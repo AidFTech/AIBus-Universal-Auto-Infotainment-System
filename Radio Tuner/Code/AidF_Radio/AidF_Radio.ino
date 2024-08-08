@@ -1,0 +1,708 @@
+#include <elapsedMillis.h>
+
+#include "AIBus.h"
+#include "AIBus_Handler.h"
+#include "Audio_Source.h"
+#include "Text_Handler.h"
+#include "Parameter_List.h"
+#include "Si4703_AidF.h"
+
+#ifdef __AVR_ATmegax09__
+#define AI_RX PIN_PA7
+#define FM1_EN PIN_PB0
+#define FM2_EN PIN_PB1
+#define TUNER_RESET PIN_PB2
+#define IDAT PIN_PA2
+#define ICLK PIN_PA3
+#else
+#define AI_RX 3
+#define FM1_EN 4
+#define FM2_EN 5
+#define TUNER_RESET 6
+#define AUX_SW 7
+#define EXT_SW 8
+#define IDAT A4
+#define ICLK A5
+#endif
+
+#define SOURCE_COUNT 16
+#define SOURCE_PING_DELAY 5000
+#define COMPUTER_PING_DELAY 4000
+#define SCREEN_PING_DELAY 5000
+#define PARAMETER_DELAY 250
+
+#define DISPLAY_INFO_TIMER 750
+#define IMID_TIMER 300
+
+ParameterList parameters;
+
+#define AISerial Serial
+AIBusHandler aibus_handler(&AISerial, AI_RX);
+
+TextHandler text_handler(&aibus_handler, &parameters);
+Si4703Controller tuner1(TUNER_RESET, FM1_EN, IDAT, ICLK, &aibus_handler, &parameters, &text_handler);//, tuner2(TUNER_RESET, FM2_EN, A4, A5, &aibus_handler, &parameters, &text_handler);
+
+SourceHandler source_handler(&aibus_handler, &tuner1, &parameters, SOURCE_COUNT);
+
+elapsedMillis aibus_timer, source_text_timer;
+elapsedMillis src_ping_timer, computer_ping_timer, parameter_timer, screen_ping_timer;
+
+bool source_text_timer_enabled = false;
+
+bool info_timer_enabled = false;
+elapsedMillis info_timer;
+
+bool imid_timer_enabled = false;
+elapsedMillis imid_timer;
+
+bool* power_on = &parameters.power_on;
+
+//Arduino setup function.
+void setup() {
+	pinMode(AI_RX, INPUT_PULLUP);
+	pinMode(AUX_SW, OUTPUT);
+	pinMode(EXT_SW, OUTPUT);
+
+	digitalWrite(AUX_SW, LOW);
+	digitalWrite(EXT_SW, LOW);
+
+	AISerial.begin(AI_BAUD);
+	
+	tuner1.init();
+	//tuner2.init();
+	parameters.fm1_tune = tuner1.getFrequency();
+	parameters.fm2_tune = tuner1.getFrequency();
+
+	parameters.handshake_sources.setStorage(parameters.handshake_source_list, 0);
+
+	AudioSource src_fm1, src_fm2, src_am;
+	src_fm1.source_name = "FM1";
+	src_fm1.source_id = ID_RADIO;
+	src_fm1.sub_id = 0;
+	src_fm2.source_name = "FM2";
+	src_fm2.source_id = ID_RADIO;
+	src_fm2.sub_id = 1;
+	src_am.source_name = "AM";
+	src_am.source_id = ID_RADIO;
+	src_am.sub_id = 2;
+
+	AudioSource src_aux, src_bta, src_usb;
+	src_aux.source_name = "Aux";
+	src_aux.source_id = ID_RADIO;
+	src_aux.sub_id = 3;
+
+	source_handler.source_list[0] = src_fm1;
+	source_handler.source_list[1] = src_fm2;
+	source_handler.source_list[2] = src_am;
+
+	source_handler.source_list[SOURCE_COUNT - 3] = src_aux;
+
+	source_handler.sendRadioHandshake();
+}
+
+//Arduino loop function.
+void loop() {
+	if(parameters.minute_timer > MINUTE_TIMER) {
+		parameters.minute_timer = 0;
+		if(parameters.min >= 0 && parameters.hour >= 0) {
+			parameters.min += 1;
+			if(parameters.min >= 60) {
+				parameters.min = 0;
+				parameters.hour += 1;
+			}
+			if(parameters.hour >= 24)
+				parameters.hour = 0;
+
+			if(*power_on)
+				text_handler.sendTime();
+		}
+	}
+	
+	if(!*power_on) {
+		AIData msg;
+		if(aibus_handler.readAIData(&msg)) {
+			if(msg.l == 1 && msg.data[0] == 0x1 && msg.receiver == ID_RADIO) //Ping.
+				aibus_handler.sendAcknowledgement(ID_RADIO, msg.sender);
+			else if(msg.l >= 1 && msg.data[0] == 0x80) { //Acknowledgement. Ignore.
+			} else if(msg.receiver == 0xFF && msg.data[0] == 0xA1) {
+				if(msg.data[1] == 0x2) { //Key position.
+					const uint8_t pos = msg.data[2];
+					if(pos != 0)
+						*power_on = true;
+				}
+			}
+		}
+		
+		delay(500);
+		return;
+	}
+	
+	const uint8_t last_active_source_id = source_handler.getCurrentSourceID();
+	const uint16_t last_source_count = source_handler.getFilledSourceCount(), last_active_source = source_handler.getCurrentSource();
+
+	const uint16_t last_fm1 = parameters.fm1_tune, last_fm2 = parameters.fm2_tune, last_am = parameters.am_tune;
+	const bool last_info = parameters.info_mode;
+
+	AIData msg;
+	
+	do {
+		if(aibus_handler.dataAvailable() > 0) {
+			if(aibus_handler.readAIData(&msg)) {
+				aibus_timer = 0;
+				computer_ping_timer = COMPUTER_PING_DELAY - 1000;
+
+				if(msg.sender == ID_RADIO)
+					continue;
+				
+				if(msg.receiver == ID_RADIO) {
+					if(msg.sender == source_handler.getCurrentSourceID())
+						source_text_timer = 0;
+				}
+				
+				handleAIBus(&msg);
+			}
+		}
+	} while(aibus_timer < 50);
+
+	AudioSource source_list[SOURCE_COUNT];
+	const uint16_t source_count = source_handler.getFilledSources(source_list), current_source = source_handler.getCurrentSource();
+	/*if(source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getFilledSourceCount() != last_source_count) {
+		src_ping_timer = 0;
+		const uint8_t current_source_id = source_handler.getCurrentSourceID();
+
+		uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+		if(current_source_id == 0)
+			sub_id = 0;
+
+		for(uint16_t i=0;i<source_count;i+=1) {
+			if(source_list[i].source_id == ID_RADIO || source_list[i].sub_id != 0)
+				continue;
+
+			AIData function_msg(4, ID_RADIO, source_list[i].source_id);
+			uint8_t function_data[] = {0x40, 0x10, current_source_id, sub_id};
+			function_msg.refreshAIData(function_data);
+
+			aibus_handler.writeAIData(&function_msg);
+		}
+		
+		if(current_source_id != last_active_source_id)
+			setSourceName();
+
+		if(current_source_id != 0 && current_source_id != ID_RADIO) {
+			if(last_active_source_id == ID_RADIO)
+				tuner1.setPower(false);
+				
+			//text_handler.sendSourceTextControl(current_source_id, current_source_id);
+		} else if(current_source_id == ID_RADIO) {
+			setTunerFrequency(sub_id);
+			sendTunedFrequencyMessage(sub_id);
+			clearFMData();
+			text_handler.createRadioMenu(sub_id);
+		} else {
+			if(last_active_source_id == ID_RADIO)
+				tuner1.setPower(false);
+		}
+	} else if(source_handler.getCurrentSource() != last_active_source && source_handler.getCurrentSourceID() != 0) {
+		setSourceName();
+		
+		const uint8_t current_source_id = source_handler.getCurrentSourceID();
+		const uint16_t current_source = source_handler.getCurrentSource();
+
+		if(current_source_id != ID_RADIO) {
+			if(last_active_source_id == ID_RADIO)
+				tuner1.setPower(false);
+
+			uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+			if(current_source_id == 0)
+				sub_id = 0;
+
+			uint8_t function_data[] = {0x40, 0x10, source_handler.getCurrentSourceID(), sub_id};
+			AIData function_msg(sizeof(function_data), ID_RADIO, current_source_id);
+			function_msg.refreshAIData(function_data);
+
+			aibus_handler.writeAIData(&function_msg);
+
+			//text_handler.sendSourceTextControl(current_source_id, current_source_id);
+			source_text_timer = 0;
+			source_text_timer_enabled = true;
+		} else {
+			const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+			setTunerFrequency(sub_id);
+			sendTunedFrequencyMessage(sub_id);
+			clearFMData();
+			text_handler.createRadioMenu(sub_id);
+		}
+	}*/
+	
+	//Source changed.
+	if(source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source) {
+		src_ping_timer = 0;
+		parameters.info_mode = false;
+		
+		const uint8_t current_source_id = source_handler.getCurrentSourceID();
+		const uint16_t current_source = source_handler.getCurrentSource();
+		
+		uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+		if(current_source_id == 0)
+			sub_id = 0;
+
+		parameters.last_sub = sub_id;
+		
+		uint8_t function_data[] = {0x40, 0x10, current_source_id, sub_id};
+		AIData function_msg(sizeof(function_data), ID_RADIO, last_active_source_id);
+		function_msg.refreshAIData(function_data);
+		
+		if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
+			aibus_handler.writeAIData(&function_msg);
+		else if(function_msg.receiver == ID_RADIO && current_source_id != ID_RADIO)
+			tuner1.setPower(false);
+		
+		setSourceName();
+		
+		if(current_source_id != 0 && current_source_id != ID_RADIO) {
+			function_msg.receiver = current_source_id;
+			aibus_handler.writeAIData(&function_msg, function_msg.receiver != 0 && function_msg.receiver != ID_RADIO);
+
+			source_text_timer_enabled = true;
+			source_text_timer = 0;
+		} else if(current_source_id == ID_RADIO) {
+			const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+			setTunerFrequency(sub_id);
+			sendTunedFrequencyMessage(sub_id);
+			clearFMData();
+			text_handler.createRadioMenu(sub_id);
+		}
+	}
+	
+	if(source_text_timer_enabled && source_text_timer > 50) {
+		source_text_timer_enabled = false;
+		const uint8_t current_source_id = source_handler.getCurrentSourceID();
+		text_handler.sendSourceTextControl(current_source_id, current_source_id);
+	}
+
+	if(imid_timer_enabled && imid_timer > IMID_TIMER) {
+		imid_timer_enabled = false;
+
+		sendIMIDRequest();
+
+		const uint8_t current_source = source_handler.getCurrentSourceID();
+		
+		if(current_source == ID_RADIO) {
+			const uint16_t current_source_num = source_handler.getCurrentSource();
+			const uint8_t sub_id = source_handler.source_list[current_source_num].sub_id;
+			
+			text_handler.sendIMIDSourceMessage(current_source, sub_id);
+			sendTunedFrequencyMessage(sub_id);
+		} else if(current_source != 0) {
+			text_handler.sendSourceTextControl(current_source, current_source);
+		}
+	}
+
+	parameters.timer_active = info_timer_enabled || source_text_timer_enabled || imid_timer_enabled || MINUTE_TIMER - parameters.minute_timer <= 100;
+
+	if(parameters.handshake_timer_active && parameters.handshake_timer > 200) {
+		parameters.handshake_timer_active = false;
+
+		source_handler.checkSources();
+		/*while(parameters.handshake_sources.size() > 0) {
+			uint8_t handshake_data[] = {0x5, parameters.handshake_sources.at(0), 0x2};
+			AIData handshake_msg(sizeof(handshake_data), ID_RADIO, parameters.handshake_sources.at(0));
+			handshake_msg.refreshAIData(handshake_data);
+			aibus_handler.writeAIData(&handshake_msg);
+
+			parameters.handshake_sources.remove(0);
+		}*/
+
+	}
+
+	do {
+		if(source_handler.getCurrentSourceID() == ID_RADIO) {
+			tuner1.loop();
+			//tuner2.loop();
+			
+			const bool last_stereo = parameters.fm_stereo;
+			const uint16_t current_source = source_handler.getCurrentSource();
+
+			const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+
+			uint16_t last_compare, *current_frequency;
+			if(sub_id == SUB_FM1) {
+				last_compare = last_fm1;
+				current_frequency = &parameters.fm1_tune;
+			} else if(sub_id == SUB_FM2) {
+				last_compare = last_fm2;
+				current_frequency = &parameters.fm2_tune;
+			} else if(sub_id == SUB_AM) {
+				last_compare = last_am;
+				current_frequency = &parameters.am_tune;
+			} else break;
+
+			if(parameters.info_mode && !last_info) {
+				info_timer_enabled = true;
+				info_timer = 0;
+				text_handler.sendIMIDInfoMessage("RDS");
+			} else if(!parameters.info_mode && last_info) {
+				String current_rds = getRDSString(parameters.rds_text);
+
+				if(parameters.imid_radio)
+					text_handler.sendIMIDSourceMessage(ID_RADIO, sub_id);
+
+				text_handler.sendTunedFrequencyMessage(*current_frequency, sub_id != SUB_AM, true);
+
+				text_handler.sendShortRDSMessage(current_rds);
+				text_handler.sendIMIDRDSMessage(current_rds);
+			}
+
+			if(info_timer_enabled && info_timer > DISPLAY_INFO_TIMER && parameters.info_mode) {
+				info_timer_enabled = false;
+				String current_rds = getRDSString(parameters.rds_text);
+				text_handler.sendIMIDInfoMessage(current_rds);
+			}
+			
+			if(sub_id == SUB_FM1 || sub_id == SUB_FM2) {
+				const bool seeking = tuner1.getSeeking(current_frequency);
+				if(!seeking && (parameter_timer >= PARAMETER_DELAY)) {
+					parameter_timer = 0;
+
+					const String last_rds = getRDSString(parameters.rds_text);
+					tuner1.getParameters(&parameters, sub_id);
+
+					//if(parameters.ai_pending)
+					//	break;
+
+					if(parameters.fm_stereo != last_stereo) {
+						text_handler.sendStereoMessage(parameters.fm_stereo);
+						parameter_timer = 0;
+					}
+
+					if(aibus_handler.dataAvailable() > 0)
+						parameters.ai_pending = true;
+
+					if(parameters.ai_pending)
+						break;
+
+					String current_rds = getRDSString(parameters.rds_text);
+					if(parameters.has_rds && current_rds.compareTo(last_rds) != 0) {
+						text_handler.sendShortRDSMessage(current_rds);
+						text_handler.sendIMIDRDSMessage(current_rds);
+
+						if(parameters.info_mode && !info_timer_enabled)
+							text_handler.sendIMIDInfoMessage(current_rds);
+
+						parameter_timer = 0;
+					}
+				}
+			}
+			
+			if(last_compare != *current_frequency) {
+				if(parameters.info_mode) {
+					parameters.info_mode = false;
+					if(parameters.imid_radio)
+						text_handler.sendIMIDSourceMessage(ID_RADIO, sub_id);
+				}
+				text_handler.sendTunedFrequencyMessage(*current_frequency, sub_id != SUB_AM, true);
+				clearFMData();
+				parameter_timer = 0;
+			}
+			//if(parameters.ai_pending)
+			//	break;
+			
+			break;
+		}
+	} while(false);
+
+	if(!parameters.ai_pending) {
+		if(src_ping_timer >= SOURCE_PING_DELAY)
+			pingActiveSource();
+
+		if(!parameters.computer_connected && computer_ping_timer >= COMPUTER_PING_DELAY)
+			pingComputer();
+
+		//if(screen_ping_timer >= SCREEN_PING_DELAY)
+		//	getScreenControlRequest(!parameters.computer_connected || parameters.manual_tune_mode);
+	} else
+		parameters.ai_pending = false;
+}
+
+//Interpret a received AIBus message.
+void handleAIBus(AIData* msg) {
+	if(msg->receiver != ID_RADIO && msg->receiver != 0xFF)
+		return;
+
+	if(msg->l == 1 && msg->data[0] == 0x1 && msg->receiver == ID_RADIO) { //Ping.
+		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
+	} else if(msg->l >= 1 && msg->data[0] == 0x80) { //Acknowledgement. Ignore.
+	} else if(msg->receiver == ID_RADIO && msg->l >= 2 && msg->data[0] == 0x1D) { //Clock message.
+		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
+		parameters.send_time = msg->data[1] != 0;
+	} else if(msg->receiver == ID_RADIO) { //Radio message.
+		bool answered = false;
+		if(!answered)
+			answered = source_handler.handleAIBus(msg);
+	} else if(msg->receiver == 0xFF && msg->data[0] == 0xA1 && msg->sender != ID_RADIO) {
+		if(msg->data[1] == 0x2) { //Key position.
+			const uint8_t pos = msg->data[2];
+			if(pos == 0)
+				parameters.power_on = false;
+			else
+				parameters.power_on = true;
+			
+		} else if(msg->data[1] == 0x1F && msg->l >= 3) {
+			if(msg->data[2] == 0x1 && msg->l >= 6) { //Time.
+				int16_t new_minute = 60*msg->data[3] + msg->data[4] - parameters.offset*30;
+				
+				while(new_minute >= 1440)
+					new_minute -= 1440;
+				while(new_minute < 0)
+					new_minute += 1440;
+					
+				parameters.hour = new_minute/60;
+				parameters.min = new_minute%60;
+				parameters.minute_timer = msg->data[5]*1000;
+					
+			} else if(msg->data[2] == 0x4) { //Vehicle speed.
+				double speed = getSpeed(msg);
+				if(msg->data[3]&0x80 != 0) //Speed in mph.
+					parameters.vehicle_speed = uint16_t(speed*1.6);
+				else
+					parameters.vehicle_speed = uint16_t(speed);
+			}
+		}
+	} else if(msg->receiver == 0xFF && msg->sender == ID_IMID_SCR && msg->data[0] == 0x3B) {
+		if(msg->data[1] == 0x23 && msg-> l >= 4) {
+			parameters.imid_char = msg->data[2];
+			parameters.imid_lines = msg->data[3];
+		} else if(msg->data[1] == 0x57 && msg->l >= 3) {
+			for(uint8_t i=2;i<msg->l;i+=1) {
+				if(msg->data[i] == ID_RADIO)
+					parameters.imid_radio = true;
+				if(parameters.imid_radio)
+					break;
+			}
+		}
+		
+		imid_timer = 0;
+		imid_timer_enabled = true;
+	}
+
+	if(!parameters.computer_connected && msg->sender == ID_NAV_COMPUTER) {
+		parameters.computer_connected = true;
+		screenInit();
+	}
+
+	if(!parameters.imid_connected && msg->sender == ID_IMID_SCR) {
+		parameters.imid_connected = true;
+		
+		if(parameters.min >= 0 && parameters.hour >= 0)
+			text_handler.sendTime();
+	}
+}
+
+//Send the frequency message to the screen.
+void sendTunedFrequencyMessage(const uint8_t sub_id) {
+	if(sub_id == 0)
+		text_handler.sendTunedFrequencyMessage(parameters.fm1_tune, true, true);
+	else if(sub_id == 1)
+		text_handler.sendTunedFrequencyMessage(parameters.fm2_tune, true, true);
+	else if(sub_id == 2)
+		text_handler.sendTunedFrequencyMessage(parameters.am_tune, false, true);
+}
+
+//Set the tuner frequency to a pre-set value based on the active sub-id.
+void setTunerFrequency(const uint8_t sub_id) {
+	if(sub_id == 0)
+		tuner1.setFrequency(parameters.fm1_tune);
+	else if(sub_id == 1)
+		tuner1.setFrequency(parameters.fm2_tune);
+	else //TODO: AM tuning.
+		tuner1.setPower(false);
+	
+	parameter_timer = PARAMETER_DELAY;
+}
+
+//Send the heartbeat/redundant message to the active source.
+void pingActiveSource() {
+	src_ping_timer = 0;
+	const uint8_t current_source = source_handler.getCurrentSourceID();
+	if(current_source == ID_RADIO || current_source == 0)
+		return;
+
+	AIData ping_msg(3, ID_RADIO, current_source);
+	uint8_t ping_data[] = {0x70, 0x10, current_source};
+	ping_msg.refreshAIData(ping_data);
+
+	aibus_handler.writeAIData(&ping_msg);
+}
+
+//Ping the nav computer to check that it is connected.
+void pingComputer() {
+	computer_ping_timer = 0;
+	
+	uint8_t ping_data[] = {1};
+	AIData ping_msg(sizeof(ping_data), ID_RADIO, ID_NAV_COMPUTER);
+	ping_msg.refreshAIData(ping_data);
+
+	if(aibus_handler.writeAIData(&ping_msg, false));
+}
+
+//Send the initial message to the nav computer.
+void screenInit() {
+	if(parameters.min >= 0 && parameters.hour >= 0)
+		text_handler.sendTime();
+	
+	setSourceName();
+	const uint8_t current_source = source_handler.getCurrentSourceID();
+	if(current_source != 0 && current_source != ID_RADIO)
+		text_handler.sendSourceTextControl(current_source, current_source);
+}
+
+//Send the active source name to the nav computer.
+void setSourceName() {
+	String audio_off_msg = F("Audio Off");
+	text_handler.clearAllText();
+
+	if(source_handler.getCurrentSourceID() == 0) {
+		text_handler.setBlankHeader(audio_off_msg);
+		text_handler.sendIMIDSourceMessage(0,0);
+		return;
+	}
+
+	if(source_handler.source_list[source_handler.getCurrentSource()].source_name.compareTo("") != 0) {
+		text_handler.setBlankHeader(source_handler.source_list[source_handler.getCurrentSource()].source_name);
+	} else {
+		const uint8_t source = source_handler.getCurrentSourceID();
+		String source_name = "";
+		switch(source) {
+		case 0:
+			source_name = audio_off_msg;
+			break;
+		case ID_RADIO:
+			source_name = "Radio";
+			break;
+		case ID_TAPE:
+			source_name = "Tape";
+			break;
+		case ID_CD:
+		case ID_CDC:
+			source_name = "CD";
+			break;
+		case ID_XM:
+			source_name = "XM";
+			break;
+		case ID_ANDROID_AUTO:
+			source_name = "Mirror";
+			break;
+		default:
+			source_name = "EXT.";
+			break;
+		}
+
+		text_handler.setBlankHeader(source_name);
+	}
+
+	text_handler.sendIMIDSourceMessage(source_handler.getCurrentSourceID(), source_handler.source_list[source_handler.getCurrentSource()].sub_id);
+}
+
+//Get the current vehicle speed.
+double getSpeed(AIData* msg) {
+	const uint8_t byte_count = msg->data[3]&0xF, dec = (msg->data[3]&0x70)>>4;
+	unsigned long speed_int = 0;
+	for(uint8_t i=0;i<byte_count;i+=1) {
+		speed_int <<= 8;
+		speed_int |= msg->data[4+i];
+	}
+
+	double speed = double(speed_int);
+	for(uint8_t i=0;i<dec;i+=1) {
+		speed = speed/10.0;
+	}
+	return speed;
+}
+
+//Clear RDS and stereo indicator.
+void clearFMData() {
+	const bool last_stereo = parameters.fm_stereo;
+	const uint16_t last_rds[] = {parameters.rds_text[0], parameters.rds_text[1], parameters.rds_text[2], parameters.rds_text[3]};
+	
+	parameters.fm_stereo = false;
+	
+	if(parameters.fm_stereo != last_stereo)
+		text_handler.sendStereoMessage(false);
+	
+	parameters.rds_text[0] = 0x0;
+	parameters.rds_text[1] = 0x0;
+	parameters.rds_text[2] = 0x0;
+	parameters.rds_text[3] = 0x0;
+	
+	bool refresh_rds = false;
+	for(uint8_t i=0;i<4;i+=1) {
+		if(parameters.rds_text[i] != last_rds[i]) {
+			refresh_rds = true;
+			break;
+		}
+	}
+	
+	if(refresh_rds)
+		text_handler.sendShortRDSMessage("");
+}
+
+//Send the screen control request message.
+void getScreenControlRequest(const bool all) {
+	screen_ping_timer = 0;
+	uint8_t data[] = {0x77, ID_RADIO, 0x20};
+	if(all)
+		data[2] |= 0x10;
+
+	AIData screen_msg(sizeof(data), ID_RADIO, 0xFF);
+	screen_msg.refreshAIData(data);
+	aibus_handler.writeAIData(&screen_msg);
+}
+
+//Send a request to the IMID for its full specs.
+void sendIMIDRequest() {
+	uint8_t imid_request_data[] = {0x4, 0xE6, 0x3B};
+	AIData imid_request_msg(sizeof(imid_request_data), ID_RADIO, ID_IMID_SCR);
+	imid_request_msg.refreshAIData(imid_request_data);
+
+	aibus_handler.writeAIData(&imid_request_msg);
+
+	elapsedMillis response_timer;
+	while(response_timer < 100) {
+		AIData reply;
+		if(aibus_handler.dataAvailable(false) > 0) {
+			if(aibus_handler.readAIData(&reply, false)) {
+				if(reply.sender == ID_RADIO || (reply.l >=1 && reply.data[0] == 0x80))
+					continue;
+
+				if(reply.receiver != ID_RADIO && reply.receiver != 0xFF)
+					continue;
+
+				response_timer = 0;
+				if(reply.sender == ID_IMID_SCR && reply.receiver == ID_RADIO) {
+					aibus_handler.sendAcknowledgement(ID_RADIO, reply.sender);
+					if(reply.data[1] == 0x23 && reply.l >= 4) {
+						parameters.imid_char = reply.data[2];
+						parameters.imid_lines = reply.data[3];
+					} else if(reply.data[1] == 0x57 && reply.l >= 3) {
+						for(uint8_t i=2;i<reply.l;i+=1) {
+							if(reply.data[i] == ID_RADIO)
+								parameters.imid_radio = true;
+							if(parameters.imid_radio)
+								break;
+						}
+					} else
+						aibus_handler.cacheMessage(&reply);
+
+					parameters.imid_connected = true;
+				} else if(reply.receiver == ID_RADIO || reply.receiver == 0xFF) {
+					if(reply.receiver == ID_RADIO)
+						aibus_handler.sendAcknowledgement(ID_RADIO, reply.sender);
+						
+					aibus_handler.cacheMessage(&reply);
+				}
+			}
+		}
+	}
+
+	text_handler.sendTime();
+}
