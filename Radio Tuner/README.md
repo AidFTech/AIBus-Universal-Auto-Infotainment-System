@@ -1,0 +1,2 @@
+# AidF AIBus Radio Tuner
+The universal radio tuner and source switch. Identified with AIBus ID 0x10. When finished, this device will be able to switch and output analog or digital audio from any source in the car. Full-range FM and AM tuning is supported via the Skyworks Si4732 with the option for 12 FM an 6 AM presets.
