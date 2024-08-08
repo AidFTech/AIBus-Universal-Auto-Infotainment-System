@@ -1,0 +1,47 @@
+#include <stdint.h>
+#include <SDL2/SDL.h>
+
+#include "../AidF_Color_Profile.h"
+#include "../Background/Nav_Background.h"
+#include "../AIBus_Handler.h"
+
+#ifndef attribute_list_h
+#define attribute_list_h
+
+#define DAY_NIGHT_AUTO 0
+#define DAY_NIGHT_DAY 1
+#define DAY_NIGHT_NIGHT 2
+
+#define NEXT_WINDOW_LAST -1
+#define NEXT_WINDOW_NULL 0
+#define NEXT_WINDOW_MAIN 1
+#define NEXT_WINDOW_MAP 2
+#define NEXT_WINDOW_AUDIO 3
+#define NEXT_WINDOW_CONSUMPTION 5
+#define NEXT_WINDOW_SETTINGS_MAIN 6
+#define NEXT_WINDOW_SETTINGS_DISPLAY 7
+#define NEXT_WINDOW_SETTINGS_INFO 8
+#define NEXT_WINDOW_SETTINGS_CLOCK 9
+#define NEXT_WINDOW_SETTINGS_FORMAT 10
+#define NEXT_WINDOW_SETTINGS_COLOR 11
+#define NEXT_WINDOW_SETTINGS_COLOR_PICKER 12
+
+struct AttributeList {
+	SDL_Renderer* renderer;
+
+	AidFColorProfile *color_profile, *day_profile, *night_profile;
+	Background *br;
+
+	uint16_t w, h;
+
+	int8_t next_window = NEXT_WINDOW_NULL;
+	uint8_t day_night_settings = DAY_NIGHT_AUTO;
+	bool canslator_connected = false, radio_connected = false;
+	
+	bool background_changed = false; //True if the background was changed by the user.
+	bool text_changed = false; //True if the text color was changed.
+
+	AIBusHandler* aibus_handler;
+};
+
+#endif
