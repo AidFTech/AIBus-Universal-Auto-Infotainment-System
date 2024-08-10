@@ -64,11 +64,11 @@ ParameterList parameters;
 elapsedMillis all_timer, radio_timer, source_timer;
 bool all_timer_enabled = false, radio_timer_enabled = false, source_timer_enabled = false;
 
-//LightController light_handler(ILL_CATHODE, KNOB_MCP_ANODE, &mcp_knob);
+LightController* light_handler;
 
-//ButtonHandler button_handler(&mcp_in, &mcp_out, &ai_handler, &parameters, &mcp_knob, KNOB_MCP_VOL_PUSH);
-//JogHandler jog_handler(&mcp_out, OUTPUT_MCP_TOGGLE_UP, &mcp_out, OUTPUT_MCP_TOGGLE_DOWN, &mcp_in, INPUT_MCP_TOGGLE_LEFT, &mcp_in, INPUT_MCP_TOGGLE_RIGHT, &mcp_in, INPUT_MCP_TOGGLE_ENTER, &ai_handler, &parameters);
-//OpenCloseHandler open_handler(&mcp_out, OUTPUT_MCP_PUSH_OPEN, &mcp_out, OUTPUT_MCP_PUSH_CLOSE, &mcp_knob, KNOB_MCP_MOTOR_OPEN, &mcp_knob, KNOB_MCP_MOTOR_CLOSE, NULL, MOTOR_STOP_OUT, &mcp_knob, KNOB_MCP_MOTOR_STOP_IND, &mcp_knob, KNOB_MCP_CLOSE_ANODE, MOTOR_POSITION, &ai_handler, &parameters);
+ButtonHandler* button_handler;
+JogHandler* jog_handler;
+OpenCloseHandler* open_handler;
 //Encoder vol_knob_handler(KNOB_A, KNOB_B);
 
 void setup() {
@@ -122,6 +122,11 @@ void setup() {
 
 	pinMode(KNOB_A, INPUT_PULLUP);
 	pinMode(KNOB_B, INPUT_PULLUP);
+
+	button_handler = new ButtonHandler(&mcp_in, &mcp_out, &ai_handler, &parameters, &mcp_knob, KNOB_MCP_VOL_PUSH);
+	jog_handler = new JogHandler(&mcp_out, OUTPUT_MCP_TOGGLE_UP, &mcp_out, OUTPUT_MCP_TOGGLE_DOWN, &mcp_in, INPUT_MCP_TOGGLE_LEFT, &mcp_in, INPUT_MCP_TOGGLE_RIGHT, &mcp_in, INPUT_MCP_TOGGLE_ENTER, &ai_handler, &parameters);
+	open_handler = new OpenCloseHandler(&mcp_out, OUTPUT_MCP_PUSH_OPEN, &mcp_out, OUTPUT_MCP_PUSH_CLOSE, &mcp_knob, KNOB_MCP_MOTOR_OPEN, &mcp_knob, KNOB_MCP_MOTOR_CLOSE, NULL, MOTOR_STOP_OUT, &mcp_knob, KNOB_MCP_MOTOR_STOP_IND, &mcp_knob, KNOB_MCP_CLOSE_ANODE, MOTOR_POSITION, &ai_handler, &parameters);
+	light_handler = new LightController(ILL_CATHODE, KNOB_MCP_ANODE, &mcp_knob);
 }
 
 void loop() {
@@ -141,9 +146,9 @@ void loop() {
 				else if(msg.receiver == 0xFF && msg.l >= 1 && msg.data[0] == 0xA1) {
 					/*if(msg.l >= 0x4 && msg.data[1] == 0x10) { //Light control.
 						if((msg.data[3]&0x1) != 0)
-							light_handler.lightOn(msg.data[2]);
+							light_handler->lightOn(msg.data[2]);
 						else
-							light_handler.lightOff();
+							light_handler->lightOff();
 					}*/
 				}
 				ai_timer = 0;
@@ -199,9 +204,9 @@ void loop() {
 				}
 			} else if(msg.l >= 2 && msg.data[0] == 0x38) {
 				if(msg.data[1] == 0x0)
-					open_handler.forceClose();
+					open_handler->forceClose();
 				else if(msg.data[1] == 0x2)
-					open_handler.forceOpen();
+					open_handler->forceOpen();
 			}*/
 
 			if(ack)
@@ -209,9 +214,9 @@ void loop() {
 		}
 	} while(ai_timer < 50);
 
-	//button_handler.loop();
-	//jog_handler.loop();
-	//open_handler.loop();
+	//button_handler->loop();
+	//jog_handler->loop();
+	//open_handler->loop();
 
 	if(all_timer_enabled && all_timer > CONTROL_TIMER) {
 		all_timer_enabled = false;
