@@ -144,12 +144,12 @@ void loop() {
 				if(msg.receiver == ID_NAV_SCREEN && msg.l >= 1 && msg.data[0] != 0x80)
 					message_read = true;
 				else if(msg.receiver == 0xFF && msg.l >= 1 && msg.data[0] == 0xA1) {
-					/*if(msg.l >= 0x4 && msg.data[1] == 0x10) { //Light control.
+					if(msg.l >= 0x4 && msg.data[1] == 0x10) { //Light control.
 						if((msg.data[3]&0x1) != 0)
 							light_handler->lightOn(msg.data[2]);
 						else
 							light_handler->lightOff();
-					}*/
+					}
 				}
 				ai_timer = 0;
 			}
@@ -161,7 +161,7 @@ void loop() {
 			if(msg.sender == ID_NAV_SCREEN)
 				continue;
 
-			/*if(msg.l >= 2 && msg.data[0] == 0x31 && msg.data[1] == 0x30) { //Button request.
+			if(msg.l >= 2 && msg.data[0] == 0x31 && msg.data[1] == 0x30) { //Button request.
 				ack = false;
 				ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
 				sendButtonsPresent(msg.sender);
@@ -207,16 +207,16 @@ void loop() {
 					open_handler->forceClose();
 				else if(msg.data[1] == 0x2)
 					open_handler->forceOpen();
-			}*/
+			}
 
 			if(ack)
 				ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
 		}
 	} while(ai_timer < 50);
 
-	//button_handler->loop();
-	//jog_handler->loop();
-	//open_handler->loop();
+	button_handler->loop();
+	jog_handler->loop();
+	open_handler->loop();
 
 	if(all_timer_enabled && all_timer > CONTROL_TIMER) {
 		all_timer_enabled = false;
