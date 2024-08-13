@@ -279,7 +279,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						{
 							uint8_t data[] = {0x77, ID_RADIO, 0x20};
 							if(parameter_list->manual_tune_mode)
-								data[2] = 0x10;
+								data[2] |= 0x10;
 
 							AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
 							screen_msg.refreshAIData(data);

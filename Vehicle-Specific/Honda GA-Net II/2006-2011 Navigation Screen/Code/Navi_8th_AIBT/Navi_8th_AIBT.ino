@@ -8,6 +8,27 @@
 #include "Open_Close_Handler.h"
 #include "AIBT_Parameters.h"
 
+#ifndef __AVR__
+#define TCNT2 _SFR_MEM8(0xB2)
+#define TCCR2B _SFR_MEM8(0xB1)
+#endif
+
+#if defined(TCNT2)
+#define TIMER TCNT2
+#elif defined(TCNT2L)
+#define TIMER TCNT2L
+#else
+#error Timer Not Defined
+#endif
+
+#if defined(TCCR2B)
+#define TIMER_SCALER TCCR2B
+#else
+#error Scale Not Defined
+#endif
+
+#define KNOB_WAIT int(10e-3*F_CPU/1024)
+
 #define KNOB_A 2
 #define KNOB_B 3
 
@@ -321,6 +342,10 @@ void sendButtonsPresent(const uint8_t receiver) {
 }
 
 void volumeKnobIncrement() {
+	TIMER_SCALER &= 0xF8;
+	TIMER_SCALER |= 0x5;
+	TIMER = 0;
+
 	const uint8_t last_vol_a = vol_a_state, last_vol_b = vol_b_state;
 	int8_t increment = 0;
 
@@ -355,6 +380,8 @@ void volumeKnobIncrement() {
 		else
 			steps -= increment;
 	}
+
+	while(TIMER < KNOB_WAIT);
 
 	vol_steps += steps;
 }
