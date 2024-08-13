@@ -25,10 +25,10 @@ void ButtonHandler::loop() {
 
 void ButtonHandler::checkButtonPress() {
 	for(uint8_t x=0;x<4;x+=1) { //Check each output COM.
-		output_mcp->digitalWriteIO(x, true);
+		output_mcp->digitalWriteIO(x, LOW);
 		
 		for(uint8_t y=0;y<5;y+=1) { //Check each input COM.
-			const bool state = input_mcp->digitalReadIO(y);
+			const bool state = !input_mcp->digitalReadIO(y);
 			const int index = getButtonIndex(x, y);
 
 			if(index < 0 || index >= BUTTON_INDEX_SIZE)
@@ -90,7 +90,7 @@ void ButtonHandler::checkButtonPress() {
 			}
 		}
 		
-		output_mcp->digitalWriteIO(x, false);
+		output_mcp->digitalWriteIO(x, HIGH);
 	}
 	
 	//Check the volume button.

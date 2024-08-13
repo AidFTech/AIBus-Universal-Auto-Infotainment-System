@@ -275,6 +275,17 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					switch(item) {
 					case 1: //Manual tune.
 						parameter_list->manual_tune_mode = !parameter_list->manual_tune_mode;
+
+						{
+							uint8_t data[] = {0x77, ID_RADIO, 0x20};
+							if(parameter_list->manual_tune_mode)
+								data[2] = 0x10;
+
+							AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
+							screen_msg.refreshAIData(data);
+							ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
+						}
+
 						this->sendManualTuneMessage();
 						break;
 					}

@@ -111,17 +111,22 @@ void setup() {
 	mcp_out.pinModeIO(OUTPUT_MCP_TOGGLE_UP, INPUT_PULLUP);
 	mcp_out.pinModeIO(OUTPUT_MCP_TOGGLE_DOWN, INPUT_PULLUP);
 
-	mcp_in.pinModeIO(INPUT_MCP_COM6, INPUT);
-	mcp_in.pinModeIO(INPUT_MCP_COM7, INPUT);
-	mcp_in.pinModeIO(INPUT_MCP_COM8, INPUT);
-	mcp_in.pinModeIO(INPUT_MCP_COM9, INPUT);
-	mcp_in.pinModeIO(INPUT_MCP_COM10, INPUT);
+	mcp_in.pinModeIO(INPUT_MCP_COM6, INPUT_PULLUP);
+	mcp_in.pinModeIO(INPUT_MCP_COM7, INPUT_PULLUP);
+	mcp_in.pinModeIO(INPUT_MCP_COM8, INPUT_PULLUP);
+	mcp_in.pinModeIO(INPUT_MCP_COM9, INPUT_PULLUP);
+	mcp_in.pinModeIO(INPUT_MCP_COM10, INPUT_PULLUP);
 	mcp_in.pinModeIO(INPUT_MCP_TOGGLE_ENTER, INPUT_PULLUP);
 	mcp_in.pinModeIO(INPUT_MCP_TOGGLE_LEFT, INPUT_PULLUP);
 	mcp_in.pinModeIO(INPUT_MCP_TOGGLE_RIGHT, INPUT_PULLUP);
 
 	pinMode(KNOB_A, INPUT_PULLUP);
 	pinMode(KNOB_B, INPUT_PULLUP);
+
+	mcp_out.digitalWriteIO(OUTPUT_MCP_COM2, HIGH);
+	mcp_out.digitalWriteIO(OUTPUT_MCP_COM3, HIGH);
+	mcp_out.digitalWriteIO(OUTPUT_MCP_COM4, HIGH);
+	mcp_out.digitalWriteIO(OUTPUT_MCP_COM5, HIGH);
 
 	button_handler = new ButtonHandler(&mcp_in, &mcp_out, &ai_handler, &parameters, &mcp_knob, KNOB_MCP_VOL_PUSH);
 	jog_handler = new JogHandler(&mcp_out, OUTPUT_MCP_TOGGLE_UP, &mcp_out, OUTPUT_MCP_TOGGLE_DOWN, &mcp_in, INPUT_MCP_TOGGLE_LEFT, &mcp_in, INPUT_MCP_TOGGLE_RIGHT, &mcp_in, INPUT_MCP_TOGGLE_ENTER, &ai_handler, &parameters);
