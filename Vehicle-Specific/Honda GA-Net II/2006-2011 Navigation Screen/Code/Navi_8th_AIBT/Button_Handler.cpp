@@ -82,7 +82,13 @@ void ButtonHandler::checkButtonPress() {
 					AIData scroll_msg(sizeof(scroll_data), ID_NAV_SCREEN, *recipient);
 					scroll_msg.refreshAIData(scroll_data);
 
-					ai_handler->writeAIData(&scroll_msg);
+					bool ack = true;
+					if(*recipient == ID_NAV_COMPUTER && !parameters->computer_connected)
+						ack = false;
+					else if(*recipient == ID_RADIO && !parameters->radio_connected)
+						ack = false;
+					
+					ai_handler->writeAIData(&scroll_msg, ack);
 					button_states[index] = BUTTON_STATE_PRESSED;
 				} else if(!state && button_states[index] != BUTTON_STATE_RELEASED) {
 					button_states[index] = BUTTON_STATE_RELEASED;
@@ -118,16 +124,17 @@ void ButtonHandler::checkButtonHold() {
 		if(button_states[i] == BUTTON_STATE_PRESSED) {
 			if(button_timers[i] >= HOLD_TIME) {
 				if(i == BUTTON_INDEX_AMFM || i == BUTTON_INDEX_CDXM) {
-					const unsigned long am_fm_timer = button_timers[BUTTON_INDEX_AMFM], cd_timer = button_timers[BUTTON_INDEX_CDXM];
+					const long long am_fm_timer = button_timers[BUTTON_INDEX_AMFM], cd_timer = button_timers[BUTTON_INDEX_CDXM];
 
 					if(button_states[BUTTON_INDEX_AMFM] == BUTTON_STATE_PRESSED && button_states[BUTTON_INDEX_CDXM] == BUTTON_STATE_PRESSED
-					&& abs(am_fm_timer - cd_timer) <= 100) {
+					&& abs(am_fm_timer - cd_timer) <= 500) {
 						amfm_pressed = true;
 						cdxm_pressed = true;
 						
 						button_states[BUTTON_INDEX_AMFM] = BUTTON_STATE_HELD;
 						button_states[BUTTON_INDEX_CDXM] = BUTTON_STATE_HELD;
 
+						sendButtonMessage(0x23, BUTTON_STATE_PRESSED, parameters->audio_dest);
 						sendButtonMessage(0x23, BUTTON_STATE_RELEASED, parameters->audio_dest);
 						continue;
 					}

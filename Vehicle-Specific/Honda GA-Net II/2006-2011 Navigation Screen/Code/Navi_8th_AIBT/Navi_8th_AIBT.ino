@@ -1,9 +1,6 @@
 #include <MCP23S08.h>
 #include <SPI.h>
 
-//#define ENCODER_USE_INTERRUPTS
-//#include <Encoder.h>
-
 #include "AIBus_Handler.h"
 #include "Light_Control.h"
 #include "Button_Handler.h"
@@ -51,6 +48,8 @@
 #define OUTPUT_MCP_TOGGLE_DOWN 7
 
 #define CONTROL_TIMER 7000
+#define DOOR_TIMER 30000
+#define VOL_REVERSE_TIMER 100
 
 #define AISerial Serial
 
@@ -64,15 +63,30 @@ ParameterList parameters;
 elapsedMillis all_timer, radio_timer, source_timer;
 bool all_timer_enabled = false, radio_timer_enabled = false, source_timer_enabled = false;
 
+elapsedMillis door_timer;
+bool door_timer_enabled = false;
+
+elapsedMillis vol_reverse_timer;
+
 LightController* light_handler;
 
 ButtonHandler* button_handler;
 JogHandler* jog_handler;
 OpenCloseHandler* open_handler;
-//Encoder vol_knob_handler(KNOB_A, KNOB_B);
+
+volatile int32_t vol_steps = 0;
+volatile int8_t last_int = 0;
+volatile uint8_t vol_a_state, vol_b_state;
+
+uint8_t key_position = 0, door_position = 0;
+bool power_off_with_door = false; //Turn the power off when the door opens.
 
 void setup() {
 	AISerial.begin(AI_BAUD);
+	pinMode(AI_RX, INPUT);
+
+	pinMode(MOTOR_STOP_OUT, OUTPUT);
+	digitalWrite(MOTOR_STOP_OUT, LOW);
 
 	SPI.begin();
 
@@ -122,11 +136,22 @@ void setup() {
 
 	pinMode(KNOB_A, INPUT_PULLUP);
 	pinMode(KNOB_B, INPUT_PULLUP);
+	vol_a_state = digitalRead(KNOB_A);
+	vol_b_state = digitalRead(KNOB_B);
+
+	attachInterrupt(digitalPinToInterrupt(KNOB_A), volumeKnobIncrement, CHANGE);
+	attachInterrupt(digitalPinToInterrupt(KNOB_B), volumeKnobIncrement, CHANGE);
 
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM2, HIGH);
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM3, HIGH);
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM4, HIGH);
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM5, HIGH);
+
+	mcp_knob.digitalWriteIO(KNOB_MCP_MOTOR_CLOSE, LOW);
+	mcp_knob.digitalWriteIO(KNOB_MCP_MOTOR_OPEN, LOW);
+	mcp_knob.digitalWriteIO(KNOB_MCP_ANODE, LOW);
+	mcp_knob.digitalWriteIO(KNOB_MCP_CLOSE_ANODE, LOW);
+	mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
 
 	button_handler = new ButtonHandler(&mcp_in, &mcp_out, &ai_handler, &parameters, &mcp_knob, KNOB_MCP_VOL_PUSH);
 	jog_handler = new JogHandler(&mcp_out, OUTPUT_MCP_TOGGLE_UP, &mcp_out, OUTPUT_MCP_TOGGLE_DOWN, &mcp_in, INPUT_MCP_TOGGLE_LEFT, &mcp_in, INPUT_MCP_TOGGLE_RIGHT, &mcp_in, INPUT_MCP_TOGGLE_ENTER, &ai_handler, &parameters);
@@ -154,6 +179,34 @@ void loop() {
 							light_handler->lightOn(msg.data[2]);
 						else
 							light_handler->lightOff();
+					} else if(msg.l >= 3 && msg.data[1] == 0x2) { //Key position.
+						if((msg.data[2]&0x7) != 0) {
+							mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, HIGH);
+							door_timer_enabled = false;
+						}
+
+						if(key_position != 0 && msg.data[2] == 0) {
+							if((door_position&0xF) == 0)
+								power_off_with_door = true;
+							else {
+								power_off_with_door = false;
+								mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
+							}
+						}
+
+						key_position = msg.data[2];
+					} else if(msg.l >= 3 && msg.data[1] == 0x43) { //Door opened or closed.
+						door_position = msg.data[2];
+						if((msg.data[2]&0xF) != 0) { //Door opened.
+							if(power_off_with_door && key_position == 0) {
+								power_off_with_door = false;
+								mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
+							} else if(key_position == 0) {
+								mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, HIGH);
+								door_timer_enabled = true;
+								door_timer = 0;
+							}
+						}
 					}
 				}
 				ai_timer = 0;
@@ -223,6 +276,8 @@ void loop() {
 	jog_handler->loop();
 	open_handler->loop();
 
+	handleVolumeKnob();
+
 	if(all_timer_enabled && all_timer > CONTROL_TIMER) {
 		all_timer_enabled = false;
 		parameters.all_dest = ID_NAV_COMPUTER;
@@ -247,6 +302,14 @@ void loop() {
 		else
 			parameters.source_dest = ID_NAV_COMPUTER;
 	}
+
+	if(door_timer_enabled && door_timer > DOOR_TIMER) {
+		door_timer_enabled = false;
+		mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
+	}
+
+	if(last_int != 0 && vol_reverse_timer > VOL_REVERSE_TIMER)
+		last_int = 0;
 }
 
 void sendButtonsPresent(const uint8_t receiver) {
@@ -257,17 +320,65 @@ void sendButtonsPresent(const uint8_t receiver) {
 	ai_handler.writeAIData(&button_msg);
 }
 
-void handleVolumeKnob() {
-	/*int32_t steps = vol_knob_handler.read();
-	if(steps != 0) {
-		elapsedMillis vol_timer;
-		while(vol_timer < 5)
-			steps = vol_knob_handler.read();
-		
-		steps = vol_knob_handler.readAndReset();
+void volumeKnobIncrement() {
+	const uint8_t last_vol_a = vol_a_state, last_vol_b = vol_b_state;
+	int8_t increment = 0;
 
-		uint8_t vol_knob_data[] = {0x32, 0x6, steps&0xF};
-		if(steps > 0)
+	vol_a_state = digitalRead(KNOB_A);
+	vol_b_state = digitalRead(KNOB_B);
+
+	int32_t steps = 0;
+
+	if(vol_a_state != last_vol_a && vol_b_state != last_vol_b)
+		return;
+
+	if(vol_a_state != last_vol_a) {
+		if(vol_b_state == LOW)
+			increment = 1;
+		else
+			increment = -1;
+
+		if(vol_a_state == HIGH && last_vol_a == LOW)
+			steps += increment;
+		else
+			steps -= increment;
+	} 
+	
+	if(vol_b_state != last_vol_b) {
+		if(vol_a_state == HIGH)
+			increment = 1;
+		else
+			increment = -1;
+
+		if(vol_b_state == HIGH && last_vol_b == LOW)
+			steps += increment;
+		else
+			steps -= increment;
+	}
+
+	vol_steps += steps;
+}
+
+void handleVolumeKnob() {
+	if(vol_steps != 0) {
+		if(last_int == 0) {
+			if(vol_steps < 0)
+				last_int = -1;
+			else if(vol_steps > 0)
+				last_int = 1;
+			else
+				last_int = 0;
+		}
+
+		if((vol_steps < 0 && last_int > 0) || (vol_steps > 0 && last_int < 0)) {
+			vol_steps = 0;
+			return;
+		}
+
+		vol_reverse_timer = 0;
+
+		uint8_t vol_knob_data[] = {0x32, 0x6, abs(vol_steps)&0xF};
+		if(vol_steps > 0)
 			vol_knob_data[2] |= 0x10;
 
 		AIData vol_knob_msg(sizeof(vol_knob_data), ID_NAV_SCREEN, parameters.audio_dest);
@@ -282,5 +393,6 @@ void handleVolumeKnob() {
 			ack = false;
 
 		ai_handler.writeAIData(&vol_knob_msg, ack);
-	}*/
+	}
+	vol_steps = 0;
 }
