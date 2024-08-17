@@ -103,6 +103,10 @@ uint8_t key_position = 0, door_position = 0;
 bool power_off_with_door = false; //Turn the power off when the door opens.
 
 void setup() {
+	TIMER_SCALER &= 0xF8;
+	TIMER_SCALER |= 0x2;
+	TIMER = 0;
+
 	AISerial.begin(AI_BAUD);
 	pinMode(AI_RX, INPUT);
 
@@ -407,6 +411,9 @@ void volumeKnobIncrement() {
 
 	vol_steps += steps;
 	interrupts();
+	TIMER_SCALER &= 0xF8;
+	TIMER_SCALER |= 0x2;
+	TIMER = 0;
 }
 
 void handleVolumeKnob() {
