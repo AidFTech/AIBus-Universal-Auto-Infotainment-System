@@ -240,12 +240,24 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			} else if((button == 0x24 || button == 0x25) && state == 2) { //Seek up/down.
 				if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id != SUB_AM)				
 					this->tuner->startSeek(button == 0x25);
-			} else if((button == 0x2A || button == 0x2B) && state == 2) { //Left/right buttons.
+			} else if((button == 0x2A || button == 0x2B) && state == 0) { //Left/right buttons.
 				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected) && source_list[current_source].source_id == ID_RADIO)
 					manualTuneIncrement(button == 0x2B, 1);
 			} else if(button == 0x7 && state == 2) { //Enter button.
 				parameter_list->manual_tune_mode = false;
 				sendManualTuneMessage();
+
+				{
+					uint8_t data[] = {0x77, ID_RADIO, 0x10};
+					if(parameter_list->manual_tune_mode)
+						data[2] |= 0x20;
+					else
+						data[1] = parameter_list->last_control;
+
+					AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
+					screen_msg.refreshAIData(data);
+					ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
+				}
 			} else if(button == 0x53 && state == 2) { //Info button.
 				if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && getCurrentSourceID() == ID_RADIO)
 					parameter_list->info_mode = !parameter_list->info_mode;
@@ -277,9 +289,11 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						parameter_list->manual_tune_mode = !parameter_list->manual_tune_mode;
 
 						{
-							uint8_t data[] = {0x77, ID_RADIO, 0x20};
+							uint8_t data[] = {0x77, ID_RADIO, 0x10};
 							if(parameter_list->manual_tune_mode)
-								data[2] |= 0x10;
+								data[2] |= 0x20;
+							else
+								data[1] = parameter_list->last_control;
 
 							AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
 							screen_msg.refreshAIData(data);

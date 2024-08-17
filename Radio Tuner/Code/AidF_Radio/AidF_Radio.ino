@@ -359,6 +359,11 @@ void loop() {
 
 //Interpret a received AIBus message.
 void handleAIBus(AIData* msg) {
+	if(msg->receiver == ID_NAV_SCREEN && msg->l >= 3 && msg->data[0] == 0x77) {
+		if((msg->data[2]&0x10) != 0)
+			parameters.last_control = msg->data[1];
+	}
+
 	if(msg->receiver != ID_RADIO && msg->receiver != 0xFF)
 		return;
 

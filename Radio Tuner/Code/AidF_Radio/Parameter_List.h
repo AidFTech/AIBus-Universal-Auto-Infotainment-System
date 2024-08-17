@@ -2,6 +2,8 @@
 #include <Arduino.h>
 #include <Vector.h>
 
+#include "AIBus.h"
+
 #ifndef parameter_list_h
 #define parameter_list_h
 
@@ -34,6 +36,8 @@ struct ParameterList {
 	uint16_t rds_text[4];
 
 	uint8_t last_sub = 0;
+
+	uint8_t last_control = ID_NAV_COMPUTER;
 
 	bool handshake_timer_active = false;
 	elapsedMillis handshake_timer;

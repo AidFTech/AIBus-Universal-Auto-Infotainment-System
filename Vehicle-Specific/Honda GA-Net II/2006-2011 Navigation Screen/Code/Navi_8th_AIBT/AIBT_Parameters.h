@@ -7,7 +7,7 @@
 #ifndef parameter_list_h
 #define parameter_list_h
 
-#define HOLD_TIME 1250
+#define HOLD_TIME 1000
 #define OPEN_CLOSE_TIME 800
 
 #define BUTTON_STATE_RELEASED 0

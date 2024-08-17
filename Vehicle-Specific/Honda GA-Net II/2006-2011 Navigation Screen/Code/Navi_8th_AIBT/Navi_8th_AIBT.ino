@@ -27,7 +27,7 @@
 #error Scale Not Defined
 #endif
 
-#define KNOB_WAIT int(10e-3*F_CPU/1024)
+#define KNOB_WAIT int(5e-3*F_CPU/1024)
 
 #define KNOB_A 2
 #define KNOB_B 3
@@ -70,7 +70,7 @@
 
 #define CONTROL_TIMER 7000
 #define DOOR_TIMER 30000
-#define VOL_REVERSE_TIMER 100
+#define VOL_REVERSE_TIMER 50
 
 #define AISerial Serial
 
@@ -297,7 +297,11 @@ void loop() {
 	jog_handler->loop();
 	open_handler->loop();
 
-	handleVolumeKnob();
+	if(vol_reverse_timer > VOL_REVERSE_TIMER) {
+		handleVolumeKnob();
+		if(last_int == 0)
+			vol_reverse_timer = 0;
+	}
 
 	if(all_timer_enabled && all_timer > CONTROL_TIMER) {
 		all_timer_enabled = false;
@@ -342,48 +346,67 @@ void sendButtonsPresent(const uint8_t receiver) {
 }
 
 void volumeKnobIncrement() {
+	noInterrupts();
 	TIMER_SCALER &= 0xF8;
 	TIMER_SCALER |= 0x5;
 	TIMER = 0;
 
 	const uint8_t last_vol_a = vol_a_state, last_vol_b = vol_b_state;
-	int8_t increment = 0;
 
 	vol_a_state = digitalRead(KNOB_A);
 	vol_b_state = digitalRead(KNOB_B);
+	TIMER = 0;
+
+	if(vol_a_state == last_vol_a && vol_b_state == last_vol_b)
+		return;
+	
+	if(vol_a_state == HIGH && vol_b_state == HIGH) {
+		while(TIMER < KNOB_WAIT);
+		vol_a_state = digitalRead(KNOB_A);
+		vol_b_state = digitalRead(KNOB_B);
+		TIMER = 0;
+	}
 
 	int32_t steps = 0;
 
-	if(vol_a_state != last_vol_a && vol_b_state != last_vol_b)
-		return;
+	if(vol_a_state != last_vol_a && vol_b_state != last_vol_b) {
+		if(last_int < 0)
+			steps += -2;
+		else if(last_int > 0)
+			steps += 2;
+	} else {
+		int8_t increment = 0;
+		if(vol_a_state != last_vol_a) {
+			if(vol_b_state == LOW)
+				increment = 1;
+			else
+				increment = -1;
 
-	if(vol_a_state != last_vol_a) {
-		if(vol_b_state == LOW)
-			increment = 1;
-		else
-			increment = -1;
+			if(vol_a_state == HIGH && last_vol_a == LOW)
+				steps += increment;
+			else
+				steps -= increment;
+		} 
+		
+		if(vol_b_state != last_vol_b) {
+			if(vol_a_state == HIGH)
+				increment = 1;
+			else
+				increment = -1;
 
-		if(vol_a_state == HIGH && last_vol_a == LOW)
-			steps += increment;
-		else
-			steps -= increment;
-	} 
-	
-	if(vol_b_state != last_vol_b) {
-		if(vol_a_state == HIGH)
-			increment = 1;
-		else
-			increment = -1;
-
-		if(vol_b_state == HIGH && last_vol_b == LOW)
-			steps += increment;
-		else
-			steps -= increment;
+			if(vol_b_state == HIGH && last_vol_b == LOW)
+				steps += increment;
+			else
+				steps -= increment;
+		}
 	}
 
 	while(TIMER < KNOB_WAIT);
+	vol_a_state = digitalRead(KNOB_A);
+	vol_b_state = digitalRead(KNOB_B);
 
 	vol_steps += steps;
+	interrupts();
 }
 
 void handleVolumeKnob() {
