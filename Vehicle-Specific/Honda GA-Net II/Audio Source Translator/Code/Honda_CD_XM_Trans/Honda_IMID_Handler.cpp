@@ -166,15 +166,15 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 
 		writeIMIDTextMessage(new_text);
 	} else if(the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && the_message->sender == ID_RADIO) {
+		ack = false;
+		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+		
 		const uint8_t source = the_message->data[2];
 		if(the_message->l >= 4) {
 			const uint8_t subsource = the_message->data[3];
 			setIMIDSource(source, subsource);
 		} else
 			setIMIDSource(source, 0);
-
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
 
 		/*uint8_t data_request_data[] = {0x60, 0x10};
 		AIData data_request(sizeof(data_request_data), ID_IMID_SCR, ID_RADIO);
