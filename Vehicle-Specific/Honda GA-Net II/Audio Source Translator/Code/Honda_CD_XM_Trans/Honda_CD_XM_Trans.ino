@@ -37,6 +37,7 @@
 //#define MEMORY_CHECK
 
 #define FUNCTION_DELAY 5000
+#define SOURCE_DELAY 5000
 
 #define CACHE_SIZE 32
 
@@ -52,7 +53,7 @@ HondaTapeHandler tape_handler(&ie_handler, &ai_handler, &parameters, &imid_handl
 HondaXMHandler xm_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
 HondaCDHandler cd_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
 
-elapsedMillis function_timer, ai_timer;
+elapsedMillis function_timer, ai_timer, screen_request_timer;
 
 void setup() {
 	AISerial.begin(AI_BAUD);
@@ -63,6 +64,7 @@ void setup() {
 	digitalWrite(LED_BUILTIN, LOW);
 
 	sendWideHandshake(&ie_handler);
+	parameters.screen_request_timer = &screen_request_timer;
 
 	#ifdef MEMORY_CHECK
 	Serial.begin(115200);
@@ -224,6 +226,16 @@ void loop() {
 	imid_handler.loop();
 	cd_handler.loop();
 	xm_handler.loop();
+
+	if(screen_request_timer > SOURCE_DELAY) {
+		screen_request_timer = 0;
+		if(cd_handler.getSelected())
+			cd_handler.requestControl();
+		else if(tape_handler.getSelected())
+			tape_handler.requestControl();
+		else if(xm_handler.getSelected())
+			xm_handler.requestControl();
+	}
 }
 
 void interpretIEData(IE_Message ie_msg) {

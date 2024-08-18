@@ -214,6 +214,20 @@ void HondaSourceHandler::setMenuTitle(String title) {
 	ai_driver->writeAIData(&change_title_msg, parameter_list->computer_connected);
 }
 
+//Request display control.
+void HondaSourceHandler::requestControl() {
+	this->requestControl(this->device_ai_id);
+}
+
+//Request display control.
+void HondaSourceHandler::requestControl(const uint8_t id) {
+	uint8_t request_data[] = {0x77, id, 0x80};
+	AIData request_msg(sizeof(request_data), this->device_ai_id, ID_NAV_SCREEN);
+	request_msg.refreshAIData(request_data);
+
+	ai_driver->writeAIData(&request_msg, parameter_list->screen_connected);
+}
+
 //Get a text message from a string.
 AIData getTextMessage(const uint8_t sender, String text, const uint8_t group, const uint8_t area, const bool refresh) {
 	//text.replace("#","##  ");

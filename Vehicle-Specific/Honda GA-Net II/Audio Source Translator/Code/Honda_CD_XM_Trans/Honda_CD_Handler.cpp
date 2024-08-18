@@ -375,6 +375,7 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 			sendFunctionMessage(ie_driver, false, IE_ID_CDC, function, sizeof(function));
 			getIEAckMessage(device_ie_id);
 			
+			*parameter_list->screen_request_timer = 0;
 			sendAICDStatusMessage(ID_RADIO);
 			if(this->text_control) {
 				sendCDTrackMessage();
@@ -404,8 +405,10 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 				uint8_t function[] = {0x0, 0x1};
 				sendFunctionMessage(ie_driver, true, IE_ID_CDC, function, sizeof(function));
 				getIEAckMessageStrict(device_ie_id);
+				*parameter_list->screen_request_timer = 0;
 			}
 
+			*active_menu = 0;
 			this->text_control = false;
 			clearCDText(true, true, true, true, true);
 		}

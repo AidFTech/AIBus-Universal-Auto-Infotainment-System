@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <elapsedMillis.h>
 
 #ifndef parameter_list_h
 #define parameter_list_h
@@ -27,6 +28,7 @@ struct ParameterList {
 	uint8_t active_menu = 0;
 
 	uint16_t screen_w = 800, screen_h = 480;
+	elapsedMillis *screen_request_timer;
 };
 
 #endif

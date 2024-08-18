@@ -527,6 +527,8 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 			sendAINumberMessage(ID_RADIO);
 			for(uint8_t i=0;i<=3;i+=1)
 				sendAITextMessage(ID_RADIO, i);
+
+			*parameter_list->screen_request_timer = 0;
 			
 			if(this->text_control) {
 				if(parameter_list->imid_connected) {
@@ -546,6 +548,7 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				uint8_t function[] = {0x0, 0x1};
 				sendFunctionMessage(ie_driver, true, IE_ID_SIRIUS, function, sizeof(function));
 				getIEAckMessage(device_ie_id);
+				*parameter_list->screen_request_timer = 0;
 			}
 
 			this->text_control = false;

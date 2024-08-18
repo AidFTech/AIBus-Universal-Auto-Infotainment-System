@@ -178,6 +178,7 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			getIEAckMessage(device_ie_id);
 			
 			sendTapeUpdateMessage(ID_RADIO);
+			*parameter_list->screen_request_timer = 0;
 			if(this->text_control) {
 				if(!parameter_list->imid_connected && !parameter_list->external_imid_tape)
 					clearExternalIMID();
@@ -190,6 +191,7 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 				uint8_t function[] = {0x0, 0x1};
 				sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function, sizeof(function));
 				getIEAckMessage(device_ie_id);
+				*parameter_list->screen_request_timer = 0;
 			}
 
 			*active_menu = 0;

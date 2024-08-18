@@ -21,6 +21,8 @@ public:
 
 	bool getEstablished();
 	bool getSelected();
+
+	void requestControl();
 protected:
 	EnIEBusHandler* ie_driver;
 	AIBusHandler* ai_driver;
@@ -49,6 +51,8 @@ protected:
 	void appendAudioMenu(const uint8_t position, String text);
 	void displayAudioMenu(const uint8_t selected);
 	void setMenuTitle(String title);
+
+	void requestControl(const uint8_t id);
 };
 
 AIData getTextMessage(const uint8_t sender, String text, const uint8_t group, const uint8_t area, const bool refresh);
