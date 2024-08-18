@@ -16,6 +16,11 @@ void EnAIBusHandler::addID(const uint8_t id) {
 	if(current_id >= id_count)
 		return;
 	
+	for(int i=0;i<current_id;i+=1) {
+		if(id_list[i] == id)
+			return;
+	}
+
 	id_list[current_id] = id;
 	current_id += 1;
 }

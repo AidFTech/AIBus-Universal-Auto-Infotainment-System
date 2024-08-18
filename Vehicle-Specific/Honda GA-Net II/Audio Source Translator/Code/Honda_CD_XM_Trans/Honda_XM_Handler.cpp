@@ -98,8 +98,10 @@ void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 	if(the_message->receiver != IE_ID_RADIO || the_message->sender != IE_ID_SIRIUS)
 		return;
 
-	if(!source_established && the_message->l > 4)
+	if(!source_established && the_message->l > 4) {
+		ie_driver->addID(ID_XM);
 		source_established = true;
+	}
 		
 	bool ack = true;
 
@@ -500,6 +502,19 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 			xm_timer = 0;
 			xm_timer_enabled = true;
 			while(xm_timer < XM_FULL_TIMER && !full_xm_ack) {
+				if(ai_driver->dataAvailable(false) > 0) {
+					AIData ai_msg;
+					if(ai_driver->readAIData(&ai_msg, false)) {
+						if(ai_msg.receiver == ID_XM) {
+							ai_driver->sendAcknowledgement(ID_XM, ai_msg.sender);
+							if(ai_msg.l >= 3 && ai_msg.data[0] == 0x40 && ai_msg.data[1] == 0x1)
+								this->text_control = ai_msg.data[2] == ID_XM;
+							else
+								ai_driver->cacheMessage(&ai_msg);
+						}
+					}
+				}
+
 				if(ie_driver->getInputOn()) {
 					IE_Message new_msg;
 					if(ie_driver->readMessage(&new_msg, true, IE_ID_RADIO) == 0) {

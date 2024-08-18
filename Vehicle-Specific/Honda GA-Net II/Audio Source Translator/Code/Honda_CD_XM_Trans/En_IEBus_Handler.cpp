@@ -24,7 +24,9 @@ void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, cons
 
 	this->ai_handler->writeAIData(&block_msg);*/
 
-	ai_handler->cacheAllPending();
+	while(ai_handler->dataAvailable(false) > 0) {
+		ai_handler->cacheAllPending();
+	}
 
 	if(ai_block_pin >= 0)
 		digitalWrite(ai_block_pin, HIGH);
@@ -42,7 +44,9 @@ void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, cons
 
 	this->ai_handler->writeAIData(&block_msg);*/
 
-	ai_handler->cacheAllPending();
+	while(ai_handler->dataAvailable(false) > 0) {
+		ai_handler->cacheAllPending();
+	}
 
 	if(ai_block_pin >= 0)
 		digitalWrite(ai_block_pin, HIGH);
@@ -54,7 +58,9 @@ void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, cons
 }
 
 int EnIEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id) volatile  {
-	ai_handler->cacheAllPending();
+	while(ai_handler->dataAvailable(false) > 0) {
+		ai_handler->cacheAllPending();
+	}
 
 	if(ai_block_pin >= 0)
 		digitalWrite(ai_block_pin, HIGH);

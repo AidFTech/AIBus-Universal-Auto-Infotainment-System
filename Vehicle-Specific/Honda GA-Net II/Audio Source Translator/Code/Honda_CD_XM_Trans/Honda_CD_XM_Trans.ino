@@ -47,7 +47,7 @@
 
 ParameterList parameters;
 
-EnAIBusHandler ai_handler(&AISerial, AI_RX, 4);
+EnAIBusHandler ai_handler(&AISerial, AI_RX, 8);
 EnIEBusHandler ie_handler(IEBUS_RX, IEBUS_TX, &ai_handler, AIBUS_BLOCK);
 
 HondaIMIDHandler imid_handler(&ie_handler, &ai_handler, &parameters);
