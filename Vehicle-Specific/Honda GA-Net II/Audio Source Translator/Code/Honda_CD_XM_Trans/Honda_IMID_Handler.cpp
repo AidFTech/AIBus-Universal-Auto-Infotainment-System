@@ -771,8 +771,9 @@ void HondaIMIDHandler::writeIMIDCDCTrackMessage(const uint8_t disc, const uint8_
 	cd_message.refreshIEData(cd_data);
 
 	bool ack = false;
+	elapsedMillis wait_timer;
 
-	while(!ack) {
+	while(!ack && wait_timer < 50) {
 		ie_driver->sendMessage(&cd_message, true, true);
 		ack = this->getIEAckMessage(IE_ID_RADIO);
 	}
@@ -873,14 +874,16 @@ void HondaIMIDHandler::writeIMIDCDCTextMessage(const uint8_t position, String te
 	text_msg2.refreshIEData(text_data2);
 
 	bool ack = false;
+	elapsedMillis wait_timer;
 
-	while(!ack) {
+	while(!ack && wait_timer < 50) {
 		ie_driver->sendMessage(&text_msg1, true, true);
 		ack = getIEAckMessage(IE_ID_RADIO);
 	}
 
 	ack = false;
-	while(!ack) {
+	wait_timer = 0;
+	while(!ack && wait_timer < 50) {
 		ie_driver->sendMessage(&text_msg2, true, true);
 		ack = getIEAckMessage(IE_ID_RADIO);
 	}

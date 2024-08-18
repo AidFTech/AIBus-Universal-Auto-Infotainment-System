@@ -98,9 +98,11 @@ void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 	if(the_message->receiver != IE_ID_RADIO || the_message->sender != IE_ID_SIRIUS)
 		return;
 
-	if(!source_established && the_message->l > 4) {
+	if(!source_established && (the_message->l > 4 || (the_message->l >= 1 && the_message->data[0] == 0x80))) {
 		ie_driver->addID(ID_XM);
 		source_established = true;
+		if(parameter_list->radio_connected)
+			sendSourceNameMessage();
 	}
 		
 	bool ack = true;
@@ -537,7 +539,13 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				getIEAckMessage(device_ie_id);
 				full_xm = true;
 			}
-			//TODO: Change the channel if XM2 is selected.
+			
+			if(xm2)
+				channel = &xm2_channel;
+			else
+				channel = &xm1_channel;
+			
+			setChannel(*channel);
 
 			sendAINumberMessage(ID_RADIO);
 			for(uint8_t i=0;i<=3;i+=1)
@@ -897,8 +905,9 @@ void HondaXMHandler::changeToPreset(uint8_t preset) {
 	preset_request.refreshIEData(preset_request_data);
 
 	bool ie_ack = false;
+	elapsedMillis ack_timer;
 
-	while(!ie_ack) {
+	while(!ie_ack && ack_timer < 50) {
 		ie_driver->sendMessage(&preset_request, true, true);
 		ie_ack = this->getIEAckMessage(device_ie_id);
 	}
@@ -921,8 +930,9 @@ void HondaXMHandler::savePreset(uint8_t preset) {
 	preset_request.refreshIEData(preset_request_data);
 
 	bool ie_ack = false;
+	elapsedMillis ack_timer;
 
-	while(!ie_ack) {
+	while(!ie_ack && ack_timer < 50) {
 		ie_driver->sendMessage(&preset_request, true, true);
 		ie_ack = this->getIEAckMessage(device_ie_id);
 	}
@@ -934,7 +944,8 @@ void HondaXMHandler::savePreset(uint8_t preset) {
 	ie_driver->sendMessage(&preset_set, true, true);
 
 	ie_ack = false;
-	while(!ie_ack) {
+	ack_timer = 0;
+	while(!ie_ack && ack_timer < 50) {
 		ie_driver->sendMessage(&preset_set, true, true);
 		ie_ack = this->getIEAckMessage(device_ie_id);
 	}
@@ -1403,7 +1414,7 @@ void HondaXMHandler::clearUpperField() {
 
 void HondaXMHandler::appendDirectNumber(const uint8_t num) {
 	if(num > 0 && num <= 10) {
-		if(direct_num <= 255) {
+		if(direct_num*10+int(num)%10 <= 255) {
 			direct_num*=10;
 			direct_num += int(num)%10;
 		}

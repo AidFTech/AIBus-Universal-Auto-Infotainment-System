@@ -24,8 +24,15 @@ void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, cons
 
 	this->ai_handler->writeAIData(&block_msg);*/
 
-	while(ai_handler->dataAvailable(false) > 0) {
-		ai_handler->cacheAllPending();
+	int avail = ai_handler->dataAvailable(false);
+	elapsedMicros timer;
+
+	while(timer < AI_DELAY_U) {
+		if(ai_handler->dataAvailable(false) != avail || ai_handler->dataAvailable(false) > 0) {
+			ai_handler->cacheAllPending();
+			avail = ai_handler->dataAvailable(false);
+			timer = 0;
+		}
 	}
 
 	if(ai_block_pin >= 0)
@@ -44,8 +51,15 @@ void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, cons
 
 	this->ai_handler->writeAIData(&block_msg);*/
 
-	while(ai_handler->dataAvailable(false) > 0) {
-		ai_handler->cacheAllPending();
+	int avail = ai_handler->dataAvailable(false);
+	elapsedMicros timer;
+
+	while(timer < AI_DELAY_U) {
+		if(ai_handler->dataAvailable(false) != avail || ai_handler->dataAvailable(false) > 0) {
+			ai_handler->cacheAllPending();
+			avail = ai_handler->dataAvailable(false);
+			timer = 0;
+		}
 	}
 
 	if(ai_block_pin >= 0)
@@ -58,8 +72,15 @@ void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, cons
 }
 
 int EnIEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id) volatile  {
-	while(ai_handler->dataAvailable(false) > 0) {
-		ai_handler->cacheAllPending();
+	int avail = ai_handler->dataAvailable(false);
+	elapsedMicros timer;
+
+	while(timer < AI_DELAY_U) {
+		if(ai_handler->dataAvailable(false) != avail || ai_handler->dataAvailable(false) > 0) {
+			ai_handler->cacheAllPending();
+			avail = ai_handler->dataAvailable(false);
+			timer = 0;
+		}
 	}
 
 	if(ai_block_pin >= 0)

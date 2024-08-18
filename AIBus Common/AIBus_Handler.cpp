@@ -79,6 +79,16 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 				ai_timer = 0;
 
 			if(ai_timer > AI_WAIT) {
+				elapsedMicros clear_timer;
+
+				int avail = ai_serial->available();
+				while(clear_timer < AI_DELAY_U) {
+					if(ai_serial->available() > avail) {
+						avail = ai_serial->available();
+						clear_timer = 0;
+					}
+				}
+
 				uint8_t db[ai_serial->available()];
 				ai_serial->readBytes(db, ai_serial->available());
 				return false;
@@ -106,6 +116,16 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 				chex[i+3] = d[i];
 
 			if(!checkValidity(chex,l+2)) {
+				elapsedMicros clear_timer;
+
+				int avail = ai_serial->available();
+				while(clear_timer < AI_DELAY_U) {
+					if(ai_serial->available() > avail) {
+						avail = ai_serial->available();
+						clear_timer = 0;
+					}
+				}
+
 				uint8_t db[ai_serial->available()];
 				ai_serial->readBytes(db, ai_serial->available());
 				return false;

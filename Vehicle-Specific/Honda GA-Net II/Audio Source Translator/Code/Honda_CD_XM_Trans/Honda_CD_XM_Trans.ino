@@ -66,6 +66,10 @@ void setup() {
 	digitalWrite(LED_BUILTIN, LOW);
 
 	sendWideHandshake(&ie_handler);
+	sendPingHandshake(&ie_handler, IE_ID_IMID);
+	sendPingHandshake(&ie_handler, IE_ID_CDC);
+	sendPingHandshake(&ie_handler, IE_ID_TAPE);
+	sendPingHandshake(&ie_handler, IE_ID_SIRIUS);
 	parameters.screen_request_timer = &screen_request_timer;
 
 	#ifdef MEMORY_CHECK

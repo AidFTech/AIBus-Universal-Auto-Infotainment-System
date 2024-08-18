@@ -123,9 +123,11 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 	if(the_message->receiver != IE_ID_RADIO || the_message->sender != IE_ID_CDC)
 		return;
 
-	if(!source_established && the_message->l > 4) {
+	if(!source_established && (the_message->l > 4 || (the_message->l >= 1 && the_message->data[0] == 0x80))) {
 		ie_driver->addID(ID_CDC);
 		source_established = true;
+		if(parameter_list->radio_connected)
+			sendSourceNameMessage();
 	}
 
 	bool ack = true;

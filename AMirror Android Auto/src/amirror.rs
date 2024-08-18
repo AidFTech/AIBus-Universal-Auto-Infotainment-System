@@ -160,11 +160,25 @@ impl <'a> AMirror<'a> {
 							return;
 						}
 					};
+
+					self.write_aibus_message(AIBusMessage {
+						sender: AIBUS_DEVICE_AMIRROR,
+						receiver: AIBUS_DEVICE_NAV_SCREEN,
+						data: [0x77, AIBUS_DEVICE_AMIRROR, 0x80],
+					});
 					
 				} else { //Deselected!
 					self.handler.send_carplay_command(PHONE_COMMAND_PAUSE);
 					context.audio_selected = false;
 					context.audio_text = false;
+
+					if new_data != 0 {
+						self.write_aibus_message(AIBusMessage {
+							sender: AIBUS_DEVICE_AMIRROR,
+							receiver: AIBUS_DEVICE_NAV_SCREEN,
+							data: [0x77, new_device, 0x80],
+						});
+					}
 				}
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x40 && ai_msg.data[1] == 0x1 { //Text control change.
 				let new_device = ai_msg.data[2];

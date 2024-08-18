@@ -164,8 +164,7 @@ void setup() {
 	vol_a_state = digitalRead(KNOB_A);
 	vol_b_state = digitalRead(KNOB_B);
 
-	attachInterrupt(digitalPinToInterrupt(KNOB_A), volumeKnobIncrement, CHANGE);
-	attachInterrupt(digitalPinToInterrupt(KNOB_B), volumeKnobIncrement, CHANGE);
+	attachInterrupt(digitalPinToInterrupt(KNOB_A), volumeKnobIncrement, FALLING);
 
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM2, HIGH);
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM3, HIGH);
@@ -350,7 +349,7 @@ void sendButtonsPresent(const uint8_t receiver) {
 }
 
 void volumeKnobIncrement() {
-	noInterrupts();
+	/*noInterrupts();
 	TIMER_SCALER &= 0xF8;
 	TIMER_SCALER |= 0x5;
 	TIMER = 0;
@@ -413,7 +412,14 @@ void volumeKnobIncrement() {
 	interrupts();
 	TIMER_SCALER &= 0xF8;
 	TIMER_SCALER |= 0x2;
-	TIMER = 0;
+	TIMER = 0;*/
+	vol_a_state = digitalRead(KNOB_A);
+	vol_b_state = digitalRead(KNOB_B);
+
+	if(vol_b_state == HIGH)
+		vol_steps += 1;
+	else
+		vol_steps -= 1;
 }
 
 void handleVolumeKnob() {

@@ -31,3 +31,11 @@ void sendFunctionMessage(IEBusHandler* driver, const bool change, const uint16_t
 	
 	driver->sendMessage(&function_message, true, true);
 }
+
+void sendPingHandshake(IEBusHandler* driver, const uint16_t id) {
+	uint8_t handshake_data[] = {0x1};
+	IE_Message handshake(sizeof(handshake_data), IE_ID_RADIO, id&0xFFF, 0xF, true);
+	handshake.refreshIEData(handshake_data);
+
+	driver->sendMessage(&handshake, true, true);
+}
