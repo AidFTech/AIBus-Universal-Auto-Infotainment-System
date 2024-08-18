@@ -221,6 +221,9 @@ void HondaSourceHandler::requestControl() {
 
 //Request display control.
 void HondaSourceHandler::requestControl(const uint8_t id) {
+	if(id == 0)
+		return;
+
 	uint8_t request_data[] = {0x77, id, 0x80};
 	AIData request_msg(sizeof(request_data), this->device_ai_id, ID_NAV_SCREEN);
 	request_msg.refreshAIData(request_data);

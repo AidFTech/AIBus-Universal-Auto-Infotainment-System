@@ -9,6 +9,8 @@
 #define MENU_XM 0x19
 #define MENU_RADIO 0x10
 
+#define SCREEN_REQUEST_TIMER 5000
+
 struct ParameterList {
 	bool power_on = true;
 

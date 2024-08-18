@@ -33,6 +33,8 @@
 #define IEBUS_TX 6
 #define IEBUS_RX 7
 
+#define AIBUS_BLOCK 8
+
 #define ILL_CATHODE 8
 //#define MEMORY_CHECK
 
@@ -46,7 +48,7 @@
 ParameterList parameters;
 
 EnAIBusHandler ai_handler(&AISerial, AI_RX, 4);
-EnIEBusHandler ie_handler(IEBUS_RX, IEBUS_TX, &ai_handler);
+EnIEBusHandler ie_handler(IEBUS_RX, IEBUS_TX, &ai_handler, AIBUS_BLOCK);
 
 HondaIMIDHandler imid_handler(&ie_handler, &ai_handler, &parameters);
 HondaTapeHandler tape_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
