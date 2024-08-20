@@ -229,6 +229,20 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
 		if(ai_d->data[0] == 0x30) { //Button press.
 			const uint8_t button = ai_d->data[1], state = ai_d->data[2]>>6;
+
+			if(parameter_list->manual_tune_mode && (button != 0x7 && button != 0x2A && button != 0x2B)) {
+				parameter_list->manual_tune_mode = false;
+				sendManualTuneMessage();
+				
+				{
+					uint8_t data[] = {0x77, parameter_list->last_control, 0x10};
+
+					AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
+					screen_msg.refreshAIData(data);
+					ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
+				}
+			}
+
 			if(button == 0x6 && state == 2) //Press volume knob.
 				audio_on = !audio_on;
 			else if(button == 0x23 && state == 2) { //Source button.
@@ -263,7 +277,133 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					parameter_list->info_mode = !parameter_list->info_mode;
 				else
 					parameter_list->info_mode = false;
+			} else if(button == 0x36 && state == 0x2) { //AM/FM button.
+				const uint8_t source_id = getCurrentSourceID();
+				if(source_id == ID_RADIO) { //Increment AM/FM.
+					int new_src = getFirstOccurenceOf(ID_RADIO, current_source+1);
+					if(new_src < 0)
+						new_src = getFirstOccurenceOf(ID_RADIO);
+					else if(source_list[new_src].sub_id > 2) {
+						new_src = getFirstOccurenceOf(ID_RADIO, new_src+1);
+						if(new_src < 0)
+							new_src = getFirstOccurenceOf(ID_RADIO);
+					}
+
+					if(new_src >= 0 && new_src < source_count) {
+						setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
+					}
+				} else {
+					int new_src = getFirstOccurenceOf(ID_RADIO);
+
+					if(source_list[new_src].sub_id > 2)
+						new_src = getFirstOccurenceOf(ID_RADIO, new_src+1);
+
+					if(new_src >= 0 && new_src < source_count)
+						setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
+				}
+			} else if(button == 0x38 && state == 0x2) { //Media button.
+				int new_src = current_source;
+				const uint8_t source_id = getCurrentSourceID();
+
+				if(source_id == 0)
+					new_src = -1;
+
+				for(int s=current_source + 1;s<source_count;s+=1) {
+					bool source_found = false;
+
+					if((source_list[s].source_id != ID_RADIO && source_list[s].source_id != 0) || (source_list[s].source_id == ID_RADIO && source_list[s].sub_id > 2)) {
+						new_src = s;
+						source_found = true;
+					}
+
+					if(source_found)
+						break;
+
+					if(s == current_source)
+						break;
+					if(s == source_count - 1)
+						s = 0;
+				}
+
+				if(new_src > 0 && new_src < source_count && new_src != current_source)
+					setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
+			} else if(button == 0x30 && state == 2) { //FM button.
+				if(getCurrentSourceID() == 0) {
+					setCurrentSource(ID_RADIO, 0);
+				} else if(source_list[current_source].source_id == ID_RADIO) {
+					if(source_list[current_source].sub_id == 0)
+						setCurrentSource(ID_RADIO, 1);
+					else
+						setCurrentSource(ID_RADIO, 0);
+				} else
+					setCurrentSource(ID_RADIO, 0);
+			} else if(button == 0x31 && state == 2) { //AM button.
+				setCurrentSource(ID_RADIO, 2);
+			} else if(button == 0x33 && state == 2) { //CD button.
+				const uint8_t source_id = getCurrentSourceID();
+				int new_src = -1;
+
+				if(source_id == ID_CD) {
+					new_src = getFirstOccurenceOf(ID_CDC);
+				} else if(source_id == ID_CDC) {
+					new_src = getFirstOccurenceOf(ID_CD);
+				} else {
+					new_src = getFirstOccurenceOf(ID_CD);
+					if(new_src < 0)
+						new_src = getFirstOccurenceOf(ID_CDC);
+				}
+
+				if(new_src >= 0 && new_src < source_count)
+					setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
+			} else if(button == 0x32 && state == 2) { //Tape button.
+				setCurrentSource(ID_TAPE, 0);
+			} else if(button == 0x34 && state == 2) { //Aux button.
+				setCurrentSource(ID_RADIO, 3);
+				//TODO: USB and BTA.
+			} else if(button == 0x35 && state == 2) {
+				const uint8_t source_id = getCurrentSourceID();
+				int new_src = -1;
+
+				if(source_id == ID_XM) {
+					new_src = getFirstOccurenceOf(ID_XM, current_source + 1);
+					if(new_src < 0)
+						new_src = getFirstOccurenceOf(ID_XM);
+				} else
+					new_src = getFirstOccurenceOf(ID_XM);
+
+				if(new_src >= 0 && new_src < source_count && new_src != current_source)
+					setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
+			} else if(button == 0x37 && state == 2) { //Tape/CD button.
+				int new_src = current_source;
+				const uint8_t source_id = getCurrentSourceID();
+
+				if(source_id == 0)
+					new_src = -1;
+
+				for(int s=current_source + 1;s<source_count;s+=1) {
+					bool source_found = false;
+
+					if(source_list[s].source_id == ID_TAPE) {
+						new_src = s;
+						source_found = true;
+					} else if(source_list[s].source_id == ID_CDC || source_list[s].source_id == ID_CD) {
+						new_src = s;
+						source_found = true;
+					}
+
+					if(source_found)
+						break;
+
+					if(s == current_source)
+						break;
+					if(s == source_count - 1)
+						s = 0;
+				}
+
+				if(new_src > 0 && new_src < source_count && new_src != current_source)
+					setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
 			}
+			
 		} else if(ai_d->data[0] == 0x32) { //Knob turn.
 			const uint8_t steps = ai_d->data[2]&0xF;
 			const bool clockwise = (ai_d->data[2]&0x10) != 0;

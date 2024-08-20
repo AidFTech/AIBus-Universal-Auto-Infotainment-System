@@ -545,7 +545,8 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 			else
 				channel = &xm1_channel;
 			
-			setChannel(*channel);
+			if(full_xm)
+				setChannel(*channel);
 
 			sendAINumberMessage(ID_RADIO);
 			for(uint8_t i=0;i<=3;i+=1)

@@ -418,6 +418,14 @@ void volumeKnobIncrement() {
 	TIMER_SCALER &= 0xF8;
 	TIMER_SCALER |= 0x2;
 	TIMER = 0;*/
+
+	noInterrupts();
+	TIMER_SCALER &= 0xF8;
+	TIMER_SCALER |= 0x5;
+	TIMER = 0;
+
+	while(TIMER < KNOB_WAIT);
+
 	vol_a_state = digitalRead(KNOB_A);
 	vol_b_state = digitalRead(KNOB_B);
 
@@ -425,6 +433,10 @@ void volumeKnobIncrement() {
 		vol_steps += 1;
 	else
 		vol_steps -= 1;
+
+	TIMER_SCALER &= 0xF8;
+	TIMER_SCALER |= 0x2;
+	interrupts();
 }
 
 void handleVolumeKnob() {

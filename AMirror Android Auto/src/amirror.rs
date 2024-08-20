@@ -1,5 +1,6 @@
 use std::os::unix::net::UnixStream;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::mirror::messages::*;
 use crate::{aibus::*, write_aibus_message};
@@ -14,6 +15,8 @@ pub struct AMirror<'a> {
 	context: &'a Arc<Mutex<Context>>,
 	stream: &'a Arc<Mutex<UnixStream>>,
 	handler: MirrorHandler<'a>,
+
+	source_request_timer: Instant,
 }
 
 impl <'a> AMirror<'a> {
@@ -23,7 +26,9 @@ impl <'a> AMirror<'a> {
 		return Self{
 			context,
 			stream,
-			handler: mutex_mirror_handler
+			handler: mutex_mirror_handler,
+
+			source_request_timer: Instant::now(),
 		};
 	}
 
@@ -132,6 +137,21 @@ impl <'a> AMirror<'a> {
 				}
 			}
 		}
+
+		if Instant::now() - self.source_request_timer > Duration::from_millis(5000) && context.audio_selected {
+			self.source_request_timer = Instant::now();
+
+			let mut control_req = 0x80;
+			if context.phone_active {
+				control_req |= 0x10;
+			}
+			
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_NAV_SCREEN,
+				data: [0x77, AIBUS_DEVICE_AMIRROR, control_req].to_vec(),
+			});
+		}
 	}
 
 	pub fn handle_aibus_message(&mut self, ai_msg: AIBusMessage) {
@@ -161,10 +181,15 @@ impl <'a> AMirror<'a> {
 						}
 					};
 
+					let mut control_req = 0x80;
+					if context.phone_active {
+						control_req |= 0x10;
+					}
+
 					self.write_aibus_message(AIBusMessage {
 						sender: AIBUS_DEVICE_AMIRROR,
 						receiver: AIBUS_DEVICE_NAV_SCREEN,
-						data: [0x77, AIBUS_DEVICE_AMIRROR, 0x80],
+						data: [0x77, AIBUS_DEVICE_AMIRROR, control_req].to_vec(),
 					});
 					
 				} else { //Deselected!
@@ -172,11 +197,11 @@ impl <'a> AMirror<'a> {
 					context.audio_selected = false;
 					context.audio_text = false;
 
-					if new_data != 0 {
+					if new_device != 0 {
 						self.write_aibus_message(AIBusMessage {
 							sender: AIBUS_DEVICE_AMIRROR,
 							receiver: AIBUS_DEVICE_NAV_SCREEN,
-							data: [0x77, new_device, 0x80],
+							data: [0x77, new_device, 0x80].to_vec(),
 						});
 					}
 				}
