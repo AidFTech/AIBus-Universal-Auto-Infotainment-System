@@ -368,16 +368,27 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 		ack = false;
 		sendAIAckMessage(sender);
 		sendSourceNameMessage(the_message->sender);
-	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function change.
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO && the_message->l >= 3) { //Function change.
 		const uint8_t active_source = the_message->data[2];
 
+		ack = false;
+		sendAIAckMessage(sender);
+
 		if(active_source == ID_CDC) {
+
 			uint8_t function[] = {0x6, 0x0, 0x1};
 			source_sel = true;
 			sendFunctionMessage(ie_driver, true, IE_ID_CDC, function, sizeof(function));
-			getIEAckMessage(device_ie_id);
+			
+			elapsedMillis function_timer;
+			while(!getIEAckMessage(device_ie_id) && function_timer < 200)
+				sendFunctionMessage(ie_driver, true, IE_ID_CDC, function, sizeof(function));
+
 			sendFunctionMessage(ie_driver, false, IE_ID_CDC, function, sizeof(function));
-			getIEAckMessage(device_ie_id);
+
+			function_timer = 0;
+			while(!getIEAckMessage(device_ie_id) && function_timer < 200)
+				sendFunctionMessage(ie_driver, false, IE_ID_CDC, function, sizeof(function));
 			
 			*parameter_list->screen_request_timer = SCREEN_REQUEST_TIMER;
 			sendAICDStatusMessage(ID_RADIO);
@@ -416,7 +427,7 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 			this->text_control = false;
 			clearCDText(true, true, true, true, true);
 		}
-	} else if (the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO) {
+	} else if (the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO && the_message->l >= 3) {
 		ack = false;
 		sendAIAckMessage(sender);
 	

@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <elapsedMillis.h>
 
-#define AI_CACHE_SIZE 256
 #include "AIBus_Handler.h"
 #include "IEBus_Handler.h"
 
@@ -18,6 +17,8 @@ public:
 
 	void addID(const uint8_t id);
 	bool cacheAllPending();
+
+	void waitForAIBus();
 
 private:
 	unsigned int id_count = 0, current_id = 0;

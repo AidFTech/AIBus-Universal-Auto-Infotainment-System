@@ -46,7 +46,7 @@
 #define KNOB_MCP_MOTOR_STOP_IND 2
 #define KNOB_MCP_ANODE 3
 #define KNOB_MCP_CLOSE_ANODE 4
-#define KNOB_BACKLIGHT 5
+#define KNOB_MCP_BACKLIGHT 5
 #define KNOB_MCP_POWER_ON 6
 #define KNOB_MCP_VOL_PUSH 7
 
@@ -137,6 +137,7 @@ void setup() {
 	mcp_knob.pinModeIO(KNOB_MCP_MOTOR_OPEN, OUTPUT);
 	mcp_knob.pinModeIO(KNOB_MCP_MOTOR_STOP_IND, INPUT);
 	mcp_knob.pinModeIO(KNOB_MCP_ANODE, OUTPUT);
+	mcp_knob.pinModeIO(KNOB_MCP_BACKLIGHT, OUTPUT);
 	mcp_knob.pinModeIO(KNOB_MCP_CLOSE_ANODE, OUTPUT);
 	mcp_knob.pinModeIO(KNOB_MCP_POWER_ON, OUTPUT);
 	mcp_knob.pinModeIO(KNOB_MCP_VOL_PUSH, INPUT_PULLUP);
@@ -176,6 +177,7 @@ void setup() {
 	mcp_knob.digitalWriteIO(KNOB_MCP_ANODE, LOW);
 	mcp_knob.digitalWriteIO(KNOB_MCP_CLOSE_ANODE, LOW);
 	mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
+	mcp_knob.digitalWriteIO(KNOB_MCP_BACKLIGHT, LOW);
 
 	button_handler = new ButtonHandler(&mcp_in, &mcp_out, &ai_handler, &parameters, &mcp_knob, KNOB_MCP_VOL_PUSH);
 	jog_handler = new JogHandler(&mcp_out, OUTPUT_MCP_TOGGLE_UP, &mcp_out, OUTPUT_MCP_TOGGLE_DOWN, &mcp_in, INPUT_MCP_TOGGLE_LEFT, &mcp_in, INPUT_MCP_TOGGLE_RIGHT, &mcp_in, INPUT_MCP_TOGGLE_ENTER, &ai_handler, &parameters);
@@ -206,6 +208,7 @@ void loop() {
 					} else if(msg.l >= 3 && msg.data[1] == 0x2) { //Key position.
 						if((msg.data[2]&0x7) != 0) {
 							mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, HIGH);
+							mcp_knob.digitalWriteIO(KNOB_MCP_BACKLIGHT, HIGH);
 							door_timer_enabled = false;
 						}
 
@@ -215,6 +218,7 @@ void loop() {
 							else {
 								power_off_with_door = false;
 								mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
+								mcp_knob.digitalWriteIO(KNOB_MCP_BACKLIGHT, LOW);
 							}
 						}
 
@@ -225,6 +229,7 @@ void loop() {
 							if(power_off_with_door && key_position == 0) {
 								power_off_with_door = false;
 								mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
+								mcp_knob.digitalWriteIO(KNOB_MCP_BACKLIGHT, LOW);
 							} else if(key_position == 0) {
 								mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, HIGH);
 								door_timer_enabled = true;

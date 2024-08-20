@@ -8,6 +8,7 @@ AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin) {
 		pinMode(this->rx_pin, INPUT_PULLUP);
 
 	cached_vec.setStorage(cached_byte, 0);
+	this->ai_serial->setTimeout(1);
 }
 
 AIBusHandler::~AIBusHandler() {

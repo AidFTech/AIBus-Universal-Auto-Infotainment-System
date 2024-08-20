@@ -20,6 +20,10 @@
 #define UINT32_MAX 0xFFFFFFFF
 #endif
 
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+#define AI_CACHE_SIZE 256
+#endif
+
 #ifndef AI_CACHE_SIZE
 #define AI_CACHE_SIZE 32
 #endif

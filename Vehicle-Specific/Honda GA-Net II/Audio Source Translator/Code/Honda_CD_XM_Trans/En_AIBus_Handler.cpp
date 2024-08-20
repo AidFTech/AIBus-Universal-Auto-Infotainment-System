@@ -60,7 +60,7 @@ bool EnAIBusHandler::cacheAllPending() {
 						uint8_t data[ai_msg.l + 4];
 						ai_msg.getBytes(data);
 						for(int i=0;i<ai_msg.l + 4;i+=1)
-						cached_vec.push_back(data[i]);
+							cached_vec.push_back(data[i]);
 					}
 				}
 			return true;
@@ -68,4 +68,14 @@ bool EnAIBusHandler::cacheAllPending() {
 		}
 	}
 	return false;
+}
+
+//Delay until the AIBus line is clear.
+void EnAIBusHandler::waitForAIBus() {
+	elapsedMicros ai_timer;
+	while(ai_timer < AI_DELAY_U) {
+		if(digitalRead(this->rx_pin) == LOW) {
+			ai_timer = 0;
+		}
+	}
 }

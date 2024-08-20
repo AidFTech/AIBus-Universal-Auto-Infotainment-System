@@ -73,7 +73,7 @@ bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 	elapsedMillis delay_timer = 0;
 	while(!ack && delay_timer < 20) {
 		IE_Message ie_d;
-		if(ie_driver->readMessage(&ie_d, true, IE_ID_RADIO) == 0) {
+		if(ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO) == 0) {
 			if(ie_d.l >= 1 && ie_d.data[0] == 0x80) {
 				ack = true;
 				break;
@@ -92,7 +92,7 @@ bool HondaSourceHandler::getIEAckMessageStrict(const uint16_t sender) {
 	elapsedMillis delay_timer = 0;
 	while(!ack && delay_timer < 20) {
 		IE_Message ie_d;
-		if(ie_driver->readMessage(&ie_d, true, IE_ID_RADIO) == 0) {
+		if(ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO) == 0) {
 			if(ie_d.l >= 1 && ie_d.data[0] == 0x80) {
 				ack = true;
 				break;

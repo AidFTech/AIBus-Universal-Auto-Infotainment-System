@@ -35,7 +35,7 @@
 
 #define AIBUS_BLOCK 8
 
-#define ILL_CATHODE 8
+#define ILL_CATHODE 9
 //#define MEMORY_CHECK
 
 #define FUNCTION_DELAY 5000
@@ -56,6 +56,8 @@ HondaXMHandler xm_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
 HondaCDHandler cd_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
 
 elapsedMillis function_timer, ai_timer, screen_request_timer;
+
+uint8_t door_state = 0;
 
 void setup() {
 	AISerial.begin(AI_BAUD);
@@ -123,6 +125,9 @@ void loop() {
 			
 			if(!parameters.computer_connected && ai_msg.sender == ID_NAV_COMPUTER)
 				parameters.computer_connected = true;
+
+			if(!parameters.screen_connected && ai_msg.sender == ID_NAV_SCREEN)
+				parameters.screen_connected = true;
 				
 			#ifndef AI_DEBUG
 			if(!parameters.radio_connected && ai_msg.sender == ID_RADIO) {
@@ -180,11 +185,25 @@ void loop() {
 					if(key != 0) {
 						digitalWrite(GA_ON, HIGH);
 						parameters.power_on = true;
+
+						sendWideHandshake(&ie_handler);
+						sendPingHandshake(&ie_handler, IE_ID_IMID);
+						sendPingHandshake(&ie_handler, IE_ID_CDC);
+						sendPingHandshake(&ie_handler, IE_ID_TAPE);
+						sendPingHandshake(&ie_handler, IE_ID_SIRIUS);
 					} else {
 						parameters.power_on = false;
-					}
 
-					//TODO: Turn GA off if the key is turned off AND the driver door is opened.
+						if((door_state&0xF) != 0)
+							digitalWrite(GA_ON, LOW);
+					}
+				} else if(ai_msg.sender == ID_CANSLATOR && ai_msg.data[1] == 0x43 && ai_msg.l >= 3) { //Doors.
+					const uint8_t last_door_state = door_state;
+					door_state = ai_msg.data[2];
+
+					if((last_door_state&0xF) == 0x0 && (door_state&0xF) != 0x0 && !parameters.power_on) {
+						digitalWrite(GA_ON, LOW);
+					}
 				} else if(ai_msg.sender == ID_CANSLATOR && ai_msg.data[1] == 0x10) { //Lights.
 				} 
 			} else if(ai_msg.receiver == 0xFF && ai_msg.sender == ID_RADIO) {

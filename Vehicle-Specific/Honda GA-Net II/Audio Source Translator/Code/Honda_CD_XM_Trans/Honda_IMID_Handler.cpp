@@ -433,15 +433,27 @@ bool HondaIMIDHandler::setIMIDSource(const uint8_t source, const uint8_t subsour
 				
 				IE_Message cd_msg_2(sizeof(cd_data_2), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
 				cd_msg_2.refreshIEData(cd_data_2);
+
+				bool ack = false;
+				elapsedMillis wait_timer;
 				
-				ie_driver->sendMessage(&cd_msg_1, true, true);
+				while(!ack && wait_timer < 5000) {
+					ie_driver->sendMessage(&cd_msg_1, true, true);
+					ack = getIEAckMessage(device_ie_id);
+				}
 			
-				if(!getIEAckMessage(device_ie_id))
+				if(!ack)
 					return false;
+
+				ack = false;
+				wait_timer = 0;
 				
-				ie_driver->sendMessage(&cd_msg_2, true, true);
+				while(!ack && wait_timer < 5000) {
+					ie_driver->sendMessage(&cd_msg_2, true, true);
+					ack = getIEAckMessage(device_ie_id);
+				}
 			
-				if(!getIEAckMessage(device_ie_id))
+				if(!ack)
 					return false;
 			} else {
 				uint8_t cd_data_1[] = {0x60, 0x4, 0x11, 0x0, 0x15, 0x10, 0x1, 0x2A, 0x80, 0xE0, 0x1};
@@ -773,7 +785,7 @@ void HondaIMIDHandler::writeIMIDCDCTrackMessage(const uint8_t disc, const uint8_
 	bool ack = false;
 	elapsedMillis wait_timer;
 
-	while(!ack && wait_timer < 50) {
+	while(!ack && wait_timer < 5000) {
 		ie_driver->sendMessage(&cd_message, true, true);
 		ack = this->getIEAckMessage(IE_ID_RADIO);
 	}
@@ -876,14 +888,14 @@ void HondaIMIDHandler::writeIMIDCDCTextMessage(const uint8_t position, String te
 	bool ack = false;
 	elapsedMillis wait_timer;
 
-	while(!ack && wait_timer < 50) {
+	while(!ack && wait_timer < 5000) {
 		ie_driver->sendMessage(&text_msg1, true, true);
 		ack = getIEAckMessage(IE_ID_RADIO);
 	}
 
 	ack = false;
 	wait_timer = 0;
-	while(!ack && wait_timer < 50) {
+	while(!ack && wait_timer < 5000) {
 		ie_driver->sendMessage(&text_msg2, true, true);
 		ack = getIEAckMessage(IE_ID_RADIO);
 	}
