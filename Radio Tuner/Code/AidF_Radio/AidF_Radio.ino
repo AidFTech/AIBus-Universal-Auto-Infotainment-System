@@ -219,7 +219,8 @@ void loop() {
 	if(source_text_timer_enabled && source_text_timer > 50) {
 		source_text_timer_enabled = false;
 		const uint8_t current_source_id = source_handler.getCurrentSourceID();
-		text_handler.sendSourceTextControl(current_source_id, current_source_id);
+		if(current_source_id != ID_RADIO && current_source_id != 0)
+			text_handler.sendSourceTextControl(current_source_id, current_source_id);
 	}
 
 	if(imid_timer_enabled && imid_timer > IMID_TIMER) {
