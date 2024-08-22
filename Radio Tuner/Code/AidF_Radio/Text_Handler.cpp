@@ -47,6 +47,11 @@ void TextHandler::sendSourceTextControl(const uint8_t recipient, const uint8_t s
 
 //Write a radio frequency to the screen.
 void TextHandler::sendTunedFrequencyMessage(const uint16_t frequency, const bool mhz, const bool sub) {
+	sendTunedFrequencyMessage(0, frequency, mhz, sub);
+}
+
+//Write a radio frequency to the screen.
+void TextHandler::sendTunedFrequencyMessage(const uint8_t preset, const uint16_t frequency, const bool mhz, const bool sub) {
 	last_frequency = frequency;
 	String frequency_text = "";
 	if(mhz) {
@@ -67,7 +72,7 @@ void TextHandler::sendTunedFrequencyMessage(const uint16_t frequency, const bool
 	frequency_message.data[1] |= 0x10;
 	ai_handler->writeAIData(&frequency_message, parameter_list->computer_connected);
 
-	this->sendIMIDFrequencyMessage(frequency, parameter_list->last_sub);
+	this->sendIMIDFrequencyMessage(frequency, parameter_list->last_sub, preset);
 }
 
 //Write an FM Stereo indicator to the screen.
@@ -83,7 +88,7 @@ void TextHandler::sendStereoMessage(const bool stereo) {
 		
 		ai_handler->writeAIData(&stereo_message, parameter_list->computer_connected);
 	}
-	this->sendIMIDFrequencyMessage(last_frequency, parameter_list->last_sub);
+	this->sendIMIDFrequencyMessage(last_frequency, parameter_list->last_sub, parameter_list->current_preset);
 }
 
 //Send the short 8-character RDS message to the screen.
@@ -152,14 +157,17 @@ void TextHandler::sendIMIDSourceMessage(const uint8_t source, const uint8_t subs
 }
 
 //Send the frequency message to the IMID.
-void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8_t subsrc) {
+void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8_t subsrc, const uint8_t preset) {
 	if(!parameter_list->imid_connected || parameter_list->info_mode)
 		return;
 
 	if(parameter_list->imid_radio) {
-		uint8_t freq_data[] = {0x67, (frequency&0xFF00)>>8, frequency&0xFF, 2, 0, 0x4D}; //TODO: kHz and presets.
+		uint8_t freq_data[] = {0x67, (frequency&0xFF00)>>8, frequency&0xFF, 2, 0, 0x4D}; //TODO: kHz.
 		if(parameter_list->fm_stereo)
 			freq_data[4] |= 0x10;
+
+		if(preset > 0)
+			freq_data[4] |= (preset&0xF);
 
 		AIData freq_msg(sizeof(freq_data), ID_RADIO, ID_IMID_SCR);
 		freq_msg.refreshAIData(freq_data);
@@ -177,7 +185,10 @@ void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8
 			else if(subsrc == SUB_AM)
 				freq_text = "AM";
 
-			freq_text += "  ";
+			if(preset > 0)
+				freq_text += "-" + String(preset);
+			else
+				freq_text += "  ";
 		}
 			
 		if(subsrc != SUB_AM) {

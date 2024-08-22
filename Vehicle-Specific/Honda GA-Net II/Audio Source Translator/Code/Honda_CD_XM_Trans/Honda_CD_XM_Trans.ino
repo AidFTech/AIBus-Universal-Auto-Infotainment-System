@@ -181,7 +181,7 @@ void loop() {
 						imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year);
 					}
 				} else if(ai_msg.sender == ID_CANSLATOR && ai_msg.data[1] == 0x2) { //Key position.
-					const uint8_t key = ai_msg.data[2];
+					const uint8_t key = ai_msg.data[2]&0xF;
 					if(key != 0) {
 						digitalWrite(GA_ON, HIGH);
 						parameters.power_on = true;

@@ -22,6 +22,7 @@ public:
 	void sendSourceTextControl(const uint8_t recipient, const uint8_t source);
 	
 	void sendTunedFrequencyMessage(const uint16_t frequency, const bool mhz, const bool sub);
+	void sendTunedFrequencyMessage(const uint8_t preset, const uint16_t frequency, const bool mhz, const bool sub);
 	void sendStereoMessage(const bool stereo);
 	void sendShortRDSMessage(String text);
 
@@ -40,7 +41,7 @@ private:
 
 	uint16_t last_frequency = 0;
 
-	void sendIMIDFrequencyMessage(const uint16_t frequency, const uint8_t subsrc);
+	void sendIMIDFrequencyMessage(const uint16_t frequency, const uint8_t subsrc, const uint8_t preset);
 };
 
 AIData getTextMessage(String text, const uint8_t group, const uint8_t area);

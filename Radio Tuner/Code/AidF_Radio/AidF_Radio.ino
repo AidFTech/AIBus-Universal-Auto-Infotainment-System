@@ -73,6 +73,13 @@ void setup() {
 	parameters.fm1_tune = tuner1.getFrequency();
 	parameters.fm2_tune = tuner1.getFrequency();
 
+	//TODO: Load in presets from radio.
+	for(int i=0;i<sizeof(parameters.fm1_presets)/sizeof(uint16_t);i+=1)
+		parameters.fm1_presets[i] = parameters.fm1_tune;
+
+	for(int i=0;i<sizeof(parameters.fm2_presets)/sizeof(uint16_t);i+=1)
+		parameters.fm2_presets[i] = parameters.fm2_tune;
+
 	parameters.handshake_sources.setStorage(parameters.handshake_source_list, 0);
 
 	AudioSource src_fm1, src_fm2, src_am;
@@ -171,6 +178,8 @@ void loop() {
 	if(source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source) {
 		src_ping_timer = 0;
 		parameters.info_mode = false;
+		parameters.current_preset = 0;
+		parameters.preferred_preset = 0;
 		
 		const uint8_t current_source_id = source_handler.getCurrentSourceID();
 		const uint16_t current_source = source_handler.getCurrentSource();
@@ -231,7 +240,7 @@ void loop() {
 		}
 	}
 
-	parameters.timer_active = info_timer_enabled || source_text_timer_enabled || imid_timer_enabled || MINUTE_TIMER - parameters.minute_timer <= 100;
+	parameters.timer_active = info_timer_enabled || source_text_timer_enabled || imid_timer_enabled || MINUTE_TIMER - parameters.minute_timer <= 100 || SCREEN_PING_DELAY - screen_ping_timer <= 100;
 
 	if(parameters.handshake_timer_active && parameters.handshake_timer > 200) {
 		parameters.handshake_timer_active = false;
@@ -256,7 +265,7 @@ void loop() {
 			const bool last_stereo = parameters.fm_stereo;
 			const uint16_t current_source = source_handler.getCurrentSource();
 
-			const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+			const uint8_t sub_id = source_handler.source_list[current_source].sub_id, last_preset = parameters.current_preset;
 
 			uint16_t last_compare, *current_frequency;
 			if(sub_id == SUB_FM1) {
@@ -270,6 +279,44 @@ void loop() {
 				current_frequency = &parameters.am_tune;
 			} else break;
 
+			uint8_t current_preset = 0;
+			bool preset_found = false;
+
+			if(parameters.preferred_preset > 0) {
+				if(sub_id == SUB_FM1) {
+					if(parameters.fm1_presets[parameters.preferred_preset-1] == *current_frequency) {
+						current_preset = parameters.preferred_preset;
+						preset_found = true;
+					}
+				} else if(sub_id == SUB_FM2) {
+					if(parameters.fm2_presets[parameters.preferred_preset-1] == *current_frequency) {
+						current_preset = parameters.preferred_preset;
+						preset_found = true;
+					}
+				}
+			} 
+
+			if(!preset_found) {
+				if(sub_id == SUB_FM1) {
+					for(int i=0;i<PRESET_COUNT;i+=1) {
+						if(parameters.fm1_presets[i] == *current_frequency) {
+							current_preset = i + 1;
+							break;
+						}
+					}
+				} else if(sub_id == SUB_FM2) {
+					for(int i=0;i<PRESET_COUNT;i+=1) {
+						if(parameters.fm2_presets[i] == *current_frequency) {
+							current_preset = i + 1;
+							break;
+						}
+					}
+				}
+			}
+
+			parameters.current_preset = current_preset;
+			parameters.preferred_preset = current_preset;
+
 			if(parameters.info_mode && !last_info) {
 				info_timer_enabled = true;
 				info_timer = 0;
@@ -280,7 +327,7 @@ void loop() {
 				if(parameters.imid_radio)
 					text_handler.sendIMIDSourceMessage(ID_RADIO, sub_id);
 
-				text_handler.sendTunedFrequencyMessage(*current_frequency, sub_id != SUB_AM, true);
+				text_handler.sendTunedFrequencyMessage(parameters.current_preset, *current_frequency, sub_id != SUB_AM, true);
 
 				text_handler.sendShortRDSMessage(current_rds);
 				text_handler.sendIMIDRDSMessage(current_rds);
@@ -337,6 +384,30 @@ void loop() {
 				clearFMData();
 				parameter_timer = 0;
 			}
+
+			if(last_preset != current_preset) {
+				String header_text = "";
+				switch(sub_id) {
+				case SUB_FM1:
+					header_text += "FM1";
+					break;
+				case SUB_FM2:
+					header_text += "FM2";
+					break;
+				case SUB_AM:
+					header_text += "AM";
+					break;
+				}
+
+				if(current_preset > 0)
+					header_text += "-" + String(current_preset);
+
+				AIData text_msg = getTextMessage(header_text, 0, 0);
+				aibus_handler.writeAIData(&text_msg, parameters.computer_connected);
+
+				text_handler.sendTunedFrequencyMessage(current_preset, *current_frequency, sub_id != SUB_AM, true);
+			}
+
 			//if(parameters.ai_pending)
 			//	break;
 			
@@ -426,6 +497,14 @@ void handleAIBus(AIData* msg) {
 	if(!parameters.computer_connected && msg->sender == ID_NAV_COMPUTER) {
 		parameters.computer_connected = true;
 		screenInit();
+		
+		{
+			uint8_t data[] = {0x77, parameters.last_control, 0x10};
+
+			AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
+			screen_msg.refreshAIData(data);
+			aibus_handler.writeAIData(&screen_msg, parameters.screen_connected);
+		}
 	}
 
 	if(!parameters.imid_connected && msg->sender == ID_IMID_SCR) {
@@ -642,5 +721,6 @@ void sendIMIDRequest() {
 		}
 	}
 
-	text_handler.sendTime();
+	if(parameters.min >= 0 && parameters.hour >= 0)
+		text_handler.sendTime();
 }

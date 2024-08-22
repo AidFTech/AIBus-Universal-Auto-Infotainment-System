@@ -423,6 +423,7 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 				requestControl(active_source);
 			}
 
+			display_parameter = TEXT_NONE;
 			*active_menu = 0;
 			this->text_control = false;
 			clearCDText(true, true, true, true, true);

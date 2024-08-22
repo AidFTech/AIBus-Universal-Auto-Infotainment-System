@@ -28,9 +28,11 @@ struct ParameterList {
 	uint16_t fm1_tune, fm2_tune, am_tune;
 	bool fm_stereo = false, has_rds = false, info_mode = false;
 	
-	uint16_t fm1_presets[6];
-	uint16_t fm2_presets[6];
-	uint16_t am_presets[6];
+	uint16_t fm1_presets[PRESET_COUNT];
+	uint16_t fm2_presets[PRESET_COUNT];
+	uint16_t am_presets[PRESET_COUNT];
+
+	uint8_t current_preset = 0, preferred_preset = 0;
 
 	int8_t rds_index = -1;
 	uint16_t rds_text[4];

@@ -165,7 +165,7 @@ void setup() {
 	vol_a_state = digitalRead(KNOB_A);
 	vol_b_state = digitalRead(KNOB_B);
 
-	attachInterrupt(digitalPinToInterrupt(KNOB_A), volumeKnobIncrement, FALLING);
+	//attachInterrupt(digitalPinToInterrupt(KNOB_A), volumeKnobIncrement, FALLING);
 
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM2, HIGH);
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM3, HIGH);
@@ -212,7 +212,7 @@ void loop() {
 							door_timer_enabled = false;
 						}
 
-						if(key_position != 0 && msg.data[2] == 0) {
+						if((key_position&0xF) != 0 && msg.data[2] == 0) {
 							if((door_position&0xF) == 0)
 								power_off_with_door = true;
 							else {
@@ -230,7 +230,7 @@ void loop() {
 								power_off_with_door = false;
 								mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
 								mcp_knob.digitalWriteIO(KNOB_MCP_BACKLIGHT, LOW);
-							} else if(key_position == 0) {
+							} else if((key_position&0xF) == 0) {
 								mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, HIGH);
 								door_timer_enabled = true;
 								door_timer = 0;

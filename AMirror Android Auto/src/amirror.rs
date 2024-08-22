@@ -138,19 +138,24 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
-		if Instant::now() - self.source_request_timer > Duration::from_millis(5000) && context.audio_selected {
+		if Instant::now() - self.source_request_timer > Duration::from_millis(5000) {
 			self.source_request_timer = Instant::now();
 
-			let mut control_req = 0x80;
+			let mut control_req = 0x0;
 			if context.phone_active {
 				control_req |= 0x10;
 			}
-			
-			self.write_aibus_message(AIBusMessage {
-				sender: AIBUS_DEVICE_AMIRROR,
-				receiver: AIBUS_DEVICE_NAV_SCREEN,
-				data: [0x77, AIBUS_DEVICE_AMIRROR, control_req].to_vec(),
-			});
+			if context.audio_selected {
+				control_req |= 0x80;
+			}
+
+			if control_req != 0 {
+				self.write_aibus_message(AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_NAV_SCREEN,
+					data: [0x77, AIBUS_DEVICE_AMIRROR, control_req].to_vec(),
+				});
+			}
 		}
 	}
 

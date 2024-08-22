@@ -130,7 +130,7 @@ pub fn write_aibus_message(stream: &mut UnixStream, message: AIBusMessage) {
 	let bytes = message.get_bytes();
 
 	let mut socket_msg = SocketMessage {
-		opcode: 0x68,
+		opcode: OPCODE_AIBUS_SEND,
 		data: vec![0;bytes.len()+3],
 	};
 

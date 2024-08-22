@@ -303,12 +303,15 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				}
 			} else if(button == 0x38 && state == 0x2) { //Media button.
 				int new_src = current_source;
+				int start = current_source;
 				const uint8_t source_id = getCurrentSourceID();
 
-				if(source_id == 0)
+				if(source_id == 0) {
+					start = 0;
 					new_src = -1;
+				}
 
-				for(int s=current_source + 1;s<source_count;s+=1) {
+				for(int s=start + 1;s<source_count;s+=1) {
 					bool source_found = false;
 
 					if((source_list[s].source_id != ID_RADIO && source_list[s].source_id != 0) || (source_list[s].source_id == ID_RADIO && source_list[s].sub_id > 2)) {
@@ -319,13 +322,13 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					if(source_found)
 						break;
 
-					if(s == current_source)
+					if(s == start)
 						break;
 					if(s == source_count - 1)
 						s = 0;
 				}
 
-				if(new_src > 0 && new_src < source_count && new_src != current_source)
+				if(new_src > 0 && new_src < source_count)
 					setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
 			} else if(button == 0x30 && state == 2) { //FM button.
 				if(getCurrentSourceID() == 0) {
@@ -360,7 +363,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			} else if(button == 0x34 && state == 2) { //Aux button.
 				setCurrentSource(ID_RADIO, 3);
 				//TODO: USB and BTA.
-			} else if(button == 0x35 && state == 2) {
+			} else if(button == 0x35 && state == 2) { //XM button.
 				const uint8_t source_id = getCurrentSourceID();
 				int new_src = -1;
 
@@ -371,16 +374,19 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				} else
 					new_src = getFirstOccurenceOf(ID_XM);
 
-				if(new_src >= 0 && new_src < source_count && new_src != current_source)
+				if(new_src >= 0 && new_src < source_count)
 					setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
 			} else if(button == 0x37 && state == 2) { //Tape/CD button.
+				int start = current_source;
 				int new_src = current_source;
 				const uint8_t source_id = getCurrentSourceID();
 
-				if(source_id == 0)
+				if(source_id == 0) {
+					start = 0;
 					new_src = -1;
+				}
 
-				for(int s=current_source + 1;s<source_count;s+=1) {
+				for(int s=start + 1;s<source_count;s+=1) {
 					bool source_found = false;
 
 					if(source_list[s].source_id == ID_TAPE) {
@@ -394,7 +400,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					if(source_found)
 						break;
 
-					if(s == current_source)
+					if(s == start)
 						break;
 					if(s == source_count - 1)
 						s = 0;
@@ -402,6 +408,29 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 
 				if(new_src > 0 && new_src < source_count && new_src != current_source)
 					setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
+			} else if(button >= 0x11 && button <= 0x16) { //Presets.
+				const uint8_t preset = (button&0xF) - 1;
+				if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
+					const uint8_t group = source_list[current_source].sub_id;
+					if(state == 2) { //Recall preset.
+						uint16_t freq = tuner->getFrequency();
+						if(group == 0)
+							freq = parameter_list->fm1_presets[preset];
+						else if(group == 1)
+							freq = parameter_list->fm2_presets[preset];
+
+						tuner->setFrequency(freq);
+						if(group == 0)
+							parameter_list->fm1_tune = tuner->getFrequency();
+						else if(group == 1)
+							parameter_list->fm2_tune = tuner->getFrequency();
+
+						parameter_list->preferred_preset = preset + 1;
+					} else if(state == 1) { //Save preset.
+						savePreset(tuner->getFrequency(), preset, group);
+						parameter_list->preferred_preset = preset + 1;
+					}
+				}
 			}
 			
 		} else if(ai_d->data[0] == 0x32) { //Knob turn.
@@ -818,7 +847,29 @@ void SourceHandler::handleSteeringControl(const uint8_t command, const uint8_t s
 	} else if((command == 0x25 || command == 0x24) && button_state == 0x0) { //Increment/decrement.
 		const uint8_t source = getCurrentSourceID();
 		if(source == ID_RADIO) {
-			//TODO: Change preset.
+			const uint8_t sub = source_list[current_source].sub_id;
+			int8_t new_preset = parameter_list->current_preset;
+			
+			if(command == 0x24)
+				new_preset -= 1;
+			else
+				new_preset += 1;
+				
+			if(new_preset <= 0)
+				new_preset = PRESET_COUNT;
+			if(new_preset > PRESET_COUNT)
+				new_preset = 1;
+
+			parameter_list->preferred_preset = new_preset;
+				
+			if(sub == SUB_FM1) {
+				tuner->setFrequency(parameter_list->fm1_presets[new_preset - 1]);
+				parameter_list->fm1_tune = tuner->getFrequency();
+			} else if(sub == SUB_FM2) {
+				tuner->setFrequency(parameter_list->fm2_presets[new_preset - 1]);
+				parameter_list->fm2_tune = tuner->getFrequency();
+			}
+			
 		} else if(source == ID_TAPE) {
 			uint8_t command_data[] = {0x28, 0x7, 0x0, 0x1}; //TODO: Track count.
 			
@@ -828,7 +879,7 @@ void SourceHandler::handleSteeringControl(const uint8_t command, const uint8_t s
 			AIData command_msg(sizeof(command_data), ID_RADIO, ID_TAPE);
 			command_msg.refreshAIData(command_data);
 			ai_handler->writeAIData(&command_msg);
-		} else {
+		} else if(source != 0) {
 			uint8_t command_data[] = {0x38, 0xA, 0x0};
 
 			if(source == ID_XM)
@@ -842,4 +893,19 @@ void SourceHandler::handleSteeringControl(const uint8_t command, const uint8_t s
 			ai_handler->writeAIData(&command_msg);
 		}
 	}
+}
+
+//Save frequency freq to preset to FM1 (group = 0), FM2 (group = 1), or AM (group = 2).
+void SourceHandler::savePreset(const uint16_t freq, const uint8_t preset, const uint8_t group) {
+	if(preset >= PRESET_COUNT)
+		return;
+
+	if(group == 0)
+		parameter_list->fm1_presets[preset] = freq;
+	else if(group == 1)
+		parameter_list->fm2_presets[preset] = freq;
+	else if(group == 2)
+		parameter_list->am_presets[preset] = freq;
+		
+	parameter_list->current_preset = 0;
 }

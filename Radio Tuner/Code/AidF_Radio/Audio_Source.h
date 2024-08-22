@@ -79,6 +79,8 @@ class SourceHandler {
 		void setCurrentSource(const uint8_t id, const uint8_t sub_id);
 
 		void handleSteeringControl(const uint8_t command, const uint8_t state);
+
+		void savePreset(const uint16_t freq, const uint8_t preset, const uint8_t group);
 };
 
 #endif
