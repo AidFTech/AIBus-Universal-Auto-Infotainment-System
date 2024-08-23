@@ -38,13 +38,17 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 		if(cached_vec.size() >= 4) {
 			const uint8_t l = cached_vec.at(1);
 			uint8_t data[l+2];
-			
-			for(int i=0;i<l;i+=1) {
-				data[i] = cached_vec.at(0);
-				cached_vec.remove(0);
-			}
 
-			readAIData(&cached_msg, data, l);
+			if(cached_vec.size() < l + 2)
+				cached_vec.clear();
+			else {
+				for(int i=0;i<l+2;i+=1) {
+					data[i] = cached_vec.at(0);
+					cached_vec.remove(0);
+				}
+
+				readAIData(&cached_msg, data, l);
+			}
 		} else if(cached_vec.size() > 0)
 			cached_vec.clear();
 		
