@@ -195,10 +195,10 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			if(msg.sender == ai_d->receiver && msg.receiver == ai_d->sender && msg.data[0] == 0x80) {
 				ack_sent = true;
 			} else if(msg.sender != ai_d->sender) {
-				if((msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80 && cached_vec.size() + msg.l+4 < cached_vec.max_size()) {
+				if(msg.receiver == ai_d->sender && msg.l >= 1 && msg.data[0] != 0x80)
+					sendAcknowledgement(ai_d->sender, msg.sender);
+				if((msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
 					cacheMessage(&msg);
-					if(msg.receiver == ai_d->sender)
-						sendAcknowledgement(ai_d->sender, msg.sender);
 				}
 			}
 		}
@@ -235,9 +235,9 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 				acknowledge = true;
 				break;
 			} else if(new_msg.sender != ai_d->sender) {
-				if((new_msg.receiver == ai_d->sender || new_msg.receiver == 0xFF) && new_msg.l >= 1 && new_msg.data[0] != 0x80 && cached_vec.size() + new_msg.l+4 < cached_vec.max_size()) {
-					if(new_msg.receiver == ai_d->sender)
-						sendAcknowledgement(ai_d->sender, new_msg.sender);
+				if(new_msg.receiver == ai_d->sender && new_msg.l >= 1 && new_msg.data[0] != 0x80)
+					sendAcknowledgement(ai_d->sender, new_msg.sender);
+				if((new_msg.receiver == ai_d->sender || new_msg.receiver == 0xFF) && new_msg.l >= 1 && new_msg.data[0] != 0x80) {
 					cacheMessage(&new_msg);
 				}
 				repeat_time = 0;
@@ -271,9 +271,9 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 		if(readAIData(&ai_msg, false)) {
 			if(ai_msg.sender != id) {
 				if(ai_msg.receiver == id || ai_msg.receiver == 0xFF) {
-					if((ai_msg.receiver == id || ai_msg.receiver == 0xFF) && ai_msg.l >= 1 && ai_msg.data[0] != 0x80 && cached_vec.size() + ai_msg.l+4 < cached_vec.max_size()) {
-						if(ai_msg.receiver == id)
-							sendAcknowledgement(id, ai_msg.sender);
+					if(ai_msg.receiver == id && ai_msg.l >= 1 && ai_msg.data[0] != 0x80)
+						sendAcknowledgement(id, ai_msg.sender);
+					if((ai_msg.receiver == id || ai_msg.receiver == 0xFF) && ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
 						cacheMessage(&ai_msg);
 					}
 					return true;
