@@ -23,7 +23,7 @@ AIBusHandler::AIBusHandler(std::string port) {
 }
 #else
 AIBusHandler::AIBusHandler() {
-	this->cached_msg = std::vector<AIData>(0);
+	this->cached_bytes = std::vector<uint8_t>(0);
 	std::cout<<"Ready!\nEnter the sender, receiver, and data. Separate all characters with a space. Do not include the checksum.\n";
 }
 #endif
@@ -64,9 +64,30 @@ bool AIBusHandler::readAIData(AIData* ai_d) {
 bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 	ai_d->refreshAIData(0, 0, 0);
 	if(port_connected) {
-		if(cache && cached_msg.size() > 0) {
-			ai_d->refreshAIData(cached_msg.at(0));
-			cached_msg.erase(cached_msg.begin());
+		if(cache && cached_msg.l > 0) {
+			ai_d->refreshAIData(cached_msg);
+
+			if(cached_bytes.size() > 4) {
+				const int l = cached_bytes.at(1);
+				if(cached_bytes.size() < l + 2) {
+					cached_bytes.clear();
+					return true;
+				}
+
+				uint8_t data[l+2];
+				for(int i=0;i<l+2;i+=1) {
+					data[i] = cached_bytes.at(0);
+					cached_bytes.erase(cached_bytes.begin());
+				}
+
+				readAIData(&cached_msg, data, sizeof(data));
+
+			} else {
+				if(cached_bytes.size() > 0)
+					cached_bytes.clear();
+
+				cached_msg.refreshAIData(0,0,0);
+			}
 			return true;
 		} else if(aiserialBytesAvailable(this->ai_port) >= 2) {
 			const uint8_t s = uint8_t(aiserialReadByte(this->ai_port));
@@ -86,8 +107,18 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 				#endif
 				
 				if((clock() - start)/(CLOCKS_PER_SEC/1000) > 5) {
-					while(aiserialBytesAvailable(this->ai_port) > 0)
-						aiserialReadByte(this->ai_port);
+					clock_t clear_time = clock();
+					
+					while((clock() - clear_time)/(CLOCKS_PER_SEC/1000000) < 20) {
+						#ifdef RPI_UART
+						if(gpioRead(AI_RX) == 0)
+							clear_time = clock();
+						#endif
+						if(aiserialBytesAvailable(this->ai_port) > 0) {
+							aiserialReadByte(this->ai_port);
+							clear_time = clock();
+						}
+					}
 					return false;
 				}
 			}
@@ -178,6 +209,23 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 	}
 }
 
+//Read AIBus data from bytes.
+bool AIBusHandler::readAIData(AIData* ai_d, uint8_t* data, const uint8_t d_l) {
+	if(d_l < 2)
+		return false;
+	
+	const uint8_t l=data[1]-2;
+	if(!checkValidity(data, l+4))
+		return false;
+	
+	ai_d->refreshAIData(l, data[0], data[2]);
+	
+	for(uint8_t i=0;i<ai_d->l;i+=1)
+		ai_d->data[i] = data[i+3];
+	
+	return true;
+}
+
 //Write AIBus data.
 void AIBusHandler::writeAIData(AIData* ai_d) {
 	writeAIData(ai_d, ai_d->receiver != 0xFF && ai_d->data[0] != 0x80);
@@ -194,13 +242,21 @@ void AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			if(readAIData(&msg, false)) {
 				if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
 					sendAcknowledgement(msg.receiver, msg.sender);
-					cached_msg.push_back(AIData(msg.l, msg.sender, msg.receiver));
-					cached_msg.at(cached_msg.size()-1).refreshAIData(msg.data);
+					
+					if(cached_msg.l <= 0)
+						cached_msg.refreshAIData(msg);
+					else {
+						uint8_t data[msg.l+4];
+						msg.getBytes(data);
+
+						for(int i=0;i<sizeof(data);i+=1)
+							cached_bytes.push_back(data[i]);
+					}
 				}
 			}
 		}
 
-		if(ai_d->l > 1 || ai_d->data[0] != 0x80) {
+		if(ai_d->l > 1 || (ai_d->l >= 1 && ai_d->data[0] != 0x80)) {
 			clock_t start = clock();
 			#ifndef RPI_UART
 			int cached_bytes = aiserialBytesAvailable(this->ai_port);
@@ -223,13 +279,23 @@ void AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 		for(uint8_t i=0;i<ai_d->l+4;i+=1)
 			aiserialWriteByte(this->ai_port, data[i]);
 
-		while(aiserialBytesAvailable(this->ai_port) >= 2) {
-			AIData msg;
-			if(readAIData(&msg, false)) {
-				if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
-					sendAcknowledgement(msg.receiver, msg.sender);
-					cached_msg.push_back(AIData(msg.l, msg.sender, msg.receiver));
-					cached_msg.at(cached_msg.size()-1).refreshAIData(msg.data);
+		if(ai_d->l > 1 || (ai_d->l >= 1 && ai_d->data[0] != 0x80)) {
+			while(aiserialBytesAvailable(this->ai_port) >= 2) {
+				AIData msg;
+				if(readAIData(&msg, false)) {
+					if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
+						sendAcknowledgement(msg.receiver, msg.sender);
+						
+						if(cached_msg.l <= 0)
+							cached_msg.refreshAIData(msg);
+						else {
+							uint8_t data[msg.l+4];
+							msg.getBytes(data);
+
+							for(int i=0;i<sizeof(data);i+=1)
+								cached_bytes.push_back(data[i]);
+					}
+					}
 				}
 			}
 		}
@@ -269,8 +335,16 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 			} else {
 				if(new_msg.sender != ai_d->sender && (new_msg.receiver == ai_d->sender || new_msg.receiver == 0xFF) && new_msg.l >= 1 && new_msg.data[0] != 0x80) {
 					sendAcknowledgement(new_msg.receiver, new_msg.sender);
-					cached_msg.push_back(AIData(new_msg.l, new_msg.sender, new_msg.receiver));
-					cached_msg.at(cached_msg.size()-1).refreshAIData(new_msg.data);
+					
+					if(cached_msg.l <= 0)
+						cached_msg.refreshAIData(new_msg);
+					else {
+						uint8_t data[new_msg.l+4];
+						new_msg.getBytes(data);
+
+						for(int i=0;i<sizeof(data);i+=1)
+							cached_bytes.push_back(data[i]);
+					}
 				}
 				repeat_time = clock();
 			}
@@ -294,10 +368,10 @@ int AIBusHandler::getAvailableBytes() {
 //Get the number of available bytes.
 int AIBusHandler::getAvailableBytes(const bool cache) {
 	if(port_connected) {
-		if(!cache || cached_msg.size() <= 0)
+		if(!cache || cached_msg.l <= 0)
 			return aiserialBytesAvailable(this->ai_port);
 		else
-			return cached_msg.at(0).l + 4;
+			return cached_msg.l + 4;
 	} else
 		return -1;
 }
@@ -318,8 +392,16 @@ bool AIBusHandler::cachePending() {
 			if(ai_msg.receiver == ID_NAV_COMPUTER || ai_msg.receiver == 0xFF) {
 				if(ai_msg.sender != ID_NAV_COMPUTER && ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
 					sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-					cached_msg.push_back(AIData(ai_msg.l, ai_msg.sender, ai_msg.receiver));
-					cached_msg.at(cached_msg.size()-1).refreshAIData(ai_msg.data);
+
+					if(cached_msg.l <= 0)
+						cached_msg.refreshAIData(ai_msg);
+					else {
+						uint8_t data[ai_msg.l+4];
+						ai_msg.getBytes(data);
+
+						for(int i=0;i<sizeof(data);i+=1)
+							cached_bytes.push_back(data[i]);
+					}
 				}
 				return true;
 			}

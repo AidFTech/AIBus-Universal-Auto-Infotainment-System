@@ -52,6 +52,8 @@ private:
 	int connectAIPort(std::string port);
 	#endif
 	
+	bool readAIData(AIData* ai_d, uint8_t* data, const uint8_t d_l);
+
 	bool awaitAcknowledgement(AIData* ai_d);
 
 	int ai_port;
@@ -61,7 +63,8 @@ private:
 	bool port_connected = false;
 	#endif
 
-	std::vector<AIData> cached_msg;
+	std::vector<uint8_t> cached_bytes;
+	AIData cached_msg;
 };
 
 #ifndef RPI_UART

@@ -169,7 +169,7 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 	const unsigned int full_length = ai_d->l + 4;
 	ai_d->getBytes(data);
 
-	if(this->rx_pin >= 0 && (ai_d->l > 1 || ai_d->data[0] != 0x80)) {
+	if(this->rx_pin >= 0 && (ai_d->l > 1 || (ai_d->l >= 1 && ai_d->data[0] != 0x80))) {
 		elapsedMicros timer;
 		while(timer < AI_DELAY_U) {
 			while(micros() >= UINT32_MAX - AI_DELAY_U*2);
@@ -177,28 +177,31 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			if(rx == LOW)
 				timer = 0;
 		}
+		
+		while(ai_serial->available() > 0)
+			cachePending(ai_d->sender);
 	}
-
-	while(ai_serial->available() > 0)
-		cachePending(ai_d->sender);
 
 	ai_serial->write(data, ai_d->l + 4);
 	ai_serial->flush();
 
-	AIData msg;
 	bool ack_sent = false;
-	while(ai_serial->available() > 0) {
-		if(readAIData(&msg, false)) {
-			if(msg.sender == ai_d->sender)
-				continue;
-			
-			if(msg.sender == ai_d->receiver && msg.receiver == ai_d->sender && msg.data[0] == 0x80) {
-				ack_sent = true;
-			} else if(msg.sender != ai_d->sender) {
-				if(msg.receiver == ai_d->sender && msg.l >= 1 && msg.data[0] != 0x80)
-					sendAcknowledgement(ai_d->sender, msg.sender);
-				if((msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
-					cacheMessage(&msg);
+
+	if(ai_d->l > 1 || (ai_d->l >= 1 && ai_d->data[0] != 0x80)) {
+		AIData msg;
+		while(ai_serial->available() > 0) {
+			if(readAIData(&msg, false)) {
+				if(msg.sender == ai_d->sender)
+					continue;
+				
+				if(msg.sender == ai_d->receiver && msg.receiver == ai_d->sender && msg.data[0] == 0x80) {
+					ack_sent = true;
+				} else if(msg.sender != ai_d->sender) {
+					if(msg.receiver == ai_d->sender && msg.l >= 1 && msg.data[0] != 0x80)
+						sendAcknowledgement(ai_d->sender, msg.sender);
+					if((msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
+						cacheMessage(&msg);
+					}
 				}
 			}
 		}
