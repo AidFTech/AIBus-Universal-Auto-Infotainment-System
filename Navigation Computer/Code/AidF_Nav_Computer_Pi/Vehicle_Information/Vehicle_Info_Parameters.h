@@ -22,7 +22,7 @@
 #define INFO_LIGHTS_B_BED 0x4
 
 struct InfoParameters {
-    uint8_t light_state_a = 0, light_state_b = 0; 
+	uint8_t light_state_a = 0, light_state_b = 0; 
 };
 
 void setLightState(AIData* light_msg, InfoParameters* info_parameters);
