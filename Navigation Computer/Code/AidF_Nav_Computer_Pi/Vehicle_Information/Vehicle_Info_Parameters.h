@@ -23,6 +23,7 @@
 
 struct InfoParameters {
 	uint8_t light_state_a = 0, light_state_b = 0; 
+	bool hybrid_system_present = false;
 };
 
 void setLightState(AIData* light_msg, InfoParameters* info_parameters);
