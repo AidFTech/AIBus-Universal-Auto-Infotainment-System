@@ -233,6 +233,19 @@ impl <'a> AMirror<'a> {
 
 				}
 			}
+		} else if ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER {
+			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x48 && ai_msg.data[1] == 0x8E { //Turn on/off the interface.
+				let mut context = match self.context.try_lock() {
+					Ok(context) => context,
+					Err(_) => {
+						println!("AMirror Handle AIBus Message: Context Locked");
+						return;
+					}
+				};
+				
+				self.handler.set_minimize(ai_msg.data[2] == 0);
+				context.phone_active = ai_msg.data[2] != 0;
+			}
 		}
 
 		std::mem::drop(context);
