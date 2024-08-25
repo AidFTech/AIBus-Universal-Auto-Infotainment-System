@@ -9,3 +9,18 @@ VehicleInfoWindow::VehicleInfoWindow(AttributeList *attribute_list, InfoParamete
 	else
 		title_box->setText("Vehicle Information");
 }
+
+VehicleInfoWindow::~VehicleInfoWindow() {
+
+}
+
+void VehicleInfoWindow::refreshWindow() {
+	this->title_box->renderText();
+}
+
+void VehicleInfoWindow::drawWindow() {
+	if(!this->active)
+		return;
+	
+	this->title_box->drawText();
+}

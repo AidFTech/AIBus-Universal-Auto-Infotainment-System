@@ -5,7 +5,7 @@
 #ifndef vehicle_info_parameters_h
 #define vehicle_info_parameters_h
 
-#define INFO_LIGHTS_A_RAPID_FLASH 0x80
+#define INFO_LIGHTS_A_AUTO 0x80
 #define INFO_LIGHTS_A_RIGHT_SIGNAL 0x40
 #define INFO_LIGHTS_A_LEFT_SIGNAL 0x20
 #define INFO_LIGHTS_A_FRONT_FOG 0x10
@@ -23,7 +23,7 @@
 
 struct InfoParameters {
 	uint8_t light_state_a = 0, light_state_b = 0; 
-	bool hybrid_system_present = false;
+	bool hybrid_system_present = false; //True if a hybrid system exists.
 };
 
 void setLightState(AIData* light_msg, InfoParameters* info_parameters);

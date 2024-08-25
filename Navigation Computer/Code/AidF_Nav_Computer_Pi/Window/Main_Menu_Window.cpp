@@ -133,6 +133,9 @@ void Main_Menu_Window::handleEnterButton() {
 				this->attribute_list->aibus_handler->writeAIData(&screen_off_msg);
 			}
 			break;
+		case 10:
+			attribute_list->next_window = NEXT_WINDOW_VEHICLE_INFO;
+			break;
 		case 11:
 			attribute_list->next_window = NEXT_WINDOW_CONSUMPTION;
 			break;

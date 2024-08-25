@@ -15,6 +15,9 @@
 #include "Window/Settings_Color_Window.h"
 #include "Window/Settings_Color_Picker.h"
 
+#include "Vehicle_Information/Vehicle_Info_Parameters.h"
+#include "Vehicle_Information/Vehicle_Info_Window.h"
+
 #ifndef nav_window_handler_h
 #define nav_window_handler_h
 
@@ -41,6 +44,7 @@ public:
 	AidFColorProfile* getColorProfile();
 
 	AttributeList* getAttributeList();
+	InfoParameters* getVehicleInfo();
 
 	AIBusHandler* getAIBusHandler();
 	
@@ -62,6 +66,7 @@ private:
 	
 	NavWindow* active_window, *last_window;
 	AttributeList *attribute_list;
+	InfoParameters *vehicle_info_paramters;
 
 	AIBusHandler* aibus_handler;
 };
