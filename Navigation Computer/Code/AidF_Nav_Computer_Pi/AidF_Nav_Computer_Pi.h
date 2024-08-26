@@ -18,6 +18,8 @@
 #include "Window/Settings_Main_Window.h"
 #include "Window/Settings_Display_Window.h"
 
+#include "Vehicle_Information/Vehicle_Info_Parameters.h"
+
 #define DEFAULT_W 800
 #define DEFAULT_H 480
 

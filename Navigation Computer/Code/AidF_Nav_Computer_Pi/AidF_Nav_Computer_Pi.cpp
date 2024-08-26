@@ -127,6 +127,9 @@ void AidF_Nav_Computer::loop() {
 							} else if(button == 0x20 && state == 0x2) { //Home button.
 								this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_MAIN;
 							}
+						} else if(ai_msg.sender == ID_CANSLATOR && ai_msg.l >= 1 && ai_msg.data[0] == 0x11) { //Light info.
+							InfoParameters* info_parameters = window_handler->getVehicleInfo();
+							setLightState(&ai_msg, info_parameters);
 						}
 					}
 				}
@@ -170,6 +173,10 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 	} else if(ai_d->sender == ID_CANSLATOR && ai_d->data[1] == 0x10) { //Night mode.
 		if(this->attribute_list->day_night_settings == DAY_NIGHT_AUTO)
 			this->setDayNight((ai_d->data[3]&0x80) != 0);
+		return true;
+	} else if(ai_d->sender == ID_CANSLATOR && ai_d->data[1] == 0x11) { //Light position.
+		InfoParameters* info_parameters = window_handler->getVehicleInfo();
+		setLightState(ai_d, info_parameters);
 		return true;
 	} else
 		return false;
