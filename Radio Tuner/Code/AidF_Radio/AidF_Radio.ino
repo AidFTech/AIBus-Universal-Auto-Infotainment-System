@@ -14,13 +14,22 @@
 #define TUNER_RESET PIN_PB2
 #define IDAT PIN_PA2
 #define ICLK PIN_PA3
+
+#define AUDIO_SW0 PIN_PB3 //Audio switch.
+#define AUDIO_SW1 PIN_PB4 //Audio switch.
+#define NAV_SW PIN_PB5 //Nav audio switch.
+#define AUDIO_ON_SW PIN_PC0 //Audio on/off. Audio on when low.
+#define SPDIF_SW PIN_PC1 //Switch source to S/PDIF when high.
+#define DIGITAL_MODE PIN_PC2 //Input, digital mode active when low.
+#define AUX_SW PIN_PC4 //Input, aux port mechanical switch.
+
+#define ADC_CS PIN_PD0
+#define VOL_CS PIN_PD1
 #else
 #define AI_RX 3
 #define FM1_EN 4
 #define FM2_EN 5
 #define TUNER_RESET 6
-#define AUX_SW 7
-#define EXT_SW 8
 #define IDAT A4
 #define ICLK A5
 #endif
@@ -55,16 +64,28 @@ elapsedMillis info_timer;
 bool imid_timer_enabled = false;
 elapsedMillis imid_timer;
 
-bool* power_on = &parameters.power_on;
+bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
 
 //Arduino setup function.
 void setup() {
 	pinMode(AI_RX, INPUT_PULLUP);
-	pinMode(AUX_SW, OUTPUT);
-	pinMode(EXT_SW, OUTPUT);
 
-	digitalWrite(AUX_SW, LOW);
-	digitalWrite(EXT_SW, LOW);
+	#ifdef __AVR_ATmegax09__
+	pinMode(AUDIO_SW0, OUTPUT);
+	pinMode(AUDIO_SW1, OUTPUT);
+	pinMode(NAV_SW, OUTPUT);
+	pinMode(AUDIO_ON_SW, OUTPUT);
+	pinMode(SPDIF_SW, OUTPUT);
+	pinMode(DIGITAL_MODE, INPUT);
+	pinMode(AUX_SW, INPUT_PULLUP);
+
+	digitalWrite(AUDIO_SW0, LOW);
+	digitalWrite(AUDIO_SW1, LOW);
+
+	digitalWrite(NAV_SW, LOW);
+	digitalWrite(AUDIO_ON_SW, HIGH);
+	digitalWrite(SPDIF_SW, LOW);
+	#endif
 
 	AISerial.begin(AI_BAUD);
 	
@@ -214,6 +235,33 @@ void loop() {
 			clearFMData();
 			text_handler.createRadioMenu(sub_id);
 		}
+
+		#ifdef __AVR_ATmegax09__
+		if(current_source_id == 0) { //TODO: And phone is not in use.
+			digitalWrite(AUDIO_ON_SW, HIGH);
+			digitalWrite(AUDIO_SW0, LOW);
+			digitalWrite(AUDIO_SW1, LOW);
+
+			digitalWrite(SPDIF_SW, LOW);
+		} else if(current_source_id == ID_RADIO) {
+			digitalWrite(AUDIO_ON_SW, LOW);
+			const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+			if(sub_id < 3) { //Tuner.
+				digitalWrite(AUDIO_SW0, LOW);
+				digitalWrite(AUDIO_SW1, LOW);
+			} else { //Aux.
+				digitalWrite(AUDIO_SW0, LOW);
+				digitalWrite(AUDIO_SW1, HIGH);
+			}
+			setDigitalActiveMode();
+		} else { //AIBus.
+			digitalWrite(AUDIO_ON_SW, LOW);
+			digitalWrite(AUDIO_SW0, HIGH);
+			digitalWrite(AUDIO_SW1, HIGH);
+
+			setDigitalActiveMode();
+		}
+		#endif
 	}
 	
 	if(source_text_timer_enabled && source_text_timer > 50) {
@@ -413,6 +461,12 @@ void loop() {
 			//	break;
 			
 			break;
+		} else if(source_handler.getCurrentSourceID() != 0) {
+			#ifdef __AVR_ATmegax09__
+			const int digital_status = digitalRead(DIGITAL_MODE);
+			if((digital_status == LOW && !*digital_mode) || (digital_status == HIGH && *digital_mode))
+				setDigitalActiveMode();
+			#endif
 		}
 	} while(false);
 
@@ -536,6 +590,19 @@ void setTunerFrequency(const uint8_t sub_id) {
 		tuner1.setPower(false);
 	
 	parameter_timer = PARAMETER_DELAY;
+}
+
+//Set the digital mode.
+void setDigitalActiveMode() {
+	#ifdef __AVR_ATmegax09__
+	const int d_state = digitalRead(DIGITAL_MODE);
+	*digital_mode = d_state == LOW;
+
+	if(*digital_mode)
+		digitalWrite(SPDIF_SW, HIGH);
+	else
+		digitalWrite(SPDIF_SW, LOW);
+	#endif
 }
 
 //Send the heartbeat/redundant message to the active source.

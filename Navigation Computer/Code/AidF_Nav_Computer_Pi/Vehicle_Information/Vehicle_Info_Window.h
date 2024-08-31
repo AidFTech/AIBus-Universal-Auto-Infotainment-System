@@ -35,7 +35,7 @@ private:
 				*frontfog_texture = NULL,
 				*rearfog_texture = NULL;
 	
-	SDL_Texture* silhouette_texture = NULL;
+	SDL_Texture* silhouette_texture = NULL, *silhouette_outline_texture = NULL;
 };
 
 #endif

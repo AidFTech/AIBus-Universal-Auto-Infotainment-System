@@ -46,6 +46,8 @@ struct ParameterList {
 	uint8_t handshake_source_list[16];
 	Vector<uint8_t> handshake_sources;
 
+	bool digital_mode = false;
+
 	uint16_t screen_w = 800, screen_h = 480;
 
 	bool ai_pending = false;

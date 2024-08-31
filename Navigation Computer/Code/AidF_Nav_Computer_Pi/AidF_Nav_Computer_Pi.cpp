@@ -174,9 +174,16 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 		if(this->attribute_list->day_night_settings == DAY_NIGHT_AUTO)
 			this->setDayNight((ai_d->data[3]&0x80) != 0);
 		return true;
-	} else if(ai_d->sender == ID_CANSLATOR && ai_d->data[1] == 0x11) { //Light position.
+	} else if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 2 && ai_d->data[1] == 0x11) { //Light position.
 		InfoParameters* info_parameters = window_handler->getVehicleInfo();
 		setLightState(ai_d, info_parameters);
+		return true;
+	} else if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 2 && ai_d->data[1] == 0x33) { //Hybrid system.
+		InfoParameters* info_parameters = window_handler->getVehicleInfo();
+		
+		if(ai_d->l >= 4 && ai_d->data[2] == 0x1)
+			info_parameters->hybrid_system_present = (ai_d->data[3]&0x7) != 0;
+
 		return true;
 	} else
 		return false;

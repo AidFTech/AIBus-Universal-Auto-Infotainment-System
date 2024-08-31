@@ -44,6 +44,17 @@ VehicleInfoWindow::VehicleInfoWindow(AttributeList *attribute_list, InfoParamete
 	this->silhouette_texture = SDL_CreateTextureFromSurface(renderer, silhouette_surface);
 	SDL_SetTextureBlendMode(this->silhouette_texture, SDL_BLENDMODE_BLEND);
 
+	uint8_t silhouette_outline_data[sizeof(image_data_Silhouette_Outline)];
+	for(int i=0;i<sizeof(image_data_Silhouette_Outline);i+=1)
+		silhouette_outline_data[i] = image_data_Silhouette_Outline[i];
+
+	silhouette_surface = SDL_CreateRGBSurfaceWithFormatFrom(silhouette_outline_data, 600, 240, 1, 607/8, SDL_PIXELFORMAT_INDEX1MSB);
+	SDL_Color outline_colors[] = {{0,0,0,0}, getSDLColor(attribute_list->color_profile->outline)};
+	SDL_SetPaletteColors(silhouette_surface->format->palette, outline_colors, 0, 2);
+
+	this->silhouette_outline_texture = SDL_CreateTextureFromSurface(renderer, silhouette_surface);
+	SDL_SetTextureBlendMode(this->silhouette_outline_texture, SDL_BLENDMODE_BLEND);
+
 	SDL_FreeSurface(silhouette_surface);
 }
 
@@ -68,6 +79,9 @@ VehicleInfoWindow::~VehicleInfoWindow() {
 
 	if(this->silhouette_texture != NULL)
 		SDL_DestroyTexture(this->silhouette_texture);
+
+	if(this->silhouette_outline_texture != NULL)
+		SDL_DestroyTexture(this->silhouette_outline_texture);
 }
 
 void VehicleInfoWindow::refreshWindow() {
@@ -79,13 +93,24 @@ void VehicleInfoWindow::refreshWindow() {
 	uint8_t silhouette_data[sizeof(image_data_Silhouette)];
 	for(int i=0;i<sizeof(image_data_Silhouette);i+=1)
 		silhouette_data[i] = image_data_Silhouette[i];
-	
+
 	SDL_Surface* silhouette_surface = SDL_CreateRGBSurfaceWithFormatFrom(silhouette_data, 600, 240, 1, 607/8, SDL_PIXELFORMAT_INDEX1MSB);
 	SDL_Color colors[] = {{0,0,0,0}, getSDLColor(attribute_list->color_profile->button)};
 	SDL_SetPaletteColors(silhouette_surface->format->palette, colors, 0, 2);
 
 	this->silhouette_texture = SDL_CreateTextureFromSurface(renderer, silhouette_surface);
 	SDL_SetTextureBlendMode(this->silhouette_texture, SDL_BLENDMODE_BLEND);
+
+	uint8_t silhouette_outline_data[sizeof(image_data_Silhouette_Outline)];
+	for(int i=0;i<sizeof(image_data_Silhouette_Outline);i+=1)
+		silhouette_outline_data[i] = image_data_Silhouette_Outline[i];
+
+	silhouette_surface = SDL_CreateRGBSurfaceWithFormatFrom(silhouette_outline_data, 600, 240, 1, 607/8, SDL_PIXELFORMAT_INDEX1MSB);
+	SDL_Color outline_colors[] = {{0,0,0,0}, getSDLColor(attribute_list->color_profile->outline)};
+	SDL_SetPaletteColors(silhouette_surface->format->palette, outline_colors, 0, 2);
+
+	this->silhouette_outline_texture = SDL_CreateTextureFromSurface(renderer, silhouette_surface);
+	SDL_SetTextureBlendMode(this->silhouette_outline_texture, SDL_BLENDMODE_BLEND);
 
 	SDL_FreeSurface(silhouette_surface);
 }
@@ -96,13 +121,18 @@ void VehicleInfoWindow::drawWindow() {
 
 	int16_t silhouette_start_y = attribute_list->h/2 - 240/2;
 	if(info_parameters->hybrid_system_present)
-		silhouette_start_y = 100;
+		silhouette_start_y -= 30;
 	
 	this->title_box->drawText();
 
 	if(this->silhouette_texture != NULL) {
 		SDL_Rect silhouette_rect = {100, silhouette_start_y, 600, 240};
 		SDL_RenderCopy(this->renderer, this->silhouette_texture, NULL, &silhouette_rect);
+	}
+
+	if(this->silhouette_outline_texture != NULL) {
+		SDL_Rect silhouette_rect = {100, silhouette_start_y, 600, 240};
+		SDL_RenderCopy(this->renderer, this->silhouette_outline_texture, NULL, &silhouette_rect);
 	}
 
 	if((this->info_parameters->light_state_a & INFO_LIGHTS_A_DRL) != 0 && (this->info_parameters->light_state_a & INFO_LIGHTS_A_FRONT_FOG) == 0) {

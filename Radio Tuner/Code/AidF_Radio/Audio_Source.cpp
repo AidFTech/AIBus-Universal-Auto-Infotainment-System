@@ -414,15 +414,15 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					const uint8_t group = source_list[current_source].sub_id;
 					if(state == 2) { //Recall preset.
 						uint16_t freq = tuner->getFrequency();
-						if(group == 0)
+						if(group == SUB_FM1)
 							freq = parameter_list->fm1_presets[preset];
-						else if(group == 1)
+						else if(group == SUB_FM2)
 							freq = parameter_list->fm2_presets[preset];
 
 						tuner->setFrequency(freq);
-						if(group == 0)
+						if(group == SUB_FM1)
 							parameter_list->fm1_tune = tuner->getFrequency();
-						else if(group == 1)
+						else if(group == SUB_FM2)
 							parameter_list->fm2_tune = tuner->getFrequency();
 
 						parameter_list->preferred_preset = preset + 1;
@@ -900,11 +900,11 @@ void SourceHandler::savePreset(const uint16_t freq, const uint8_t preset, const 
 	if(preset >= PRESET_COUNT)
 		return;
 
-	if(group == 0)
+	if(group == SUB_FM1)
 		parameter_list->fm1_presets[preset] = freq;
-	else if(group == 1)
+	else if(group == SUB_FM2)
 		parameter_list->fm2_presets[preset] = freq;
-	else if(group == 2)
+	else if(group == SUB_AM)
 		parameter_list->am_presets[preset] = freq;
 		
 	parameter_list->current_preset = 0;
