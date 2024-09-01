@@ -117,7 +117,7 @@ void OpenCloseHandler::checkButtonPress() {
 	else if(close_pin >= 0)
 		close_state = digitalRead(close_pin) == HIGH;
 
-	const bool screen_open = this->motor_position < 40, screen_closed = this->motor_position > 984;
+	const bool screen_open = this->motor_position < 980, screen_closed = this->motor_position > 984;
 	if(open_state != open_pressed && open_pressed) { //Open button pressed.
 		if(screen_closed && !parameters->open_pulse_enabled) {
 			if(open_motor_pin >= 0) {

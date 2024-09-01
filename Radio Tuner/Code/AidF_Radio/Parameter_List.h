@@ -46,7 +46,8 @@ struct ParameterList {
 	uint8_t handshake_source_list[16];
 	Vector<uint8_t> handshake_sources;
 
-	bool digital_mode = false;
+	bool digital_mode = false; //True if the source is digital.
+	bool phone_active = false, digital_amp = false;
 
 	uint16_t screen_w = 800, screen_h = 480;
 

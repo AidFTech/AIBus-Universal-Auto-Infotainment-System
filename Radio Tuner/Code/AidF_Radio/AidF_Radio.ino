@@ -1,4 +1,5 @@
 #include <elapsedMillis.h>
+#include <MCP4251.h>
 
 #include "AIBus.h"
 #include "AIBus_Handler.h"
@@ -17,7 +18,7 @@
 
 #define AUDIO_SW0 PIN_PB3 //Audio switch.
 #define AUDIO_SW1 PIN_PB4 //Audio switch.
-#define NAV_SW PIN_PB5 //Nav audio switch.
+#define NAV_SW PIN_PB5 //Nav audio switch. Input.
 #define AUDIO_ON_SW PIN_PC0 //Audio on/off. Audio on when low.
 #define SPDIF_SW PIN_PC1 //Switch source to S/PDIF when high.
 #define DIGITAL_MODE PIN_PC2 //Input, digital mode active when low.
@@ -25,6 +26,9 @@
 
 #define ADC_CS PIN_PD0
 #define VOL_CS PIN_PD1
+#define TREBLE_CS PIN_PD2
+#define BASS_CS PIN_PD3
+#define FADE_CS PIN_PD4
 #else
 #define AI_RX 3
 #define FM1_EN 4
@@ -53,6 +57,13 @@ Si4703Controller tuner1(TUNER_RESET, FM1_EN, IDAT, ICLK, &aibus_handler, &parame
 
 SourceHandler source_handler(&aibus_handler, &tuner1, &parameters, SOURCE_COUNT);
 
+#ifdef __AVR_ATmegax09__
+MCP4251 vol_controller(VOL_CS, 10000, 0, 10000, 0);
+MCP4251 treble_controller(TREBLE_CS, 10000, 0, 10000, 0);
+MCP4251 bass_controller(BASS_CS, 10000, 0, 10000, 0);
+MCP4251 fade_controller(FADE_CS, 10000, 0, 10000, 0);
+#endif
+
 elapsedMillis aibus_timer, source_text_timer;
 elapsedMillis src_ping_timer, computer_ping_timer, parameter_timer, screen_ping_timer;
 
@@ -73,18 +84,24 @@ void setup() {
 	#ifdef __AVR_ATmegax09__
 	pinMode(AUDIO_SW0, OUTPUT);
 	pinMode(AUDIO_SW1, OUTPUT);
-	pinMode(NAV_SW, OUTPUT);
+	pinMode(NAV_SW, INPUT);
 	pinMode(AUDIO_ON_SW, OUTPUT);
 	pinMode(SPDIF_SW, OUTPUT);
 	pinMode(DIGITAL_MODE, INPUT);
 	pinMode(AUX_SW, INPUT_PULLUP);
 
+	pinMode(VOL_CS, OUTPUT);
+	pinMode(TREBLE_CS, OUTPUT);
+	pinMode(BASS_CS, OUTPUT);
+	pinMode(FADE_CS, OUTPUT);
+
 	digitalWrite(AUDIO_SW0, LOW);
 	digitalWrite(AUDIO_SW1, LOW);
 
-	digitalWrite(NAV_SW, LOW);
 	digitalWrite(AUDIO_ON_SW, HIGH);
 	digitalWrite(SPDIF_SW, LOW);
+
+	
 	#endif
 
 	AISerial.begin(AI_BAUD);
@@ -237,29 +254,37 @@ void loop() {
 		}
 
 		#ifdef __AVR_ATmegax09__
-		if(current_source_id == 0) { //TODO: And phone is not in use.
-			digitalWrite(AUDIO_ON_SW, HIGH);
-			digitalWrite(AUDIO_SW0, LOW);
+		if(!parameters.phone_active) {
+			if(current_source_id == 0) {
+				digitalWrite(AUDIO_ON_SW, HIGH);
+				digitalWrite(AUDIO_SW0, LOW);
+				digitalWrite(AUDIO_SW1, LOW);
+
+				digitalWrite(SPDIF_SW, LOW);
+			} else if(current_source_id == ID_RADIO) {
+				digitalWrite(AUDIO_ON_SW, LOW);
+				const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+				if(sub_id < 3) { //Tuner.
+					digitalWrite(AUDIO_SW0, LOW);
+					digitalWrite(AUDIO_SW1, LOW);
+				} else { //Aux.
+					digitalWrite(AUDIO_SW0, LOW);
+					digitalWrite(AUDIO_SW1, HIGH);
+				}
+				setDigitalActiveMode();
+			} else { //AIBus.
+				digitalWrite(AUDIO_ON_SW, LOW);
+				digitalWrite(AUDIO_SW0, HIGH);
+				digitalWrite(AUDIO_SW1, HIGH);
+
+				setDigitalActiveMode();
+			}
+		} else {
+			digitalWrite(AUDIO_ON_SW, LOW);
+			digitalWrite(AUDIO_SW0, HIGH);
 			digitalWrite(AUDIO_SW1, LOW);
 
 			digitalWrite(SPDIF_SW, LOW);
-		} else if(current_source_id == ID_RADIO) {
-			digitalWrite(AUDIO_ON_SW, LOW);
-			const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
-			if(sub_id < 3) { //Tuner.
-				digitalWrite(AUDIO_SW0, LOW);
-				digitalWrite(AUDIO_SW1, LOW);
-			} else { //Aux.
-				digitalWrite(AUDIO_SW0, LOW);
-				digitalWrite(AUDIO_SW1, HIGH);
-			}
-			setDigitalActiveMode();
-		} else { //AIBus.
-			digitalWrite(AUDIO_ON_SW, LOW);
-			digitalWrite(AUDIO_SW0, HIGH);
-			digitalWrite(AUDIO_SW1, HIGH);
-
-			setDigitalActiveMode();
 		}
 		#endif
 	}
