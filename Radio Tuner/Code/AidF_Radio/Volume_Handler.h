@@ -2,6 +2,7 @@
 #include <MCP4251.h>
 
 #include "AIBus_Handler.h"
+#include "Parameter_List.h"
 
 #ifndef volume_handler_h
 #define volume_handler_h
@@ -10,7 +11,9 @@
 
 class VolumeHandler {
 public:
-	VolumeHandler(MCP4251* vol_mcp, MCP4251* treble_mcp, MCP4251* bass_mcp, MCP4251* fader_mcp, AIBusHandler* ai_handler);
+	VolumeHandler(MCP4251* vol_mcp, MCP4251* treble_mcp, MCP4251* bass_mcp, MCP4251* fader_mcp, ParameterList* parameters, AIBusHandler* ai_handler);
+
+	bool handleAIBus(AIData *msg);
 
 	void setVolRange(const uint16_t vol_range);
 	uint16_t getVolRange();
@@ -21,9 +24,13 @@ private:
 	MCP4251 *vol_mcp, *treble_mcp, *bass_mcp, *fader_mcp;
 	AIBusHandler* ai_handler;
 
+	ParameterList* parameters;
+
 	uint16_t vol_range = DEFAULT_RANGE;
 	uint16_t volume = 0, treble = DEFAULT_RANGE, bass = DEFAULT_RANGE;
 	int16_t balance = 0, fader = 0;
+
+	void setVolume();
 };
 
 #endif

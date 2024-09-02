@@ -788,6 +788,7 @@ void SourceHandler::createSourceMenu() {
 				return;
 			} else if(no_msg.receiver == ID_RADIO) {
 				ai_handler->sendAcknowledgement(ID_RADIO, no_msg.sender);
+				ai_handler->cacheMessage(&no_msg);
 			}
 		}
 	}

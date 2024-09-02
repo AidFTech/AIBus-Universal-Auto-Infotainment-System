@@ -7,6 +7,7 @@
 #include "Text_Handler.h"
 #include "Parameter_List.h"
 #include "Si4703_AidF.h"
+#include "Volume_Handler.h"
 
 #ifdef __AVR_ATmegax09__
 #define AI_RX PIN_PA7
@@ -64,6 +65,8 @@ MCP4251 vol_controller(VOL_CS, 10000, 0, 10000, 0);
 MCP4251 treble_controller(TREBLE_CS, 10000, 0, 10000, 0);
 MCP4251 bass_controller(BASS_CS, 10000, 0, 10000, 0);
 MCP4251 fade_controller(FADE_CS, 10000, 0, 10000, 0);
+
+VolumeHandler volume_handler(&vol_controller, &treble_controller, &bass_controller, &fade_controller, &parameters, &aibus_handler);
 #endif
 
 elapsedMillis aibus_timer, source_text_timer;
@@ -529,6 +532,9 @@ void handleAIBus(AIData* msg) {
 		parameters.send_time = msg->data[1] != 0;
 	} else if(msg->receiver == ID_RADIO) { //Radio message.
 		bool answered = false;
+		#ifdef __AVR_ATmegax09__
+		answered = volume_handler.handleAIBus(msg);
+		#endif
 		if(!answered)
 			answered = source_handler.handleAIBus(msg);
 	} else if(msg->receiver == 0xFF && msg->data[0] == 0xA1 && msg->sender != ID_RADIO) {
