@@ -29,6 +29,8 @@
 #define TREBLE_CS PIN_PD2
 #define BASS_CS PIN_PD3
 #define FADE_CS PIN_PD4
+
+#define NAV_MUTE PIN_PD5
 #else
 #define AI_RX 3
 #define FM1_EN 4
@@ -89,6 +91,7 @@ void setup() {
 	pinMode(SPDIF_SW, OUTPUT);
 	pinMode(DIGITAL_MODE, INPUT);
 	pinMode(AUX_SW, INPUT_PULLUP);
+	pinMode(NAV_MUTE, INPUT_PULLUP);
 
 	pinMode(VOL_CS, OUTPUT);
 	pinMode(TREBLE_CS, OUTPUT);
