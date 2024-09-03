@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <Si4735.h>
+#include <SI4735.h>
 
 #include "AIBus_Handler.h"
 #include "Parameter_List.h"

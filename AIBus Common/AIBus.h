@@ -16,6 +16,7 @@
 #define ID_XM 0x19
 #define ID_GPS_ANTENNA 0x3B
 #define ID_CANSLATOR 0x57
+#define ID_AMPLIFIER 0x6A
 #define ID_STEERING_CTRL 0x6F
 #define ID_ANDROID_AUTO 0x8E
 
