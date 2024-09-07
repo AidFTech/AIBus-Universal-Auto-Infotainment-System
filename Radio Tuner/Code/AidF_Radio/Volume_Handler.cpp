@@ -86,7 +86,11 @@ void VolumeHandler::setVolume(const uint16_t volume) {
 		this->fader_mcp->DigitalPotSetWiperPosition(0, rr_vol);
 		this->fader_mcp->DigitalPotSetWiperPosition(1, lr_vol);
 	} else { //Digital mode.
-		//TODO: Send a volume change message to the amp.
+		uint8_t volume_data[] = {0x32, 0x6, (this->volume&0xFF00)>>8, this->volume&0xFF};
+		AIData volume_msg(sizeof(volume_data), ID_RADIO, ID_AMPLIFIER);
+		volume_msg.refreshAIData(volume_data);
+
+		ai_handler->writeAIData(&volume_msg, parameters->amp_connected);
 	}
 }
 

@@ -6,7 +6,7 @@
 #include "Audio_Source.h"
 #include "Text_Handler.h"
 #include "Parameter_List.h"
-#include "Si4703_AidF.h"
+#include "Si4735_AidF.h"
 #include "Volume_Handler.h"
 
 #ifdef __AVR_ATmegax09__
@@ -23,7 +23,10 @@
 #define AUDIO_ON_SW PIN_PC0 //Audio on/off. Audio on when low.
 #define SPDIF_SW PIN_PC1 //Switch source to S/PDIF when high.
 #define DIGITAL_MODE PIN_PC2 //Input, digital mode active when low.
+#define POWER_ON_SW PIN_PC3 //Output, vehicle power is on when high.
 #define AUX_SW PIN_PC4 //Input, aux port mechanical switch.
+
+#define DAC_FILTER_MODE PIN_PC5 //Output, digital filter mode.
 
 #define ADC_CS PIN_PD0
 #define VOL_CS PIN_PD1
@@ -32,6 +35,8 @@
 #define FADE_CS PIN_PD4
 
 #define NAV_MUTE PIN_PD5
+#define DIGITAL_NPCM PIN_PD6
+#define DIGITAL_ERROR PIN_PD7
 #else
 #define AI_RX 3
 #define FM1_EN 4
@@ -39,6 +44,27 @@
 #define TUNER_RESET 6
 #define IDAT A4
 #define ICLK A5
+
+#define AUDIO_SW0 7 //Audio switch.
+#define AUDIO_SW1 8 //Audio switch.
+#define NAV_SW 9 //Nav audio switch. Input.
+#define AUDIO_ON_SW 10 //Audio on/off. Audio on when low.
+#define SPDIF_SW 11 //Switch source to S/PDIF when high.
+#define DIGITAL_MODE 12 //Input, digital mode active when low.
+#define POWER_ON_SW 13 //Output, vehicle power is on when high.
+#define AUX_SW 14 //Input, aux port mechanical switch.
+
+#define DAC_FILTER_MODE 15 //Output, digital filter mode.
+
+#define ADC_CS 16
+#define VOL_CS 17
+#define TREBLE_CS 18
+#define BASS_CS 19
+#define FADE_CS 20
+
+#define NAV_MUTE 21
+#define DIGITAL_NPCM 22
+#define DIGITAL_ERROR 23
 #endif
 
 #define SOURCE_COUNT 16
@@ -56,18 +82,16 @@ ParameterList parameters;
 AIBusHandler aibus_handler(&AISerial, AI_RX);
 
 TextHandler text_handler(&aibus_handler, &parameters);
-Si4703Controller tuner1(TUNER_RESET, FM1_EN, IDAT, ICLK, &aibus_handler, &parameters, &text_handler);//, tuner2(TUNER_RESET, FM2_EN, A4, A5, &aibus_handler, &parameters, &text_handler);
 
-SourceHandler source_handler(&aibus_handler, &tuner1, &parameters, SOURCE_COUNT);
-
-#ifdef __AVR_ATmegax09__
 MCP4251 vol_controller(VOL_CS, 10000, 0, 10000, 0);
 MCP4251 treble_controller(TREBLE_CS, 10000, 0, 10000, 0);
 MCP4251 bass_controller(BASS_CS, 10000, 0, 10000, 0);
 MCP4251 fade_controller(FADE_CS, 10000, 0, 10000, 0);
 
 VolumeHandler volume_handler(&vol_controller, &treble_controller, &bass_controller, &fade_controller, &parameters, &aibus_handler);
-#endif
+
+Si4735Controller tuner1(TUNER_RESET, HIGH, &aibus_handler, &parameters, &text_handler);
+SourceHandler source_handler(&aibus_handler, &tuner1, &parameters, SOURCE_COUNT);
 
 elapsedMillis aibus_timer, source_text_timer;
 elapsedMillis src_ping_timer, computer_ping_timer, parameter_timer, screen_ping_timer;
@@ -86,29 +110,34 @@ bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
 void setup() {
 	pinMode(AI_RX, INPUT_PULLUP);
 
-	#ifdef __AVR_ATmegax09__
 	pinMode(AUDIO_SW0, OUTPUT);
 	pinMode(AUDIO_SW1, OUTPUT);
 	pinMode(NAV_SW, INPUT);
 	pinMode(AUDIO_ON_SW, OUTPUT);
+	pinMode(POWER_ON_SW, OUTPUT);
 	pinMode(SPDIF_SW, OUTPUT);
 	pinMode(DIGITAL_MODE, INPUT);
 	pinMode(AUX_SW, INPUT_PULLUP);
 	pinMode(NAV_MUTE, INPUT_PULLUP);
+
+	pinMode(DAC_FILTER_MODE, OUTPUT);
 
 	pinMode(VOL_CS, OUTPUT);
 	pinMode(TREBLE_CS, OUTPUT);
 	pinMode(BASS_CS, OUTPUT);
 	pinMode(FADE_CS, OUTPUT);
 
+	pinMode(DIGITAL_ERROR, INPUT);
+	pinMode(DIGITAL_NPCM, INPUT);
+
 	digitalWrite(AUDIO_SW0, LOW);
 	digitalWrite(AUDIO_SW1, LOW);
 
-	digitalWrite(AUDIO_ON_SW, HIGH);
+	digitalWrite(AUDIO_ON_SW, LOW);
+	digitalWrite(POWER_ON_SW, LOW);
 	digitalWrite(SPDIF_SW, LOW);
 
-	
-	#endif
+	digitalWrite(DAC_FILTER_MODE, LOW);
 
 	AISerial.begin(AI_BAUD);
 	
@@ -259,7 +288,6 @@ void loop() {
 			text_handler.createRadioMenu(sub_id);
 		}
 
-		#ifdef __AVR_ATmegax09__
 		if(!parameters.phone_active) {
 			if(current_source_id == 0) {
 				digitalWrite(AUDIO_ON_SW, HIGH);
@@ -292,7 +320,6 @@ void loop() {
 
 			digitalWrite(SPDIF_SW, LOW);
 		}
-		#endif
 	}
 	
 	if(source_text_timer_enabled && source_text_timer > 50) {
@@ -493,11 +520,9 @@ void loop() {
 			
 			break;
 		} else if(source_handler.getCurrentSourceID() != 0) {
-			#ifdef __AVR_ATmegax09__
 			const int digital_status = digitalRead(DIGITAL_MODE);
 			if((digital_status == LOW && !*digital_mode) || (digital_status == HIGH && *digital_mode))
 				setDigitalActiveMode();
-			#endif
 		}
 	} while(false);
 
@@ -532,9 +557,7 @@ void handleAIBus(AIData* msg) {
 		parameters.send_time = msg->data[1] != 0;
 	} else if(msg->receiver == ID_RADIO) { //Radio message.
 		bool answered = false;
-		#ifdef __AVR_ATmegax09__
 		answered = volume_handler.handleAIBus(msg);
-		#endif
 		if(!answered)
 			answered = source_handler.handleAIBus(msg);
 	} else if(msg->receiver == 0xFF && msg->data[0] == 0xA1 && msg->sender != ID_RADIO) {
@@ -628,7 +651,6 @@ void setTunerFrequency(const uint8_t sub_id) {
 
 //Set the digital mode.
 void setDigitalActiveMode() {
-	#ifdef __AVR_ATmegax09__
 	const int d_state = digitalRead(DIGITAL_MODE);
 	*digital_mode = d_state == LOW;
 
@@ -636,7 +658,6 @@ void setDigitalActiveMode() {
 		digitalWrite(SPDIF_SW, HIGH);
 	else
 		digitalWrite(SPDIF_SW, LOW);
-	#endif
 }
 
 //Send the heartbeat/redundant message to the active source.

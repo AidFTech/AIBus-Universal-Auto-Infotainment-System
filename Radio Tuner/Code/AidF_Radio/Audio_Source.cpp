@@ -1,6 +1,6 @@
 #include "Audio_Source.h"
 
-SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4703Controller* tuner, ParameterList* parameter_list, uint16_t source_count) {
+SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner, ParameterList* parameter_list, uint16_t source_count) {
 	this->source_count = source_count;
 	this->source_list = new AudioSource[source_count];
 
@@ -545,9 +545,9 @@ void SourceHandler::manualTuneIncrement(const bool up, const uint8_t steps) {
 		return;
 	
 	if(up)
-		*current_frequency = this->tuner->incrementFrequency(*current_frequency, steps);
+		*current_frequency = this->tuner->incrementFrequency(steps);
 	else
-		*current_frequency = this->tuner->decrementFrequency(*current_frequency, steps);
+		*current_frequency = this->tuner->decrementFrequency(steps);
 }
 
 //Increment source up.

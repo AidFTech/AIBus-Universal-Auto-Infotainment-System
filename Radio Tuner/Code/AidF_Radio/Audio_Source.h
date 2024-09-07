@@ -6,7 +6,7 @@
 #include "AIBus_Handler.h"
 #include "Parameter_List.h"
 #include "Text_Handler.h"
-#include "Si4703_AidF.h"
+#include "Si4735_AidF.h"
 
 #ifndef audio_source_h
 #define audio_source_h
@@ -24,7 +24,7 @@ class SourceHandler {
 		AudioSource* source_list;
 		uint16_t source_count;
 	
-		SourceHandler(AIBusHandler* ai_handler, Si4703Controller* tuner, ParameterList* parameter_list, uint16_t source_count);
+		SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner, ParameterList* parameter_list, uint16_t source_count);
 		~SourceHandler();
 
 		void sendRadioHandshake();
@@ -53,7 +53,7 @@ class SourceHandler {
 
 		uint16_t current_source = 0;
 		AIBusHandler* ai_handler;
-		Si4703Controller* tuner;
+		Si4735Controller* tuner;
 
 		ParameterList* parameter_list;
 
