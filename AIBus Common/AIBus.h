@@ -19,6 +19,7 @@
 #define ID_AMPLIFIER 0x6A
 #define ID_STEERING_CTRL 0x6F
 #define ID_ANDROID_AUTO 0x8E
+#define ID_PHONE 0xC8
 
 #define WAIT_TIME 500
 

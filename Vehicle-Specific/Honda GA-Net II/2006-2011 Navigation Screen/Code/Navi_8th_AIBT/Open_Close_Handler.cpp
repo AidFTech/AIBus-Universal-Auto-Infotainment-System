@@ -27,9 +27,13 @@ OpenCloseHandler::OpenCloseHandler(MCP23S08* open_mcp, const int8_t open_pin,
 						this->motor_pos_pin = motor_pos;
 						this->ai_handler = ai_handler;
 						this->parameters = parameters;
+
+						motor_timer = 0;
 					}
 
 void OpenCloseHandler::loop() {
+	const int last_motor_position = motor_position;
+
 	checkButtonPress();
 	getMotorPosition();
 
@@ -39,7 +43,15 @@ void OpenCloseHandler::loop() {
 	else if(stop_motor_ind_pin >= 0)
 		stop_motor_ind = digitalRead(stop_motor_ind_pin) == HIGH;
 
-	if(stop_motor_ind) {
+	if(motor_position != last_motor_position) {
+		motor_timer = 0;
+		panel_moving = true;
+	}
+
+	if(stop_motor_ind || (motor_timer > MOTOR_WAIT && panel_moving)) {
+		motor_timer = 0;
+		panel_moving = false;
+
 		if(open_motor_mcp != NULL && open_motor_pin >= 0)
 			open_motor_mcp->digitalWriteIO(open_motor_pin, false);
 		else if(open_motor_pin >= 0)

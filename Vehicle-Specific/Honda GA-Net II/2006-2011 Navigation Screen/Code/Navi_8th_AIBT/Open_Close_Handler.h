@@ -8,6 +8,8 @@
 #ifndef open_close_handler_h
 #define open_close_handler_h
 
+#define MOTOR_WAIT 100 //Stop the motor after this time.
+
 class OpenCloseHandler {
 public:
 	OpenCloseHandler(MCP23S08* open_mcp, const int8_t open_pin,
@@ -33,8 +35,11 @@ private:
 
 	bool open_pressed = false, close_pressed = false;
 	bool close_led = false;
+	bool panel_moving = false;
 
 	int motor_position = 0;
+
+	elapsedMillis motor_timer;
 
 	void checkButtonPress();
 	void getMotorPosition();
