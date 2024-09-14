@@ -90,8 +90,8 @@ MCP4251 fade_controller(FADE_CS, 10000, 0, 10000, 0);
 
 VolumeHandler volume_handler(&vol_controller, &treble_controller, &bass_controller, &fade_controller, &parameters, &aibus_handler);
 
-Si4735Controller tuner1(TUNER_RESET, HIGH, &aibus_handler, &parameters, &text_handler);
-SourceHandler source_handler(&aibus_handler, &tuner1, &parameters, SOURCE_COUNT);
+Si4735Controller tuner1(TUNER_RESET, HIGH, &aibus_handler, &parameters, &text_handler), tuner2(TUNER_RESET, LOW, &aibus_handler, &parameters, &text_handler);
+SourceHandler source_handler(&aibus_handler, &tuner1, &tuner2, &parameters, SOURCE_COUNT);
 
 elapsedMillis aibus_timer, source_text_timer;
 elapsedMillis src_ping_timer, computer_ping_timer, parameter_timer, screen_ping_timer;
@@ -142,7 +142,7 @@ void setup() {
 	AISerial.begin(AI_BAUD);
 	
 	tuner1.init();
-	//tuner2.init();
+	tuner2.init();
 	parameters.fm1_tune = tuner1.getFrequency();
 	parameters.fm2_tune = tuner1.getFrequency();
 
@@ -166,7 +166,7 @@ void setup() {
 	src_am.source_id = ID_RADIO;
 	src_am.sub_id = 2;
 
-	AudioSource src_aux, src_bta, src_usb;
+	AudioSource src_aux;
 	src_aux.source_name = "Aux";
 	src_aux.source_id = ID_RADIO;
 	src_aux.sub_id = 3;
@@ -639,11 +639,16 @@ void sendTunedFrequencyMessage(const uint8_t sub_id) {
 
 //Set the tuner frequency to a pre-set value based on the active sub-id.
 void setTunerFrequency(const uint8_t sub_id) {
-	if(sub_id == 0)
-		tuner1.setFrequency(parameters.fm1_tune);
-	else if(sub_id == 1)
-		tuner1.setFrequency(parameters.fm2_tune);
-	else //TODO: AM tuning.
+	if(sub_id == 0) {
+		tuner1.setPower(true, SUB_FM1);
+		parameters.fm1_tune = tuner1.setFrequency(parameters.fm1_tune);
+	} else if(sub_id == 1) {
+		tuner1.setPower(true, SUB_FM2);
+		parameters.fm2_tune = tuner1.setFrequency(parameters.fm2_tune);
+	} else if(sub_id == 2) {
+		tuner1.setPower(true, SUB_AM);
+		parameters.am_tune = tuner1.setFrequency(parameters.am_tune);
+	} else
 		tuner1.setPower(false);
 	
 	parameter_timer = PARAMETER_DELAY;

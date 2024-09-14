@@ -39,7 +39,17 @@ uint16_t Si4735Controller::getFrequency() {
 
 //Turn the radio output on or off.
 void Si4735Controller::setPower(const bool power) {
+	this->setPower(power, parameters->last_sub);
+}
+
+//Turn the radio output on or off and set its function..
+void Si4735Controller::setPower(const bool power, const uint8_t function) {
 	if(power) {
+		uint8_t si_function = POWER_UP_FM;
+		if(function == SUB_AM)
+			si_function = POWER_UP_AM;
+
+		tuner->setup(reset_pin, si_function);
 		tuner->radioPowerUp();
 	} else
 		tuner->powerDown();

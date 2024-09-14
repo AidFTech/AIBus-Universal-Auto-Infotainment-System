@@ -1,6 +1,6 @@
 #include "Audio_Source.h"
 
-SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner, ParameterList* parameter_list, uint16_t source_count) {
+SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, Si4735Controller* tuner_background, ParameterList* parameter_list, uint16_t source_count) {
 	this->source_count = source_count;
 	this->source_list = new AudioSource[source_count];
 
@@ -12,7 +12,8 @@ SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner, 
 
 	this->ai_handler = ai_handler;
 	this->parameter_list = parameter_list;
-	this->tuner = tuner;
+	this->tuner_main = tuner_main;
+	this->tuner_background = tuner_background;
 }
 
 SourceHandler::~SourceHandler() {
@@ -253,7 +254,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				}
 			} else if((button == 0x24 || button == 0x25) && state == 2) { //Seek up/down.
 				if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id != SUB_AM)				
-					this->tuner->startSeek(button == 0x25);
+					this->tuner_main->startSeek(button == 0x25);
 			} else if((button == 0x2A || button == 0x2B) && state == 0) { //Left/right buttons.
 				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected) && source_list[current_source].source_id == ID_RADIO)
 					manualTuneIncrement(button == 0x2B, 1);
@@ -413,21 +414,25 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
 					const uint8_t group = source_list[current_source].sub_id;
 					if(state == 2) { //Recall preset.
-						uint16_t freq = tuner->getFrequency();
+						uint16_t freq = tuner_main->getFrequency();
 						if(group == SUB_FM1)
 							freq = parameter_list->fm1_presets[preset];
 						else if(group == SUB_FM2)
 							freq = parameter_list->fm2_presets[preset];
+						else if(group == SUB_AM)
+							freq = parameter_list->am_presets[preset];
 
-						tuner->setFrequency(freq);
+						tuner_main->setFrequency(freq);
 						if(group == SUB_FM1)
-							parameter_list->fm1_tune = tuner->getFrequency();
+							parameter_list->fm1_tune = tuner_main->getFrequency();
 						else if(group == SUB_FM2)
-							parameter_list->fm2_tune = tuner->getFrequency();
+							parameter_list->fm2_tune = tuner_main->getFrequency();
+						else if(group == SUB_AM)
+							parameter_list->am_tune = tuner_main->getFrequency();
 
 						parameter_list->preferred_preset = preset + 1;
 					} else if(state == 1) { //Save preset.
-						savePreset(tuner->getFrequency(), preset, group);
+						savePreset(tuner_main->getFrequency(), preset, group);
 						parameter_list->preferred_preset = preset + 1;
 					}
 				}
@@ -470,6 +475,10 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						}
 
 						this->sendManualTuneMessage();
+						break;
+					case 2: //Preset list.
+						if(menu_open == NO_MENU)
+							createPresetMenu(source_list[current_source].sub_id);
 						break;
 					}
 				} else if(source_id != 0 && source_id != ID_RADIO) {
@@ -545,9 +554,9 @@ void SourceHandler::manualTuneIncrement(const bool up, const uint8_t steps) {
 		return;
 	
 	if(up)
-		*current_frequency = this->tuner->incrementFrequency(steps);
+		*current_frequency = this->tuner_main->incrementFrequency(steps);
 	else
-		*current_frequency = this->tuner->decrementFrequency(steps);
+		*current_frequency = this->tuner_main->decrementFrequency(steps);
 }
 
 //Increment source up.
@@ -738,14 +747,6 @@ void SourceHandler::clearMenu() {
 
 //Create the source menu.
 void SourceHandler::createSourceMenu() {
-	/*uint8_t clear_count = 0;
-	while(menu_open != NO_MENU && clear_count < MAX_REPEAT) {
-		clearMenu();
-		clear_count += 1;
-	}
-	if(clear_count >= MAX_REPEAT && menu_open != NO_MENU)
-		return;*/
-
 	AudioSource active_list[source_count];
 	const uint16_t active_count = getFilledSources(active_list);
 	
@@ -816,6 +817,93 @@ void SourceHandler::createSourceMenu() {
 		menu_open = SOURCE_MENU;
 }
 
+//Create a menu for presets.
+void SourceHandler::createPresetMenu(const uint8_t group) {
+	uint16_t* preset_list;
+	if(group == SUB_FM1)
+		preset_list = parameter_list->fm1_presets;
+	else if(group == SUB_FM2)
+		preset_list = parameter_list->fm2_presets;
+	else if(group == SUB_AM)
+		preset_list = parameter_list->am_presets;
+	else
+		return;
+
+	String source_title = F("Presets");
+	uint8_t source_data[12 + source_title.length()];
+
+	const uint16_t width = parameter_list->screen_w;
+
+	source_data[0] = 0x2B;
+	source_data[1] = 0x5A;
+	source_data[2] = 0x6;
+	source_data[3] = 0x6;
+	source_data[4] = 0x0;
+	source_data[5] = 0x0;
+	source_data[6] = 0x0;
+	source_data[7] = 0x8C;
+	source_data[8] = (width&0xFF00)>>8;
+	source_data[9] = width&0xFF;
+	source_data[10] = 0x0;
+	source_data[11] = 0x23;
+	for(uint8_t i=0;i<source_title.length();i+=1)
+		source_data[i+12] = uint8_t(source_title.charAt(i));
+
+	AIData menu_header(sizeof(source_data), ID_RADIO, ID_NAV_COMPUTER);
+	menu_header.refreshAIData(source_data);
+	bool ack = ai_handler->writeAIData(&menu_header);
+
+	if(!ack)
+		return;
+
+	//Confirm that the nav computer does not respond with a "no menu" message.
+	elapsedMillis no_draw;
+	while(no_draw < 50) {
+		AIData no_msg;
+		if(ai_handler->readAIData(&no_msg)) {
+			if(no_msg.receiver == ID_RADIO && no_msg.sender == ID_NAV_COMPUTER &&
+											no_msg.l >= 2 &&
+											no_msg.data[0] == 0x2B && no_msg.data[1] == 0x40) { //No menu message.
+				ai_handler->sendAcknowledgement(ID_RADIO, ID_NAV_COMPUTER);
+				return;
+			} else if(no_msg.receiver == ID_RADIO) {
+				ai_handler->sendAcknowledgement(ID_RADIO, no_msg.sender);
+				ai_handler->cacheMessage(&no_msg);
+			}
+		}
+	}
+
+	for(int i=0;i<6;i+=1) {
+		String preset = String(i+1) + ". ";
+		if(group == SUB_AM)
+			preset += String(preset_list[i]) + " kHz";
+		else {
+			if(preset_list[i]%100 >= 10)
+				preset += String(preset_list[i]/100) + "." + String(preset_list[i]%100) + " MHz";
+			else
+				preset += String(preset_list[i]/100) + ".0" + String(preset_list[i]%100) + " MHz";
+		}
+
+		uint8_t option_data[3 + preset.length()];
+		option_data[0] = 0x2B;
+		option_data[1] = 0x51;
+		option_data[2] = i&0xFF;
+		for(uint8_t j=0;j<preset.length();j+=1)
+			option_data[j+3] = uint8_t(preset.charAt(j));
+
+		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
+		option_msg.refreshAIData(option_data);
+		ai_handler->writeAIData(&option_msg);
+	}
+
+	uint8_t display_data[] = {0x2B, 0x52, 0x1};
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
+	display_msg.refreshAIData(display_data);
+	ack = ai_handler->writeAIData(&display_msg);
+	if(ack)
+		menu_open = PRESET_MENU;
+}
+
 //Set the current source to the desired ID and sub ID.
 void SourceHandler::setCurrentSource(const uint8_t id, const uint8_t sub_id) {
 	if(!audio_on)
@@ -864,11 +952,14 @@ void SourceHandler::handleSteeringControl(const uint8_t command, const uint8_t s
 			parameter_list->preferred_preset = new_preset;
 				
 			if(sub == SUB_FM1) {
-				tuner->setFrequency(parameter_list->fm1_presets[new_preset - 1]);
-				parameter_list->fm1_tune = tuner->getFrequency();
+				tuner_main->setFrequency(parameter_list->fm1_presets[new_preset - 1]);
+				parameter_list->fm1_tune = tuner_main->getFrequency();
 			} else if(sub == SUB_FM2) {
-				tuner->setFrequency(parameter_list->fm2_presets[new_preset - 1]);
-				parameter_list->fm2_tune = tuner->getFrequency();
+				tuner_main->setFrequency(parameter_list->fm2_presets[new_preset - 1]);
+				parameter_list->fm2_tune = tuner_main->getFrequency();
+			} else if(sub == SUB_AM) {
+				tuner_main->setFrequency(parameter_list->am_presets[new_preset - 1]);
+				parameter_list->am_tune = tuner_main->getFrequency();
 			}
 			
 		} else if(source == ID_TAPE) {
