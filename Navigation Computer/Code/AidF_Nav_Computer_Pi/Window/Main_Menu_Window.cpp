@@ -120,6 +120,9 @@ void Main_Menu_Window::handleEnterButton() {
 		case 1:
 			attribute_list->next_window = NEXT_WINDOW_AUDIO;
 			break;
+		case 2:
+			attribute_list->next_window = NEXT_WINDOW_PHONE;
+			break;
 		case 5:
 			attribute_list->next_window = NEXT_WINDOW_SETTINGS_MAIN;
 			break;

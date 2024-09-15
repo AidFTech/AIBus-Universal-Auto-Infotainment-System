@@ -32,6 +32,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->attribute_list->night_profile = &this->night_profile;
 
 	audio_window = new Audio_Window(attribute_list);
+	phone_window = new PhoneWindow(attribute_list);
 	main_window = new Main_Menu_Window(attribute_list);
 	this->window_handler->setActiveWindow(main_window);
 	this->window_handler->setText("--:--", 0);
@@ -49,6 +50,7 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	delete audio_window;
 	delete main_window;
 	delete misc_window;
+	delete phone_window;
 }
 
 void AidF_Nav_Computer::loop() {
@@ -65,7 +67,7 @@ void AidF_Nav_Computer::loop() {
 		}
 	}
 	
-	this->window_handler->checkNextWindow(misc_window, audio_window, main_window);
+	this->window_handler->checkNextWindow(misc_window, audio_window, phone_window, main_window);
 
 	if(attribute_list->day_night_settings == DAY_NIGHT_DAY) 
 		setDayNight(false);
@@ -82,6 +84,8 @@ void AidF_Nav_Computer::loop() {
 		
 		if(this->audio_window != NULL)
 			this->audio_window->refreshWindow();
+		if(this->phone_window != NULL)
+			this->phone_window->refreshWindow();
 		if(this->main_window != NULL)
 			this->main_window->refreshWindow();
 		this->window_handler->refresh();
@@ -124,6 +128,8 @@ void AidF_Nav_Computer::loop() {
 							const uint8_t button = ai_msg.data[1], state = ai_msg.data[2]>>6;
 							if(button == 0x26 && state == 0x2) { //Audio button.
 								this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_AUDIO;
+							} else if(button == 0x50 && state == 0x2) { //Phone button.
+								this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_PHONE;
 							} else if(button == 0x20 && state == 0x2) { //Home button.
 								this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_MAIN;
 							}
@@ -207,6 +213,8 @@ void AidF_Nav_Computer::setDayNight(const bool night) {
 
 	if(this->audio_window != NULL)
 		this->audio_window->refreshWindow();
+	if(this->phone_window != NULL)
+		this->phone_window->refreshWindow();
 	if(this->main_window != NULL)
 		this->main_window->refreshWindow();
 	this->window_handler->refresh();
