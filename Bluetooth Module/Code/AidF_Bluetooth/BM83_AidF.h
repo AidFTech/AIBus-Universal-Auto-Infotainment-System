@@ -6,6 +6,7 @@
 class BM83 {
 public:
 	BM83(Stream* serial);
+	void loop();
 private:
 	Stream* serial;
 	
