@@ -52,7 +52,7 @@ public:
 	NavWindow* getActiveWindow();
 	void setActiveWindow(NavWindow* new_window);
 
-	void checkNextWindow(NavWindow* misc_window, NavWindow* audio_window, NavWindow* main_window);
+	void checkNextWindow(NavWindow* misc_window, NavWindow* audio_window, NavWindow* phone_window, NavWindow* main_window);
 private:
 	void drawClockHeader();
 

@@ -13,6 +13,8 @@
 #include "Background/Nav_Gradient_Background.h"
 
 #include "Window/Audio_Window.h"
+#include "Window/Phone_Window.h"
+
 #include "Window/Main_Menu_Window.h"
 #include "Window/Consumption_Window.h"
 #include "Window/Settings_Main_Window.h"
@@ -60,6 +62,7 @@ private:
 	AttributeList* attribute_list;
 
 	Audio_Window* audio_window;
+	PhoneWindow* phone_window;
 	Main_Menu_Window* main_window;
 	NavWindow* misc_window;
 

@@ -112,7 +112,7 @@ void Window_Handler::setActiveWindow(NavWindow* new_window) {
 		this->active_window->setActive(true);
 }
 
-void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_window, NavWindow* main_window) {
+void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_window, NavWindow* phone_window, NavWindow* main_window) {
 	const int next_window = attribute_list->next_window;
 
 	if(next_window == NEXT_WINDOW_AUDIO) {
@@ -121,6 +121,10 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 		attribute_list->next_window = NEXT_WINDOW_NULL;
 	} else if(next_window == NEXT_WINDOW_MAIN) {
 		this->setActiveWindow(main_window);
+	} else if(next_window == NEXT_WINDOW_PHONE) {
+		phone_window->setActive(true);
+		this->setActiveWindow(phone_window);
+		attribute_list->next_window = NEXT_WINDOW_NULL;
 	} else if(next_window == NEXT_WINDOW_CONSUMPTION) {
 		misc_window = new Consumption_Window(attribute_list);
 		this->setActiveWindow(misc_window);
