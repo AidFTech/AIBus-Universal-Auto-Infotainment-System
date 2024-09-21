@@ -106,8 +106,53 @@ bool PhoneWindow::handleAIBus(AIData* msg) {
 		aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 		this->interpretPhoneScreenChange(msg);
 		return true;
-	}
-	return false;
+	} else if(msg->sender == ID_NAV_SCREEN) { //Button pressed on screen.
+		if(!this->active)
+			return false;
+		
+		if(msg->data[0] == 0x32 && msg->data[1] == 0x7) {
+			this->interpretMenuChange(msg);
+			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+			return true;
+		} else if(msg->data[0] == 0x30) {
+			const uint8_t button = msg->data[1], state = msg->data[2]>>6;
+			if(button == 0x7 && state == 0x2) { //Enter button.
+				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+				this->handleEnterButton();
+				return true;
+			} else if ((button == 0x27 || (button == 0x51 && this->settings_menu_active)) && state == 0x2) { //Menu or back button.
+				if(this->settings_menu_active) {
+					this->settings_menu_active = false;
+					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+					this->settings_menu_prep = false;
+					sendMenuClose();
+					return true;
+				} else
+					return false;
+			} else if(button == 0x51 && state == 0x2 && !this->settings_menu_active) {
+				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+				
+				uint8_t menu_request_data[] = {0x2B, 0x4C};
+				AIData menu_request_msg(sizeof(menu_request_data), ID_NAV_COMPUTER, ID_PHONE);
+				menu_request_msg.refreshAIData(menu_request_data);
+
+				aibus_handler->writeAIData(&menu_request_msg);
+				return true;
+			} else if(button == 0x20 && state == 0x2) { //Home button.
+				this->active = false;
+				this->attribute_list->next_window = NEXT_WINDOW_MAIN;
+				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+				return true;
+			} else if((button == 0x28 || button == 0x29 || button == 0x2A || button == 0x2B) && state == 0x2)  {
+				this->interpretMenuChange(msg);
+				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+				return true;
+			} else
+				return false;
+		} else
+			return false;
+	} else
+		return false;
 }
 
 void PhoneWindow::setText(const uint8_t group, const uint8_t area, std::string text) {
@@ -204,7 +249,6 @@ void PhoneWindow::refreshPhoneScreen() {
 }
 
 void PhoneWindow::fillText(const uint8_t group, const uint8_t area) {
-
 	if(group == MAIN_AREA_GROUP) {
 		if(area >= 6)
 			return;
@@ -221,4 +265,92 @@ void PhoneWindow::fillText(const uint8_t group, const uint8_t area) {
 		if(this->active)
 			subtitle_area_box[area]->drawText();
 	}
+}
+
+void PhoneWindow::interpretMenuChange(AIData* ai_b) {
+	if(ai_b->sender == ID_NAV_SCREEN) {
+		if(ai_b->data[0] == 0x32) {
+			const bool clockwise = (ai_b->data[2]&0x10) != 0;
+			const uint8_t steps = ai_b->data[2]&0xF;
+
+			if(this->settings_menu == NULL || !this->settings_menu_active) {
+				if(this->side_menu != NULL) {
+					if(clockwise) {
+						for(uint8_t i=0;i<steps;i+=1)
+							this->side_menu->incrementSelected();
+					} else {
+						for(uint8_t i=0;i<steps;i+=1)
+							this->side_menu->decrementSelected();
+					}
+				}
+			} else {
+				if(!clockwise) {
+					for(uint8_t i=0;i<steps;i+=1)
+						this->settings_menu->incrementSelected();
+				} else {
+					for(uint8_t i=0;i<steps;i+=1)
+						this->settings_menu->decrementSelected();
+				}
+			}
+		} else if(ai_b->data[0] == 0x30) {
+			if(this->settings_menu == NULL || !this->settings_menu_active) {
+				if(this->side_menu != NULL) {
+					if(ai_b->data[1] == 0x29)
+						this->side_menu->incrementSelected();
+					else if(ai_b->data[1] == 0x28)
+						this->side_menu->decrementSelected();
+				}
+			} else {
+				int8_t control = -1;
+				switch(ai_b->data[1]) {
+					case 0x28:
+						control = NAV_UP;
+						break;
+					case 0x29:
+						control = NAV_DOWN;
+						break;
+					case 0x2A:
+						control = NAV_LEFT;
+						break;
+					case 0x2B:
+						control = NAV_RIGHT;
+						break;
+					default:
+						return;
+				}
+				this->settings_menu->navigateSelected(control);
+			}
+		}
+	}
+}
+
+void PhoneWindow::handleEnterButton() {
+	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
+
+	aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ID_NAV_SCREEN);
+	if(this->settings_menu_active && this->settings_menu != NULL) {
+		uint8_t data[] = {0x2B, 0x60, uint8_t(this->settings_menu->getSelected())};
+		AIData enter_msg(3, ID_NAV_COMPUTER, this->settings_menu_sender);
+		enter_msg.refreshAIData(data);
+
+		aibus_handler->writeAIData(&enter_msg);
+	} else {
+		uint8_t data[] = {0x2B, 0x6C, uint8_t(this->side_menu->getSelected())};
+		AIData enter_msg(3, ID_NAV_COMPUTER, ID_PHONE);
+		enter_msg.refreshAIData(data);
+
+		aibus_handler->writeAIData(&enter_msg);
+	}
+}
+
+void PhoneWindow::sendMenuClose() {
+	this->sendMenuClose(this->settings_menu_sender);
+}
+
+void PhoneWindow::sendMenuClose(const uint8_t receiver) {
+	AIData close_msg(2, ID_NAV_COMPUTER, receiver);
+	uint8_t data[] = {0x2B, 0x40};
+	close_msg.refreshAIData(data);
+
+	this->attribute_list->aibus_handler->writeAIData(&close_msg);
 }

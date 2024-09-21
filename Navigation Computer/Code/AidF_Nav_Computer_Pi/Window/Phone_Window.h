@@ -37,6 +37,12 @@ private:
 	void interpretPhoneScreenChange(AIData* ai_b);
 	void refreshPhoneScreen();
 
+	void interpretMenuChange(AIData* ai_b);
+	void handleEnterButton();
+
+	void sendMenuClose();
+	void sendMenuClose(const uint8_t receiver);
+
 	void fillText(const uint8_t group, const uint8_t area);
 };
 

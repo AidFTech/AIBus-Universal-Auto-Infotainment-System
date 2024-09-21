@@ -120,6 +120,9 @@ void ButtonHandler::checkButtonPress() {
 void ButtonHandler::checkButtonHold() {
 	for(int i=0;i<BUTTON_INDEX_SIZE;i+=1) {
 		uint8_t* recipient = &parameters->all_dest;
+		
+		if(i == BUTTON_INDEX_ZOOMIN || i == BUTTON_INDEX_ZOOMOUT)
+			continue;
 
 		if(button_states[i] == BUTTON_STATE_PRESSED) {
 			if(button_timers[i] >= HOLD_TIME) {

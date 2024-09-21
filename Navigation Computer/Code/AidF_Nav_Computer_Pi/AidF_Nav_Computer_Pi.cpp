@@ -118,6 +118,8 @@ void AidF_Nav_Computer::loop() {
 
 					if(!answered)
 						answered = audio_window->handleAIBus(&ai_msg);
+					if(!answered)
+						answered = phone_window->handleAIBus(&ai_msg);
 					if(!answered && this->window_handler->getActiveWindow() != NULL  && this->window_handler->getActiveWindow() != audio_window)
 						answered = this->window_handler->getActiveWindow()->handleAIBus(&ai_msg);
 					if(!answered) { //Handle the AIBus message directly.
@@ -136,6 +138,8 @@ void AidF_Nav_Computer::loop() {
 						} else if(ai_msg.sender == ID_CANSLATOR && ai_msg.l >= 1 && ai_msg.data[0] == 0x11) { //Light info.
 							InfoParameters* info_parameters = window_handler->getVehicleInfo();
 							setLightState(&ai_msg, info_parameters);
+						} else if(ai_msg.sender == ID_PHONE && ai_msg.l >= 3 && ai_msg.data[0] == 0x21 && ai_msg.data[1] == 0x00 && ai_msg.data[2] == 0x1) { //Open the phone window.
+							this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_PHONE;
 						}
 					}
 				}
