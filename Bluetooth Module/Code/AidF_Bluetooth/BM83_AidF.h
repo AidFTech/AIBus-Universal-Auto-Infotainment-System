@@ -1,5 +1,7 @@
 #include <Arduino.h>
 
+#include "Bluetooth_Device.h"
+
 #ifndef bm83_aidf_h
 #define bm83_aidf_h
 
@@ -9,8 +11,12 @@ public:
 	void loop();
 private:
 	Stream* serial;
+
+	BluetoothDevice* active_device = NULL;
 	
 	void sendPowerOn();
+
+	void sendConnect(BluetoothDevice* device);
 };
 
 #endif

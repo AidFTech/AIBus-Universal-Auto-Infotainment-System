@@ -98,6 +98,13 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 	}
 	
 	parameters->fm_stereo = tuner->getCurrentPilot();
+
+	tuner->rdsBeginQuery();
+	parameters->has_rds = tuner->getRdsReceived();
+
+	if(parameters->has_rds) {
+		//Fill the RDS data.
+	}
 }
 
 AIBusHandler* Si4735Controller::getAIHandler() {
