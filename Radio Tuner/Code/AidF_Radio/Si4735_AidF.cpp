@@ -103,7 +103,11 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 	parameters->has_rds = tuner->getRdsReceived();
 
 	if(parameters->has_rds) {
-		//Fill the RDS data.
+		const char* c_name = tuner->getRdsStationName();
+		parameters->rds_station_name = String(c_name);
+
+		const char* c_text = tuner->getRdsProgramInformation();
+		parameters->rds_program_name = String(c_text);
 	}
 }
 
@@ -115,7 +119,7 @@ ParameterList* Si4735Controller::getParameterList() {
 	return this->parameters;
 }
 
-String getRDSString(uint16_t* registers) {
+/*String getRDSString(uint16_t* registers) {
 	String message = "";
 	for(uint8_t i=0;i<4;i+=1) {
 		char letter_a = (registers[i]&0xFF00)>>8, letter_b = (registers[i]&0xFF);
@@ -137,4 +141,4 @@ String getRDSString(uint16_t* registers) {
 	}
 
 	return message;
-}
+}*/

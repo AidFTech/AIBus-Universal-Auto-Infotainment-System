@@ -35,7 +35,7 @@ struct ParameterList {
 	uint8_t current_preset = 0, preferred_preset = 0;
 
 	int8_t rds_index = -1;
-	uint16_t rds_text[4];
+	String rds_station_name, rds_program_name;
 
 	uint8_t last_sub = 0;
 

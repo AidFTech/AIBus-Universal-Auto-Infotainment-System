@@ -429,7 +429,7 @@ void loop() {
 				info_timer = 0;
 				text_handler.sendIMIDInfoMessage("RDS");
 			} else if(!parameters.info_mode && last_info) {
-				String current_rds = getRDSString(parameters.rds_text);
+				String current_rds = parameters.rds_program_name;
 
 				if(parameters.imid_radio)
 					text_handler.sendIMIDSourceMessage(ID_RADIO, sub_id);
@@ -442,7 +442,7 @@ void loop() {
 
 			if(info_timer_enabled && info_timer > DISPLAY_INFO_TIMER && parameters.info_mode) {
 				info_timer_enabled = false;
-				String current_rds = getRDSString(parameters.rds_text);
+				String current_rds = parameters.rds_program_name;
 				text_handler.sendIMIDInfoMessage(current_rds);
 			}
 			
@@ -451,7 +451,7 @@ void loop() {
 				if(!seeking && (parameter_timer >= PARAMETER_DELAY)) {
 					parameter_timer = 0;
 
-					const String last_rds = getRDSString(parameters.rds_text);
+					const String last_rds = parameters.rds_program_name;
 					tuner1.getParameters(&parameters, sub_id);
 
 					//if(parameters.ai_pending)
@@ -468,7 +468,7 @@ void loop() {
 					if(parameters.ai_pending)
 						break;
 
-					String current_rds = getRDSString(parameters.rds_text);
+					String current_rds = parameters.rds_program_name;
 					if(parameters.has_rds && current_rds.compareTo(last_rds) != 0) {
 						text_handler.sendShortRDSMessage(current_rds);
 						text_handler.sendIMIDRDSMessage(current_rds);
@@ -767,27 +767,16 @@ double getSpeed(AIData* msg) {
 //Clear RDS and stereo indicator.
 void clearFMData() {
 	const bool last_stereo = parameters.fm_stereo;
-	const uint16_t last_rds[] = {parameters.rds_text[0], parameters.rds_text[1], parameters.rds_text[2], parameters.rds_text[3]};
+	const String last_rds = parameters.rds_program_name;
 	
 	parameters.fm_stereo = false;
 	
 	if(parameters.fm_stereo != last_stereo)
 		text_handler.sendStereoMessage(false);
 	
-	parameters.rds_text[0] = 0x0;
-	parameters.rds_text[1] = 0x0;
-	parameters.rds_text[2] = 0x0;
-	parameters.rds_text[3] = 0x0;
+	parameters.rds_program_name = "";
 	
-	bool refresh_rds = false;
-	for(uint8_t i=0;i<4;i+=1) {
-		if(parameters.rds_text[i] != last_rds[i]) {
-			refresh_rds = true;
-			break;
-		}
-	}
-	
-	if(refresh_rds)
+	if(parameters.rds_program_name.compareTo(last_rds) != 0)
 		text_handler.sendShortRDSMessage("");
 }
 

@@ -45,6 +45,6 @@ private:
 	int8_t address_state = LOW;
 };
 
-String getRDSString(uint16_t* registers);
+//String getRDSString(uint16_t* registers);
 
 #endif
