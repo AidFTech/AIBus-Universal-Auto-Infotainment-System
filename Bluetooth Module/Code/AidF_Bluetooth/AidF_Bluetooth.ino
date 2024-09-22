@@ -47,15 +47,35 @@ SoftwareSerial BM83Serial(2, 3);
 #endif
 
 AIBusHandler ai_handler(&AISerial, AI_RX);
-BM83 bm83_handler(&BM83Serial);
+BM83 bm83_handler(&BM83Serial, &ai_handler);
 
 //Arduino setup.
 void setup() {
 	AISerial.begin(AI_BAUD);
 	BM83Serial.begin(115200);
+
+	bm83_handler.init();
 }
 
 //Arduino loop.
 void loop() {
-	
+	bm83_handler.loop();
 }
+
+//Send text to the phone screen.
+void sendPhoneScreenMessage() {
+	//TODO: Determine if a paired device is connected.
+	String header_text = "Not Connected";
+	AIData header_msg(header_text.length() + 3, ID_PHONE, ID_NAV_SCREEN);
+
+	header_msg.data[0] = 0x21;
+	header_msg.data[1] = 0xA5;
+	header_msg.data[2] = 0x0;
+	for(int i=0;i<header_text.length();i+=1)
+		header_msg.data[i+3] = uint8_t(header_text[i]);
+
+	ai_handler.writeAIData(&header_msg);
+
+
+}
+

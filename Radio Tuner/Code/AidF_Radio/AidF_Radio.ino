@@ -223,6 +223,8 @@ void loop() {
 	const uint16_t last_fm1 = parameters.fm1_tune, last_fm2 = parameters.fm2_tune, last_am = parameters.am_tune;
 	const bool last_info = parameters.info_mode;
 
+	const bool last_phone = parameters.phone_active;
+
 	AIData msg;
 	
 	do {
@@ -248,7 +250,7 @@ void loop() {
 	const uint16_t source_count = source_handler.getFilledSources(source_list), current_source = source_handler.getCurrentSource();
 	
 	//Source changed.
-	if(source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source) {
+	if(source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source || parameters.phone_active != last_phone) {
 		src_ping_timer = 0;
 		parameters.info_mode = false;
 		parameters.current_preset = 0;
@@ -257,35 +259,37 @@ void loop() {
 		const uint8_t current_source_id = source_handler.getCurrentSourceID();
 		const uint16_t current_source = source_handler.getCurrentSource();
 		
-		uint8_t sub_id = source_handler.source_list[current_source].sub_id;
-		if(current_source_id == 0)
-			sub_id = 0;
+		if(!parameters.phone_active) {
+			uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+			if(current_source_id == 0)
+				sub_id = 0;
 
-		parameters.last_sub = sub_id;
-		
-		uint8_t function_data[] = {0x40, 0x10, current_source_id, sub_id};
-		AIData function_msg(sizeof(function_data), ID_RADIO, last_active_source_id);
-		function_msg.refreshAIData(function_data);
-		
-		if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
-			aibus_handler.writeAIData(&function_msg);
-		else if(function_msg.receiver == ID_RADIO && current_source_id != ID_RADIO)
-			tuner1.setPower(false);
-		
-		setSourceName();
-		
-		if(current_source_id != 0 && current_source_id != ID_RADIO) {
-			function_msg.receiver = current_source_id;
-			aibus_handler.writeAIData(&function_msg, function_msg.receiver != 0 && function_msg.receiver != ID_RADIO);
+			parameters.last_sub = sub_id;
+			
+			uint8_t function_data[] = {0x40, 0x10, current_source_id, sub_id};
+			AIData function_msg(sizeof(function_data), ID_RADIO, last_active_source_id);
+			function_msg.refreshAIData(function_data);
+			
+			if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
+				aibus_handler.writeAIData(&function_msg);
+			else if(function_msg.receiver == ID_RADIO && current_source_id != ID_RADIO)
+				tuner1.setPower(false);
+			
+			setSourceName();
+			
+			if(current_source_id != 0 && current_source_id != ID_RADIO) {
+				function_msg.receiver = current_source_id;
+				aibus_handler.writeAIData(&function_msg, function_msg.receiver != 0 && function_msg.receiver != ID_RADIO);
 
-			source_text_timer_enabled = true;
-			source_text_timer = 0;
-		} else if(current_source_id == ID_RADIO) {
-			const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
-			setTunerFrequency(sub_id);
-			sendTunedFrequencyMessage(sub_id);
-			clearFMData();
-			text_handler.createRadioMenu(sub_id);
+				source_text_timer_enabled = true;
+				source_text_timer = 0;
+			} else if(current_source_id == ID_RADIO) {
+				const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
+				setTunerFrequency(sub_id);
+				sendTunedFrequencyMessage(sub_id);
+				clearFMData();
+				text_handler.createRadioMenu(sub_id);
+			}
 		}
 
 		if(!parameters.phone_active) {
@@ -322,7 +326,7 @@ void loop() {
 		}
 	}
 	
-	if(source_text_timer_enabled && source_text_timer > 50) {
+	if(source_text_timer_enabled && source_text_timer > 50 && !parameters.phone_active) {
 		source_text_timer_enabled = false;
 		const uint8_t current_source_id = source_handler.getCurrentSourceID();
 		if(current_source_id != ID_RADIO && current_source_id != 0)
@@ -555,6 +559,13 @@ void handleAIBus(AIData* msg) {
 	} else if(msg->receiver == ID_RADIO && msg->l >= 2 && msg->data[0] == 0x1D) { //Clock message.
 		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
 		parameters.send_time = msg->data[1] != 0;
+	} else if(msg->receiver == ID_RADIO && msg->sender == ID_PHONE && msg->l >= 3) { //Phone message.
+		if(msg->data[1] == 0x6) {
+			if(msg->data[2] == 0x1) { //Stop audio.
+				parameters.phone_active = true;
+				
+			}
+		}
 	} else if(msg->receiver == ID_RADIO) { //Radio message.
 		bool answered = false;
 		answered = volume_handler.handleAIBus(msg);
