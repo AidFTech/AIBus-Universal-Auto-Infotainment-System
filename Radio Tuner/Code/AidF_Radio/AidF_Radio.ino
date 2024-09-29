@@ -290,9 +290,8 @@ void loop() {
 				clearFMData();
 				text_handler.createRadioMenu(sub_id);
 			}
-		}
-
-		if(!parameters.phone_active) {
+		
+			//Set audio switch.
 			if(current_source_id == 0) {
 				digitalWrite(AUDIO_ON_SW, HIGH);
 				digitalWrite(AUDIO_SW0, LOW);
@@ -318,6 +317,18 @@ void loop() {
 				setDigitalActiveMode();
 			}
 		} else {
+			uint8_t function_data[] = {0x40, 0x10, 0x0};
+			AIData function_msg(sizeof(function_data), ID_RADIO, last_active_source_id);
+			function_msg.refreshAIData(function_data);
+			
+			if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
+				aibus_handler.writeAIData(&function_msg);
+			else if(function_msg.receiver == ID_RADIO)
+				tuner1.setPower(false);
+			
+			if(!last_phone)
+				text_handler.createPhoneWindow();
+			
 			digitalWrite(AUDIO_ON_SW, LOW);
 			digitalWrite(AUDIO_SW0, HIGH);
 			digitalWrite(AUDIO_SW1, LOW);
@@ -561,10 +572,7 @@ void handleAIBus(AIData* msg) {
 		parameters.send_time = msg->data[1] != 0;
 	} else if(msg->receiver == ID_RADIO && msg->sender == ID_PHONE && msg->l >= 3) { //Phone message.
 		if(msg->data[1] == 0x6) {
-			if(msg->data[2] == 0x1) { //Stop audio.
-				parameters.phone_active = true;
-				
-			}
+			parameters.phone_active = msg->data[2] != 0x0;
 		}
 	} else if(msg->receiver == ID_RADIO) { //Radio message.
 		bool answered = false;

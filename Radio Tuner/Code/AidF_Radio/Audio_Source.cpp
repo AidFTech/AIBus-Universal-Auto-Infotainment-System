@@ -225,6 +225,17 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
 		return true;
 		
+	} else if(ai_d->l >= 3 && ai_d->data[0] == 0x10 && ai_d->data[1] == 0x10) { //Source request control.
+		ack = false;
+		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+		
+		const uint8_t new_src = ai_d->data[2];
+		uint8_t new_sub = 0;
+		
+		if(ai_d->l >= 4)
+			new_sub = ai_d->data[3];
+		
+		setCurrentSource(new_src, new_sub);
 	} else if(ai_d->sender == ID_NAV_SCREEN) { //Screen message.
 		ack = false;
 		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);

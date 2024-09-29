@@ -206,7 +206,7 @@ void loop() {
 						else
 							light_handler->lightOff();
 					} else if(msg.l >= 3 && msg.data[1] == 0x2) { //Key position.
-						if((msg.data[2]&0x7) != 0) {
+						if((msg.data[2]&0xF) != 0) {
 							mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, HIGH);
 							mcp_knob.digitalWriteIO(KNOB_MCP_BACKLIGHT, HIGH);
 							door_timer_enabled = false;

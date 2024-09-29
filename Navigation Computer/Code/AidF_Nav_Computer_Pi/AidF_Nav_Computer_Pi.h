@@ -46,6 +46,8 @@ private:
 
 	void getBackground();
 
+	uint8_t key_position = 0, door_position = 0;
+
 	uint16_t lw, lh;
 	bool night = false;
 

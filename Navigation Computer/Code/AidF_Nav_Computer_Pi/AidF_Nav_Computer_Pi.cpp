@@ -149,8 +149,18 @@ void AidF_Nav_Computer::loop() {
 }
 
 bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
-	if(ai_d->sender == ID_CANSLATOR && ai_d->data[1] == 0x2) { //Key position message.
-		if(ai_d->data[2] == 0x0)
+	if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 3 && ai_d->data[1] == 0x2) { //Key position message.
+		this->key_position = ai_d->data[2]&0xF;
+		
+		if(this->key_position == 0x0 && (this->door_position&0xF) != 0)
+			this->running = false;
+		else
+			this->running = true;
+		return true;
+	} else if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 3 && ai_d->data[1] == 0x43) { //Door message.
+		this->door_position = ai_d->data[2];
+
+		if(this->key_position == 0x0 && (this->door_position&0xF) != 0)
 			this->running = false;
 		else
 			this->running = true;

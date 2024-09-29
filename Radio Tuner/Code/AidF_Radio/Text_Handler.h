@@ -27,6 +27,7 @@ public:
 	void sendShortRDSMessage(String text);
 
 	void createRadioMenu(const uint8_t sub);
+	void createPhoneWindow();
 
 	void sendIMIDSourceMessage(const uint8_t source, const uint8_t subsource);
 	void sendIMIDRDSMessage(String text);

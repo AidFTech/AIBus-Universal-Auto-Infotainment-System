@@ -108,6 +108,12 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 
 		const char* c_text = tuner->getRdsProgramInformation();
 		parameters->rds_program_name = String(c_text);
+
+		uint16_t year, month, day, hour, minute;
+		if(tuner->getRdsDateTime(&year, &month, &day, &hour, &minute)) {
+			parameters->hour = hour;
+			parameters->min = minute;
+		}
 	}
 }
 

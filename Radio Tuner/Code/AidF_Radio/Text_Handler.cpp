@@ -111,6 +111,20 @@ void TextHandler::sendShortRDSMessage(String text) {
 	}
 }
 
+//Create a placeholder window for a phone call.
+void TextHandler::createPhoneWindow() {
+	clearAllText();
+	AIData phone_header = getTextMessage("In Call", 0x0, 0x0);
+	AIData phone_option = getTextMessage("Phone Menu", 0xB, 0x0);
+	AIData end_option = getTextMessage("End", 0xB, 0x1);
+	
+	end_option.data[1] |= 0x10;
+	
+	ai_handler->writeAIData(&phone_header, parameter_list->computer_connected);
+	ai_handler->writeAIData(&phone_option, parameter_list->computer_connected);
+	ai_handler->writeAIData(&end_option, parameter_list->computer_connected);
+}
+
 //Write the radio-handling menu to screen.
 void TextHandler::createRadioMenu(const uint8_t sub) {
 	if(sub != SUB_AM && sub != SUB_FM1 && sub != SUB_FM2)

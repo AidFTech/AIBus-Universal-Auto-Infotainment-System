@@ -1,12 +1,12 @@
 #include "Phone_Window.h"
 
 PhoneWindow::PhoneWindow(AttributeList *attribute_list) : NavWindow(attribute_list) {
-	main_area_box[0] = new TextBox(this->renderer, TITLE_AREA_X + 64, TITLE_AREA_Y, AREA_W, AREA_H, ALIGN_H_L, ALIGN_V_M, 50, &this->color_profile->text);
+	main_area_box[0] = new TextBox(this->renderer, TITLE_AREA_X + 64, TITLE_AREA_Y, this->w - (TITLE_AREA_X + 64), AREA_H, ALIGN_H_L, ALIGN_V_M, 50, &this->color_profile->text);
 	for(uint8_t i=1;i<6;i+=1)
 		main_area_box[i] = new TextBox(this->renderer, TITLE_AREA_X, MAIN_AREA_Y + MAIN_AREA_HEIGHT*i, FULL_AREA_W, AREA_H, ALIGN_H_L, ALIGN_V_M, 36, &this->color_profile->text);
 	
 	for(uint8_t i=0;i<2;i+=1)
-		subtitle_area_box[i] = new TextBox(this->renderer, this->w - TITLE_AREA_X - SUB_AREA_WIDTH, SUB_AREA_Y + SUB_AREA_HEIGHT*(1-i%2), SUB_AREA_WIDTH, SUB_AREA_HEIGHT, ALIGN_H_R, ALIGN_V_M, 26, &this->color_profile->text);
+		subtitle_area_box[i] = new TextBox(this->renderer, this->w - TITLE_AREA_X - SUB_AREA_WIDTH, TITLE_AREA_Y + AREA_H + SUB_AREA_HEIGHT*(1-i%2), SUB_AREA_WIDTH, SUB_AREA_HEIGHT, ALIGN_H_R, ALIGN_V_M, 26, &this->color_profile->text);
 	subtitle_area_box[2] = new TextBox(this->renderer, TITLE_AREA_X + 64, TITLE_AREA_Y + AREA_H, HALF_AREA_W, SUB_AREA_HEIGHT, ALIGN_H_L, ALIGN_V_M, 29, &this->color_profile->text);
 
 	//Clear all the "changed" bools.
