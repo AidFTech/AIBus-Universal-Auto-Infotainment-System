@@ -3,4 +3,92 @@
 BackgroundTuneHandler::BackgroundTuneHandler(Si4735Controller* br_tuner, ParameterList* parameter_list) {
 	this->br_tuner = br_tuner;
 	this->parameter_list = parameter_list;
+
+	this->freq_list_vec.setStorage(freq_list, 0);
+	this->station_name_vec.setStorage(station_name, 0);
+
+	seek_timer = 0;
+}
+
+//Basic loop function.
+void BackgroundTuneHandler::loop() {
+	br_tuner->getParameters(&br_parameter_list, 0);
+	
+	if(station_seek) {
+		const uint8_t rssi = br_tuner->getRSSI();
+		if(rssi > max_rssi) {
+			max_rssi = rssi;
+			freq_list_vec.clear();
+			station_name_vec.clear();
+		}
+
+		if(rssi >= max_rssi/2) { //List this station.
+			const uint16_t freq = br_tuner->getFrequency();
+			addFrequency(freq, br_parameter_list.rds_station_name);
+		} else { //Remove this station.
+			const uint16_t freq = br_tuner->getFrequency();
+			int index = -1;
+			for(int i=0;i<freq_list_vec.size();i+=1) {
+				if(freq_list_vec.at(i) == freq)
+					index = i;
+				if(index >= 0)
+					break;
+			}
+
+			if(index >= 0) {
+				freq_list_vec.remove(index);
+				station_name_vec.remove(index);
+			}
+		}
+
+		if(seek_timer > SEEK_TIME) {
+			seek_timer = 0;
+			br_tuner->incrementFrequency();
+		}
+	}
+}
+
+void BackgroundTuneHandler::addFrequency(const uint16_t freq, String station_name_str) {
+	bool found = false;
+	for(int i=0;i<freq_list_vec.size();i+=1) {
+		if(freq_list_vec.at(i) == freq)
+			found = true;
+		if(found)
+			break;
+	}
+
+	if(!found) {
+		int index = -1;
+		for(int i=0;i<freq_list_vec.size();i+=1) {
+			if(freq_list_vec.at(i) > freq)
+				index = i;
+			if(index >= 0)
+				break;
+		}
+
+		if(index >= 0) {
+			if(freq_list_vec.size() < freq_list_vec.max_size()) {
+				if(freq_list_vec.size() > 0) {
+					freq_list_vec.push_back(freq_list_vec.at(freq_list_vec.size() - 1));
+					station_name_vec.push_back(station_name_vec.at(station_name_vec.size() - 1));
+				}
+
+				for(int i=freq_list_vec.size() - 1;i > index;i-=1) {
+					freq_list_vec.at(i) = freq_list_vec.at(i-1);
+					station_name_vec.at(i) = station_name_vec.at(i-1);
+				}
+
+				station_name_vec.at(index) = station_name_str;
+				freq_list_vec.at(index) = freq;
+			}
+		} else {
+			freq_list_vec.push_back(freq);
+			station_name_vec.push_back(station_name_str);
+		}
+	}
+}
+
+//Set whether the tuner should seek or add/remove stations, i.e. if a station list is open.
+void BackgroundTuneHandler::setSeekMode(const bool seek) {
+	this->station_seek = seek;
 }

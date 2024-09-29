@@ -8,6 +8,7 @@
 #include "Parameter_List.h"
 #include "Si4735_AidF.h"
 #include "Volume_Handler.h"
+#include "Background_Tune_Handler.h"
 
 #ifdef __AVR_ATmegax09__
 #define AI_RX PIN_PA7
@@ -92,6 +93,7 @@ VolumeHandler volume_handler(&vol_controller, &treble_controller, &bass_controll
 
 Si4735Controller tuner1(TUNER_RESET, HIGH, &aibus_handler, &parameters, &text_handler), tuner2(TUNER_RESET, LOW, &aibus_handler, &parameters, &text_handler);
 SourceHandler source_handler(&aibus_handler, &tuner1, &tuner2, &parameters, SOURCE_COUNT);
+BackgroundTuneHandler background_tuner(&tuner2, &parameters);
 
 elapsedMillis aibus_timer, source_text_timer;
 elapsedMillis src_ping_timer, computer_ping_timer, parameter_timer, screen_ping_timer;
@@ -378,6 +380,8 @@ void loop() {
 		}*/
 
 	}
+
+	background_tuner.loop();
 
 	do {
 		if(source_handler.getCurrentSourceID() == ID_RADIO) {
