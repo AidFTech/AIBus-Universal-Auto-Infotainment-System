@@ -112,6 +112,23 @@ void BM83::sendBM83Message(BM83Data* msg) {
 	//TODO: Acknowledgement.
 }
 
+//Connect the specified device.
+void BM83::sendConnect(BluetoothDevice* device) {
+	uint8_t connect_bytes[] = {0x5,
+								device->device_number&0xF - 1,
+								0x2, //TODO: Check this one.
+								device->mac_id[5],
+								device->mac_id[4],
+								device->mac_id[3],
+								device->mac_id[2],
+								device->mac_id[1],
+								device->mac_id[0]};
+
+	BM83Data connect_msg(sizeof(connect_bytes), 0x17);
+
+	sendBM83Message(&connect_msg);
+}
+
 BM83Data::BM83Data(const uint16_t l, const uint8_t opcode) {
 	this->data = new uint8_t[l];
 	this->l = l;

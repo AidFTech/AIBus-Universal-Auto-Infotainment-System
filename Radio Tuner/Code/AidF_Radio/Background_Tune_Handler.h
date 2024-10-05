@@ -29,7 +29,8 @@ class BackgroundTuneHandler {
 		String station_name[MAXIMUM_FREQUENCY_COUNT];
 		Vector<String> station_name_vec;
 
-		uint16_t time_frequency = 0;
+		uint16_t time_frequency = 0, last_frequency = 0;
+		bool time_station_set = false, time_set = false;
 
 		uint8_t max_rssi = 0;
 

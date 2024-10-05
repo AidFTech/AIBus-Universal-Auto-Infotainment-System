@@ -33,6 +33,7 @@
 
 #define XM_FULL_TIMER 200
 
+#define XM_STATION_TIMER 500
 #define XM_QUERY_TIMER 1000
 #define PRESET_QUERY_TIMER 120000
 
@@ -93,6 +94,12 @@ private:
 	uint8_t preset_request_increment = 1;
 	unsigned int preset_request_wait = XM_QUERY_TIMER;
 	bool preset_received = false;
+	
+	//Timer to request station data.
+	elapsedMillis station_request_timer = 0;
+	uint8_t station_request_increment = 0;
+	unsigned int station_request_wait = XM_STATION_TIMER;
+	bool station_received = false;
 
 	void sendAINumberMessage(const uint8_t receiver);
 	void sendAITextMessage(const uint8_t receiver, const uint8_t field);
