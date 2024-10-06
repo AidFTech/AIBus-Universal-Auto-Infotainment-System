@@ -13,14 +13,20 @@ pub struct Context {
 	pub album: String, // The album name.
 	pub app: String, //The app name.
 
+	pub night: bool, //True if the system is in night mode.
+
 	//IMID Parameters:
 	pub imid_row_count: u8,
 	pub imid_text_len: u8,
+	pub imid_native_mirror: bool,
 
 	//Nav screen buttons:
 	pub vertical_toggle: bool, //Vertical toggle options present.
 	pub horizontal_toggle: bool, //Horizontal toggle options present.
 	pub nav_knob: bool, //Nav knob present.
+
+	//Devices:
+	pub radio_connected: bool,
 }
 
 impl Context {
@@ -40,13 +46,18 @@ impl Context {
 			artist: "".to_string(),
 			album: "".to_string(),
 			app: "".to_string(),
+
+			night: false,
 			
 			imid_row_count: 0,
 			imid_text_len: 0,
+			imid_native_mirror: false,
 
 			vertical_toggle: false,
 			horizontal_toggle: false,
 			nav_knob: false,
+			
+			radio_connected: false,
 		};
 	}
 }

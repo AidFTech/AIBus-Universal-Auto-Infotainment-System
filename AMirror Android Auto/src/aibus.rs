@@ -5,6 +5,7 @@ pub const AIBUS_DEVICE_NAV_COMPUTER: u8 = 0x1;
 pub const AIBUS_DEVICE_NAV_SCREEN: u8 = 0x7;
 pub const AIBUS_DEVICE_RADIO: u8 = 0x10;
 pub const AIBUS_DEVICE_AMIRROR: u8 = 0x8E;
+pub const AIBUS_DEVICE_CANSLATOR: u8 = 0x57;
 pub const AIBUS_DEVICE_IMID: u8 = 0x11;
 
 pub struct AIBusMessage {

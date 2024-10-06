@@ -3,6 +3,9 @@ const MAGIC: u32 = 0x55aa55aa;
 
 pub const PHONE_COMMAND_VOICE: u32 = 5;
 
+pub const PHONE_COMMAND_DAY: u32 = 17;
+pub const PHONE_COMMAND_NIGHT: u32 = 16;
+
 pub const PHONE_COMMAND_LEFT: u32 = 100;
 pub const PHONE_COMMAND_RIGHT: u32 = 101;
 pub const PHONE_COMMAND_ANDROID_UP: u32 = 102;

@@ -52,6 +52,11 @@ impl <'a> AMirror<'a> {
 		let album = context.album.clone();
 		let app = context.app.clone();
 
+		let night = context.night;
+		let radio_connected = context.radio_connected;
+
+		let playing = context.playing;
+
 		std::mem::drop(context);
 
 		self.handler.process();
@@ -75,13 +80,41 @@ impl <'a> AMirror<'a> {
 			
 			if context.audio_selected && context.audio_text {
 				if context.phone_type == 0 {
-					self.write_nav_text("Phone Mirror".to_string(), 0, 0, true);
+					self.write_nav_text("Mirror".to_string(), 0, 0, true);
 				} else if context.phone_type == 3 {
 					self.write_nav_text("Carplay".to_string(), 0, 0, true);
 				} else if context.phone_type == 5 {
 					self.write_nav_text("Android".to_string(), 0, 0, true);
 				}
 			}
+
+			if context.radio_connected {
+				std::mem::drop(context);
+
+				self.write_radio_name();
+
+				context = match self.context.try_lock() {
+					Ok(context) => context,
+					Err(_) => {
+						println!("AMirror Process: Context Locked.");
+						return;
+					}
+				};
+			}
+		}
+
+		if context.radio_connected && !radio_connected {
+			std::mem::drop(context);
+
+			self.write_radio_handshake();
+
+			context = match self.context.try_lock() {
+				Ok(context) => context,
+				Err(_) => {
+					println!("AMirror Process: Context Locked.");
+					return;
+				}
+			};
 		}
 
 		if context.phone_name != phone_name {
@@ -102,6 +135,30 @@ impl <'a> AMirror<'a> {
 
 			if context.audio_selected && context.audio_text {
 				self.write_nav_text(context.phone_name.clone(), 2, 1, true);
+			}
+
+			if context.radio_connected {
+				std::mem::drop(context);
+
+				self.write_radio_name();
+
+				context = match self.context.try_lock() {
+					Ok(context) => context,
+					Err(_) => {
+						println!("AMirror Process: Context Locked.");
+						return;
+					}
+				};
+			}
+		}
+
+		if context.playing != playing {
+			if context.audio_selected && context.audio_text {
+				if context.playing {
+					self.write_nav_text("#FWD".to_string(), 1, 1, true);
+				} else {
+					self.write_nav_text("||".to_string(), 1, 1, true);
+				}
 			}
 		}
 	
@@ -141,6 +198,14 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
+		if context.night != night {
+			if context.night {
+				self.handler.send_carplay_command(PHONE_COMMAND_NIGHT);
+			} else {
+				self.handler.send_carplay_command(PHONE_COMMAND_DAY);
+			}
+		}
+
 		if Instant::now() - self.source_request_timer > Duration::from_millis(5000) {
 			self.source_request_timer = Instant::now();
 
@@ -170,6 +235,10 @@ impl <'a> AMirror<'a> {
 				return;
 			}
 		};
+
+		if ai_msg.sender == AIBUS_DEVICE_RADIO && !context.radio_connected {
+			context.radio_connected = true;
+		}
 
 		if ai_msg.receiver != AIBUS_DEVICE_AMIRROR && ai_msg.receiver != 0xFF {
 			return;
@@ -256,7 +325,45 @@ impl <'a> AMirror<'a> {
 				//self.handler.set_minimize(ai_msg.data[2] == 0);
 				context.phone_active = ai_msg.data[2] != 0;
 
-				self.source_request_timer = Instant::now() + Duration::from_millis(5000);
+				if context.phone_active {
+					let mut control_req = 0x10;
+					if context.audio_selected {
+						control_req |= 0x80;
+					}
+
+					self.write_aibus_message(AIBusMessage {
+						sender: AIBUS_DEVICE_AMIRROR,
+						receiver: AIBUS_DEVICE_NAV_SCREEN,
+						data: [0x77, AIBUS_DEVICE_AMIRROR, control_req].to_vec(),
+					});
+				} else {
+					self.write_aibus_message(AIBusMessage {
+						sender: AIBUS_DEVICE_AMIRROR,
+						receiver: AIBUS_DEVICE_NAV_SCREEN,
+						data: [0x77, AIBUS_DEVICE_NAV_COMPUTER, 0x10].to_vec(), //TODO: If another device has requested control, send that instead.
+					});
+				}
+			}
+		} else if ai_msg.sender == AIBUS_DEVICE_IMID {
+			if ai_msg.l() >= 2 && ai_msg.data[0] == 0x3B {
+				if ai_msg.data[1] == 0x23 && ai_msg.l() >= 4 { //Character count.
+					context.imid_text_len = ai_msg.data[2];
+					context.imid_row_count = ai_msg.data[3];
+				} else if ai_msg.data[1] == 0x57 && ai_msg.l() >= 3 { //Supported device list.
+					context.imid_native_mirror = false;
+					for i in 2..ai_msg.l() {
+						if ai_msg.data[i] == 0x8E {
+							context.imid_native_mirror = true;
+							break;
+						}
+					}
+				}
+			}
+		} else if ai_msg.sender == AIBUS_DEVICE_CANSLATOR {
+			if ai_msg.receiver == 0xFF && ai_msg.l() >= 1 && ai_msg.data[0] == 0xA1 {
+				if ai_msg.l() >= 4 && ai_msg.data[1] == 0x10 { //Light status message.
+					context.night = (ai_msg.data[3]&0x80) != 0;
+				}
 			}
 		}
 
@@ -334,6 +441,53 @@ impl <'a> AMirror<'a> {
 		self.write_metadata(AIBUS_DEVICE_RADIO, text, position);
 	}
 
+	//Write the radio handshake.
+	fn write_radio_handshake(&mut self) {
+		let handshake_data = [0x1, 0x1, AIBUS_DEVICE_AMIRROR].to_vec();
+		let handshake_msg = AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_RADIO,
+			data: handshake_data,
+		};
+
+		self.write_aibus_message(handshake_msg);
+		self.write_radio_name();
+	}
+
+	//Write the device name.
+	fn write_radio_name(&mut self) {
+		let mut name_data = [0x1, 0x23, 0x0].to_vec();
+
+		let context = match self.context.try_lock() {
+			Ok(context) => context,
+			Err(_) => {
+				println!("AMirror Write Radio Name: Context Locked.");
+				return;
+			}
+		};
+
+		let mut name_str = "Phone Mirror".to_string();
+
+		if context.phone_type == 3 {
+			name_str = "Carplay: ".to_string() + &context.phone_name;
+		} else if context.phone_type == 5 {
+			name_str = "Android Auto: ".to_string() + &context.phone_name;
+		}
+
+		let name_bytes = name_str.as_bytes();
+		for i in 0..name_bytes.len() {
+			name_data.push(name_bytes[i]);
+		}
+
+		let name_msg = AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_RADIO,
+			data: name_data,
+		};
+
+		self.write_aibus_message(name_msg);
+	}
+
 	//Write metadata to the nav computer.
 	fn write_nav_text(&mut self, text: String, position: u8, subtitle: u8, refresh: bool) {
 		let mut meta_data = [0x23, 0x60|(subtitle&0xF), position].to_vec();
@@ -403,7 +557,7 @@ impl <'a> AMirror<'a> {
 		};
 		
 		if context.phone_type == 0 {
-			self.write_nav_text("Phone Mirror".to_string(), 0, 0, true);
+			self.write_nav_text("Mirror".to_string(), 0, 0, true);
 		} else if context.phone_type == 3 {
 			self.write_nav_text("Carplay".to_string(), 0, 0, true);
 		} else if context.phone_type == 5 {
@@ -415,5 +569,11 @@ impl <'a> AMirror<'a> {
 		self.write_nav_text(context.artist.clone(), 2, 0, false);
 		self.write_nav_text(context.album.clone(), 3, 0, false);
 		self.write_nav_text(context.app.clone(), 4, 0, true);
+
+		if context.playing {
+			self.write_nav_text("#FWD".to_string(), 1, 1, true);
+		} else {
+			self.write_nav_text("||".to_string(), 1, 1, true);
+		}
 	}
 }

@@ -358,6 +358,13 @@ impl<'a> MirrorHandler<'a> {
 				}
 
 				if audio_type == 1 {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							context.playing = true;
+						}
+						Err(_) => {
+						}
+					}
 					self.rd_audio.send_audio(&data);
 				} else if audio_type == 2 {
 					self.nav_audio.send_audio(&data);

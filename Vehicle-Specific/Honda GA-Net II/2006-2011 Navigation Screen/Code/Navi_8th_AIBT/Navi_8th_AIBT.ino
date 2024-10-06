@@ -193,6 +193,12 @@ void loop() {
 	do {
 		bool message_read = false;
 		if(AISerial.available() > 0) {
+			if(msg.sender == ID_RADIO && !parameters.radio_connected)
+				parameters.radio_connected = true;
+			
+			if(msg.sender == ID_NAV_COMPUTER && !parameters.computer_connected)
+				parameters.computer_connected = true;
+
 			if(ai_handler.readAIData(&msg)) {
 				if(msg.sender == ID_NAV_SCREEN)
 					continue;
