@@ -6,6 +6,7 @@ use crate::mirror::messages::*;
 use crate::{aibus::*, write_aibus_message};
 use crate::context::Context;
 use crate::mirror::handler::*;
+use crate::ipc::*;
 
 const APP_NAME: u8 = 0x0;
 const SONG_NAME: u8 = 0x1;
@@ -108,7 +109,7 @@ impl <'a> AMirror<'a> {
 			if context.audio_selected {
 				self.write_radio_metadata(context.song_title.clone(), SONG_NAME);
 				if context.audio_text {
-					self.write_nav_text(context.song_title.clone(), 1, 0, context.artist != artist || context.album != album || context.app != app);
+					self.write_nav_text(context.song_title.clone(), 1, 0, true);
 				}
 			}
 		}
@@ -117,7 +118,7 @@ impl <'a> AMirror<'a> {
 			if context.audio_selected {
 				self.write_radio_metadata(context.artist.clone(), ARTIST_NAME);
 				if context.audio_text {
-					self.write_nav_text(context.artist.clone(), 2, 0, context.album != album || context.app != app);
+					self.write_nav_text(context.artist.clone(), 2, 0, true);
 				}
 			}
 		}
@@ -126,7 +127,7 @@ impl <'a> AMirror<'a> {
 			if context.audio_selected {
 				self.write_radio_metadata(context.album.clone(), ALBUM_NAME);
 				if context.audio_text {
-					self.write_nav_text(context.album.clone(), 3, 0, context.app != app);
+					self.write_nav_text(context.album.clone(), 3, 0, true);
 				}
 			}
 		}
@@ -252,16 +253,10 @@ impl <'a> AMirror<'a> {
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x48 && ai_msg.data[1] == 0x8E { //Turn on/off the interface.
-				let mut context = match self.context.try_lock() {
-					Ok(context) => context,
-					Err(_) => {
-						println!("AMirror Handle AIBus Message: Context Locked");
-						return;
-					}
-				};
-				
-				self.handler.set_minimize(ai_msg.data[2] == 0);
+				//self.handler.set_minimize(ai_msg.data[2] == 0);
 				context.phone_active = ai_msg.data[2] != 0;
+
+				self.source_request_timer = Instant::now() + Duration::from_millis(5000);
 			}
 		}
 
@@ -278,7 +273,38 @@ impl <'a> AMirror<'a> {
 			}
 		};
 
+		let msg_copy = ai_msg.clone();
 		write_aibus_message(&mut stream, ai_msg);
+
+		if msg_copy.l() >=1 && msg_copy.data[0] != 0x80 && msg_copy.receiver != 0xFF && msg_copy.receiver != 0x10 { //TODO: Cancel the 0x10 if the radio is connected.
+			let mut ack = false;
+			let mut num_tries = 0;
+			let mut last_try = Instant::now();
+			while !ack && num_tries < 15 {
+				let mut msg = SocketMessage {
+					opcode: 0,
+					data: Vec::new(),
+				};
+
+				if read_socket_message(&mut stream, &mut msg) > 0 {
+					if msg.opcode != OPCODE_AIBUS_RECV {
+						continue;
+					}
+		
+					let rx_msg = get_aibus_message(msg.data);
+					if rx_msg.receiver == msg_copy.sender && rx_msg.sender == msg_copy.receiver && rx_msg.l() >= 1 && rx_msg.data[0] == 0x80 {
+						ack = true;
+					}
+				}
+
+				if !ack && Instant::now() - last_try > Duration::from_millis(100) {
+					last_try = Instant::now();
+					let resend = msg_copy.clone();
+					write_aibus_message(&mut stream, resend);
+					num_tries += 1;
+				}
+			}
+		}
 	}
 
 	//Write metadata.

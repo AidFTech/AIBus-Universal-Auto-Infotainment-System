@@ -376,6 +376,11 @@ int AIBusHandler::getAvailableBytes(const bool cache) {
 		return -1;
 }
 
+//Get a pointer to the port.
+int* AIBusHandler::getPortPointer() {
+	return &this->ai_port;
+}
+
 //Get whether the port is connected.
 bool AIBusHandler::getConnected() {
 	return port_connected;

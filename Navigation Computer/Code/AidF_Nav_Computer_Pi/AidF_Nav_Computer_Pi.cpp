@@ -40,9 +40,8 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->canslator_connected = &attribute_list->canslator_connected;
 	this->radio_connected = &attribute_list->radio_connected;
 
-	this->socket_parameters.aidata_rx = std::vector<uint8_t>(0);
-	this->socket_parameters.aidata_tx = std::vector<uint8_t>(0);
 	this->socket_parameters.running = &this->running;
+	this->socket_parameters.ai_serial = aibus_handler->getPortPointer();
 
 	pthread_create(&socket_thread, NULL, socketThread, (void *)&socket_parameters);
 }
@@ -103,25 +102,37 @@ void AidF_Nav_Computer::loop() {
 	this->window_handler->drawWindow();
 	SDL_RenderPresent(renderer);
 
-	if(socket_parameters.aidata_rx.size() >= 4) {
-		const int l = socket_parameters.aidata_rx.at(1);
-		if(l+2 > socket_parameters.aidata_rx.size()) {
-			socket_parameters.aidata_rx.clear();
+	/*if(socket_parameters.ai_rx_size >= 4) {
+		socket_parameters.rx_access = true;
+
+		const int l = socket_parameters.aidata_rx[1];
+		if(l+2 > socket_parameters.ai_rx_size) {
+			socket_parameters.eraseRX(socket_parameters.ai_rx_size);
 		} else {
 			uint8_t data[l+2];
 			for(int i=0;i<l+2;i+=1) {
-				data[i] = socket_parameters.aidata_rx.at(0);
-				socket_parameters.aidata_rx.erase(socket_parameters.aidata_rx.begin());
+				data[i] = socket_parameters.aidata_rx[i];
 			}
+			socket_parameters.eraseRX(l+2);
 
 			AIData rx_msg;
-			if(readAIByteData(&rx_msg, data, sizeof(data)))
-				if(rx_msg.receiver != ID_NAV_COMPUTER)
-					aibus_handler->writeAIData(&rx_msg, false);
-				else
+			if(readAIByteData(&rx_msg, data, sizeof(data))) {
+				bool ack = true;
+				if(rx_msg.l >= 1 && rx_msg.data[0] == 0x80)
+					ack = false;
+				if(rx_msg.receiver == 0xFF)
+					ack = false;
+				if(rx_msg.receiver == ID_RADIO && !*radio_connected)
+					ack = false;
+
+				aibus_handler->writeAIData(&rx_msg, ack);
+				if(rx_msg.receiver == ID_NAV_COMPUTER)
 					aibus_handler->cacheMessage(&rx_msg);
 			}
-	}
+		}
+
+		socket_parameters.rx_access = false;
+	}*/
 
 	AIData ai_msg;
 	do {
@@ -130,11 +141,22 @@ void AidF_Nav_Computer::loop() {
 				aibus_read_time = clock();
 
 				{
+					/*socket_parameters.tx_access = true;
 					uint8_t ai_bytes[ai_msg.l + 4];
 					ai_msg.getBytes(ai_bytes);
 					
 					for(int i=0;i<sizeof(ai_bytes);i+=1)
-						socket_parameters.aidata_tx.push_back(ai_bytes[i]);
+						socket_parameters.aidata_tx[i+socket_parameters.ai_tx_size] = ai_bytes[i];
+
+					socket_parameters.ai_tx_size += sizeof(ai_bytes);
+					socket_parameters.tx_access = false;*/
+
+					uint8_t ai_bytes[ai_msg.l + 4];
+					ai_msg.getBytes(ai_bytes);
+
+					SocketMessage ai_sock_msg(OPCODE_AIBUS_SEND, sizeof(ai_bytes));
+					ai_sock_msg.refreshSocketData(ai_bytes);
+					writeSocketMessage(&ai_sock_msg, socket_parameters.client_socket);
 				}
 
 				if(!*canslator_connected && ai_msg.sender == ID_CANSLATOR)

@@ -45,6 +45,8 @@ public:
 	
 	bool getConnected();
 
+	int* getPortPointer();
+
 	bool cachePending();
 	void cacheMessage(AIData* ai_msg);
 

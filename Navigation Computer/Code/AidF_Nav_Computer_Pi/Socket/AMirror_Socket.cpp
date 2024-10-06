@@ -70,7 +70,7 @@ void AMirrorSocket::writeSocketMessage(SocketMessage* msg) {
 	send(client_socket, data, byte_l, 0);
 }
 
-//Read a socket message.
+//Read a socket message. Return the number of bytes read.
 int AMirrorSocket::readSocketMessage(SocketMessage* msg) {
 	uint8_t data[DEFAULT_READ_LENGTH];
 
@@ -108,11 +108,63 @@ int AMirrorSocket::readSocketMessage(SocketMessage* msg) {
 	return msg_length;
 }
 
+//Get the client socket.
+int AMirrorSocket::getClient() {
+	return this->client_socket;
+}
+
+//Erase TX cache bytes from 0-size exclusive.
+void SocketHandlerParameters::eraseTX(const int size) {
+	ai_tx_size -= size;
+
+	for(int i=0;i<ai_tx_size;i+=1)
+		aidata_tx[i] = aidata_tx[i+size];
+}
+
+//Erase RX cache bytes from 0-size exclusive.
+void SocketHandlerParameters::eraseRX(const int size) {
+	ai_rx_size -= size;
+
+	for(int i=0;i<ai_rx_size;i+=1)
+		aidata_rx[i] = aidata_rx[i+size];
+}
+
+//Write a message to the client socket.
+void writeSocketMessage(SocketMessage* msg, const int socket) {
+	if(msg->l + 1 > 255)
+		return;
+
+	if(socket < 0)
+		return;
+
+	const int byte_l = msg->l + strlen(SOCKET_START) + 3, start_l = strlen(SOCKET_START);
+
+	uint8_t data[byte_l];
+
+	for(int i=0;i<start_l;i+=1)
+		data[i] = uint8_t(SOCKET_START[i]);
+
+	data[start_l] = msg->opcode;
+	data[start_l + 1] = uint8_t(msg->l + 1);
+
+	for(int i=0;i<msg->l;i+=1)
+		data[start_l + 2 + i] = msg->data[i];
+
+	uint8_t checksum = 0;
+	for(int i=0;i<byte_l - 1;i+=1)
+		checksum ^= data[i];
+
+	data[byte_l-1] = checksum;
+
+	send(socket, data, byte_l, 0);
+}
+
 //Socket thread function.
 void *socketThread(void* parameters_v) {
 	SocketHandlerParameters* parameters = (SocketHandlerParameters*)parameters_v;
 
 	AMirrorSocket amirror_socket;
+	parameters->client_socket = amirror_socket.getClient();
 
 	SocketRecvHandlerParameters recv_paramters;
 	recv_paramters.main_parameters = parameters;
@@ -122,18 +174,19 @@ void *socketThread(void* parameters_v) {
 	pthread_create(&recv_thread, NULL, socketReceiveThread, (void*)&recv_paramters);
 
 	while(*parameters->running) {
-		if(parameters->aidata_tx.size() > 4) { //An AIBus message is ready to send.
-			const int l = parameters->aidata_tx.at(1);
-			if(parameters->aidata_tx.size() < l + 2) {
-				parameters->aidata_tx.clear();
+		while(parameters->tx_access);
+		if(parameters->ai_tx_size > 4) { //An AIBus message is ready to send.
+			const int l = parameters->aidata_tx[1];
+			if(parameters->ai_tx_size < l + 2) {
+				parameters->ai_tx_size = 0;
 				continue;
 			}
 
 			uint8_t data[l+2];
 			for(int i=0;i<l+2;i+=1) {
-				data[i] = parameters->aidata_tx.at(0);
-				parameters->aidata_tx.erase(parameters->aidata_tx.begin());
+				data[i] = parameters->aidata_tx[i];
 			}
+			parameters->eraseTX(l+2);
 
 			SocketMessage socket_msg(OPCODE_AIBUS_SEND, sizeof(data));
 			socket_msg.refreshSocketData(data);
@@ -160,8 +213,13 @@ void *socketReceiveThread(void* parameters_v) {
 
 		if(socket_handler->readSocketMessage(&rx_msg) > 0) {
 			if(rx_msg.opcode == OPCODE_AIBUS_RECEIVE) {
+				while(parameters->rx_access);
+
+				char rx_buf[rx_msg.l];
 				for(int i=0;i<rx_msg.l;i+=1)
-					parameters->aidata_rx.push_back(rx_msg.data[i]);
+					rx_buf[i] = char(rx_msg.data[i]);
+
+				aiserialWrite(*parameters->ai_serial, rx_buf, rx_msg.l);
 			}
 		}
 	}
