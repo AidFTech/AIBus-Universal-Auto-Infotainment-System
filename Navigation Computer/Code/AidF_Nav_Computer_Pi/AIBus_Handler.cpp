@@ -80,7 +80,7 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 					cached_bytes.erase(cached_bytes.begin());
 				}
 
-				readAIData(&cached_msg, data, sizeof(data));
+				readAIByteData(&cached_msg, data, sizeof(data));
 
 			} else {
 				if(cached_bytes.size() > 0)
@@ -210,7 +210,7 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 }
 
 //Read AIBus data from bytes.
-bool AIBusHandler::readAIData(AIData* ai_d, uint8_t* data, const uint8_t d_l) {
+bool readAIByteData(AIData* ai_d, uint8_t* data, const uint8_t d_l) {
 	if(d_l < 2)
 		return false;
 	
@@ -294,7 +294,7 @@ void AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 
 							for(int i=0;i<sizeof(data);i+=1)
 								cached_bytes.push_back(data[i]);
-					}
+						}
 					}
 				}
 			}
@@ -409,6 +409,25 @@ bool AIBusHandler::cachePending() {
 	}
 	
 	return false;
+}
+
+//Cache a message.
+void AIBusHandler::cacheMessage(AIData* ai_msg) {
+	if(ai_msg->receiver == ID_NAV_COMPUTER || ai_msg->receiver == 0xFF) {
+		if(ai_msg->sender != ID_NAV_COMPUTER && ai_msg->l >= 1 && ai_msg->data[0] != 0x80) {
+			sendAcknowledgement(ai_msg->receiver, ai_msg->sender);
+
+			if(cached_msg.l <= 0)
+				cached_msg.refreshAIData(*ai_msg);
+			else {
+				uint8_t data[ai_msg->l+4];
+				ai_msg->getBytes(data);
+
+				for(int i=0;i<sizeof(data);i+=1)
+					cached_bytes.push_back(data[i]);
+			}
+		}
+	}
 }
 
 #ifndef RPI_UART

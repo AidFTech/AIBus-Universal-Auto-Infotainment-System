@@ -131,7 +131,7 @@ pub fn write_aibus_message(stream: &mut UnixStream, message: AIBusMessage) {
 
 	let mut socket_msg = SocketMessage {
 		opcode: OPCODE_AIBUS_SEND,
-		data: vec![0;bytes.len()+3],
+		data: vec![0;bytes.len()],
 	};
 
 	for i in 0..bytes.len() {

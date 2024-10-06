@@ -17,6 +17,7 @@ pub struct AMirror<'a> {
 	handler: MirrorHandler<'a>,
 
 	source_request_timer: Instant,
+	pub run: bool,
 }
 
 impl <'a> AMirror<'a> {
@@ -29,6 +30,7 @@ impl <'a> AMirror<'a> {
 			handler: mutex_mirror_handler,
 
 			source_request_timer: Instant::now(),
+			run: true,
 		};
 	}
 
@@ -167,6 +169,21 @@ impl <'a> AMirror<'a> {
 				return;
 			}
 		};
+
+		if ai_msg.receiver != AIBUS_DEVICE_AMIRROR && ai_msg.receiver != 0xFF {
+			return;
+		}
+
+		if ai_msg.receiver == AIBUS_DEVICE_AMIRROR && ai_msg.l() >= 1 && ai_msg.data[0] != 0x80 {
+			let mut ack_msg = AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: ai_msg.sender,
+				data: Vec::new(),
+			};
+			ack_msg.data.push(0x80);
+
+			self.write_aibus_message(ack_msg);
+		}
 
 		if ai_msg.sender == AIBUS_DEVICE_RADIO {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x40 && ai_msg.data[1] == 0x10 { //Source change.

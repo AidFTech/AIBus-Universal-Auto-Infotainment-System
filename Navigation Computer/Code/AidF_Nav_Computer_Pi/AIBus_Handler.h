@@ -46,13 +46,13 @@ public:
 	bool getConnected();
 
 	bool cachePending();
+	void cacheMessage(AIData* ai_msg);
 
 private:
 	#ifndef RPI_UART
 	int connectAIPort(std::string port);
 	#endif
-	
-	bool readAIData(AIData* ai_d, uint8_t* data, const uint8_t d_l);
+
 
 	bool awaitAcknowledgement(AIData* ai_d);
 
@@ -70,6 +70,8 @@ private:
 #ifndef RPI_UART
 uint16_t stringToNumber(std::string str);
 #endif
+
+bool readAIByteData(AIData* ai_d, uint8_t* data, const uint8_t d_l);
 
 void printBytes(AIData* ai_d);
 #endif

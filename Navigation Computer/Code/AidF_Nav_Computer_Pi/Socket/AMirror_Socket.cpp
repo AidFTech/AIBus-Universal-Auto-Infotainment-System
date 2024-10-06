@@ -96,8 +96,8 @@ int AMirrorSocket::readSocketMessage(SocketMessage* msg) {
 		msg_data[i] = data[i+strlen(SOCKET_START) + 2];
 
 	uint8_t checksum = 0;
-	for(int i=0;i<msg_length;i+=1)
-		checksum ^= msg_data[i];
+	for(int i=0;i<message_size - 1;i+=1)
+		checksum ^= data[i];
 
 	if(checksum != data[message_size - 1])
 		return -1;
@@ -117,6 +117,9 @@ void *socketThread(void* parameters_v) {
 	SocketRecvHandlerParameters recv_paramters;
 	recv_paramters.main_parameters = parameters;
 	recv_paramters.socket = &amirror_socket;
+
+	pthread_t recv_thread;
+	pthread_create(&recv_thread, NULL, socketReceiveThread, (void*)&recv_paramters);
 
 	while(*parameters->running) {
 		if(parameters->aidata_tx.size() > 4) { //An AIBus message is ready to send.
@@ -138,6 +141,11 @@ void *socketThread(void* parameters_v) {
 			amirror_socket.writeSocketMessage(&socket_msg);
 		}
 	}
+
+	pthread_join(recv_thread, NULL);
+
+	void* result;
+	return result;
 }
 
 //Socket receive thread function.
@@ -157,4 +165,7 @@ void *socketReceiveThread(void* parameters_v) {
 			}
 		}
 	}
+
+	void* result;
+	return result;
 }

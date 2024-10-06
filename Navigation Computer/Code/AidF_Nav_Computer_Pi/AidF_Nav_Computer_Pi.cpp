@@ -39,6 +39,12 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 
 	this->canslator_connected = &attribute_list->canslator_connected;
 	this->radio_connected = &attribute_list->radio_connected;
+
+	this->socket_parameters.aidata_rx = std::vector<uint8_t>(0);
+	this->socket_parameters.aidata_tx = std::vector<uint8_t>(0);
+	this->socket_parameters.running = &this->running;
+
+	pthread_create(&socket_thread, NULL, socketThread, (void *)&socket_parameters);
 }
 
 AidF_Nav_Computer::~AidF_Nav_Computer() {
@@ -51,6 +57,8 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	delete main_window;
 	delete misc_window;
 	delete phone_window;
+
+	pthread_join(socket_thread, NULL);
 }
 
 void AidF_Nav_Computer::loop() {
@@ -95,11 +103,39 @@ void AidF_Nav_Computer::loop() {
 	this->window_handler->drawWindow();
 	SDL_RenderPresent(renderer);
 
+	if(socket_parameters.aidata_rx.size() >= 4) {
+		const int l = socket_parameters.aidata_rx.at(1);
+		if(l+2 > socket_parameters.aidata_rx.size()) {
+			socket_parameters.aidata_rx.clear();
+		} else {
+			uint8_t data[l+2];
+			for(int i=0;i<l+2;i+=1) {
+				data[i] = socket_parameters.aidata_rx.at(0);
+				socket_parameters.aidata_rx.erase(socket_parameters.aidata_rx.begin());
+			}
+
+			AIData rx_msg;
+			if(readAIByteData(&rx_msg, data, sizeof(data)))
+				if(rx_msg.receiver != ID_NAV_COMPUTER)
+					aibus_handler->writeAIData(&rx_msg, false);
+				else
+					aibus_handler->cacheMessage(&rx_msg);
+			}
+	}
+
 	AIData ai_msg;
 	do {
 		if(!this->aibus_handler->getConnected() || this->aibus_handler->getAvailableBytes() > 0) {
 			if(this->aibus_handler->readAIData(&ai_msg)) {
 				aibus_read_time = clock();
+
+				{
+					uint8_t ai_bytes[ai_msg.l + 4];
+					ai_msg.getBytes(ai_bytes);
+					
+					for(int i=0;i<sizeof(ai_bytes);i+=1)
+						socket_parameters.aidata_tx.push_back(ai_bytes[i]);
+				}
 
 				if(!*canslator_connected && ai_msg.sender == ID_CANSLATOR)
 					*canslator_connected = true;
