@@ -1,6 +1,7 @@
 use std::io::prelude::*;
 use std::os::unix::net::UnixStream;
 use std::str;
+use std::time::Duration;
 
 use crate::get_aibus_message;
 use crate::AIBusMessage;
@@ -30,6 +31,7 @@ pub fn init_socket(socket_path: String) -> Option<UnixStream> {
 		}
 	};
 
+	let _ = stream.set_read_timeout(Some(Duration::from_millis(1)));
 	let _ = stream.set_nonblocking(true);
 	return Some(stream);
 }

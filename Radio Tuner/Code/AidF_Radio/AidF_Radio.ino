@@ -1,6 +1,8 @@
 #include <elapsedMillis.h>
 #include <MCP4251.h>
 
+#include <Wire.h>
+
 #include "AIBus.h"
 #include "AIBus_Handler.h"
 #include "Audio_Source.h"
@@ -91,9 +93,9 @@ MCP4251 fade_controller(FADE_CS, 10000, 0, 10000, 0);
 
 VolumeHandler volume_handler(&vol_controller, &treble_controller, &bass_controller, &fade_controller, &parameters, &aibus_handler);
 
-Si4735Controller tuner1(TUNER_RESET, HIGH, &aibus_handler, &parameters, &text_handler), tuner2(TUNER_RESET, LOW, &aibus_handler, &parameters, &text_handler);
-SourceHandler source_handler(&aibus_handler, &tuner1, &tuner2, &parameters, SOURCE_COUNT);
-BackgroundTuneHandler background_tuner(&tuner2, &parameters);
+Si4735Controller tuner1(TUNER_RESET, LOW, &aibus_handler, &parameters, &text_handler);//, tuner2(TUNER_RESET, LOW, &aibus_handler, &parameters, &text_handler);
+SourceHandler source_handler(&aibus_handler, &tuner1, &tuner1, &parameters, SOURCE_COUNT);
+//BackgroundTuneHandler background_tuner(&tuner2, &parameters);
 
 elapsedMillis aibus_timer, source_text_timer;
 elapsedMillis src_ping_timer, computer_ping_timer, parameter_timer, screen_ping_timer;
@@ -111,6 +113,8 @@ bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
 //Arduino setup function.
 void setup() {
 	pinMode(AI_RX, INPUT_PULLUP);
+	
+	pinMode(TUNER_RESET, OUTPUT);
 
 	pinMode(AUDIO_SW0, OUTPUT);
 	pinMode(AUDIO_SW1, OUTPUT);
@@ -131,6 +135,8 @@ void setup() {
 
 	pinMode(DIGITAL_ERROR, INPUT);
 	pinMode(DIGITAL_NPCM, INPUT);
+	
+	digitalWrite(TUNER_RESET, HIGH);
 
 	digitalWrite(AUDIO_SW0, LOW);
 	digitalWrite(AUDIO_SW1, LOW);
@@ -142,11 +148,13 @@ void setup() {
 	digitalWrite(DAC_FILTER_MODE, LOW);
 
 	AISerial.begin(AI_BAUD);
+	Wire.begin();
+	Wire.setClock(20000);
 	
-	tuner1.init();
-	tuner2.init();
-	parameters.fm1_tune = tuner1.getFrequency();
-	parameters.fm2_tune = tuner1.getFrequency();
+	//tuner1.init();
+	//tuner2.init();
+	//parameters.fm1_tune = tuner1.getFrequency();
+	//parameters.fm2_tune = tuner1.getFrequency();
 
 	//TODO: Load in presets from radio.
 	for(int i=0;i<sizeof(parameters.fm1_presets)/sizeof(uint16_t);i+=1)
@@ -274,8 +282,8 @@ void loop() {
 			
 			if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
 				aibus_handler.writeAIData(&function_msg);
-			else if(function_msg.receiver == ID_RADIO && current_source_id != ID_RADIO)
-				tuner1.setPower(false);
+			//else if(function_msg.receiver == ID_RADIO && current_source_id != ID_RADIO)
+			//	tuner1.setPower(false);
 			
 			setSourceName();
 			
@@ -287,7 +295,7 @@ void loop() {
 				source_text_timer = 0;
 			} else if(current_source_id == ID_RADIO) {
 				const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
-				setTunerFrequency(sub_id);
+				//setTunerFrequency(sub_id);
 				sendTunedFrequencyMessage(sub_id);
 				clearFMData();
 				text_handler.createRadioMenu(sub_id);
@@ -325,8 +333,8 @@ void loop() {
 			
 			if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
 				aibus_handler.writeAIData(&function_msg);
-			else if(function_msg.receiver == ID_RADIO)
-				tuner1.setPower(false);
+			//else if(function_msg.receiver == ID_RADIO)
+			//	tuner1.setPower(false);
 			
 			if(!last_phone)
 				text_handler.createPhoneWindow();
@@ -381,9 +389,9 @@ void loop() {
 
 	}
 
-	background_tuner.loop();
+	//background_tuner.loop();
 
-	do {
+	/*do {
 		if(source_handler.getCurrentSourceID() == ID_RADIO) {
 			tuner1.loop();
 			//tuner2.loop();
@@ -543,7 +551,7 @@ void loop() {
 			if((digital_status == LOW && !*digital_mode) || (digital_status == HIGH && *digital_mode))
 				setDigitalActiveMode();
 		}
-	} while(false);
+	} while(false);*/
 
 	if(!parameters.ai_pending) {
 		if(src_ping_timer >= SOURCE_PING_DELAY)

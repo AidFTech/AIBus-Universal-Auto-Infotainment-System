@@ -113,22 +113,6 @@ int AMirrorSocket::getClient() {
 	return this->client_socket;
 }
 
-//Erase TX cache bytes from 0-size exclusive.
-void SocketHandlerParameters::eraseTX(const int size) {
-	ai_tx_size -= size;
-
-	for(int i=0;i<ai_tx_size;i+=1)
-		aidata_tx[i] = aidata_tx[i+size];
-}
-
-//Erase RX cache bytes from 0-size exclusive.
-void SocketHandlerParameters::eraseRX(const int size) {
-	ai_rx_size -= size;
-
-	for(int i=0;i<ai_rx_size;i+=1)
-		aidata_rx[i] = aidata_rx[i+size];
-}
-
 //Write a message to the client socket.
 void writeSocketMessage(SocketMessage* msg, const int socket) {
 	if(msg->l + 1 > 255)
@@ -166,55 +150,11 @@ void *socketThread(void* parameters_v) {
 	AMirrorSocket amirror_socket;
 	parameters->client_socket = amirror_socket.getClient();
 
-	SocketRecvHandlerParameters recv_paramters;
-	recv_paramters.main_parameters = parameters;
-	recv_paramters.socket = &amirror_socket;
-
-	pthread_t recv_thread;
-	pthread_create(&recv_thread, NULL, socketReceiveThread, (void*)&recv_paramters);
-
 	while(*parameters->running) {
-		while(parameters->tx_access);
-		if(parameters->ai_tx_size > 4) { //An AIBus message is ready to send.
-			const int l = parameters->aidata_tx[1];
-			if(parameters->ai_tx_size < l + 2) {
-				parameters->ai_tx_size = 0;
-				continue;
-			}
-
-			uint8_t data[l+2];
-			for(int i=0;i<l+2;i+=1) {
-				data[i] = parameters->aidata_tx[i];
-			}
-			parameters->eraseTX(l+2);
-
-			SocketMessage socket_msg(OPCODE_AIBUS_SEND, sizeof(data));
-			socket_msg.refreshSocketData(data);
-
-			amirror_socket.writeSocketMessage(&socket_msg);
-		}
-	}
-
-	pthread_join(recv_thread, NULL);
-
-	void* result;
-	return result;
-}
-
-//Socket receive thread function.
-void *socketReceiveThread(void* parameters_v) {
-	SocketRecvHandlerParameters* recv_parameters = (SocketRecvHandlerParameters*)parameters_v;
-	SocketHandlerParameters* parameters = recv_parameters->main_parameters;
-
-	AMirrorSocket* socket_handler = recv_parameters->socket;
-	
-	while(parameters->running) {
 		SocketMessage rx_msg(0, DEFAULT_READ_LENGTH);
 
-		if(socket_handler->readSocketMessage(&rx_msg) > 0) {
+		if(amirror_socket.readSocketMessage(&rx_msg) > 0) {
 			if(rx_msg.opcode == OPCODE_AIBUS_RECEIVE) {
-				while(parameters->rx_access);
-
 				char rx_buf[rx_msg.l];
 				for(int i=0;i<rx_msg.l;i+=1)
 					rx_buf[i] = char(rx_msg.data[i]);

@@ -45,7 +45,8 @@ fn main() {
 			}
 
 			let ai_msg = get_aibus_message(msg.data);
-			if ai_msg.receiver == AIBUS_DEVICE_AMIRROR || ai_msg.receiver == 0xFF {
+
+			if ai_msg.sender == AIBUS_DEVICE_RADIO || ai_msg.receiver == AIBUS_DEVICE_AMIRROR || ai_msg.receiver == 0xFF {
 				std::mem::drop(stream);
 				amirror.handle_aibus_message(ai_msg);
 			}

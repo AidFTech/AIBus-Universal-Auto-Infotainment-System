@@ -17,8 +17,15 @@ Si4735Controller::~Si4735Controller() {
 
 //Start the controller.
 void Si4735Controller::init() {
-	this->tuner->setup(reset_pin, POWER_UP_FM);
 	this->tuner->setDeviceI2CAddress(address_state);
+
+	delay(500);
+	this->tuner->setup(reset_pin, POWER_UP_FM);
+	this->tuner->setFM(8400, 10800, 8750, 10);
+
+	//delay(500);
+	this->tuner->setRdsConfig(3, 3, 3, 3, 3);
+	this->tuner->setFifoCount(1);
 }
 
 //Loop function.
@@ -49,8 +56,13 @@ void Si4735Controller::setPower(const bool power, const uint8_t function) {
 		if(function == SUB_AM)
 			si_function = POWER_UP_AM;
 
-		tuner->setup(reset_pin, si_function);
-		tuner->radioPowerUp();
+		//tuner->setup(reset_pin, si_function);
+		//tuner->radioPowerUp();
+
+		if(function == SUB_FM1)
+			this->tuner->setFM(8400, 10800, parameters->fm1_tune, 10);
+		else if(function == SUB_FM2)
+			this->tuner->setFM(8400, 10800, parameters->fm2_tune, 10);
 	} else
 		tuner->powerDown();
 }
@@ -74,6 +86,7 @@ uint16_t Si4735Controller::decrementFrequency(const uint8_t count) {
 
 //Get the RSSI.
 uint8_t Si4735Controller::getRSSI() {
+	tuner->getStatus();
 	return tuner->getReceivedSignalStrengthIndicator();
 }
 

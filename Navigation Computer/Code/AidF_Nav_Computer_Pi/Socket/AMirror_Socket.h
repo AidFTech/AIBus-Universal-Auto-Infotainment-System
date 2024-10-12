@@ -46,29 +46,14 @@ private:
 };
 
 struct SocketHandlerParameters {
-	uint8_t aidata_tx[DEFAULT_READ_LENGTH];
-	uint8_t aidata_rx[DEFAULT_READ_LENGTH];
-
-	int ai_tx_size = 0, ai_rx_size = 0;
 	int* ai_serial;
 	int client_socket = -1;
 
 	bool* running;
-
-	bool tx_access = false, rx_access = false;
-
-	void eraseTX(const int size);
-	void eraseRX(const int size);
-};
-
-struct SocketRecvHandlerParameters {
-	AMirrorSocket* socket;
-	SocketHandlerParameters* main_parameters;
 };
 
 void writeSocketMessage(SocketMessage* msg, const int socket);
 
 void *socketThread(void* parameters_v);
-void *socketReceiveThread(void* parameters_v);
 
 #endif

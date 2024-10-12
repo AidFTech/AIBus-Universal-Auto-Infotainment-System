@@ -102,38 +102,6 @@ void AidF_Nav_Computer::loop() {
 	this->window_handler->drawWindow();
 	SDL_RenderPresent(renderer);
 
-	/*if(socket_parameters.ai_rx_size >= 4) {
-		socket_parameters.rx_access = true;
-
-		const int l = socket_parameters.aidata_rx[1];
-		if(l+2 > socket_parameters.ai_rx_size) {
-			socket_parameters.eraseRX(socket_parameters.ai_rx_size);
-		} else {
-			uint8_t data[l+2];
-			for(int i=0;i<l+2;i+=1) {
-				data[i] = socket_parameters.aidata_rx[i];
-			}
-			socket_parameters.eraseRX(l+2);
-
-			AIData rx_msg;
-			if(readAIByteData(&rx_msg, data, sizeof(data))) {
-				bool ack = true;
-				if(rx_msg.l >= 1 && rx_msg.data[0] == 0x80)
-					ack = false;
-				if(rx_msg.receiver == 0xFF)
-					ack = false;
-				if(rx_msg.receiver == ID_RADIO && !*radio_connected)
-					ack = false;
-
-				aibus_handler->writeAIData(&rx_msg, ack);
-				if(rx_msg.receiver == ID_NAV_COMPUTER)
-					aibus_handler->cacheMessage(&rx_msg);
-			}
-		}
-
-		socket_parameters.rx_access = false;
-	}*/
-
 	AIData ai_msg;
 	do {
 		if(!this->aibus_handler->getConnected() || this->aibus_handler->getAvailableBytes() > 0) {
@@ -141,16 +109,6 @@ void AidF_Nav_Computer::loop() {
 				aibus_read_time = clock();
 
 				{
-					/*socket_parameters.tx_access = true;
-					uint8_t ai_bytes[ai_msg.l + 4];
-					ai_msg.getBytes(ai_bytes);
-					
-					for(int i=0;i<sizeof(ai_bytes);i+=1)
-						socket_parameters.aidata_tx[i+socket_parameters.ai_tx_size] = ai_bytes[i];
-
-					socket_parameters.ai_tx_size += sizeof(ai_bytes);
-					socket_parameters.tx_access = false;*/
-
 					uint8_t ai_bytes[ai_msg.l + 4];
 					ai_msg.getBytes(ai_bytes);
 

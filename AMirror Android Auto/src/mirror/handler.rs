@@ -145,6 +145,10 @@ impl<'a> MirrorHandler<'a> {
 				} else if button == 0x7 && state == 0x1 { //Enter hold.
 					self.send_carplay_command(PHONE_COMMAND_VOICE);
 					self.enter_hold = true;
+				} else if button == 0x20 && state == 0x0 { //Home/menu.
+					self.send_carplay_command(PHONE_COMMAND_HOME);
+				} else if button == 0x27 && state == 0x0 { //Back.
+					self.send_carplay_command(PHONE_COMMAND_BACK);
 				} else if button == 0x25 && state == 0x0 { //Next track.
 					self.send_carplay_command(PHONE_COMMAND_NEXT_TRACK);
 				} else if button == 0x24 && state == 0x0 { //Previous track.
