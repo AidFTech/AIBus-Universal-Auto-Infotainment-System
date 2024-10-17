@@ -16,7 +16,20 @@ fn main() {
 		Some(socket) => socket,
 		None => {
 			println!("Socket not connected.");
-			return;
+			let mut stream_test = None;
+			let mut stream_connected = false;
+			while !stream_connected {
+				stream_test = match init_default_socket() {
+					Some(socket) => {
+						stream_connected = true;
+						Some(socket)
+					}
+					None => {
+						continue;
+					}
+				};
+			}
+			stream_test.unwrap()
 		}
 	};
 
@@ -27,11 +40,6 @@ fn main() {
 	while amirror.run {
 		amirror.process();
 
-		let mut msg = SocketMessage {
-			opcode: 0,
-			data: Vec::new(),
-		};
-
 		let mut stream = match mutex_stream.try_lock() {
 			Ok(stream) => stream,
 			Err(_) => {
@@ -39,16 +47,34 @@ fn main() {
 			}
 		};
 
-		if read_socket_message(&mut stream, &mut msg) > 0 {
-			if msg.opcode != OPCODE_AIBUS_RECV {
-				continue;
-			}
+		let mut msg_list = Vec::new();
+		let bytes_pending = read_socket_message(&mut stream, &mut msg_list);
 
-			let ai_msg = get_aibus_message(msg.data);
+		if bytes_pending > 0 {
+			std::mem::drop(stream);
+			while msg_list.len() > 0 {
+				stream = match mutex_stream.try_lock() {
+					Ok(stream) => stream,
+					Err(_) => {
+						break;
+					}
+				};
+				let msg = &msg_list[0];
 
-			if ai_msg.sender == AIBUS_DEVICE_RADIO || ai_msg.receiver == AIBUS_DEVICE_AMIRROR || ai_msg.receiver == 0xFF {
-				std::mem::drop(stream);
-				amirror.handle_aibus_message(ai_msg);
+				if msg.opcode != OPCODE_AIBUS_RECV {
+					break;
+				}
+
+				println!("{:X?}", msg.data);
+
+				let ai_msg = get_aibus_message(msg.data.clone());
+
+				if ai_msg.l() >= 1 && (ai_msg.sender == AIBUS_DEVICE_RADIO || ai_msg.receiver == AIBUS_DEVICE_AMIRROR || ai_msg.receiver == 0xFF) {
+					std::mem::drop(stream);
+					amirror.handle_aibus_message(ai_msg);
+				}
+
+				msg_list.remove(0);
 			}
 		}
 	}

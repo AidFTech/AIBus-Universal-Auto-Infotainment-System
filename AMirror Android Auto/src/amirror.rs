@@ -12,6 +12,9 @@ const APP_NAME: u8 = 0x0;
 const SONG_NAME: u8 = 0x1;
 const ARTIST_NAME: u8 = 0x2;
 const ALBUM_NAME: u8 = 0x3;
+
+const MENU_NONE: u8 = 0;
+const MENU_SETTINGS: u8 = 1;
 pub struct AMirror<'a> {
 	context: &'a Arc<Mutex<Context>>,
 	stream: &'a Arc<Mutex<UnixStream>>,
@@ -24,6 +27,15 @@ pub struct AMirror<'a> {
 	display_phone: bool,
 	
 	imid_scroll: i8,
+
+	local_radio_connected: bool,
+	local_imid_native: bool,
+	local_imid_text_len: u8,
+	local_imid_rows: u8,
+
+	menu_open: u8,
+
+	w: u16,
 
 	source_request_timer: Instant,
 	pub run: bool,
@@ -44,6 +56,15 @@ impl <'a> AMirror<'a> {
 			display_app: false,
 			display_phone: false,
 			imid_scroll: -1,
+
+			local_radio_connected: false,
+			local_imid_native: false,
+			local_imid_text_len: 0,
+			local_imid_rows: 0,
+
+			menu_open: MENU_NONE,
+
+			w,
 
 			source_request_timer: Instant::now(),
 			run: true,
@@ -90,20 +111,16 @@ impl <'a> AMirror<'a> {
 
 			if context.phone_type == 0 {
 				context.phone_name = "".to_string();
+			} else {
+				if context.night {
+					self.handler.send_carplay_command(PHONE_COMMAND_NIGHT);
+				} else {
+					self.handler.send_carplay_command(PHONE_COMMAND_DAY);
+				}
 			}
 
 			self.write_aibus_message(phone_type_msg);
 
-			if context.imid_native_mirror && context.audio_text {
-				let phone_type_msg_imid = AIBusMessage {
-					sender: AIBUS_DEVICE_AMIRROR,
-					receiver: AIBUS_DEVICE_IMID,
-					data: [0x30, context.phone_type].to_vec(),
-				};
-
-				self.write_aibus_message(phone_type_msg_imid);
-			}
-			
 			if context.audio_selected && context.audio_text {
 				if context.phone_type == 0 {
 					self.write_nav_text("Mirror".to_string(), 0, 0, true);
@@ -112,6 +129,18 @@ impl <'a> AMirror<'a> {
 				} else if context.phone_type == 5 {
 					self.write_nav_text("Android".to_string(), 0, 0, true);
 				}
+
+				std::mem::drop(context);
+
+				self.write_all_imid_text();
+
+				context = match self.context.try_lock() {
+					Ok(context) => context,
+					Err(_) => {
+						println!("AMirror Process Phone Type: Context Locked.");
+						return;
+					}
+				};
 			}
 
 			if context.radio_connected {
@@ -148,24 +177,17 @@ impl <'a> AMirror<'a> {
 			if context.audio_selected && context.audio_text {
 				self.write_nav_text(context.phone_name.clone(), 2, 1, true);
 
-				if context.imid_native_mirror  {
-					let phone_name_msg_imid = AIBusMessage {
-						sender: AIBUS_DEVICE_AMIRROR,
-						receiver: AIBUS_DEVICE_IMID,
-						data: phone_name_data,
-					};
+				std::mem::drop(context);
 
-					self.write_aibus_message(phone_name_msg_imid);
-				} else if context.imid_row_count > 0 && context.imid_text_len > 0 {
-					if self.display_phone && self.imid_scroll < 0 {
-						let mut imid_x = (context.imid_text_len/2) as isize - (context.phone_name.len()/2) as isize;
-						if imid_x < 0 || imid_x > context.imid_text_len as isize {
-							imid_x = 0;
-						}
+				self.write_all_imid_text();
 
-						self.write_imid_text(context.phone_name.clone(), imid_x as u8, 1);
+				context = match self.context.try_lock() {
+					Ok(context) => context,
+					Err(_) => {
+						println!("AMirror Process Phone Name: Context Locked.");
+						return;
 					}
-				}
+				};
 			}
 
 			if context.radio_connected {
@@ -299,7 +321,7 @@ impl <'a> AMirror<'a> {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.app.clone(), APP_NAME);
 					} else if context.imid_row_count > 0 && context.imid_text_len > 0 {
 						if self.display_app && self.imid_scroll < 0 {
-							let mut imid_x = (context.imid_text_len/2) as isize - (context.album.len()/2) as isize;
+							let mut imid_x = (context.imid_text_len/2) as isize - (context.app.len()/2) as isize;
 							if imid_x < 0 || imid_x > context.imid_text_len as isize {
 								imid_x = 0;
 							}
@@ -327,11 +349,16 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
+		self.local_radio_connected = context.radio_connected;
+		self.local_imid_native = context.imid_native_mirror;
+		self.local_imid_rows = context.imid_row_count;
+		self.local_imid_text_len = context.imid_text_len;
+
 		if Instant::now() - self.source_request_timer > Duration::from_millis(5000) {
 			self.source_request_timer = Instant::now();
 
 			let mut control_req = 0x0;
-			if context.phone_active {
+			if context.phone_active && context.phone_type != 0 {
 				control_req |= 0x10;
 			}
 			if context.audio_selected {
@@ -343,6 +370,22 @@ impl <'a> AMirror<'a> {
 					sender: AIBUS_DEVICE_AMIRROR,
 					receiver: AIBUS_DEVICE_NAV_SCREEN,
 					data: [0x77, AIBUS_DEVICE_AMIRROR, control_req].to_vec(),
+				});
+			}
+			
+			if !context.radio_connected {
+				self.write_aibus_message(AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_RADIO,
+					data: [0x1].to_vec(),
+				});
+			}
+			
+			if !context.imid_native_mirror && context.imid_row_count <= 0 && context.imid_text_len <= 0 {
+				self.write_aibus_message(AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_IMID,
+					data: [0x4, 0xE6, 0x3B].to_vec(),
 				});
 			}
 		}
@@ -468,12 +511,24 @@ impl <'a> AMirror<'a> {
 				}
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x30 { //Control.
 				if ai_msg.data[1] == 0x0 { //Status query.
-
+					//TODO: This.
 				}
+			} else if ai_msg.l() >= 2 && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x4A { //Create a settings menu.
+				std::mem::drop(context);
+				
+				self.write_settings_menu();
+
+				context = match self.context.try_lock() {
+					Ok(context) => context,
+					Err(_) => {
+						println!("AMirror Handle AIBus Message Create Menu: Context Locked");
+						return;
+					}
+				};
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x48 && ai_msg.data[1] == 0x8E { //Turn on/off the interface.
-				//self.handler.set_minimize(ai_msg.data[2] == 0);
+				self.handler.set_minimize(ai_msg.data[2] == 0);
 				context.phone_active = ai_msg.data[2] != 0;
 
 				if context.phone_active {
@@ -496,6 +551,45 @@ impl <'a> AMirror<'a> {
 				}
 
 				self.source_request_timer = Instant::now();
+			} else if ai_msg.l() >= 1 && ai_msg.data[0] == 0x2B { //Menu operation.
+				if ai_msg.l() >= 2 && ai_msg.data[1] == 0x40 { //Menu cleared.
+					self.menu_open = MENU_NONE;
+				} else if ai_msg.l() >= 3 && ai_msg.data[1] == 0x60 { //Entry selected.
+					if self.menu_open == MENU_SETTINGS {
+						std::mem::drop(context);
+
+						let option = ai_msg.data[2];
+						println!("Option: {}", option);
+						if option == 1 { //Display phone name.
+							self.display_phone = !self.display_phone;
+							self.write_settings_menu_option(option - 1);	
+						} else if option == 2 { //Display song title.
+							self.display_title = !self.display_title;
+							self.write_settings_menu_option(option - 1);
+						} else if option == 3 { //Display artist name.
+							self.display_artist = !self.display_artist;
+							self.write_settings_menu_option(option - 1);
+						} else if option == 4 { //Display album name.
+							self.display_album = !self.display_album;
+							self.write_settings_menu_option(option - 1);
+						} else if option == 5 { //Display app name.
+							self.display_app = !self.display_app;
+							self.write_settings_menu_option(option - 1);
+						}
+
+						if option <= 5 {
+							self.write_all_imid_text();
+						}
+
+						context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								println!("AMirror Handle AIBus Message Handle Menu Option: Context Locked");
+								return;
+							}
+						};
+					}
+				}
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_IMID {
 			if ai_msg.l() >= 2 && ai_msg.data[0] == 0x3B {
@@ -564,36 +658,43 @@ impl <'a> AMirror<'a> {
 			}
 		};
 		
-		let mut radio_connected_local = false;
-		match self.context.try_lock() {
-			Ok(context) => {
-				radio_connected_local = context.radio_connected;
-			}
-			Err(_) => {
-			}
-		}
+		let radio_connected_local = self.local_radio_connected;
+		let native_imid_local = self.local_imid_native;
+		let rows_local = self.local_imid_rows;
+		let text_len_local = self.local_imid_text_len;
 
 		let msg_copy = ai_msg.clone();
 		write_aibus_message(&mut stream, ai_msg);
 
-		if msg_copy.l() >=1 && msg_copy.data[0] != 0x80 && msg_copy.receiver != 0xFF && (msg_copy.receiver != 0x10 || !radio_connected_local) { 
+		let mut send_ack = msg_copy.l() >=1 && msg_copy.data[0] != 0x80;
+		if send_ack && msg_copy.receiver == 0xFF {
+			send_ack = false;
+		}
+		if send_ack && msg_copy.receiver == AIBUS_DEVICE_RADIO && !radio_connected_local {
+			send_ack = false;
+		}
+		if send_ack && msg_copy.receiver == AIBUS_DEVICE_IMID && !native_imid_local && rows_local <= 0 && text_len_local <= 0 {
+			send_ack = false;
+		}
+
+		if send_ack { 
 			let mut ack = false;
 			let mut num_tries = 0;
 			let mut last_try = Instant::now();
 			while !ack && num_tries < 15 {
-				let mut msg = SocketMessage {
-					opcode: 0,
-					data: Vec::new(),
-				};
+				let mut msg_list = Vec::new();
 
-				if read_socket_message(&mut stream, &mut msg) > 0 {
-					if msg.opcode != OPCODE_AIBUS_RECV {
-						continue;
-					}
-		
-					let rx_msg = get_aibus_message(msg.data);
-					if rx_msg.receiver == msg_copy.sender && rx_msg.sender == msg_copy.receiver && rx_msg.l() >= 1 && rx_msg.data[0] == 0x80 {
-						ack = true;
+				if read_socket_message(&mut stream, &mut msg_list) > 0 {
+					for i in 0..msg_list.len() {
+						let msg = &msg_list[i];
+						if msg.opcode != OPCODE_AIBUS_RECV {
+							continue;
+						}
+			
+						let rx_msg = get_aibus_message(msg.data.clone());
+						if rx_msg.receiver == msg_copy.sender && rx_msg.sender == msg_copy.receiver && rx_msg.l() >= 1 && rx_msg.data[0] == 0x80 {
+							ack = true;
+						}
 					}
 				}
 
@@ -763,6 +864,26 @@ impl <'a> AMirror<'a> {
 		self.write_nav_text(context.album.clone(), 3, 0, false);
 		self.write_nav_text(context.app.clone(), 4, 0, true);
 
+		if context.playing {
+			self.write_nav_text("#FWD".to_string(), 1, 1, true);
+		} else {
+			self.write_nav_text("||".to_string(), 1, 1, true);
+		}
+
+		std::mem::drop(context);
+		self.write_all_imid_text();
+	}
+
+	//Write all relevant text to the IMID.
+	fn write_all_imid_text(&mut self) {
+		let context = match self.context.try_lock() {
+			Ok(context) => context,
+			Err(_) => {
+				println!("AMirror Write All IMID Text: Context Locked.");
+				return;
+			}
+		};
+
 		if context.imid_native_mirror {
 			let mut phone_name_data = [0x23, 0x30].to_vec();
 			let phone_name_bytes = context.phone_name.as_bytes();
@@ -784,7 +905,8 @@ impl <'a> AMirror<'a> {
 			self.write_metadata(AIBUS_DEVICE_IMID, context.album.clone(), ALBUM_NAME);
 			self.write_metadata(AIBUS_DEVICE_IMID, context.app.clone(), APP_NAME);
 		} else if context.imid_row_count > 0 && context.imid_text_len > 0 {
-			if self.imid_scroll < 0 {
+			if self.imid_scroll < 0 && context.phone_name.len() > 0 {
+
 				let mut row = 1;
 				if self.display_phone {
 					let mut imid_x = (context.imid_text_len/2) as isize - (context.phone_name.len()/2) as isize;
@@ -843,14 +965,237 @@ impl <'a> AMirror<'a> {
 					if row <= context.imid_row_count {
 						self.write_imid_text(context.app.clone(), imid_x as u8, row);
 					}
+				} else {
+					row -= 1;
+				}
+
+				if row < context.imid_row_count {
+					let mut row_msg = [0x20, 0x60].to_vec();
+
+					for i in row+1..context.imid_row_count+1 {
+						row_msg.push(i);
+					}
+	
+					self.write_aibus_message(AIBusMessage {
+						sender: AIBUS_DEVICE_AMIRROR,
+						receiver: AIBUS_DEVICE_IMID,
+						data: row_msg,
+					});
+				}
+
+			} else if context.phone_name.len() <= 0 {
+				if context.phone_type == 0 {
+					let mut msg = "Phone Not Connected"; //Phone not connected.
+					if context.imid_text_len < msg.len() as u8 {
+						msg = "Phone N/C";
+					}
+
+					if context.imid_text_len < msg.len() as u8 {
+						msg = "N/C";
+					}
+
+					let mut imid_x = (context.imid_text_len/2) as usize - msg.len()/2;
+					if imid_x > context.imid_row_count as usize {
+						imid_x = 0;
+					}
+
+					if context.imid_row_count == 1 {
+						self.write_imid_text(msg.to_string(), imid_x as u8, 1);
+					} else {
+						self.write_imid_text(msg.to_string(), imid_x as u8, context.imid_row_count/2);
+					}
+				} else if context.phone_type == 3 { //Carplay.
+					let msg = "CarPlay";
+
+					let mut imid_x = (context.imid_text_len/2) as usize - msg.len()/2;
+
+					if imid_x > context.imid_row_count as usize {
+						imid_x = 0;
+					}
+
+					if context.imid_row_count == 1 {
+						self.write_imid_text(msg.to_string(), imid_x as u8, 1);
+					} else {
+						let mut imid_y = 1;
+						if self.display_phone && (context.song_title.len() <= 0 && context.artist.len() <= 0 && context.album.len() <= 0) {
+							imid_y = context.imid_row_count/2;
+						}
+						self.write_imid_text(msg.to_string(), imid_x as u8, imid_y);
+					}
+				}
+			}
+		}
+	}
+
+	//Write the settings menu.
+	fn write_settings_menu(&mut self) {
+		let settings_count = 7;
+		let y_pos: u16 = 140;
+		let menu_h: u16 = 35;
+		
+		let mut menu_req_data = [0x2B, 0x5A, settings_count, settings_count, 0, 0, (y_pos>>8) as u8, (y_pos&0xFF) as u8, (self.w>>8) as u8, (self.w&0xFF) as u8, (menu_h>>8) as u8, (menu_h&0xFF) as u8].to_vec();
+
+		let menu_header_bytes = "Mirror Settings".as_bytes();
+
+		for i in 0..menu_header_bytes.len() {
+			menu_req_data.push(menu_header_bytes[i]);
+		}
+
+		let ai_request = AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_NAV_COMPUTER,
+			data: menu_req_data,
+		};
+
+		self.write_aibus_message(ai_request);
+
+		let mut stream = match self.stream.try_lock() {
+			Ok(stream) => stream,
+			Err(_) => {
+				return;
+			}
+		};
+
+		let mut no_stream = false;
+		let stream_timer = Instant::now();
+
+		while Instant::now() - stream_timer < Duration::from_millis(100) {
+			let mut msg_list = Vec::new();
+
+			if read_socket_message(&mut stream, &mut msg_list) > 0 {
+				for i in 0..msg_list.len() {
+					let test_msg = &msg_list[i];
+
+					if test_msg.opcode == OPCODE_AIBUS_RECV {
+						let test_ai_msg = get_aibus_message(test_msg.data.clone());
+
+						if test_ai_msg.receiver == AIBUS_DEVICE_AMIRROR {
+							if test_ai_msg.l() >= 1 && test_ai_msg.data[0] != 0x80 {
+								std::mem::drop(stream);
+
+								let mut ack_msg = AIBusMessage {
+									sender: AIBUS_DEVICE_AMIRROR,
+									receiver: test_ai_msg.sender,
+									data: Vec::new(),
+								};
+								ack_msg.data.push(0x80);
+					
+								self.write_aibus_message(ack_msg);
+
+								stream = match self.stream.try_lock() {
+									Ok(stream) => stream,
+									Err(_) => {
+										return;
+									}
+								};
+							}
+
+							if test_ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER && test_ai_msg.l() >= 2 && test_ai_msg.data[0] == 0x2B && test_ai_msg.data[1] == 0x40 {
+								no_stream = true;
+								break;
+							} else {
+								//TODO: Cache.
+							}
+						}
+					}
 				}
 			}
 		}
 
-		if context.playing {
-			self.write_nav_text("#FWD".to_string(), 1, 1, true);
-		} else {
-			self.write_nav_text("||".to_string(), 1, 1, true);
+		std::mem::drop(stream);
+
+		if no_stream {
+			return;
+		}
+
+		for i in 0..settings_count {
+			self.write_settings_menu_option(i);
+		}
+
+		self.write_aibus_message(AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_NAV_COMPUTER,
+			data: [0x2B, 0x52, 0x1].to_vec(),
+		});
+
+		self.menu_open = MENU_SETTINGS;
+	}
+
+	//Write a menu option.
+	fn write_settings_menu_option(&mut self, option: u8) {
+		let context = match self.context.try_lock() {
+			Ok(context) => context,
+			Err(_) => {
+				println!("AMirror Menu Option: Context Locked.");
+				return;
+			}
+		};
+
+		let mut menu_req_data = [0x2B, 0x51, option].to_vec();
+
+		let mut req_text: String = "".to_string();
+
+		if context.imid_row_count > 0 && context.imid_text_len > 0 && option <= 5 {
+			if option == 0 {
+				if self.display_phone {
+					req_text = "#RON".to_string();
+				} else {
+					req_text = "#ROF".to_string();
+				}
+				req_text += " Display Phone Name"
+			} else if option == 1 {
+				if self.display_title {
+					req_text = "#RON".to_string();
+				} else {
+					req_text = "#ROF".to_string();
+				}
+				req_text += " Display Song Title";
+			} else if option == 2 {
+				if self.display_artist {
+					req_text = "#RON".to_string();
+				} else {
+					req_text = "#ROF".to_string();
+				}
+				req_text += " Display Artist";
+			} else if option == 3 {
+				if self.display_album {
+					req_text = "#RON".to_string();
+				} else {
+					req_text = "#ROF".to_string();
+				}
+				req_text += " Display Album";
+			} else if option == 4 {
+				if self.display_app {
+					req_text = "#RON".to_string();
+				} else {
+					req_text = "#ROF".to_string();
+				}
+				req_text += " Display App Name";
+			} else if option == 5 {
+				if self.imid_scroll < 0 {
+					req_text = "#ROF".to_string();
+				} else {
+					req_text = "#RON".to_string();
+				}
+				req_text += " Scroll Cluster Display";
+			}
+		} else if option > 5 {
+			if option == 6 {
+				req_text = "Auto Music Start".to_string();
+			}
+		}
+
+		let req_text_b = req_text.as_bytes();
+		for i in 0..req_text_b.len() {
+			menu_req_data.push(req_text_b[i]);
+		}
+
+		if req_text_b.len() > 0 {
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_NAV_COMPUTER,
+				data: menu_req_data,
+			});
 		}
 	}
 }

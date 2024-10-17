@@ -30,6 +30,8 @@
 
 #define AIBUS_WAIT 5
 
+#define SOCKET_AIBUS_TEST
+
 class AidF_Nav_Computer {
 public:
 	bool running = true;

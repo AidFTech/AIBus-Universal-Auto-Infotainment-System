@@ -7,6 +7,9 @@
 
 #include "AIBus/AIBus.h"
 #include "AIBus/AIBus_Serial.h"
+
+#include "Socket/AMirror_Socket.h"
+
 #include <string>
 #include <stdint.h>
 #include <time.h>
@@ -26,9 +29,9 @@
 class AIBusHandler {
 public:
 	#ifdef RPI_UART
-	AIBusHandler(std::string port);
+	AIBusHandler(std::string port, int** socket_list, const int socket_l);
 	#else
-	AIBusHandler();
+	AIBusHandler(int** socket_list, const int socket_l);
 	#endif
 	~AIBusHandler();
 
@@ -55,8 +58,9 @@ private:
 	int connectAIPort(std::string port);
 	#endif
 
-
 	bool awaitAcknowledgement(AIData* ai_d);
+
+	void writeToSocket(AIData* ai_d);
 
 	int ai_port;
 	#ifdef RPI_UART
@@ -67,6 +71,9 @@ private:
 
 	std::vector<uint8_t> cached_bytes;
 	AIData cached_msg;
+
+	int** socket_list;
+	int socket_l = 0;
 };
 
 #ifndef RPI_UART

@@ -19,10 +19,12 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	//TODO: Read in a file for the last saved color profile.
 	this->getBackground();
 
+	int* socket_list[] = {&this->socket_parameters.client_socket};
+
 	#ifdef RPI_UART
-	this->aibus_handler = new AIBusHandler("/dev/ttyAMA0");
+	this->aibus_handler = new AIBusHandler("/dev/ttyAMA0", socket_list, 1);
 	#else
-	this->aibus_handler = new AIBusHandler();
+	this->aibus_handler = new AIBusHandler(socket_list, 1);
 	#endif
 
 	this->window_handler = new Window_Handler(this->renderer, this->br, this->lw, this->lh, &this->active_color_profile, this->aibus_handler);
@@ -108,6 +110,9 @@ void AidF_Nav_Computer::loop() {
 			if(this->aibus_handler->readAIData(&ai_msg)) {
 				aibus_read_time = clock();
 
+				/*#ifndef SOCKET_AIBUS_TEST
+				if(ai_msg.sender != ID_NAV_COMPUTER)
+				#endif
 				{
 					uint8_t ai_bytes[ai_msg.l + 4];
 					ai_msg.getBytes(ai_bytes);
@@ -115,7 +120,7 @@ void AidF_Nav_Computer::loop() {
 					SocketMessage ai_sock_msg(OPCODE_AIBUS_SEND, sizeof(ai_bytes));
 					ai_sock_msg.refreshSocketData(ai_bytes);
 					writeSocketMessage(&ai_sock_msg, socket_parameters.client_socket);
-				}
+				}*/
 
 				if(!*canslator_connected && ai_msg.sender == ID_CANSLATOR)
 					*canslator_connected = true;

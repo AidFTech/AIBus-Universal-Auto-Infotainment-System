@@ -1,4 +1,5 @@
 #include "AMirror_Socket.h"
+#include <iostream>
 
 SocketMessage::SocketMessage(const uint8_t opcode, const uint16_t l) {
 	this->opcode = opcode;
@@ -76,8 +77,10 @@ int AMirrorSocket::readSocketMessage(SocketMessage* msg) {
 
 	const int message_size = recv(this->client_socket, data, DEFAULT_READ_LENGTH, 0);
 	
-	if(message_size <= 0)
+	if(message_size < 0)
         return -1;
+	else if(message_size == 0)
+		return 0;
 
     if(message_size < strlen(SOCKET_START) + 1)
         return -1;
@@ -146,23 +149,34 @@ void writeSocketMessage(SocketMessage* msg, const int socket) {
 //Socket thread function.
 void *socketThread(void* parameters_v) {
 	SocketHandlerParameters* parameters = (SocketHandlerParameters*)parameters_v;
-
-	AMirrorSocket amirror_socket;
-	parameters->client_socket = amirror_socket.getClient();
+	AMirrorSocket* amirror_socket = NULL;
 
 	while(*parameters->running) {
-		SocketMessage rx_msg(0, DEFAULT_READ_LENGTH);
+		if(parameters->client_socket < 0 || amirror_socket == NULL) {
+			amirror_socket = new AMirrorSocket();
+			parameters->client_socket = amirror_socket->getClient();
+		} else {
+			SocketMessage rx_msg(0, DEFAULT_READ_LENGTH);
 
-		if(amirror_socket.readSocketMessage(&rx_msg) > 0) {
-			if(rx_msg.opcode == OPCODE_AIBUS_RECEIVE) {
-				char rx_buf[rx_msg.l];
-				for(int i=0;i<rx_msg.l;i+=1)
-					rx_buf[i] = char(rx_msg.data[i]);
+			const int socket_byte_count = amirror_socket->readSocketMessage(&rx_msg);
 
-				aiserialWrite(*parameters->ai_serial, rx_buf, rx_msg.l);
+			if(socket_byte_count > 0) {
+				if(rx_msg.opcode == OPCODE_AIBUS_RECEIVE) {
+					char rx_buf[rx_msg.l];
+					for(int i=0;i<rx_msg.l;i+=1)
+						rx_buf[i] = char(rx_msg.data[i]);
+
+					aiserialWrite(*parameters->ai_serial, rx_buf, rx_msg.l);
+				}
+			} else if(socket_byte_count == 0) { //Socket closed.
+				parameters->client_socket = -1;
+				delete amirror_socket;
 			}
 		}
 	}
+
+	if(amirror_socket != NULL)
+		delete amirror_socket;
 
 	void* result;
 	return result;

@@ -7,6 +7,8 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 
+#include <vector>
+
 #include "../AIBus/AIBus_Serial.h"
 
 #ifndef amirror_socket_h

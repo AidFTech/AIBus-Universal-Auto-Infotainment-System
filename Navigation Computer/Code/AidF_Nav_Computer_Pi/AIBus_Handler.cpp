@@ -1,7 +1,7 @@
 #include "AIBus_Handler.h"
 
 #ifdef RPI_UART
-AIBusHandler::AIBusHandler(std::string port) {
+AIBusHandler::AIBusHandler(std::string port, int* socket_list, const int socket_l) {
 	this->cached_msg = std::vector<AIData>(0);
 	gpioCfgSetInternals(1<<10);
 	gpioInitialise();
@@ -20,11 +20,23 @@ AIBusHandler::AIBusHandler(std::string port) {
 
 	gpioSetMode(AI_RX, PI_INPUT);
 	gpioSetPullUpDown(AI_RX, PI_PUD_UP);
+
+	this->socket_list = new int*[socket_l];
+	for(int i=0;i<socket_l;i+=1)
+		this->socket_list[i] = socket_list[i];
+
+	this->socket_l = socket_l;
 }
 #else
-AIBusHandler::AIBusHandler() {
+AIBusHandler::AIBusHandler(int** socket_list, const int socket_l) {
 	this->cached_bytes = std::vector<uint8_t>(0);
 	std::cout<<"Ready!\nEnter the sender, receiver, and data. Separate all characters with a space. Do not include the checksum.\n";
+
+	this->socket_list = new int*[socket_l];
+	for(int i=0;i<socket_l;i+=1)
+		this->socket_list[i] = socket_list[i];
+
+	this->socket_l = socket_l;
 }
 #endif
 
@@ -34,6 +46,8 @@ AIBusHandler::~AIBusHandler() {
 	#ifdef RPI_UART
 	gpioTerminate();
 	#endif
+
+	delete[] this->socket_list;
 }
 
 #ifndef RPI_UART
@@ -71,6 +85,7 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 				const int l = cached_bytes.at(1);
 				if(cached_bytes.size() < l + 2) {
 					cached_bytes.clear();
+					writeToSocket(ai_d);
 					return true;
 				}
 
@@ -88,6 +103,8 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 
 				cached_msg.refreshAIData(0,0,0);
 			}
+			
+			writeToSocket(ai_d);
 			return true;
 		} else if(aiserialBytesAvailable(this->ai_port) >= 2) {
 			const uint8_t s = uint8_t(aiserialReadByte(this->ai_port));
@@ -155,6 +172,8 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 			#if !defined(RPI_UART) && defined(AIBUS_PRINT)
 			printBytes(ai_d);
 			#endif
+			
+			writeToSocket(ai_d);
 			return true;
 		} else {
 			return false;
@@ -431,6 +450,20 @@ void AIBusHandler::cacheMessage(AIData* ai_msg) {
 				for(int i=0;i<sizeof(data);i+=1)
 					cached_bytes.push_back(data[i]);
 			}
+		}
+	}
+}
+
+//Write a message to a socket.
+void AIBusHandler::writeToSocket(AIData* ai_d) {
+	for(int i=0;i<this->socket_l;i+=1) {
+		if(*this->socket_list[i] >= 0) {
+			uint8_t ai_bytes[ai_d->l + 4];
+			ai_d->getBytes(ai_bytes);
+
+			SocketMessage ai_sock_msg(OPCODE_AIBUS_SEND, sizeof(ai_bytes));
+			ai_sock_msg.refreshSocketData(ai_bytes);
+			writeSocketMessage(&ai_sock_msg, *this->socket_list[i]);
 		}
 	}
 }

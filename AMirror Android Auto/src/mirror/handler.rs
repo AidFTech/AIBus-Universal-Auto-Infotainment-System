@@ -436,6 +436,6 @@ impl<'a> MirrorHandler<'a> {
 	}
 
 	pub fn set_minimize(&mut self, minimize: bool) {
-		self.set_minimize(minimize);
+		self.mpv_video.set_minimize(minimize);
 	}
 }

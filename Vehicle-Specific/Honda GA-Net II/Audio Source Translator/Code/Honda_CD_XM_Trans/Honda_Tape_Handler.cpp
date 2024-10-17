@@ -211,8 +211,8 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 		
 		this->text_control = the_message->data[2] == device_ai_id;
 		if(this->text_control) {
-			if(!parameter_list->imid_connected && !parameter_list->external_imid_tape)
-				clearExternalIMID();
+			//if(!parameter_list->imid_connected && !parameter_list->external_imid_tape)
+			//	clearExternalIMID();
 			sendTapeTextMessage();
 			sendFunctionTextMessage();
 		}

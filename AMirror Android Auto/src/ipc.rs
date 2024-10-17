@@ -3,7 +3,6 @@ use std::os::unix::net::UnixStream;
 use std::str;
 use std::time::Duration;
 
-use crate::get_aibus_message;
 use crate::AIBusMessage;
 
 const SOCKET_PATH: &str = "/tmp/amirror";
@@ -64,7 +63,7 @@ fn write_socket_bytes(stream: &mut UnixStream, data: &mut Vec<u8>) -> usize {
 }
 
 //Read a full message from the socket.
-pub fn read_socket_message(stream: &mut UnixStream, message: &mut SocketMessage) -> usize {
+pub fn read_socket_message(stream: &mut UnixStream, message_list: &mut Vec<SocketMessage>) -> usize {
 	let mut data : [u8; 1024] = [0; 1024];
 	let full_l = read_socket_bytes(stream, &mut data);
 
@@ -72,33 +71,54 @@ pub fn read_socket_message(stream: &mut UnixStream, message: &mut SocketMessage)
 		return 0;
 	}
 
-	let socket_start_msg = SOCKET_START.as_bytes();
-	for i in 0..socket_start_msg.len() {
-		if data[i] != socket_start_msg[i] {
+	let mut byte_vec = Vec::new();
+	for i in 0..full_l {
+		byte_vec.push(data[i]);
+	}
+	
+	//println!("{:X?}", byte_vec);
+
+	while byte_vec.len() > SOCKET_START.len() {
+		let socket_start_msg = SOCKET_START.as_bytes();
+		for i in 0..socket_start_msg.len() {
+			if byte_vec[i] != socket_start_msg[i] {
+				return 0;
+			}
+		}
+
+		let mut message = SocketMessage {
+			opcode: 0,
+			data: Vec::new(),
+		};
+
+		message.opcode = byte_vec[socket_start_msg.len()];
+		let data_l: u8 = byte_vec[socket_start_msg.len() + 1]-1;
+		let start = socket_start_msg.len() + 2;
+		let msg_l = data_l as usize + socket_start_msg.len() + 3;
+
+		let mut checksum = 0;
+		for i in 0..msg_l-1 {
+			checksum ^= byte_vec[i];
+		}
+
+		if checksum != byte_vec[msg_l-1] {
 			return 0;
+		}
+
+		message.data = Vec::new();
+
+		for i in start..msg_l-1 {
+			message.data.push(byte_vec[i]);
+		}
+
+		message_list.push(message);
+		
+		for _i in 0..msg_l {
+			byte_vec.remove(0);
 		}
 	}
 
-	message.opcode = data[socket_start_msg.len()];
-	let data_l: u8 = data[socket_start_msg.len() + 1]-1;
-	let start = socket_start_msg.len() + 2;
-
-	let mut checksum = 0;
-	for i in 0..full_l - 1 {
-		checksum ^= data[i];
-	}
-
-	if checksum != data[full_l-1] {
-		return 0;
-	}
-
-	message.data = Vec::new();
-
-	for i in start..full_l - 1 {
-		message.data.push(data[i]);
-	}
-
-	return data_l as usize;
+	return full_l as usize;
 }
 
 //Write a full message to the socket.

@@ -55,7 +55,7 @@ HondaTapeHandler tape_handler(&ie_handler, &ai_handler, &parameters, &imid_handl
 HondaXMHandler xm_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
 HondaCDHandler cd_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
 
-elapsedMillis function_timer, ai_timer, screen_request_timer;
+elapsedMillis function_timer, ai_timer, screen_request_timer, ping_timer;
 
 uint8_t door_state = 0;
 
@@ -260,6 +260,38 @@ void loop() {
 			tape_handler.requestControl();
 		else if(xm_handler.getSelected())
 			xm_handler.requestControl();
+	}
+
+	if(ping_timer > SOURCE_DELAY) {
+		ping_timer = 0;
+
+		uint8_t sender_id = 0;
+		if(cd_handler.getEstablished())
+			sender_id = ID_CDC;
+		else if(tape_handler.getEstablished())
+			sender_id = ID_TAPE;
+		else if(xm_handler.getEstablished())
+			sender_id = ID_XM;
+
+		if(!parameters.imid_connected && !parameters.external_imid_cd && !parameters.external_imid_tape && !parameters.external_imid_xm && parameters.external_imid_lines <= 0 && parameters.external_imid_char <= 0) {
+			if(sender_id != 0) {
+				uint8_t ping_data[] = {0x4, 0xE6, 0x3B};
+				AIData ping_msg(sizeof(ping_data), sender_id, ID_IMID_SCR);
+
+				ping_msg.refreshAIData(ping_data);
+				ai_handler.writeAIData(&ping_msg, false);
+			}
+		}
+
+		if(!parameters.radio_connected) {
+			if(sender_id != 0) {
+				uint8_t ping_data[] = {0x1};
+				AIData ping_msg(sizeof(ping_data), sender_id, ID_RADIO);
+
+				ping_msg.refreshAIData(ping_data);
+				ai_handler.writeAIData(&ping_msg, false);
+			}
+		}
 	}
 }
 

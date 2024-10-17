@@ -1174,8 +1174,12 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 					if(track > 0 && track <= 99)
 						function_text += "-" + String(int(track));
 					
-					for(int i=0;i<parameter_list->external_imid_char - 10;i+=1)
+					if(parameter_list->external_imid_char >= 16) {
 						function_text += " ";
+					} else { 	
+						for(int i=0;i<parameter_list->external_imid_char - 10;i+=1)
+							function_text += " ";
+					}
 				} else {
 					if(track > 0 && track <= 99)
 						function_text += String(int(track));
