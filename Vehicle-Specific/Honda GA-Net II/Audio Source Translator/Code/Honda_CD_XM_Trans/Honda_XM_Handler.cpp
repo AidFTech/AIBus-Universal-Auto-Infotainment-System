@@ -341,8 +341,14 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				
 				if(display_parameter != N_TEXT_NONE) {
 					display_timer = 0;
-					display_timer_enabled = true;
+					if(parameter_list->external_imid_lines > 1)
+						display_timer_enabled = false;
+					else
+						display_timer_enabled = true;
 					scroll_state = 0;
+					
+					if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0)
+						clearExternalIMID();
 					sendIMIDInfoMessage();
 				} else {
 					if(parameter_list->imid_connected) {
@@ -1137,8 +1143,8 @@ void HondaXMHandler::sendIMIDInfoMessage(const bool resend) {
 
 	text_to_send = text_to_send.substring(0, pop_limit + 1);
 
-	if(resend && (parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0))
-		clearExternalIMID();
+	/*if(resend && (parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0))
+		clearExternalIMID();*/
 
 	bool scroll_changed = true;
 	uint8_t max_length = parameter_list->external_imid_char;
@@ -1156,9 +1162,49 @@ void HondaXMHandler::sendIMIDInfoMessage(const bool resend) {
 	} else
 		scroll_changed = false;
 	
+	if(resend && !parameter_list->imid_connected && parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines >= 2) {
+		switch(display_parameter) {
+			case N_SONG_NAME:
+				sendIMIDInfoHeader("SONG");
+				break;
+			case N_ARTIST_NAME:
+				sendIMIDInfoHeader("ARTIST");
+				break;
+			case N_CHANNEL_NAME:
+				sendIMIDInfoHeader("CHANNEL");
+				break;
+			case N_GENRE:
+				sendIMIDInfoHeader("GENRE");
+				break;
+		}
+	}
+
 	if((resend || scroll_changed) && !text_timer_enabled) {
 		sendIMIDInfoMessage(text_to_send);
 	}
+}
+
+void HondaXMHandler::sendIMIDInfoHeader(String text) {
+	if(parameter_list->external_imid_char <= 0 || parameter_list->external_imid_lines < 2)
+		return;
+
+	uint8_t line = parameter_list->external_imid_lines/2;
+
+	if(text.length() > parameter_list->external_imid_char)
+		text = text.substring(0, parameter_list->external_imid_char);
+		
+	text.replace("#","##  ");
+
+	AIData imid_msg(text.length() + 4, ID_XM, ID_IMID_SCR);
+	imid_msg.data[0] = 0x23;
+	imid_msg.data[1] = 0x60;
+	imid_msg.data[2] = parameter_list->external_imid_char/2-text.length()/2;
+	imid_msg.data[3] = line;
+
+	for(unsigned int i=0;i<text.length();i+=1)
+		imid_msg.data[i+4] = uint8_t(text.charAt(i));
+		
+	ai_driver->writeAIData(&imid_msg);
 }
 
 void HondaXMHandler::sendIMIDInfoMessage(String text) {

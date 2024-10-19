@@ -122,6 +122,8 @@ private:
 	void sendIMIDInfoMessage();
 	void sendIMIDInfoMessage(const bool resend);
 	void sendIMIDInfoMessage(String text);
+	
+	void sendIMIDInfoHeader(String text);
 
 	void clearXMText(const bool song_title, const bool artist, const bool channel, const bool genre);
 	void clearAIXMText(const bool song_title, const bool artist, const bool channel, const bool genre);

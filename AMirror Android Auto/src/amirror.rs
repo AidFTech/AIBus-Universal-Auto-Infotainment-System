@@ -594,29 +594,31 @@ impl <'a> AMirror<'a> {
 		} else if ai_msg.sender == AIBUS_DEVICE_IMID {
 			if ai_msg.l() >= 2 && ai_msg.data[0] == 0x3B {
 				if ai_msg.data[1] == 0x23 && ai_msg.l() >= 4 { //Character count.
-					context.imid_text_len = ai_msg.data[2];
-					context.imid_row_count = ai_msg.data[3];
+					if context.imid_text_len != ai_msg.data[2] || context.imid_row_count != ai_msg.data[3] {
+						context.imid_text_len = ai_msg.data[2];
+						context.imid_row_count = ai_msg.data[3];
 
-					if context.imid_row_count >= 5 {
-						self.display_app = true;
-						self.display_album = true;
-						self.display_artist = true;
-						self.display_title = true;
-						self.display_phone = true;
-					} else if context.imid_row_count >= 4 {
-						self.display_album = true;
-						self.display_artist = true;
-						self.display_title = true;
-						self.display_phone = true;
-					} else if context.imid_row_count >= 3 {
-						self.display_album = true;
-						self.display_artist = true;
-						self.display_title = true;
-					} else if context.imid_row_count >= 2 {
-						self.display_artist = true;
-						self.display_title = true;
-					} else if context.imid_row_count >= 1 {
-						self.display_title = true;
+						if context.imid_row_count >= 5 {
+							self.display_app = true;
+							self.display_album = true;
+							self.display_artist = true;
+							self.display_title = true;
+							self.display_phone = true;
+						} else if context.imid_row_count >= 4 {
+							self.display_album = true;
+							self.display_artist = true;
+							self.display_title = true;
+							self.display_phone = true;
+						} else if context.imid_row_count >= 3 {
+							self.display_album = true;
+							self.display_artist = true;
+							self.display_title = true;
+						} else if context.imid_row_count >= 2 {
+							self.display_artist = true;
+							self.display_title = true;
+						} else if context.imid_row_count >= 1 {
+							self.display_title = true;
+						}
 					}
 				} else if ai_msg.data[1] == 0x57 && ai_msg.l() >= 3 { //Supported device list.
 					context.imid_native_mirror = false;

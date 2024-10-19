@@ -139,6 +139,8 @@ private:
 	void sendIMIDInfoMessage(const bool resend);
 	void sendIMIDInfoMessage(String text);
 
+	void sendIMIDInfoHeader(String text);
+
 	void clearCDText(const bool song_title, const bool artist, const bool album, const bool folder, const bool file);
 	void clearAICDText(const bool song_title, const bool artist, const bool album, const bool folder, const bool file);
 	void clearExternalCDIMID(const bool album);
