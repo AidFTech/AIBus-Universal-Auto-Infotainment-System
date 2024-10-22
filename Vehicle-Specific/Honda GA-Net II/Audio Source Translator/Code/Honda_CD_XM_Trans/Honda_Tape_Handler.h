@@ -31,6 +31,8 @@
 class HondaTapeHandler : public HondaSourceHandler {
 public:
 	HondaTapeHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_driver, ParameterList* parameter_list, HondaIMIDHandler* imid_handler);
+
+	void loop();
 	
 	void interpretTapeMessage(IE_Message* the_message);
 	void readAIBusMessage(AIData* the_message);
@@ -43,6 +45,9 @@ private:
 
 	bool autostart = false, fwd_start = false;
 	bool change_dir = false; //Change direction at next play message.
+
+	bool nr_timer_enabled = false;
+	elapsedMillis nr_timer;
 
 	int8_t desired_track_count = 0;
 

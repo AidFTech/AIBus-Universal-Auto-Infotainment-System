@@ -15,6 +15,9 @@ pub struct Context {
 
 	pub night: bool, //True if the system is in night mode.
 
+	pub phone_req_off: bool, //True if the phone has requested a return to the factory UI.
+	pub home_held: bool, //True if "home" was held by the user.
+
 	//IMID Parameters:
 	pub imid_row_count: u8,
 	pub imid_text_len: u8,
@@ -48,6 +51,9 @@ impl Context {
 			app: "".to_string(),
 
 			night: false,
+
+			phone_req_off: false,
+			home_held: false,
 			
 			imid_row_count: 0,
 			imid_text_len: 0,

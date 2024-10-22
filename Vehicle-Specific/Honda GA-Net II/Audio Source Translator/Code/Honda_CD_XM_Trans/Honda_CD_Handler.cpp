@@ -116,6 +116,23 @@ void HondaCDHandler::loop() {
 			info_change_enabled = false;
 			incrementInfo();
 		}
+
+		if(mode_timer_enabled && mode_timer > MODE_FLASH_TIMER) {
+			mode_timer_enabled = false;
+
+			if(use_function_timer && parameter_list->imid_connected && text_mode != TEXT_MODE_BLANK) {
+				imid_handler->setIMIDSource(ID_CD, 0);
+			} else if(parameter_list->imid_connected) {
+				imid_handler->setIMIDSource(ID_CDC, 0);
+			}
+
+			sendCDIMIDTrackandTimeMessage();
+			text_timer = 0;
+			text_timer_enabled = true;
+			text_timer_song = true;
+			text_timer_artist = true;
+			text_timer_album = true;
+		}
 	}
 }
 
@@ -254,8 +271,15 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 			}
 
 			if(text_control) {
-				if(timer != last_timer || disc_and_track != ((disc<<8) | track) || getIECDStatus(ai_cd_status) != last_status || getIECDRepeat(ai_cd_status) != last_repeat)
+				if(timer != last_timer || disc_and_track != ((disc<<8) | track) || getIECDStatus(ai_cd_status) != last_status || getIECDRepeat(ai_cd_status) != last_repeat) {
+					if(getIECDRepeat(ai_cd_status) != last_repeat &&
+					parameter_list->imid_connected || (parameter_list->external_imid_char > 0 && parameter_list-> external_imid_char < 16 && parameter_list->external_imid_lines == 1 && !parameter_list->external_imid_cd)) {
+						this->mode_timer_enabled = true;
+						this->mode_timer = 0;
+					}
+
 					sendCDIMIDTrackandTimeMessage();
+				}
 
 				sendCDLoadWaitMessage(message_type);
 			}
@@ -1084,6 +1108,8 @@ void HondaCDHandler::incrementInfo() {
 		return;
 	}
 
+	mode_timer_enabled = false;
+
 	if(text_mode == TEXT_MODE_WITH_TEXT) {
 		switch(display_parameter) {
 			case TEXT_NONE:
@@ -1159,80 +1185,112 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 	if(!text_control)
 		return;
 
-	if(parameter_list->imid_connected) {
-		if(display_parameter == TEXT_NONE) {
-			imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status));
-		}
-	} else if(parameter_list->external_imid_cd) {
-		sendAICDStatusMessage(ID_IMID_SCR);
-		uint8_t timer_data[] = {0x3B, 0x0, 0x0, (timer&0xFF00) >> 8, (timer&0xFF)};
-
-		AIData timer_msg(sizeof(timer_data), ID_CDC, ID_IMID_SCR);
-		timer_msg.refreshAIData(timer_data);
-		
-		ai_driver->writeAIData(&timer_msg);
-	} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
-		if(display_parameter == TEXT_NONE) {
-			if(parameter_list->external_imid_lines >= 2 || (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY) {
-				String function_text = "";
-				if(parameter_list->external_imid_char > 10) {
-					function_text = "CD" + String(int(disc));
-					if(track > 0 && track <= 99)
-						function_text += "-" + String(int(track));
-					
-					if(parameter_list->external_imid_char >= 16) {
-						for(int i=0;i<(parameter_list->external_imid_char - 15)/2;i+=1)
-							function_text += " ";
-						
-						if((ai_cd_status&AI_CD_REPEAT_T) == AI_CD_REPEAT_T)
-							function_text += "RPT T";
-						else if((ai_cd_status&AI_CD_REPEAT_D) == AI_CD_REPEAT_D)
-							function_text += "RPT D";
-						else if((ai_cd_status&AI_CD_RANDOM_D) == AI_CD_RANDOM_D)
-							function_text += "RND D";
-						else if((ai_cd_status&AI_CD_RANDOM_A) == AI_CD_RANDOM_A)
-							function_text += "RND A";
-						else if((ai_cd_status&AI_CD_SCAN_D) == AI_CD_SCAN_D)
-							function_text += "SCN D";
-						else if((ai_cd_status&AI_CD_SCAN_A) == AI_CD_SCAN_A)
-							function_text += "SCN A";
-						else
-							function_text += "     ";
-						
-						for(int i=0;i<(parameter_list->external_imid_char - 15)/2;i+=1)
-							function_text += " ";
-					} else { 	
-						for(int i=0;i<parameter_list->external_imid_char - 10;i+=1)
-							function_text += " ";
-					}
-				} else {
-					if(track > 0 && track <= 99)
-						function_text += String(int(track));
-					else
-						function_text += "D" + String(int(disc));
-
-					function_text += " ";
-				}
-				
-				if(timer >= 0) {
-					function_text += String(int(timer/60)) + ":";
-					if(timer%60 >= 10)
-						function_text += String(int(timer%60));
-					else
-						function_text += "0" + String(int(timer%60));
-				} else
-					function_text += "-:--";
-
-				AIData function_msg(4+function_text.length(), ID_CDC, ID_IMID_SCR);
-				function_msg.data[0] = 0x23;
-				function_msg.data[1] = 0x60;
-				function_msg.data[2] = parameter_list->external_imid_char/2-function_text.length()/2;
-				function_msg.data[3] = 1;
-				for(int i=0;i<function_text.length();i+=1)
-					function_msg.data[i+4] = uint8_t(function_text.charAt(i));
-
-				ai_driver->writeAIData(&function_msg);
+	if(!mode_timer_enabled) {
+		if(parameter_list->imid_connected) {
+			if(display_parameter == TEXT_NONE) {
+				imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status));
 			}
+		} else if(parameter_list->external_imid_cd) {
+			sendAICDStatusMessage(ID_IMID_SCR);
+			uint8_t timer_data[] = {0x3B, 0x0, 0x0, (timer&0xFF00) >> 8, (timer&0xFF)};
+
+			AIData timer_msg(sizeof(timer_data), ID_CDC, ID_IMID_SCR);
+			timer_msg.refreshAIData(timer_data);
+			
+			ai_driver->writeAIData(&timer_msg);
+		} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
+			if(display_parameter == TEXT_NONE) {
+				if(parameter_list->external_imid_lines >= 2 || (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY) {
+					String function_text = "";
+					if(parameter_list->external_imid_char > 10) {
+						function_text = "CD" + String(int(disc));
+						if(track > 0 && track <= 99)
+							function_text += "-" + String(int(track));
+						
+						if(parameter_list->external_imid_char >= 16) {
+							for(int i=0;i<(parameter_list->external_imid_char - 15)/2;i+=1)
+								function_text += " ";
+							
+							if((ai_cd_status&AI_CD_REPEAT_T) == AI_CD_REPEAT_T)
+								function_text += "RPT T";
+							else if((ai_cd_status&AI_CD_REPEAT_D) == AI_CD_REPEAT_D)
+								function_text += "RPT D";
+							else if((ai_cd_status&AI_CD_RANDOM_D) == AI_CD_RANDOM_D)
+								function_text += "RND D";
+							else if((ai_cd_status&AI_CD_RANDOM_A) == AI_CD_RANDOM_A)
+								function_text += "RND A";
+							else if((ai_cd_status&AI_CD_SCAN_D) == AI_CD_SCAN_D)
+								function_text += "SCN D";
+							else if((ai_cd_status&AI_CD_SCAN_A) == AI_CD_SCAN_A)
+								function_text += "SCN A";
+							else
+								function_text += "     ";
+							
+							for(int i=0;i<(parameter_list->external_imid_char - 15)/2;i+=1)
+								function_text += " ";
+						} else { 	
+							for(int i=0;i<parameter_list->external_imid_char - 10;i+=1)
+								function_text += " ";
+						}
+					} else {
+						if(track > 0 && track <= 99)
+							function_text += String(int(track));
+						else
+							function_text += "D" + String(int(disc));
+
+						function_text += " ";
+					}
+					
+					if(timer >= 0) {
+						function_text += String(int(timer/60)) + ":";
+						if(timer%60 >= 10)
+							function_text += String(int(timer%60));
+						else
+							function_text += "0" + String(int(timer%60));
+					} else
+						function_text += "-:--";
+
+					AIData function_msg(4+function_text.length(), ID_CDC, ID_IMID_SCR);
+					function_msg.data[0] = 0x23;
+					function_msg.data[1] = 0x60;
+					function_msg.data[2] = parameter_list->external_imid_char/2-function_text.length()/2;
+					function_msg.data[3] = 1;
+					for(int i=0;i<function_text.length();i+=1)
+						function_msg.data[i+4] = uint8_t(function_text.charAt(i));
+
+					ai_driver->writeAIData(&function_msg);
+				}
+			}
+		}
+	} else if(mode_timer_enabled && ((!parameter_list->external_imid_cd && parameter_list->external_imid_char > 0 && parameter_list->external_imid_char < 16 && parameter_list->external_imid_lines == 1) || parameter_list->imid_connected)) {
+		String function_text;
+		if((ai_cd_status&AI_CD_REPEAT_T) == AI_CD_REPEAT_T)
+			function_text = "REPEAT T";
+		else if((ai_cd_status&AI_CD_REPEAT_D) == AI_CD_REPEAT_D)
+			function_text = "REPEAT D";
+		else if((ai_cd_status&AI_CD_RANDOM_D) == AI_CD_RANDOM_D)
+			function_text = "RANDOM D";
+		else if((ai_cd_status&AI_CD_RANDOM_A) == AI_CD_RANDOM_A)
+			function_text = "RANDOM A";
+		else if((ai_cd_status&AI_CD_SCAN_D) == AI_CD_SCAN_D)
+			function_text = "SCAN D";
+		else if((ai_cd_status&AI_CD_SCAN_A) == AI_CD_SCAN_A)
+			function_text = "SCAN A";
+		else
+			function_text = "CD PLAY";
+
+		if(parameter_list->imid_connected) {
+			imid_handler->writeIMIDTextMessage(function_text);
+		} else {
+			AIData function_msg(4+function_text.length(), ID_CDC, ID_IMID_SCR);
+			function_msg.data[0] = 0x23;
+			function_msg.data[1] = 0x60;
+			function_msg.data[2] = parameter_list->external_imid_char/2-function_text.length()/2;
+			function_msg.data[3] = 1;
+			for(int i=0;i<function_text.length();i+=1)
+				function_msg.data[i+4] = uint8_t(function_text.charAt(i));
+
+			ai_driver->writeAIData(&function_msg);
 		}
 	}
 }

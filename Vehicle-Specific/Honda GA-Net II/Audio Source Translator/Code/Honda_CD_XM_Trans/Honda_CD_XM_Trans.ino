@@ -249,6 +249,7 @@ void loop() {
 	}
 
 	imid_handler.loop();
+	tape_handler.loop();
 	cd_handler.loop();
 	xm_handler.loop();
 

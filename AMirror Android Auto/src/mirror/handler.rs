@@ -32,6 +32,7 @@ pub struct MirrorHandler<'a> {
 	heartbeat_time: SystemTime,
 
 	enter_hold: bool,
+	home_hold: bool,
 }
 
 impl<'a> MirrorHandler<'a> {
@@ -78,6 +79,7 @@ impl<'a> MirrorHandler<'a> {
 			heartbeat_time: SystemTime::now(),
 
 			enter_hold: false,
+			home_hold: false,
 		};
 	}
 
@@ -145,8 +147,30 @@ impl<'a> MirrorHandler<'a> {
 				} else if button == 0x7 && state == 0x1 { //Enter hold.
 					self.send_carplay_command(PHONE_COMMAND_VOICE);
 					self.enter_hold = true;
-				} else if button == 0x20 && state == 0x0 { //Home/menu.
-					self.send_carplay_command(PHONE_COMMAND_HOME);
+				} else if button == 0x20 && state == 0x2 { //Home/menu.
+					if !self.home_hold {
+						self.send_carplay_command(PHONE_COMMAND_HOME);
+					} else {
+						match self.context.try_lock() {
+							Ok(mut context) => {
+								context.home_held = true;
+							}
+							Err(_) => {
+								println!("Handler AIBus Message: Context Locked")
+							}
+						}
+					}
+					self.home_hold = false;
+				} else if button == 0x20 && state == 0x1 { //Home/menu hold.
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							context.phone_active = false;
+						}
+						Err(_) => {
+							println!("Handler AIBus Message: Context Locked")
+						}
+					}
+					self.home_hold = true;
 				} else if button == 0x27 && state == 0x0 { //Back.
 					self.send_carplay_command(PHONE_COMMAND_BACK);
 				} else if button == 0x25 && state == 0x0 { //Next track.
@@ -205,7 +229,7 @@ impl<'a> MirrorHandler<'a> {
 		let mut config_msg = get_sendfile_message("/etc/airplay.conf".to_string(), config_data);
 		self.usb_conn.write_message(config_msg.get_mirror_message());
 		
-		//Send BMW.png...
+		//Send AidF Android.png...
 		let mut android_icon_file = match File::open(Path::new("AidF Android.png")) {
 			Ok(file) => file,
 			Err(err) => {
@@ -253,7 +277,7 @@ impl<'a> MirrorHandler<'a> {
 	}
 
 	fn interpret_message(&mut self, message: &MirrorMessage) {
-		if message.message_type == 0x1 {
+		if message.message_type == 1 {
 			// Open message.
 			self.startup = true;
 			println!("Starting Carlinkit...");
@@ -372,6 +396,29 @@ impl<'a> MirrorHandler<'a> {
 					self.rd_audio.send_audio(&data);
 				} else if audio_type == 2 {
 					self.nav_audio.send_audio(&data);
+				}
+			}
+		} else if message.message_type == 8 { //Phone specific command.
+			if message.data.len() >= 4 {
+				let command = u32::from_le_bytes([message.data[0], message.data[1], message.data[2], message.data[3]]);
+
+				if command == PHONE_COMMAND_HOST_UI || command == PHONE_COMMAND_VIDEO_OFF {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							context.phone_active = false;
+							context.phone_req_off = true;
+						}
+						Err(_) => {
+						}
+					}
+				} else if command == PHONE_COMMAND_VIDEO_ON {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							context.phone_active = true;
+						}
+						Err(_) => {
+						}
+					}
 				}
 			}
 		} else if message.message_type == 25 || message.message_type == 42 {

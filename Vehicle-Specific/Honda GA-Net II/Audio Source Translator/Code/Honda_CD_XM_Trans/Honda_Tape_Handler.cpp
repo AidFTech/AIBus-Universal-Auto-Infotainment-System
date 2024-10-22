@@ -6,6 +6,16 @@ HondaTapeHandler::HondaTapeHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_d
 	this->imid_handler = imid_handler;
 }
 
+void HondaTapeHandler::loop() {
+	if(this->source_sel) {
+		if(nr_timer_enabled && nr_timer > MODE_FLASH_TIMER) {
+			nr_timer_enabled = false;
+
+			this->sendTapeTextMessage();
+		}
+	}
+}
+
 void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message) {
 	if(the_message->receiver != IE_ID_RADIO || the_message->sender != IE_ID_TAPE)
 		return;
@@ -70,6 +80,8 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message) {
 		if(tape_state != last_mode || direction_state != last_dir || track_state != last_track) {
 			ack = false;
 			sendIEAckMessage(the_message->sender);
+
+			const bool last_nr = nr_on;
 			
 			fwd = (direction_state&(1<<6)) == 0;
 			repeat_on = (direction_state&(1<<5)) != 0;
@@ -88,6 +100,12 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message) {
 			tape_update_message.refreshAIData(tape_update_data);
 			
 			ai_driver->writeAIData(&tape_update_message, parameter_list->radio_connected);
+			
+			if(text_control && last_nr != nr_on) {
+				this->nr_timer_enabled = true;
+				this->nr_timer = 0;
+			}
+			
 			if(text_control)
 				sendTapeTextMessage();
 
@@ -423,79 +441,106 @@ void HondaTapeHandler::sendTapeTextMessage() {
 	ai_driver->writeAIData(&sub_msg1, parameter_list->computer_connected);
 	ai_driver->writeAIData(&sub_msg2, parameter_list->computer_connected);
 
-	String imid_mode_msg = F("Tape ");
-	if((parameter_list->external_imid_char < 11 || parameter_list->external_imid_lines > 1) && !imid_handler->getEstablished())
-		imid_mode_msg = F("");
-	
-	switch(tape_mode) {
-		case TAPE_MODE_PLAY:
-			imid_mode_msg += "Play";
-			break;
-		case TAPE_MODE_REVSKIP:
-		case TAPE_MODE_REW:
-			imid_mode_msg += "Rew";
-			break;
-		case TAPE_MODE_FWDSKIP:
-		case TAPE_MODE_FF:
-			imid_mode_msg += "FF";
-			break;
-		case TAPE_MODE_LOAD:
-			imid_mode_msg += "Load";
-			break;
-		case TAPE_MODE_EJECT:
-			imid_mode_msg += "Eject";
-			break;
-	}
-
-	if(parameter_list->external_imid_char >= 15 && tape_mode == TAPE_MODE_PLAY && repeat_on) {
-		if(parameter_list->external_imid_char >= 18)
-			imid_mode_msg += " Repeat";
-		else
-			imid_mode_msg += " RPT";
-	} else if((parameter_list->external_imid_char >= 12) && (tape_mode == TAPE_MODE_REVSKIP || tape_mode == TAPE_MODE_FWDSKIP)) {
-		imid_mode_msg += " " + String(track_count);
-	}
-
-	if(parameter_list->imid_connected) {
-		if(getDisplaySymbol()) {
-			if(fwd) 
-				imid_mode_msg += " >";
-			else
-				imid_mode_msg += " <";
-		}
-		imid_handler->writeIMIDTextMessage(imid_mode_msg);
-	} else if(parameter_list->external_imid_tape) {
-		sendTapeUpdateMessage(ID_IMID_SCR);
-	} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
-		if(getDisplaySymbol()) {
-			if(fwd) 
-				imid_mode_msg += " #UP ";
-			else
-				imid_mode_msg += " #DN ";
-		}
+	if(!nr_timer_enabled) {
+		String imid_mode_msg = F("Tape ");
+		if((parameter_list->external_imid_char < 11 || parameter_list->external_imid_lines > 1) && !imid_handler->getEstablished())
+			imid_mode_msg = F("");
 		
-		if(parameter_list->external_imid_lines > 1) {
-			uint8_t imid_tape_data[] = {0x23, 0x60, parameter_list->external_imid_char/2-2, parameter_list->external_imid_lines/2, 'T', 'a', 'p', 'e'};
-			AIData imid_tape_msg(sizeof(imid_tape_data), ID_TAPE, ID_IMID_SCR);
-			imid_tape_msg.refreshAIData(imid_tape_data);
+		switch(tape_mode) {
+			case TAPE_MODE_PLAY:
+				imid_mode_msg += "Play";
+				break;
+			case TAPE_MODE_REVSKIP:
+			case TAPE_MODE_REW:
+				imid_mode_msg += "Rew";
+				break;
+			case TAPE_MODE_FWDSKIP:
+			case TAPE_MODE_FF:
+				imid_mode_msg += "FF";
+				break;
+			case TAPE_MODE_LOAD:
+				imid_mode_msg += "Load";
+				break;
+			case TAPE_MODE_EJECT:
+				imid_mode_msg += "Eject";
+				break;
+		}
+
+		if(parameter_list->external_imid_char >= 15 && tape_mode == TAPE_MODE_PLAY && repeat_on) {
+			if(parameter_list->external_imid_char >= 18)
+				imid_mode_msg += " Repeat";
+			else
+				imid_mode_msg += " RPT";
+		} else if((parameter_list->external_imid_char >= 12) && (tape_mode == TAPE_MODE_REVSKIP || tape_mode == TAPE_MODE_FWDSKIP)) {
+			imid_mode_msg += " " + String(track_count);
+		}
+
+		if(parameter_list->imid_connected) {
+			if(getDisplaySymbol()) {
+				if(fwd) 
+					imid_mode_msg += " >";
+				else
+					imid_mode_msg += " <";
+			}
+			imid_handler->writeIMIDTextMessage(imid_mode_msg);
+		} else if(parameter_list->external_imid_tape) {
+			sendTapeUpdateMessage(ID_IMID_SCR);
+		} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
+			if(getDisplaySymbol()) {
+				if(fwd) 
+					imid_mode_msg += " #UP ";
+				else
+					imid_mode_msg += " #DN ";
+			}
 			
-			ai_driver->writeAIData(&imid_tape_msg);
+			if(parameter_list->external_imid_lines > 1) {
+				uint8_t imid_tape_data[] = {0x23, 0x60, parameter_list->external_imid_char/2-2, parameter_list->external_imid_lines/2, 'T', 'a', 'p', 'e'};
+				AIData imid_tape_msg(sizeof(imid_tape_data), ID_TAPE, ID_IMID_SCR);
+				imid_tape_msg.refreshAIData(imid_tape_data);
+				
+				ai_driver->writeAIData(&imid_tape_msg);
+			}
+
+			AIData imid_text_msg(4 + imid_mode_msg.length(), ID_TAPE, ID_IMID_SCR);
+			imid_text_msg.data[0] = 0x23;
+			imid_text_msg.data[1] = 0x60;
+			imid_text_msg.data[2] = parameter_list->external_imid_char/2-imid_mode_msg.length()/2;
+			
+			if(parameter_list->external_imid_lines == 1)
+				imid_text_msg.data[3] = 1;
+			else
+				imid_text_msg.data[3] = parameter_list->external_imid_lines/2+1;
+
+			for(int i=0;i<imid_mode_msg.length();i+=1)
+				imid_text_msg.data[i+4] = uint8_t(imid_mode_msg.charAt(i));
+
+			ai_driver->writeAIData(&imid_text_msg);
 		}
+	} else {
+		String nr_mode_txt = "NR On";
+		if(!nr_on)
+			nr_mode_txt = "NR Off";
 
-		AIData imid_text_msg(4 + imid_mode_msg.length(), ID_TAPE, ID_IMID_SCR);
-		imid_text_msg.data[0] = 0x23;
-		imid_text_msg.data[1] = 0x60;
-		imid_text_msg.data[2] = parameter_list->external_imid_char/2-imid_mode_msg.length()/2;
-		
-		if(parameter_list->external_imid_lines == 1)
-			imid_text_msg.data[3] = 1;
-		else
-			imid_text_msg.data[3] = parameter_list->external_imid_lines/2+1;
+		if(parameter_list->imid_connected)
+			imid_handler->writeIMIDTextMessage(nr_mode_txt);
+		else if(parameter_list->external_imid_tape)
+			sendTapeUpdateMessage(ID_IMID_SCR);
+		else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
+			AIData imid_text_msg(4 + nr_mode_txt.length(), ID_TAPE, ID_IMID_SCR);
+			imid_text_msg.data[0] = 0x23;
+			imid_text_msg.data[1] = 0x60;
+			imid_text_msg.data[2] = parameter_list->external_imid_char/2-nr_mode_txt.length()/2;
+			
+			if(parameter_list->external_imid_lines == 1)
+				imid_text_msg.data[3] = 1;
+			else
+				imid_text_msg.data[3] = parameter_list->external_imid_lines/2+1;
 
-		for(int i=0;i<imid_mode_msg.length();i+=1)
-			imid_text_msg.data[i+4] = uint8_t(imid_mode_msg.charAt(i));
+			for(int i=0;i<nr_mode_txt.length();i+=1)
+				imid_text_msg.data[i+4] = uint8_t(nr_mode_txt.charAt(i));
 
-		ai_driver->writeAIData(&imid_text_msg);
+			ai_driver->writeAIData(&imid_text_msg);
+		}
 	}
 }
 

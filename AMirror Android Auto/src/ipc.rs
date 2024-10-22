@@ -78,7 +78,7 @@ pub fn read_socket_message(stream: &mut UnixStream, message_list: &mut Vec<Socke
 	
 	//println!("{:X?}", byte_vec);
 
-	while byte_vec.len() > SOCKET_START.len() {
+	while byte_vec.len() > SOCKET_START.len() + 3 {
 		let socket_start_msg = SOCKET_START.as_bytes();
 		for i in 0..socket_start_msg.len() {
 			if byte_vec[i] != socket_start_msg[i] {

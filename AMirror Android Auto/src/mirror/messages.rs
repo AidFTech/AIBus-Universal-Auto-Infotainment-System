@@ -1,7 +1,10 @@
 pub const HEADERSIZE: usize = 4*4;
 const MAGIC: u32 = 0x55aa55aa;
 
+pub const PHONE_COMMAND_HOST_UI: u32 = 3;
 pub const PHONE_COMMAND_VOICE: u32 = 5;
+pub const PHONE_COMMAND_CAR_MIC: u32 = 7;
+pub const PHONE_COMMAND_BOX_MIC: u32 = 15;
 
 pub const PHONE_COMMAND_DAY: u32 = 17;
 pub const PHONE_COMMAND_NIGHT: u32 = 16;
@@ -21,6 +24,9 @@ pub const PHONE_COMMAND_PAUSE: u32 = 202;
 pub const PHONE_COMMAND_PLAYPAUSE: u32 = 203;
 pub const PHONE_COMMAND_NEXT_TRACK: u32 = 204;
 pub const PHONE_COMMAND_PREV_TRACK: u32 = 205;
+
+pub const PHONE_COMMAND_VIDEO_ON: u32 = 500;
+pub const PHONE_COMMAND_VIDEO_OFF: u32 = 501;
 
 pub struct MirrorMessage {
 	pub message_type: u32,

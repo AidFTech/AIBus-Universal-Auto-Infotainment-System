@@ -15,6 +15,8 @@
 
 #define HANDSHAKE_WAIT 500
 
+#define MODE_FLASH_TIMER 1500
+
 class HondaSourceHandler {
 public:
 	HondaSourceHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_driver, ParameterList* parameter_list);

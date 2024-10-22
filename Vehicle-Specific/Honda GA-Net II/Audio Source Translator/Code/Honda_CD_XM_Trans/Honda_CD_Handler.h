@@ -108,6 +108,10 @@ private:
 	bool info_change_enabled = false, text_timer_info_change = false;
 	elapsedMillis info_change_timer;
 
+	//Timer to display repeat/random/scan.
+	bool mode_timer_enabled = false;
+	elapsedMillis mode_timer;
+
 	HondaIMIDHandler* imid_handler;
 
 	bool fr = false, ff = false; //True if actively fast-searching a disc.

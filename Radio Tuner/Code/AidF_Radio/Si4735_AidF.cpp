@@ -23,7 +23,7 @@ void Si4735Controller::init() {
 	this->tuner->setup(reset_pin, POWER_UP_FM);
 	this->tuner->setFM(8400, 10800, 8750, 10);
 
-	//delay(500);
+	delay(500);
 	this->tuner->setRdsConfig(3, 3, 3, 3, 3);
 	this->tuner->setFifoCount(1);
 }
