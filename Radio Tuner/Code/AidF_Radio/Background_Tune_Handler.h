@@ -16,12 +16,15 @@
 class BackgroundTuneHandler {
 	public:
 		BackgroundTuneHandler(Si4735Controller* br_tuner, ParameterList* parameter_list);
+		~BackgroundTuneHandler();
 
 		void loop();
 		void setSeekMode(const bool seek);
+
+		int getStationNames(String* names);
 	private:
 		Si4735Controller* br_tuner;
-		ParameterList* parameter_list, br_parameter_list;
+		ParameterList* parameter_list, *br_parameter_list;
 		
 		uint16_t freq_list[MAXIMUM_FREQUENCY_COUNT];
 		Vector<uint16_t> freq_list_vec;

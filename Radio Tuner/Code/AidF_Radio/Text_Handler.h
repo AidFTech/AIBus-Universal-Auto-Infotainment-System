@@ -24,7 +24,9 @@ public:
 	void sendTunedFrequencyMessage(const uint16_t frequency, const bool mhz, const bool sub);
 	void sendTunedFrequencyMessage(const uint8_t preset, const uint16_t frequency, const bool mhz, const bool sub);
 	void sendStereoMessage(const bool stereo);
+	
 	void sendShortRDSMessage(String text);
+	void sendLongRDSMessage(String text);
 
 	void createRadioMenu(const uint8_t sub);
 	void createPhoneWindow();
@@ -46,5 +48,6 @@ private:
 };
 
 AIData getTextMessage(String text, const uint8_t group, const uint8_t area);
+void splitText(const uint16_t len, String text, String* sub_text, const int num);
 
 #endif

@@ -4,17 +4,23 @@ BackgroundTuneHandler::BackgroundTuneHandler(Si4735Controller* br_tuner, Paramet
 	this->br_tuner = br_tuner;
 	this->parameter_list = parameter_list;
 
+	this->br_parameter_list = new ParameterList();
+
 	this->freq_list_vec.setStorage(freq_list, 0);
 	this->station_name_vec.setStorage(station_name, 0);
 
 	seek_timer = 0;
 }
 
+BackgroundTuneHandler::~BackgroundTuneHandler() {
+	delete this->br_parameter_list;
+}
+
 //Basic loop function.
 void BackgroundTuneHandler::loop() {
-	br_parameter_list.hour = parameter_list->hour;
-	br_parameter_list.min = parameter_list->min;
-	br_parameter_list.offset = parameter_list->offset;
+	br_parameter_list->hour = parameter_list->hour;
+	br_parameter_list->min = parameter_list->min;
+	br_parameter_list->offset = parameter_list->offset;
 
 	if(parameter_list->minute_timer < 50000 || time_frequency <= 0) {
 		if(time_station_set) {
@@ -26,8 +32,8 @@ void BackgroundTuneHandler::loop() {
 			
 			time_set = false;
 		}
-
-		br_tuner->getParameters(&br_parameter_list, 0);
+		
+		br_tuner->getParameters(br_parameter_list, 0);
 
 		if(station_seek) {
 			const uint8_t rssi = br_tuner->getRSSI();
@@ -37,9 +43,9 @@ void BackgroundTuneHandler::loop() {
 				station_name_vec.clear();
 			}
 
-			if(rssi >= max_rssi/2) { //List this station.
+			if(rssi >= max_rssi/2 && br_parameter_list->rds_station_name.length() > 0) { //List this station.
 				const uint16_t freq = br_tuner->getFrequency();
-				addFrequency(freq, br_parameter_list.rds_station_name);
+				addFrequency(freq, br_parameter_list->rds_station_name);
 			} else { //Remove this station.
 				const uint16_t freq = br_tuner->getFrequency();
 				int index = -1;
@@ -62,10 +68,10 @@ void BackgroundTuneHandler::loop() {
 			}
 		}
 
-		if(br_parameter_list.hour != parameter_list->hour || br_parameter_list.min != parameter_list->min || br_parameter_list.offset != parameter_list->offset) {
-			parameter_list->hour = br_parameter_list.hour;
-			parameter_list->min = br_parameter_list.min;
-			parameter_list->offset = br_parameter_list.offset;
+		if(br_parameter_list->hour != parameter_list->hour || br_parameter_list->min != parameter_list->min || br_parameter_list->offset != parameter_list->offset) {
+			parameter_list->hour = br_parameter_list->hour;
+			parameter_list->min = br_parameter_list->min;
+			parameter_list->offset = br_parameter_list->offset;
 
 			if(this->time_frequency <= 0)
 				this->time_frequency = br_tuner->getFrequency();
@@ -77,11 +83,11 @@ void BackgroundTuneHandler::loop() {
 			time_station_set = true;
 		}
 
-		br_tuner->getParameters(&br_parameter_list, 0);
-		if(br_parameter_list.hour != parameter_list->hour || br_parameter_list.min != parameter_list->min || br_parameter_list.offset != parameter_list->offset) {
-			parameter_list->hour = br_parameter_list.hour;
-			parameter_list->min = br_parameter_list.min;
-			parameter_list->offset = br_parameter_list.offset;
+		br_tuner->getParameters(br_parameter_list, 0);
+		if(br_parameter_list->hour != parameter_list->hour || br_parameter_list->min != parameter_list->min || br_parameter_list->offset != parameter_list->offset) {
+			parameter_list->hour = br_parameter_list->hour;
+			parameter_list->min = br_parameter_list->min;
+			parameter_list->offset = br_parameter_list->offset;
 
 			time_set = true;
 		}
@@ -131,4 +137,17 @@ void BackgroundTuneHandler::addFrequency(const uint16_t freq, String station_nam
 //Set whether the tuner should seek or add/remove stations, i.e. if a station list is open.
 void BackgroundTuneHandler::setSeekMode(const bool seek) {
 	this->station_seek = seek;
+}
+
+//Get the list of station names. Return the total count.
+int BackgroundTuneHandler::getStationNames(String* names) {
+	for(int i=0;i<station_name_vec.size();i+=1) {
+		String new_station_name = String(freq_list_vec.at(i)/100) + "." + String(freq_list_vec.at(i)%100);
+		new_station_name += "MHz: ";
+		new_station_name += station_name_vec.at(i);
+
+		names[i] = new_station_name;
+	}
+
+	return station_name_vec.size();
 }

@@ -94,7 +94,7 @@ void TextHandler::sendStereoMessage(const bool stereo) {
 //Send the short 8-character RDS message to the screen.
 void TextHandler::sendShortRDSMessage(String text) {
 	if(text.length() > 0) {
-		for(uint8_t i=0;i<text.length();i+=1) {
+		for(int i=0;i<text.length();i+=1) {
 			if(text.charAt(i) < 0x20)
 				text.setCharAt(i, ' ');
 		}
@@ -108,6 +108,47 @@ void TextHandler::sendShortRDSMessage(String text) {
 		clear_message.refreshAIData(data);
 
 		ai_handler->writeAIData(&clear_message, parameter_list->computer_connected);
+	}
+}
+
+//Send the full RDS message to the screen.
+void TextHandler::sendLongRDSMessage(String text) {
+	if(text.length() > 0) {
+		for(int i=0;i<text.length();i+=1) {
+			if(text.charAt(i) < 0x20)
+				text.setCharAt(i, ' ');
+		}
+		
+		String sub_text[5] = {"","","","",""};
+
+		splitText(14, text, sub_text, 5);
+		
+		for(int i=0;i<5;i+=1) {
+			AIData rds_message;
+			if(sub_text[i].length() > 0) {
+				rds_message.refreshAIData(getTextMessage(sub_text[i], 0, uint8_t(i+1)));
+			} else {
+				uint8_t clear_data[] = {0x20, 0x60, uint8_t(i+1)};
+				rds_message.refreshAIData(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER);
+				rds_message.refreshAIData(clear_data);
+			}
+			
+			if(i >= 4)
+				rds_message.data[1] |= 0x10;
+			
+			ai_handler->writeAIData(&rds_message, parameter_list->computer_connected);
+		}
+	} else {
+		for(int i=0;i<5;i+=1) {
+			uint8_t clear_data[] = {0x20, 0x60, uint8_t(i+1)};
+			if(i >= 4)
+				clear_data[1] |= 0x10;
+
+			AIData clear_msg(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER);
+			clear_msg.refreshAIData(clear_data);
+
+			ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
+		}
 	}
 }
 
@@ -176,7 +217,13 @@ void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8
 		return;
 
 	if(parameter_list->imid_radio) {
-		uint8_t freq_data[] = {0x67, (frequency&0xFF00)>>8, frequency&0xFF, 2, 0, 0x4D}; //TODO: kHz.
+		uint8_t dec = 2, freq_letter = 0x4D;
+		if(subsrc == SUB_AM) {
+			dec = 0;
+			freq_letter = 0x6B;
+		}
+
+		uint8_t freq_data[] = {0x67, (frequency&0xFF00)>>8, frequency&0xFF, dec, 0, freq_letter};
 		if(parameter_list->fm_stereo)
 			freq_data[4] |= 0x10;
 
@@ -200,9 +247,9 @@ void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8
 				freq_text = "AM";
 
 			if(preset > 0)
-				freq_text += "-" + String(preset);
+				freq_text += "-" + String(preset) + " ";
 			else
-				freq_text += "  ";
+				freq_text += "   ";
 		}
 			
 		if(subsrc != SUB_AM) {
@@ -212,6 +259,9 @@ void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8
 				freq_text += String(frequency/100) + ".0" + String(frequency%100) + "MHz";
 		} else
 			freq_text += String(frequency) + "kHz";
+
+		if(freq_text.length() + 4 < parameter_list->imid_char && parameter_list->fm_stereo)
+			freq_text += " St.";
 		
 		int16_t imid_char = parameter_list->imid_char/2 - freq_text.length()/2;
 		if(imid_char < 0)
@@ -247,6 +297,22 @@ void TextHandler::sendIMIDRDSMessage(const uint16_t frequency, String text) {
 
 		for(unsigned int i=0;i<text.length();i+=1)
 			rds_msg.data[i+2] = uint8_t(text.charAt(i));
+
+		ai_handler->writeAIData(&rds_msg);
+	} else if(parameter_list->imid_lines >= 2 && parameter_list->imid_char > 0) {
+		const uint8_t line = (parameter_list->imid_lines+1)/2 + 1;
+
+		int16_t imid_char = parameter_list->imid_char/2 - text.length()/2;
+		if(imid_char < 0)
+			imid_char = 0;
+
+		AIData rds_msg(text.length() + 4, ID_RADIO, ID_IMID_SCR);
+		rds_msg.data[0] = 0x23;
+		rds_msg.data[1] = 0x60;
+		rds_msg.data[2] = imid_char&0xFF;
+		rds_msg.data[3] = line;
+		for(unsigned int i=0;i<text.length();i+=1)
+			rds_msg.data[i+4] = uint8_t(text.charAt(i));
 
 		ai_handler->writeAIData(&rds_msg);
 	}
@@ -325,4 +391,52 @@ AIData getTextMessage(String text, const uint8_t group, const uint8_t area) {
 	
 	return text_message;
 	
+}
+
+//Split text by spaces.
+void splitText(const uint16_t len, String text, String* sub_text, const int num) {
+	if(text.length() > 0) {
+		int text_end = text.length();
+		for(int i=text.length()-1; i >= 0; i-= 1) {
+			if(text.charAt(i) > ' ')
+				break;
+			else
+				text_end = i;
+		}
+		text = text.substring(0, text_end);
+
+		for(int i=0;i<text.length();i+=1) {
+			if(text.charAt(i) < 0x20 && text.charAt(i) != 0) {
+				text.remove(i);
+				i -= 1;
+			}
+		}
+	}
+
+	for(int i=0;i<num;i+=1) {
+		if(text.length() > 0) {
+			int last_space = -1, space = -1;
+			
+			do {
+				last_space = space;
+				space = text.indexOf(' ', last_space + 1);
+				
+				if(space >= len || space < 0 || space <= last_space + 1)
+					break;
+			} while(space >= 0);
+			
+			if(last_space >= 0 && last_space < len && space >= len) {
+				sub_text[i] = text.substring(0, last_space);
+				text = text.substring(last_space + 1, text.length());
+			} else {
+				if(text.length() > len) {
+					sub_text[i] = text.substring(0,len);
+					text = text.substring(len,text.length());
+				} else {
+					sub_text[i] = text;
+					text = "";
+				}
+			}
+		}
+	}
 }

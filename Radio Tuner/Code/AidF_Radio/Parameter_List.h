@@ -27,15 +27,21 @@ struct ParameterList {
 	
 	uint16_t fm1_tune, fm2_tune, am_tune;
 	bool fm_stereo = false, has_rds = false, info_mode = false;
+
+	uint16_t fm_lower_limit = 8400, fm_upper_limit = 10800, am_lower_limit = 550, am_upper_limit = 1600;
+	uint16_t fm_start = 8750, am_start = 600;
+	uint8_t fm_inc = 10, am_inc = 10;
 	
 	uint16_t fm1_presets[PRESET_COUNT];
 	uint16_t fm2_presets[PRESET_COUNT];
 	uint16_t am_presets[PRESET_COUNT];
 
 	uint8_t current_preset = 0, preferred_preset = 0;
+	bool tune_changed = false;
 
 	int8_t rds_index = -1;
 	String rds_station_name, rds_program_name;
+	String rds_program_split[12];
 
 	uint8_t last_sub = 0;
 

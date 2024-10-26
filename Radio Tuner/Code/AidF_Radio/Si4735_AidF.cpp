@@ -15,32 +15,39 @@ Si4735Controller::~Si4735Controller() {
 	delete this->tuner;
 }
 
-//Start the controller.
-void Si4735Controller::init() {
+//Start the controller, phase 1.
+void Si4735Controller::init1() {
 	this->tuner->setDeviceI2CAddress(address_state);
-
-	delay(500);
 	this->tuner->setup(reset_pin, POWER_UP_FM);
-	this->tuner->setFM(8400, 10800, 8750, 10);
+}
+
+//Start the controller, phase 2.
+void Si4735Controller::init2() {
+	this->tuner->setFM(parameters->fm_lower_limit, parameters->fm_upper_limit, parameters->fm_start, parameters->fm_inc);
 
 	delay(500);
 	this->tuner->setRdsConfig(3, 3, 3, 3, 3);
 	this->tuner->setFifoCount(1);
+	this->tuner->setVolume(63);
+	this->tuner->setFmBlendStereoThreshold(FM_STEREO_THRESH);
 }
 
 //Loop function.
 void Si4735Controller::loop() {
-
+	if(parameters->tune_changed)
+		last_frequency_change = 0;
 }
 
 //Set the desired frequency, within the tuning range.
 uint16_t Si4735Controller::setFrequency(const uint16_t des_freq) {
 	tuner->setFrequency(des_freq);
+	delay(30);
 	return tuner->getFrequency();
 }
 
 //Get the current frequency. The number returned is the tuned frequency * 1000.
 uint16_t Si4735Controller::getFrequency() {
+	delay(30);
 	return tuner->getFrequency();
 }
 
@@ -52,17 +59,17 @@ void Si4735Controller::setPower(const bool power) {
 //Turn the radio output on or off and set its function..
 void Si4735Controller::setPower(const bool power, const uint8_t function) {
 	if(power) {
-		uint8_t si_function = POWER_UP_FM;
-		if(function == SUB_AM)
-			si_function = POWER_UP_AM;
-
-		//tuner->setup(reset_pin, si_function);
-		//tuner->radioPowerUp();
-
 		if(function == SUB_FM1)
-			this->tuner->setFM(8400, 10800, parameters->fm1_tune, 10);
+			this->tuner->setFM(parameters->fm_lower_limit, parameters->fm_upper_limit, parameters->fm1_tune, parameters->fm_inc);
 		else if(function == SUB_FM2)
-			this->tuner->setFM(8400, 10800, parameters->fm2_tune, 10);
+			this->tuner->setFM(parameters->fm_lower_limit, parameters->fm_upper_limit, parameters->fm2_tune, parameters->fm_inc);
+		else if(function == SUB_AM)
+			this->tuner->setAM(parameters->am_lower_limit, parameters->am_upper_limit, parameters->am_tune, parameters->am_inc);
+
+		if(function != SUB_AM) {
+			this->tuner->setRdsConfig(3, 3, 3, 3, 3);
+			this->tuner->setFifoCount(1);
+		}
 	} else
 		tuner->powerDown();
 }
@@ -98,10 +105,29 @@ void Si4735Controller::startSeek(const bool seek_up) {
 		tuner->seekStation(0, 1);
 }
 
+//Reset the frequency change timer.
+void Si4735Controller::resetFrequencyChange() {
+	this->last_frequency_change = 0;
+}
+
 //Return whether the tuner is seeking.
 bool Si4735Controller::getSeeking(uint16_t* frequency) {
+	if(no_seek)
+		return false;
+
 	tuner->getStatus(1, 0);
-	return !tuner->getTuneCompleteTriggered();
+	delay(30);
+	*frequency = tuner->getFrequency();
+
+	if(parameters->last_sub == SUB_FM1) {
+		if(parameters->fm1_tune != *frequency)
+			last_frequency_change = 0;
+	} else if(parameters->last_sub == SUB_FM2) {
+		if(parameters->fm2_tune != *frequency)
+			last_frequency_change = 0;
+	}
+
+	return last_frequency_change < 250;
 }
 
 //Fills the parameter list with stereo and RDS data.
@@ -109,10 +135,15 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 	if(setting >= 2) { //AM.
 		return;
 	}
-	
-	parameters->fm_stereo = tuner->getCurrentPilot();
+
+	tuner->getStatus();
+	tuner->getCurrentReceivedSignalQuality();
 
 	tuner->rdsBeginQuery();
+
+	const uint8_t rssi = tuner->getCurrentRSSI();
+	parameters->fm_stereo = rssi > FM_STEREO_THRESH;
+
 	parameters->has_rds = tuner->getRdsReceived();
 
 	if(parameters->has_rds) {
@@ -120,12 +151,32 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 		parameters->rds_station_name = String(c_name);
 
 		const char* c_text = tuner->getRdsProgramInformation();
-		parameters->rds_program_name = String(c_text);
+			
+		if(c_text != NULL) {
+			const String text = String(c_text);
 
-		uint16_t year, month, day, hour, minute;
+			int last_space = text.length();
+			for(int i=1; i < text.length(); i += 1) {
+				const char last_char = text.charAt(i-1);
+				if(text.charAt(i) <= 0x20 && last_char <= 0x20) {
+					last_space = i;
+					break;
+				}
+			}
+
+			parameters->rds_program_name = text.substring(0, last_space);
+		}
+
+		uint16_t year, month, day, hour = parameters->hour, minute = parameters->min;
+		const int16_t last_hour = parameters->hour, last_min = parameters->min;
+
 		if(tuner->getRdsDateTime(&year, &month, &day, &hour, &minute)) {
 			parameters->hour = hour;
 			parameters->min = minute;
+			parameters->minute_timer = 0;
+
+			if(parameters->send_time && parameters->hour >= 0 && parameters->min >= 0 && (parameters->hour != last_hour || parameters->min != last_min))
+				text_handler->sendTime();
 		}
 	}
 }

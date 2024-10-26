@@ -7,6 +7,7 @@
 #include "Parameter_List.h"
 #include "Text_Handler.h"
 #include "Si4735_AidF.h"
+#include "Background_Tune_Handler.h"
 
 #ifndef audio_source_h
 #define audio_source_h
@@ -14,6 +15,7 @@
 #define NO_MENU 0
 #define SOURCE_MENU 1
 #define PRESET_MENU 2
+#define STATION_MENU 3
 
 struct AudioSource {
 	uint8_t source_id, sub_id;
@@ -25,7 +27,7 @@ class SourceHandler {
 		AudioSource* source_list;
 		uint16_t source_count;
 	
-		SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, Si4735Controller* tuner_background, ParameterList* parameter_list, uint16_t source_count);
+		SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, uint16_t source_count);
 		~SourceHandler();
 
 		void sendRadioHandshake();
@@ -54,7 +56,8 @@ class SourceHandler {
 
 		uint16_t current_source = 0;
 		AIBusHandler* ai_handler;
-		Si4735Controller* tuner_main, *tuner_background;
+		Si4735Controller* tuner_main;
+		BackgroundTuneHandler *tuner_background;
 
 		ParameterList* parameter_list;
 
@@ -73,6 +76,7 @@ class SourceHandler {
 		void clearMenu();
 		void createSourceMenu();
 		void createPresetMenu(const uint8_t group);
+		void createStationListMenu();
 
 		void sendManualTuneMessage();
 		

@@ -8,12 +8,15 @@
 #ifndef si4735_aidf_h
 #define si4735_aidf_h
 
+#define FM_STEREO_THRESH 50
+
 class Si4735Controller {
 public:
 	Si4735Controller(const uint8_t reset_pin, const int8_t address_state, AIBusHandler* ai_handler, ParameterList* parameters, TextHandler* text_handler);
 	~Si4735Controller();
 
-	void init();
+	void init1();
+	void init2();
 	void loop();
 
 	uint16_t setFrequency(const uint16_t des_freq);
@@ -25,6 +28,8 @@ public:
 	uint16_t incrementFrequency(const uint8_t count = 1);
 	uint16_t decrementFrequency(const uint8_t count = 1);
 
+	void resetFrequencyChange();
+
 	void getParameters(ParameterList* parameters, const uint8_t setting);
 
 	uint8_t getRSSI();
@@ -34,6 +39,8 @@ public:
 
 	AIBusHandler* getAIHandler();
 	ParameterList* getParameterList();
+
+	bool no_seek = false; //Set to true for background tuner.
 private:
 	AIBusHandler* ai_handler;
 	ParameterList* parameters;
@@ -43,6 +50,8 @@ private:
 
 	uint8_t reset_pin;
 	int8_t address_state = LOW;
+
+	elapsedMillis last_frequency_change = 0;
 };
 
 //String getRDSString(uint16_t* registers);

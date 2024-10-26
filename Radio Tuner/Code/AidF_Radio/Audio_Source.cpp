@@ -1,6 +1,6 @@
 #include "Audio_Source.h"
 
-SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, Si4735Controller* tuner_background, ParameterList* parameter_list, uint16_t source_count) {
+SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, uint16_t source_count) {
 	this->source_count = source_count;
 	this->source_list = new AudioSource[source_count];
 
@@ -264,11 +264,15 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					incrementSource();
 				}
 			} else if((button == 0x24 || button == 0x25) && state == 2) { //Seek up/down.
-				if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id != SUB_AM)				
+				if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id != SUB_AM) {		
 					this->tuner_main->startSeek(button == 0x25);
+					parameter_list->tune_changed = true;
+				}
 			} else if((button == 0x2A || button == 0x2B) && state == 0) { //Left/right buttons.
-				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected) && source_list[current_source].source_id == ID_RADIO)
+				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected) && source_list[current_source].source_id == ID_RADIO) {
 					manualTuneIncrement(button == 0x2B, 1);
+					parameter_list->tune_changed = true;
+				}
 			} else if(button == 0x7 && state == 2) { //Enter button.
 				parameter_list->manual_tune_mode = false;
 				sendManualTuneMessage();
@@ -285,7 +289,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
 				}
 			} else if(button == 0x53 && state == 2) { //Info button.
-				if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && getCurrentSourceID() == ID_RADIO)
+				if(parameter_list->imid_char > 0 && parameter_list->imid_lines == 1 && getCurrentSourceID() == ID_RADIO)
 					parameter_list->info_mode = !parameter_list->info_mode;
 				else
 					parameter_list->info_mode = false;
@@ -442,9 +446,11 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 							parameter_list->am_tune = tuner_main->getFrequency();
 
 						parameter_list->preferred_preset = preset + 1;
+						parameter_list->tune_changed = true;
 					} else if(state == 1) { //Save preset.
 						savePreset(tuner_main->getFrequency(), preset, group);
 						parameter_list->preferred_preset = preset + 1;
+						parameter_list->tune_changed = true;
 					}
 				}
 			}
@@ -455,6 +461,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			if(ai_d->data[1] == 0x7) { //Function knob.
 				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected) && source_list[current_source].source_id == ID_RADIO) {
 					manualTuneIncrement(clockwise, steps);
+					parameter_list->tune_changed = true;
 				}
 			}
 		}
@@ -491,6 +498,10 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						if(menu_open == NO_MENU)
 							createPresetMenu(source_list[current_source].sub_id);
 						break;
+					case 4: //Station list.
+						if(menu_open == NO_MENU)
+							createStationListMenu();
+						break;
 					}
 				} else if(source_id != 0 && source_id != ID_RADIO) {
 					AIData forward_msg(ai_d->l, ID_RADIO, source_id);
@@ -506,6 +517,30 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					const uint8_t new_id = source_list[selection].source_id, new_sub = source_list[selection].sub_id;
 					clearMenu();
 					setCurrentSource(new_id, new_sub);
+				} else if(menu_open == PRESET_MENU) {
+					if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
+						const uint8_t group = source_list[current_source].sub_id;
+						uint16_t freq = tuner_main->getFrequency();
+						const uint8_t preset = selection + 1;
+						if(group == SUB_FM1)
+							freq = parameter_list->fm1_presets[preset];
+						else if(group == SUB_FM2)
+							freq = parameter_list->fm2_presets[preset];
+						else if(group == SUB_AM)
+							freq = parameter_list->am_presets[preset];
+
+						tuner_main->setFrequency(freq);
+						if(group == SUB_FM1)
+							parameter_list->fm1_tune = tuner_main->getFrequency();
+						else if(group == SUB_FM2)
+							parameter_list->fm2_tune = tuner_main->getFrequency();
+						else if(group == SUB_AM)
+							parameter_list->am_tune = tuner_main->getFrequency();
+
+						parameter_list->preferred_preset = preset + 1;
+						parameter_list->tune_changed = true;
+					}
+					clearMenu();
 				}
 				return true;
 			} else if(ai_d->data[1] == 0x4A) {
@@ -754,6 +789,7 @@ void SourceHandler::clearMenu() {
 			}
 		}
 	}
+	tuner_background->setSeekMode(true);
 }
 
 //Create the source menu.
@@ -913,6 +949,83 @@ void SourceHandler::createPresetMenu(const uint8_t group) {
 	ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = PRESET_MENU;
+}
+
+//Create the station list menu.
+void SourceHandler::createStationListMenu() {
+	String station_list[MAXIMUM_FREQUENCY_COUNT];
+	const int station_count = tuner_background->getStationNames(station_list);
+
+	if(station_count <= 0)
+		return;
+
+	String source_title = F("Stations");
+	uint8_t source_data[12 + source_title.length()];
+
+	const uint16_t width = parameter_list->screen_w;
+
+	source_data[0] = 0x2B;
+	source_data[1] = 0x5A;
+	source_data[2] = station_count&0xFF;
+	source_data[3] = station_count&0xFF;
+	source_data[4] = 0x0;
+	source_data[5] = 0x0;
+	source_data[6] = 0x0;
+	source_data[7] = 0x8C;
+	source_data[8] = (width&0xFF00)>>8;
+	source_data[9] = width&0xFF;
+	source_data[10] = 0x0;
+	source_data[11] = 0x23;
+	for(uint8_t i=0;i<source_title.length();i+=1)
+		source_data[i+12] = uint8_t(source_title.charAt(i));
+
+	AIData menu_header(sizeof(source_data), ID_RADIO, ID_NAV_COMPUTER);
+	menu_header.refreshAIData(source_data);
+	bool ack = ai_handler->writeAIData(&menu_header);
+
+	if(!ack)
+		return;
+
+	//Confirm that the nav computer does not respond with a "no menu" message.
+	elapsedMillis no_draw;
+	while(no_draw < 50) {
+		AIData no_msg;
+		if(ai_handler->readAIData(&no_msg)) {
+			if(no_msg.receiver == ID_RADIO && no_msg.sender == ID_NAV_COMPUTER &&
+											no_msg.l >= 2 &&
+											no_msg.data[0] == 0x2B && no_msg.data[1] == 0x40) { //No menu message.
+				ai_handler->sendAcknowledgement(ID_RADIO, ID_NAV_COMPUTER);
+				return;
+			} else if(no_msg.receiver == ID_RADIO) {
+				ai_handler->sendAcknowledgement(ID_RADIO, no_msg.sender);
+				ai_handler->cacheMessage(&no_msg);
+			}
+		}
+	}
+
+	tuner_background->setSeekMode(false);
+
+	for(int i=0;i<station_count;i+=1) {
+		String station_name = station_list[i];
+
+		uint8_t option_data[3 + station_name.length()];
+		option_data[0] = 0x2B;
+		option_data[1] = 0x51;
+		option_data[2] = i&0xFF;
+		for(uint8_t j=0;j<station_name.length();j+=1)
+			option_data[j+3] = uint8_t(station_name.charAt(j));
+
+		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
+		option_msg.refreshAIData(option_data);
+		ai_handler->writeAIData(&option_msg);
+	}
+
+	uint8_t display_data[] = {0x2B, 0x52, 0x1};
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
+	display_msg.refreshAIData(display_data);
+	ack = ai_handler->writeAIData(&display_msg);
+	if(ack)
+		menu_open = STATION_MENU;
 }
 
 //Set the current source to the desired ID and sub ID.

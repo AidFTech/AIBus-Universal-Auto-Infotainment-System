@@ -252,7 +252,7 @@ impl<'a> MirrorHandler<'a> {
 		let mut android_icon_msg = get_sendfile_message("/etc/oem_icon.png".to_string(), android_icon_data);
 		self.usb_conn.write_message(android_icon_msg.get_mirror_message());
 		
-		//Send BMW_icon.png...
+		//Send AidF Apple.png...
 		let mut carplay_icon_file = match File::open(Path::new("AidF Apple.png")) {
 			Ok(file) => file,
 			Err(err) => {
@@ -272,7 +272,11 @@ impl<'a> MirrorHandler<'a> {
 			}
 		};
 		
-		let mut carplay_icon_msg = get_sendfile_message("/etc/icon_120x120.png".to_string(), carplay_icon_data);
+		let mut carplay_icon_msg = get_sendfile_message("/etc/icon_120x120.png".to_string(), carplay_icon_data.clone());
+		self.usb_conn.write_message(carplay_icon_msg.get_mirror_message());
+		carplay_icon_msg = get_sendfile_message("/etc/icon_180x180.png".to_string(), carplay_icon_data.clone());
+		self.usb_conn.write_message(carplay_icon_msg.get_mirror_message());
+		carplay_icon_msg = get_sendfile_message("/etc/icon_256x256.png".to_string(), carplay_icon_data);
 		self.usb_conn.write_message(carplay_icon_msg.get_mirror_message());
 	}
 
