@@ -1,9 +1,7 @@
 #include "Si4735_AidF.h"
 
-Si4735Controller::Si4735Controller(const uint8_t reset_pin, const int8_t address_state, AIBusHandler* ai_handler, ParameterList* parameters, TextHandler* text_handler) {
-	this->ai_handler = ai_handler;
+Si4735Controller::Si4735Controller(const uint8_t reset_pin, const int8_t address_state, ParameterList* parameters) {
 	this->parameters = parameters;
-	this->text_handler = text_handler;
 
 	this->reset_pin = reset_pin;
 	this->address_state = address_state;
@@ -103,6 +101,8 @@ void Si4735Controller::startSeek(const bool seek_up) {
 		tuner->seekStation(1, 1);
 	else
 		tuner->seekStation(0, 1);
+
+	seeking = true;
 }
 
 //Reset the frequency change timer.
@@ -112,9 +112,9 @@ void Si4735Controller::resetFrequencyChange() {
 
 //Return whether the tuner is seeking.
 bool Si4735Controller::getSeeking(uint16_t* frequency) {
-	if(no_seek)
+	if(!seeking)
 		return false;
-
+	
 	tuner->getStatus(1, 0);
 	delay(30);
 	*frequency = tuner->getFrequency();
@@ -127,7 +127,10 @@ bool Si4735Controller::getSeeking(uint16_t* frequency) {
 			last_frequency_change = 0;
 	}
 
-	return last_frequency_change < 250;
+	if(last_frequency_change > 250)
+		seeking = false;
+
+	return seeking;
 }
 
 //Fills the parameter list with stereo and RDS data.
@@ -147,25 +150,9 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 	parameters->has_rds = tuner->getRdsReceived();
 
 	if(parameters->has_rds) {
-		const char* c_name = tuner->getRdsStationName();
-		parameters->rds_station_name = String(c_name);
+		getCallsign(&parameters->rds_station_name);
 
-		const char* c_text = tuner->getRdsProgramInformation();
-			
-		if(c_text != NULL) {
-			const String text = String(c_text);
-
-			int last_space = text.length();
-			for(int i=1; i < text.length(); i += 1) {
-				const char last_char = text.charAt(i-1);
-				if(text.charAt(i) <= 0x20 && last_char <= 0x20) {
-					last_space = i;
-					break;
-				}
-			}
-
-			parameters->rds_program_name = text.substring(0, last_space);
-		}
+		getRdsInfo(&parameters->rds_program_name, false);
 
 		uint16_t year, month, day, hour = parameters->hour, minute = parameters->min;
 		const int16_t last_hour = parameters->hour, last_min = parameters->min;
@@ -174,15 +161,83 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 			parameters->hour = hour;
 			parameters->min = minute;
 			parameters->minute_timer = 0;
-
-			if(parameters->send_time && parameters->hour >= 0 && parameters->min >= 0 && (parameters->hour != last_hour || parameters->min != last_min))
-				text_handler->sendTime();
 		}
 	}
 }
 
-AIBusHandler* Si4735Controller::getAIHandler() {
-	return this->ai_handler;
+//Fill string rds with RDS program info. Return true if successful.
+bool Si4735Controller::getRdsInfo(String* rds) {
+	return getRdsInfo(rds, true);
+}
+
+//Fill string rds with callsign. 
+bool Si4735Controller::getCallsign(String* rds) {
+	const uint8_t status_request_bytes[] = {0x4};
+	tuner->sendCommand(FM_RDS_STATUS, sizeof(status_request_bytes), status_request_bytes);
+
+	uint8_t status_response_bytes[12];
+	tuner->getCommandResponse(sizeof(status_response_bytes), status_response_bytes);
+
+	if((status_response_bytes[0]&0x11) == 0)
+		return false;
+	
+	uint16_t rds_a = (status_response_bytes[4]<<8) | status_response_bytes[5];
+	
+	//TODO: Station names outside the US.
+	//Thanks to: https://www.fmsystems-inc.com/rds-pi-code-formula-station-callsigns/
+	if(rds_a < 4096)
+		return false;
+	
+	if(rds_a >= 21672) {
+		rds_a -= 21672;
+		*rds = "W";
+	} else {
+		rds_a -= 4096;
+		*rds = "K";
+	}
+
+	const char callsign_letters[] = {rds_a/(26*26) + 'A', (rds_a/26)%26 + 'A', rds_a%26 + 'A', '\0'};
+	*rds += callsign_letters;
+
+	return true;
+}
+
+//Fill string rds with RDS program info. Return true if successful.
+bool Si4735Controller::getRdsInfo(String* rds, const bool init) {
+	if(init){
+		tuner->rdsBeginQuery();
+
+		if(!tuner->getRdsReceived())
+			return false;
+	}
+
+	const char* c_text = tuner->getRdsProgramInformation();
+			
+	if(c_text != NULL) {
+		const String text = String(c_text);
+
+		int last_space = text.length();
+		for(int i=text.length() - 1; i >= 0; i -= 1) {
+			bool space_found = false;
+
+			if(text.charAt(i) > 0x20) {
+				last_space = i+1;
+				space_found = true;
+			}
+
+			if(space_found)
+				break;
+		}
+
+		*rds = text.substring(0, last_space);
+		return true;
+	}
+	return false;
+}
+
+//Clear the internal RDS buffers.
+void Si4735Controller::clearRds() {
+	tuner->clearRdsBuffer();
 }
 
 ParameterList* Si4735Controller::getParameterList() {

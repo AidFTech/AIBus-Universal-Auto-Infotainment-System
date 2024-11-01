@@ -33,6 +33,10 @@ pub struct MirrorHandler<'a> {
 
 	enter_hold: bool,
 	home_hold: bool,
+
+	config_data: Vec<u8>,
+	android_icon_data: Vec<u8>,
+	carplay_icon_data: Vec<u8>,
 }
 
 impl<'a> MirrorHandler<'a> {
@@ -68,6 +72,60 @@ impl<'a> MirrorHandler<'a> {
 			}
 		}
 
+		//Load airplay.conf...
+		let mut config_data = Vec::new();
+		match File::open(Path::new("airplay.conf")) {
+			Ok(mut file) => {
+				match file.read_to_end(&mut config_data) {
+					Ok(_) => {
+		
+					}
+					Err(err) => {
+						println!("Error reading file: {}", err);
+					}
+				};
+			}
+			Err(err) => {
+				println!("Error opening file: {}", err);
+			}
+		};
+		
+		//Load AidF Android.png...
+		let mut android_icon_data: Vec<u8> = Vec::new();
+		match File::open(Path::new("AidF Android.png")) {
+			Ok(mut file) => {
+				match file.read_to_end(&mut android_icon_data) {
+					Ok(_) => {
+		
+					}
+					Err(err) => {
+						println!("Error reading file: {}", err);
+					}
+				};
+			}
+			Err(err) => {
+				println!("Error opening file: {}", err);
+			}
+		};
+		
+		//Send AidF Apple.png...
+		let mut carplay_icon_data: Vec<u8> = Vec::new();
+		match File::open(Path::new("AidF Apple.png")) {
+			Ok(mut file) => {
+				match file.read_to_end(&mut carplay_icon_data) {
+					Ok(_) => {
+		
+					}
+					Err(err) => {
+						println!("Error reading file: {}", err);
+					}
+				};
+			}
+			Err(err) => {
+				println!("Error opening file: {}", err);
+			}
+		};
+
 		return MirrorHandler {
 			context,
 			usb_conn: USBConnection::new(),
@@ -80,6 +138,10 @@ impl<'a> MirrorHandler<'a> {
 
 			enter_hold: false,
 			home_hold: false,
+
+			config_data,
+			android_icon_data,
+			carplay_icon_data,
 		};
 	}
 
@@ -206,77 +268,17 @@ impl<'a> MirrorHandler<'a> {
 		self.usb_conn.write_message(dongle_message_android.get_mirror_message());
 		self.usb_conn.write_message(dongle_message_open);
 		
-		//Send airplay.conf...
-		let mut config_file = match File::open(Path::new("airplay.conf")) {
-			Ok(file) => file,
-			Err(err) => {
-				println!("Error opening file: {}", err);
-				return;
-			}
-		};
-		
-		let mut config_data = Vec::new();
-		match config_file.read_to_end(&mut config_data) {
-			Ok(_) => {
-
-			}
-			Err(err) => {
-				println!("Error reading file: {}", err);
-				return;
-			}
-		};
-		
-		let mut config_msg = get_sendfile_message("/etc/airplay.conf".to_string(), config_data);
+		let mut config_msg = get_sendfile_message("/etc/airplay.conf".to_string(), self.config_data.clone());
 		self.usb_conn.write_message(config_msg.get_mirror_message());
-		
-		//Send AidF Android.png...
-		let mut android_icon_file = match File::open(Path::new("AidF Android.png")) {
-			Ok(file) => file,
-			Err(err) => {
-				println!("Error opening file: {}", err);
-				return;
-			}
-		};
 
-		let mut android_icon_data: Vec<u8> = Vec::new();
-		match android_icon_file.read_to_end(&mut android_icon_data) {
-			Ok(_) => {
-
-			}
-			Err(err) => {
-				println!("Error reading file: {}", err);
-				return;
-			}
-		};
-
-		let mut android_icon_msg = get_sendfile_message("/etc/oem_icon.png".to_string(), android_icon_data);
+		let mut android_icon_msg = get_sendfile_message("/etc/oem_icon.png".to_string(), self.android_icon_data.clone());
 		self.usb_conn.write_message(android_icon_msg.get_mirror_message());
 		
-		//Send AidF Apple.png...
-		let mut carplay_icon_file = match File::open(Path::new("AidF Apple.png")) {
-			Ok(file) => file,
-			Err(err) => {
-				println!("Error opening file: {}", err);
-				return;
-			}
-		};
-		
-		let mut carplay_icon_data: Vec<u8> = Vec::new();
-		match carplay_icon_file.read_to_end(&mut carplay_icon_data) {
-			Ok(_) => {
-
-			}
-			Err(err) => {
-				println!("Error reading file: {}", err);
-				return;
-			}
-		};
-		
-		let mut carplay_icon_msg = get_sendfile_message("/etc/icon_120x120.png".to_string(), carplay_icon_data.clone());
+		let mut carplay_icon_msg = get_sendfile_message("/etc/icon_120x120.png".to_string(), self.carplay_icon_data.clone());
 		self.usb_conn.write_message(carplay_icon_msg.get_mirror_message());
-		carplay_icon_msg = get_sendfile_message("/etc/icon_180x180.png".to_string(), carplay_icon_data.clone());
+		carplay_icon_msg = get_sendfile_message("/etc/icon_180x180.png".to_string(), self.carplay_icon_data.clone());
 		self.usb_conn.write_message(carplay_icon_msg.get_mirror_message());
-		carplay_icon_msg = get_sendfile_message("/etc/icon_256x256.png".to_string(), carplay_icon_data);
+		carplay_icon_msg = get_sendfile_message("/etc/icon_256x256.png".to_string(), self.carplay_icon_data.clone());
 		self.usb_conn.write_message(carplay_icon_msg.get_mirror_message());
 	}
 

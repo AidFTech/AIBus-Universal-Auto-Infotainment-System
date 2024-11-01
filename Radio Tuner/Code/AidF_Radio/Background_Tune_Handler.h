@@ -11,20 +11,21 @@
 
 #define MAXIMUM_FREQUENCY_COUNT 32
 
-#define SEEK_TIME 500
+#define SEEK_TIME 2000
 
 class BackgroundTuneHandler {
 	public:
-		BackgroundTuneHandler(Si4735Controller* br_tuner, ParameterList* parameter_list);
+		BackgroundTuneHandler(Si4735Controller* br_tuner, ParameterList* parameters);
 		~BackgroundTuneHandler();
 
 		void loop();
 		void setSeekMode(const bool seek);
 
 		int getStationNames(String* names);
+		uint16_t getStationFrequency(const int index);
 	private:
 		Si4735Controller* br_tuner;
-		ParameterList* parameter_list, *br_parameter_list;
+		ParameterList* parameter_list;
 		
 		uint16_t freq_list[MAXIMUM_FREQUENCY_COUNT];
 		Vector<uint16_t> freq_list_vec;
@@ -39,7 +40,11 @@ class BackgroundTuneHandler {
 
 		bool station_seek = true; //True if stations should be seeked.
 
+		int rssi_mean = 0, rssi_count = 0;
+		String rds = "";
+
 		elapsedMillis seek_timer;
+		unsigned long seek_timer_limit = SEEK_TIME;
 		
 		void addFrequency(const uint16_t freq, String station_name);
 };

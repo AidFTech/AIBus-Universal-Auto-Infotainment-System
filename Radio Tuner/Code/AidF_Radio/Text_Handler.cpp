@@ -411,25 +411,36 @@ void splitText(const uint16_t len, String text, String* sub_text, const int num)
 				i -= 1;
 			}
 		}
+
+		text += " ";
 	}
 
 	for(int i=0;i<num;i+=1) {
 		if(text.length() > 0) {
 			int last_space = -1, space = -1;
+
+			if(text.charAt(0) == ' ')
+				text.remove(0);
 			
 			do {
 				last_space = space;
 				space = text.indexOf(' ', last_space + 1);
 				
-				if(space >= len || space < 0 || space <= last_space + 1)
+				if(space >= len || space < 0 || space >= text.length() - 1)
 					break;
 			} while(space >= 0);
+
+			if(space >= text.length() - 1 && i >= num - 1)
+				text.remove(text.length() - 1);
 			
-			if(last_space >= 0 && last_space < len && space >= len) {
+			if(last_space >= 0 && last_space < len && space > len) {
 				sub_text[i] = text.substring(0, last_space);
 				text = text.substring(last_space + 1, text.length());
+			} else if(space == len) {
+				sub_text[i] = text.substring(0,len);
+				text = text.substring(len + 1,text.length());
 			} else {
-				if(text.length() > len) {
+				if(text.length() >= len) {
 					sub_text[i] = text.substring(0,len);
 					text = text.substring(len,text.length());
 				} else {

@@ -9,6 +9,8 @@
 #include "Si4735_AidF.h"
 #include "Background_Tune_Handler.h"
 
+#include "Radio_EEPROM.h"
+
 #ifndef audio_source_h
 #define audio_source_h
 
@@ -74,6 +76,7 @@ class SourceHandler {
 		bool sendSourceQuery(const uint8_t source);
 
 		void clearMenu();
+		bool createMenu(const String title, const int items);
 		void createSourceMenu();
 		void createPresetMenu(const uint8_t group);
 		void createStationListMenu();

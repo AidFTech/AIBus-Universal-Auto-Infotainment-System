@@ -12,6 +12,8 @@
 #include "Volume_Handler.h"
 #include "Background_Tune_Handler.h"
 
+#include "Radio_EEPROM.h"
+
 #ifdef __AVR_ATmegax09__
 #define AI_RX PIN_PA7
 #define FM1_EN PIN_PB0
@@ -78,6 +80,8 @@
 
 #define DISPLAY_INFO_TIMER 750
 #define IMID_TIMER 300
+
+#define RDS_SEGMENT_COUNT 12
 #define RDS_IMID_TIMER 3000
 
 ParameterList parameters;
@@ -94,9 +98,9 @@ MCP4251 fade_controller(FADE_CS, 10000, 0, 10000, 0);
 
 VolumeHandler volume_handler(&vol_controller, &treble_controller, &bass_controller, &fade_controller, &parameters, &aibus_handler);
 
-Si4735Controller tuner1(TUNER_RESET, HIGH, &aibus_handler, &parameters, &text_handler), tuner2(TUNER_RESET, LOW, &aibus_handler, &parameters, &text_handler);
-BackgroundTuneHandler background_tuner(&tuner2, &parameters);
-SourceHandler source_handler(&aibus_handler, &tuner1, &background_tuner, &parameters, SOURCE_COUNT);
+Si4735Controller tuner(TUNER_RESET, HIGH, &parameters), br_tuner(TUNER_RESET, LOW, &parameters);
+BackgroundTuneHandler background_tuner(&br_tuner, &parameters);
+SourceHandler source_handler(&aibus_handler, &tuner, &background_tuner, &parameters, SOURCE_COUNT);
 
 elapsedMillis aibus_timer, source_text_timer;
 elapsedMillis src_ping_timer, computer_ping_timer, parameter_timer, screen_ping_timer;
@@ -113,6 +117,8 @@ elapsedMillis rds_imid_timer;
 int rds_imid_index = 0;
 
 bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
+
+String rds_program_split[12];
 
 //Arduino setup function.
 void setup() {
@@ -153,22 +159,34 @@ void setup() {
 
 	AISerial.begin(AI_BAUD);
 	Wire.begin();
-	
-	tuner1.init1();
-	tuner2.init1();
-	tuner1.init2();
-	tuner2.init2();
-	tuner2.no_seek = true;
 
-	parameters.fm1_tune = tuner1.getFrequency();
-	parameters.fm2_tune = tuner1.getFrequency();
+	tuner.init1();
+	br_tuner.init1();
+	tuner.init2();
+	br_tuner.init2();
 
-	//TODO: Load in presets from radio.
-	for(int i=0;i<sizeof(parameters.fm1_presets)/sizeof(uint16_t);i+=1)
-		parameters.fm1_presets[i] = parameters.fm1_tune;
+	br_tuner.setPower(true, SUB_FM1);
 
-	for(int i=0;i<sizeof(parameters.fm2_presets)/sizeof(uint16_t);i+=1)
-		parameters.fm2_presets[i] = parameters.fm2_tune;
+	parameters.fm1_tune = tuner.getFrequency();
+	parameters.fm2_tune = tuner.getFrequency();
+	parameters.am_tune = parameters.am_start;
+
+	getEEPROMPresets(&parameters);
+	for(int i=0;i<sizeof(parameters.fm1_presets)/sizeof(uint16_t);i+=1) { 
+		if(parameters.fm1_presets[i] < parameters.fm_lower_limit || parameters.fm1_presets[i] > parameters.fm_upper_limit)
+			parameters.fm1_presets[i] = parameters.fm1_tune;
+	}
+
+	for(int i=0;i<sizeof(parameters.fm2_presets)/sizeof(uint16_t);i+=1) {
+		if(parameters.fm2_presets[i] < parameters.fm_lower_limit || parameters.fm2_presets[i] > parameters.fm_upper_limit)
+			parameters.fm2_presets[i] = parameters.fm2_tune;
+	}
+
+	for(int i=0;i<sizeof(parameters.am_presets)/sizeof(uint16_t);i+=1) {
+		if(parameters.am_presets[i] < parameters.am_lower_limit || parameters.am_presets[i] > parameters.am_upper_limit)
+			parameters.am_presets[i] = parameters.am_tune;
+	}
+	setEEPROMPresets(&parameters);
 
 	parameters.handshake_sources.setStorage(parameters.handshake_source_list, 0);
 
@@ -242,6 +260,8 @@ void loop() {
 
 	const uint8_t last_preset = parameters.current_preset;
 
+	const int8_t last_hour = parameters.hour, last_min = parameters.min;
+
 	const bool last_phone = parameters.phone_active;
 
 	AIData msg;
@@ -292,7 +312,7 @@ void loop() {
 			if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
 				aibus_handler.writeAIData(&function_msg);
 			else if(function_msg.receiver == ID_RADIO && current_source_id != ID_RADIO)
-				tuner1.setPower(false);
+				tuner.setPower(false);
 			
 			setSourceName();
 			
@@ -343,7 +363,7 @@ void loop() {
 			if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
 				aibus_handler.writeAIData(&function_msg);
 			else if(function_msg.receiver == ID_RADIO)
-				tuner1.setPower(false);
+				tuner.setPower(false);
 			
 			if(!last_phone)
 				text_handler.createPhoneWindow();
@@ -398,12 +418,9 @@ void loop() {
 
 	}
 
-	//background_tuner.loop();
-
 	do {
 		if(source_handler.getCurrentSourceID() == ID_RADIO) {
-			tuner1.loop();
-			//tuner2.loop();
+			tuner.loop();
 			
 			const bool last_stereo = parameters.fm_stereo;
 			const uint16_t current_source = source_handler.getCurrentSource();
@@ -485,44 +502,38 @@ void loop() {
 				text_handler.sendTunedFrequencyMessage(parameters.current_preset, *current_frequency, sub_id != SUB_AM, true);
 
 				text_handler.sendLongRDSMessage(current_rds);
-				text_handler.sendIMIDRDSMessage(parameters.rds_program_split[rds_imid_index]);
+				text_handler.sendIMIDRDSMessage(rds_program_split[rds_imid_index]);
 			}
 
 			if(info_timer_enabled && info_timer > DISPLAY_INFO_TIMER && parameters.info_mode) {
 				info_timer_enabled = false;
 				rds_imid_index = 0;
 				rds_imid_timer = 0;
-				text_handler.sendIMIDInfoMessage(parameters.rds_program_split[rds_imid_index]);
+				text_handler.sendIMIDInfoMessage(rds_program_split[rds_imid_index]);
 			}
 			
 			if(sub_id == SUB_FM1 || sub_id == SUB_FM2) {
-				const bool seeking = tuner1.getSeeking(current_frequency);
+				const bool seeking = tuner.getSeeking(current_frequency);
 				if(!seeking && (parameter_timer >= PARAMETER_DELAY)) {
 					parameter_timer = 0;
 
-					const String last_rds = parameters.rds_program_name;
-					tuner1.getParameters(&parameters, sub_id);
-					if(*current_frequency != tuner1.getFrequency()) {
-						*current_frequency = tuner1.getFrequency();
+					const String last_rds = parameters.rds_program_name, last_station_name = parameters.rds_station_name;
+					tuner.getParameters(&parameters, sub_id);
+					if(*current_frequency != tuner.getFrequency()) {
+						*current_frequency = tuner.getFrequency();
 						parameters.tune_changed = true;
 					}
-
-					//if(parameters.ai_pending)
-					//	break;
 
 					if(parameters.fm_stereo != last_stereo) {
 						text_handler.sendStereoMessage(parameters.fm_stereo);
 						parameter_timer = 0;
 					}
 
-					if(aibus_handler.dataAvailable() > 0)
-						parameters.ai_pending = true;
-
-					if(parameters.ai_pending)
-						break;
-
 					String current_rds = parameters.rds_program_name;
 					if(parameters.has_rds && current_rds.compareTo(last_rds) != 0) {
+						if(current_rds.substring(0,8).indexOf(last_rds.substring(0,8)) < 0)
+							tuner.clearRds();
+
 						text_handler.sendLongRDSMessage(current_rds);
 						
 						uint8_t rds_char = parameters.imid_char;
@@ -530,37 +541,43 @@ void loop() {
 							rds_char = 8;
 
 						for(int i=0;i<12;i+=1)
-							parameters.rds_program_split[i] = "";
+							rds_program_split[i] = "";
 
-						splitText(rds_char, current_rds, parameters.rds_program_split, 12);
+						splitText(rds_char, current_rds, rds_program_split, 12);
 						
-						text_handler.sendIMIDRDSMessage(parameters.rds_program_split[rds_imid_index]);
+						text_handler.sendIMIDRDSMessage(rds_program_split[rds_imid_index]);
 						rds_imid_timer = 0;
 
 						if(parameters.info_mode && !info_timer_enabled)
-							text_handler.sendIMIDInfoMessage(parameters.rds_program_split[rds_imid_index]);
+							text_handler.sendIMIDInfoMessage(rds_program_split[rds_imid_index]);
 
 						parameter_timer = 0;
+					}
+				
+					if(parameters.has_rds && parameters.rds_station_name.compareTo(last_station_name) != 0) {
+						AIData station_name = getTextMessage(parameters.rds_station_name, 1, 1);
+						station_name.data[1] |= 0x10;
+						aibus_handler.writeAIData(&station_name, parameters.computer_connected);
 					}
 				}
 
 				if(rds_imid_timer > RDS_IMID_TIMER) {
 					rds_imid_timer = 0;
-					const int old_len = parameters.rds_program_split[rds_imid_index].length();
+					const int old_len = rds_program_split[rds_imid_index].length();
 
 					if(rds_imid_index < 12)
 						rds_imid_index += 1;
 					else
 						rds_imid_index = 0;
 
-					if(parameters.rds_program_split[rds_imid_index].length() <= 0)
+					if(rds_program_split[rds_imid_index].length() <= 0)
 						rds_imid_index = 0;
 
-					if(parameters.rds_program_split[rds_imid_index].length() > 0 && old_len != 0) {
+					if(rds_program_split[rds_imid_index].length() > 0 && old_len != 0) {
 						if(parameters.info_mode && !info_timer_enabled)
-							text_handler.sendIMIDInfoMessage(parameters.rds_program_split[rds_imid_index]);
+							text_handler.sendIMIDInfoMessage(rds_program_split[rds_imid_index]);
 						else
-							text_handler.sendIMIDRDSMessage(parameters.rds_program_split[rds_imid_index]);
+							text_handler.sendIMIDRDSMessage(rds_program_split[rds_imid_index]);
 					}
 				}
 			}
@@ -600,9 +617,6 @@ void loop() {
 
 				text_handler.sendTunedFrequencyMessage(current_preset, *current_frequency, sub_id != SUB_AM, true);
 			}
-
-			//if(parameters.ai_pending)
-			//	break;
 			
 			break;
 		} else if(source_handler.getCurrentSourceID() != 0) {
@@ -612,17 +626,19 @@ void loop() {
 		}
 	} while(false);
 
-	if(!parameters.ai_pending) {
-		if(src_ping_timer >= SOURCE_PING_DELAY)
-			pingActiveSource();
+	if(src_ping_timer >= SOURCE_PING_DELAY)
+		pingActiveSource();
 
-		if(!parameters.computer_connected && computer_ping_timer >= COMPUTER_PING_DELAY)
-			pingComputer();
+	if(!parameters.computer_connected && computer_ping_timer >= COMPUTER_PING_DELAY)
+		pingComputer();
 
-		if(screen_ping_timer >= SCREEN_PING_DELAY)
-			getScreenControlRequest(!parameters.computer_connected || parameters.manual_tune_mode);
-	} else
-		parameters.ai_pending = false;
+	if(screen_ping_timer >= SCREEN_PING_DELAY)
+		getScreenControlRequest(!parameters.computer_connected || parameters.manual_tune_mode);
+
+	background_tuner.loop();
+
+	if(parameters.send_time && parameters.hour >= 0 && parameters.min >= 0 && (parameters.hour != last_hour || parameters.min != last_min))
+		text_handler.sendTime();
 }
 
 //Interpret a received AIBus message.
@@ -732,16 +748,16 @@ void sendTunedFrequencyMessage(const uint8_t sub_id) {
 //Set the tuner frequency to a pre-set value based on the active sub-id.
 void setTunerFrequency(const uint8_t sub_id) {
 	if(sub_id == 0) {
-		tuner1.setPower(true, SUB_FM1);
-		parameters.fm1_tune = tuner1.setFrequency(parameters.fm1_tune);
+		tuner.setPower(true, SUB_FM1);
+		parameters.fm1_tune = tuner.setFrequency(parameters.fm1_tune);
 	} else if(sub_id == 1) {
-		tuner1.setPower(true, SUB_FM2);
-		parameters.fm2_tune = tuner1.setFrequency(parameters.fm2_tune);
+		tuner.setPower(true, SUB_FM2);
+		parameters.fm2_tune = tuner.setFrequency(parameters.fm2_tune);
 	} else if(sub_id == 2) {
-		tuner1.setPower(true, SUB_AM);
-		parameters.am_tune = tuner1.setFrequency(parameters.am_tune);
+		tuner.setPower(true, SUB_AM);
+		parameters.am_tune = tuner.setFrequency(parameters.am_tune);
 	} else
-		tuner1.setPower(false);
+		tuner.setPower(false);
 	
 	parameter_timer = PARAMETER_DELAY;
 }
@@ -859,7 +875,7 @@ double getSpeed(AIData* msg) {
 //Clear RDS and stereo indicator.
 void clearFMData() {
 	const bool last_stereo = parameters.fm_stereo;
-	const String last_rds = parameters.rds_program_name;
+	const String last_rds = parameters.rds_program_name, last_station_name = parameters.rds_station_name;
 	
 	parameters.fm_stereo = false;
 	
@@ -868,11 +884,20 @@ void clearFMData() {
 	
 	parameters.rds_program_name = "";
 	for(int i=0;i<12;i+=1)
-		parameters.rds_program_split[i] = "";
+		rds_program_split[i] = "";
 	
 	if(parameters.rds_program_name.compareTo(last_rds) != 0) {
 		text_handler.sendLongRDSMessage("");
 		text_handler.sendIMIDRDSMessage("");
+	}
+
+	parameters.rds_station_name = "";
+	if(parameters.rds_station_name.compareTo(last_station_name) != 0) {
+		uint8_t clear_data[] = {0x20, 0x71, 0x1};
+		AIData clear_msg(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER);
+		clear_msg.refreshAIData(clear_data);
+
+		aibus_handler.writeAIData(&clear_msg, parameters.computer_connected);
 	}
 }
 

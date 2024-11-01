@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <Arduino.h>
 #include <Vector.h>
+#include <elapsedMillis.h>
 
 #include "AIBus.h"
 
@@ -41,7 +42,6 @@ struct ParameterList {
 
 	int8_t rds_index = -1;
 	String rds_station_name, rds_program_name;
-	String rds_program_split[12];
 
 	uint8_t last_sub = 0;
 
@@ -56,8 +56,6 @@ struct ParameterList {
 	bool phone_active = false, digital_amp = false;
 
 	uint16_t screen_w = 800, screen_h = 480;
-
-	bool ai_pending = false;
 };
 
 #endif

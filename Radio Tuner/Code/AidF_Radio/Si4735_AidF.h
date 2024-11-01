@@ -1,7 +1,6 @@
 #include <stdint.h>
 #include <SI4735.h>
 
-#include "AIBus_Handler.h"
 #include "Parameter_List.h"
 #include "Text_Handler.h"
 
@@ -12,7 +11,7 @@
 
 class Si4735Controller {
 public:
-	Si4735Controller(const uint8_t reset_pin, const int8_t address_state, AIBusHandler* ai_handler, ParameterList* parameters, TextHandler* text_handler);
+	Si4735Controller(const uint8_t reset_pin, const int8_t address_state, ParameterList* parameters);
 	~Si4735Controller();
 
 	void init1();
@@ -31,27 +30,27 @@ public:
 	void resetFrequencyChange();
 
 	void getParameters(ParameterList* parameters, const uint8_t setting);
+	bool getRdsInfo(String* rds);
+	bool getCallsign(String* rds);
+	void clearRds();
 
 	uint8_t getRSSI();
 
 	void startSeek(const bool seek_up);
 	bool getSeeking(uint16_t* frequency);
 
-	AIBusHandler* getAIHandler();
 	ParameterList* getParameterList();
-
-	bool no_seek = false; //Set to true for background tuner.
 private:
-	AIBusHandler* ai_handler;
 	ParameterList* parameters;
-	TextHandler* text_handler;
-
 	SI4735* tuner;
 
 	uint8_t reset_pin;
 	int8_t address_state = LOW;
 
 	elapsedMillis last_frequency_change = 0;
+	bool seeking = false;
+
+	bool getRdsInfo(String* rds, const bool init);
 };
 
 //String getRDSString(uint16_t* registers);

@@ -451,6 +451,8 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						savePreset(tuner_main->getFrequency(), preset, group);
 						parameter_list->preferred_preset = preset + 1;
 						parameter_list->tune_changed = true;
+
+						setEEPROMPresets(parameter_list);
 					}
 				}
 			}
@@ -472,6 +474,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 		if(ai_d->data[0] == 0x2B && ai_d->l >= 2) { //Menu related message.
 			if(ai_d->data[1] == 0x40) { //A menu was cleared.
 				menu_open = NO_MENU;
+				tuner_background->setSeekMode(true);
 				return true;
 			} if(ai_d->data[1] == 0x6A && ai_d->l >= 3) { //Audio menu item selected.
 				const uint8_t item = ai_d->data[2], source_id = this->getCurrentSourceID();
@@ -521,7 +524,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
 						const uint8_t group = source_list[current_source].sub_id;
 						uint16_t freq = tuner_main->getFrequency();
-						const uint8_t preset = selection + 1;
+						const uint8_t preset = selection;
 						if(group == SUB_FM1)
 							freq = parameter_list->fm1_presets[preset];
 						else if(group == SUB_FM2)
@@ -539,6 +542,23 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 
 						parameter_list->preferred_preset = preset + 1;
 						parameter_list->tune_changed = true;
+					}
+					clearMenu();
+				} else if(menu_open == STATION_MENU) {
+					if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id <= 1) {
+						const uint16_t new_freq = tuner_background->getStationFrequency(selection);
+						const uint8_t group = source_list[current_source].sub_id;
+
+						tuner_main->setFrequency(new_freq);
+						if(group == SUB_FM1)
+							parameter_list->fm1_tune = tuner_main->getFrequency();
+						else if(group == SUB_FM2)
+							parameter_list->fm2_tune = tuner_main->getFrequency();
+						else if(group == SUB_AM)
+							parameter_list->am_tune = tuner_main->getFrequency();
+
+						parameter_list->tune_changed = true;
+
 					}
 					clearMenu();
 				}
@@ -785,44 +805,40 @@ void SourceHandler::clearMenu() {
 											clear_msg.data[0] == 0x2B && clear_msg.data[1] == 0x40) { //Clear message.
 				ai_handler->sendAcknowledgement(ID_RADIO, ID_NAV_COMPUTER);
 				menu_open = NO_MENU;
+				tuner_background->setSeekMode(true);
 				break;
 			}
 		}
 	}
-	tuner_background->setSeekMode(true);
 }
 
-//Create the source menu.
-void SourceHandler::createSourceMenu() {
-	AudioSource active_list[source_count];
-	const uint16_t active_count = getFilledSources(active_list);
-	
-	String source_title = F("Source");
-	uint8_t source_data[12 + source_title.length()];
+//Send the initial request to create a menu. Return whether creation is allowed.
+bool SourceHandler::createMenu(const String title, const int items) {
+	uint8_t menu_header_data[12 + title.length()];
 
 	const uint16_t width = parameter_list->screen_w;
 
-	source_data[0] = 0x2B;
-	source_data[1] = 0x5A;
-	source_data[2] = active_count&0xFF;
-	source_data[3] = active_count&0xFF;
-	source_data[4] = 0x0;
-	source_data[5] = 0x0;
-	source_data[6] = 0x0;
-	source_data[7] = 0x8C;
-	source_data[8] = (width&0xFF00)>>8;
-	source_data[9] = width&0xFF;
-	source_data[10] = 0x0;
-	source_data[11] = 0x23;
-	for(uint8_t i=0;i<source_title.length();i+=1)
-		source_data[i+12] = uint8_t(source_title.charAt(i));
+	menu_header_data[0] = 0x2B;
+	menu_header_data[1] = 0x5A;
+	menu_header_data[2] = items&0xFF;
+	menu_header_data[3] = items&0xFF;
+	menu_header_data[4] = 0x0;
+	menu_header_data[5] = 0x0;
+	menu_header_data[6] = 0x0;
+	menu_header_data[7] = 0x8C;
+	menu_header_data[8] = (width&0xFF00)>>8;
+	menu_header_data[9] = width&0xFF;
+	menu_header_data[10] = 0x0;
+	menu_header_data[11] = 0x23;
+	for(uint8_t i=0;i<title.length();i+=1)
+		menu_header_data[i+12] = uint8_t(title.charAt(i));
 
-	AIData menu_header(sizeof(source_data), ID_RADIO, ID_NAV_COMPUTER);
-	menu_header.refreshAIData(source_data);
+	AIData menu_header(sizeof(menu_header_data), ID_RADIO, ID_NAV_COMPUTER);
+	menu_header.refreshAIData(menu_header_data);
 	bool ack = ai_handler->writeAIData(&menu_header);
 
 	if(!ack)
-		return;
+		return false;
 
 	//Confirm that the nav computer does not respond with a "no menu" message.
 	elapsedMillis no_draw;
@@ -833,13 +849,24 @@ void SourceHandler::createSourceMenu() {
 											no_msg.l >= 2 &&
 											no_msg.data[0] == 0x2B && no_msg.data[1] == 0x40) { //No menu message.
 				ai_handler->sendAcknowledgement(ID_RADIO, ID_NAV_COMPUTER);
-				return;
+				return false;
 			} else if(no_msg.receiver == ID_RADIO) {
 				ai_handler->sendAcknowledgement(ID_RADIO, no_msg.sender);
 				ai_handler->cacheMessage(&no_msg);
 			}
 		}
 	}
+
+	return true;
+}
+
+//Create the source menu.
+void SourceHandler::createSourceMenu() {
+	AudioSource active_list[source_count];
+	const uint16_t active_count = getFilledSources(active_list);
+	
+	if(!createMenu("Source", active_count))
+		return;
 	
 	for(uint16_t i=0;i<active_count;i+=1) {
 		uint8_t option_data[3 + active_list[i].source_name.length()];
@@ -851,7 +878,7 @@ void SourceHandler::createSourceMenu() {
 
 		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
 		option_msg.refreshAIData(option_data);
-		ack = ai_handler->writeAIData(&option_msg);
+		bool ack = ai_handler->writeAIData(&option_msg);
 		if(!ack)
 			return;
 	}
@@ -859,7 +886,7 @@ void SourceHandler::createSourceMenu() {
 	uint8_t display_data[] = {0x2B, 0x52, 0x1};
 	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
 	display_msg.refreshAIData(display_data);
-	ack = ai_handler->writeAIData(&display_msg);
+	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = SOURCE_MENU;
 }
@@ -876,49 +903,8 @@ void SourceHandler::createPresetMenu(const uint8_t group) {
 	else
 		return;
 
-	String source_title = F("Presets");
-	uint8_t source_data[12 + source_title.length()];
-
-	const uint16_t width = parameter_list->screen_w;
-
-	source_data[0] = 0x2B;
-	source_data[1] = 0x5A;
-	source_data[2] = 0x6;
-	source_data[3] = 0x6;
-	source_data[4] = 0x0;
-	source_data[5] = 0x0;
-	source_data[6] = 0x0;
-	source_data[7] = 0x8C;
-	source_data[8] = (width&0xFF00)>>8;
-	source_data[9] = width&0xFF;
-	source_data[10] = 0x0;
-	source_data[11] = 0x23;
-	for(uint8_t i=0;i<source_title.length();i+=1)
-		source_data[i+12] = uint8_t(source_title.charAt(i));
-
-	AIData menu_header(sizeof(source_data), ID_RADIO, ID_NAV_COMPUTER);
-	menu_header.refreshAIData(source_data);
-	bool ack = ai_handler->writeAIData(&menu_header);
-
-	if(!ack)
+	if(!createMenu("Presets", 6))
 		return;
-
-	//Confirm that the nav computer does not respond with a "no menu" message.
-	elapsedMillis no_draw;
-	while(no_draw < 50) {
-		AIData no_msg;
-		if(ai_handler->readAIData(&no_msg)) {
-			if(no_msg.receiver == ID_RADIO && no_msg.sender == ID_NAV_COMPUTER &&
-											no_msg.l >= 2 &&
-											no_msg.data[0] == 0x2B && no_msg.data[1] == 0x40) { //No menu message.
-				ai_handler->sendAcknowledgement(ID_RADIO, ID_NAV_COMPUTER);
-				return;
-			} else if(no_msg.receiver == ID_RADIO) {
-				ai_handler->sendAcknowledgement(ID_RADIO, no_msg.sender);
-				ai_handler->cacheMessage(&no_msg);
-			}
-		}
-	}
 
 	for(int i=0;i<6;i+=1) {
 		String preset = String(i+1) + ". ";
@@ -946,7 +932,7 @@ void SourceHandler::createPresetMenu(const uint8_t group) {
 	uint8_t display_data[] = {0x2B, 0x52, 0x1};
 	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
 	display_msg.refreshAIData(display_data);
-	ack = ai_handler->writeAIData(&display_msg);
+	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = PRESET_MENU;
 }
@@ -959,49 +945,8 @@ void SourceHandler::createStationListMenu() {
 	if(station_count <= 0)
 		return;
 
-	String source_title = F("Stations");
-	uint8_t source_data[12 + source_title.length()];
-
-	const uint16_t width = parameter_list->screen_w;
-
-	source_data[0] = 0x2B;
-	source_data[1] = 0x5A;
-	source_data[2] = station_count&0xFF;
-	source_data[3] = station_count&0xFF;
-	source_data[4] = 0x0;
-	source_data[5] = 0x0;
-	source_data[6] = 0x0;
-	source_data[7] = 0x8C;
-	source_data[8] = (width&0xFF00)>>8;
-	source_data[9] = width&0xFF;
-	source_data[10] = 0x0;
-	source_data[11] = 0x23;
-	for(uint8_t i=0;i<source_title.length();i+=1)
-		source_data[i+12] = uint8_t(source_title.charAt(i));
-
-	AIData menu_header(sizeof(source_data), ID_RADIO, ID_NAV_COMPUTER);
-	menu_header.refreshAIData(source_data);
-	bool ack = ai_handler->writeAIData(&menu_header);
-
-	if(!ack)
+	if(!createMenu("Stations", station_count))
 		return;
-
-	//Confirm that the nav computer does not respond with a "no menu" message.
-	elapsedMillis no_draw;
-	while(no_draw < 50) {
-		AIData no_msg;
-		if(ai_handler->readAIData(&no_msg)) {
-			if(no_msg.receiver == ID_RADIO && no_msg.sender == ID_NAV_COMPUTER &&
-											no_msg.l >= 2 &&
-											no_msg.data[0] == 0x2B && no_msg.data[1] == 0x40) { //No menu message.
-				ai_handler->sendAcknowledgement(ID_RADIO, ID_NAV_COMPUTER);
-				return;
-			} else if(no_msg.receiver == ID_RADIO) {
-				ai_handler->sendAcknowledgement(ID_RADIO, no_msg.sender);
-				ai_handler->cacheMessage(&no_msg);
-			}
-		}
-	}
 
 	tuner_background->setSeekMode(false);
 
@@ -1023,7 +968,7 @@ void SourceHandler::createStationListMenu() {
 	uint8_t display_data[] = {0x2B, 0x52, 0x1};
 	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
 	display_msg.refreshAIData(display_data);
-	ack = ai_handler->writeAIData(&display_msg);
+	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = STATION_MENU;
 }
