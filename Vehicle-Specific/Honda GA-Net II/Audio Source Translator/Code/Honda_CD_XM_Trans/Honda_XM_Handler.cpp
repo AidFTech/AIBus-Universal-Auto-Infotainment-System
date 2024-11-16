@@ -4,6 +4,9 @@ HondaXMHandler::HondaXMHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_drive
 	this->device_ie_id = IE_ID_SIRIUS;
 	this->device_ai_id = ID_XM;
 	this->imid_handler = imid_handler;
+
+	for(int i=0;i<SUPPORTED_CHANNEL_COUNT;i+=1)
+		channel_names[i] = "";
 }
 
 void HondaXMHandler::loop() {
@@ -91,6 +94,21 @@ void HondaXMHandler::loop() {
 			preset_request_wait = XM_QUERY_TIMER;
 		else
 			preset_request_wait =  PRESET_QUERY_TIMER;
+	}
+
+	if(source_established && station_request_timer > station_request_wait && preset_request_wait > XM_QUERY_TIMER && parameter_list->last_iebus_msg > XM_STATION_TIMER) {
+		if(station_request_increment < 0 || station_request_increment > SUPPORTED_CHANNEL_COUNT)
+			station_request_increment = 0;
+
+		getChannel(station_request_increment);
+
+		station_request_timer = 0;
+		station_request_increment += 1;
+
+		if(station_request_increment <= SUPPORTED_CHANNEL_COUNT)
+			station_request_wait = XM_STATION_TIMER;
+		else
+			station_request_wait = PRESET_QUERY_TIMER;
 	}
 }
 
@@ -235,6 +253,16 @@ void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 				}
 
 				preset_received = true;
+			} else if(text_n == 8) { //Channel name.
+				const uint8_t channel_number = getByteFromBCD(the_message->data[9])*100 + getByteFromBCD(the_message->data[10]);
+				String channel_name = "";
+
+				if(the_message->l >= 27) {
+					for(int i=0;i<16;i+=1)
+						channel_name += char(the_message->data[11 + i]);
+				}
+
+				channel_names[channel_number] = channel_name;
 			}
 		}
 
@@ -401,11 +429,11 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				sign = -1;
 
 			const int new_channel = *channel + sign*(the_message->data[2]&0xF);
-			if(new_channel >= 0 && new_channel <= 255) {
+			if(new_channel >= 0 && new_channel <= SUPPORTED_CHANNEL_COUNT) {
 				setChannel(new_channel);
 			} else if(new_channel < 0) {
-				setChannel(255);
-			} else if(new_channel > 255) {
+				setChannel(SUPPORTED_CHANNEL_COUNT);
+			} else if(new_channel > SUPPORTED_CHANNEL_COUNT) {
 				setChannel(0);
 			}
 
@@ -627,7 +655,7 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 					createXMMainMenuOption(1);
 					break;
 				case 3: //Channel list.
-					//TODO: This.
+					createXMChannelMenu();
 					break;
 				case 4: //Manual entry.
 					createXMDirectMenu();
@@ -646,6 +674,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				changeToPreset(the_message->data[2]);
 			} else if(*active_menu == MENU_DIRECT_TUNE) {
 				appendDirectNumber(the_message->data[2]);
+			} else if(*active_menu == MENU_CHANNEL) {
+				const uint8_t selection = the_message->data[2];
+				setChannel(selection);
 			}
 		} 
 	} else if(the_message->sender == ID_RADIO && the_message->l >= 3 && the_message->data[0] == 0x4 && the_message->data[1] == 0xE6 && the_message->data[2] == 0x10) {
@@ -1461,7 +1492,7 @@ void HondaXMHandler::clearUpperField() {
 
 void HondaXMHandler::appendDirectNumber(const uint8_t num) {
 	if(num > 0 && num <= 10) {
-		if(direct_num*10+int(num)%10 <= 255) {
+		if(direct_num*10+int(num)%10 <= SUPPORTED_CHANNEL_COUNT) {
 			direct_num*=10;
 			direct_num += int(num)%10;
 		}
@@ -1503,4 +1534,45 @@ void HondaXMHandler::appendDirectNumber(const uint8_t num) {
 
 		ai_driver->writeAIData(&direct_msg, parameter_list->computer_connected);
 	}
+}
+
+void HondaXMHandler::createXMChannelMenu() {
+	bool clear = false;
+
+	uint8_t clear_data[] = {0x2B, 0x4A};
+	AIData clear_msg(sizeof(clear_data), device_ai_id, ID_NAV_COMPUTER);
+	clear_msg.refreshAIData(clear_data);
+
+	ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
+	
+	elapsedMillis cancel_wait;
+	while(cancel_wait < 20) {
+		AIData ai_msg;
+		if(ai_driver->dataAvailable() > 0) {
+			if(ai_driver->readAIData(&ai_msg)) {
+				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //No menu available.
+					sendAIAckMessage(ai_msg.sender);
+					clear = true;
+					break;
+				}
+			}
+		}
+	}
+
+	if(!clear)
+		return;
+
+	startAudioMenu(SUPPORTED_CHANNEL_COUNT, SUPPORTED_CHANNEL_COUNT/2, false, "Channels");
+
+	for(int i=0;i<SUPPORTED_CHANNEL_COUNT;i+=1) {
+		if(channel_names[i].length() > 0)
+			appendAudioMenu(i, String(i) + ". " + channel_names[i]);
+	}
+	
+	*active_menu = MENU_CHANNEL;
+
+	if(channel_names[*channel].length() > 0 && *channel < 255)
+		displayAudioMenu(*channel + 1);
+	else
+		displayAudioMenu(1);
 }

@@ -11,8 +11,11 @@
 #include "Si4735_AidF.h"
 #include "Volume_Handler.h"
 #include "Background_Tune_Handler.h"
+#include "ADC_Handler.h"
 
 #include "Radio_EEPROM.h"
+
+#define U5_ERR //True if the design error involving U5 is present.
 
 #ifdef __AVR_ATmegax09__
 #define AI_RX PIN_PA7
@@ -102,6 +105,8 @@ Si4735Controller tuner(TUNER_RESET, HIGH, &parameters), br_tuner(TUNER_RESET, LO
 BackgroundTuneHandler background_tuner(&br_tuner, &parameters);
 SourceHandler source_handler(&aibus_handler, &tuner, &background_tuner, &parameters, SOURCE_COUNT);
 
+PCM9211Handler adc_handler(ADC_CS);
+
 elapsedMillis aibus_timer, source_text_timer;
 elapsedMillis src_ping_timer, computer_ping_timer, parameter_timer, screen_ping_timer;
 
@@ -142,6 +147,7 @@ void setup() {
 	pinMode(TREBLE_CS, OUTPUT);
 	pinMode(BASS_CS, OUTPUT);
 	pinMode(FADE_CS, OUTPUT);
+	pinMode(ADC_CS, OUTPUT);
 
 	pinMode(DIGITAL_ERROR, INPUT);
 	pinMode(DIGITAL_NPCM, INPUT);
@@ -153,9 +159,15 @@ void setup() {
 
 	digitalWrite(AUDIO_ON_SW, LOW);
 	digitalWrite(POWER_ON_SW, HIGH);
+
 	digitalWrite(SPDIF_SW, LOW);
 
 	digitalWrite(DAC_FILTER_MODE, LOW);
+	digitalWrite(ADC_CS, HIGH);
+
+	#ifdef __AVR_ATmegax09__
+	pinMode(PIN_PA5, INPUT_PULLUP);
+	#endif
 
 	AISerial.begin(AI_BAUD);
 	Wire.begin();
@@ -211,6 +223,8 @@ void setup() {
 	source_handler.source_list[2] = src_am;
 
 	source_handler.source_list[SOURCE_COUNT - 3] = src_aux;
+
+	adc_handler.init();
 
 	source_handler.sendRadioHandshake();
 }
@@ -334,24 +348,42 @@ void loop() {
 			if(current_source_id == 0) {
 				digitalWrite(AUDIO_ON_SW, HIGH);
 				digitalWrite(AUDIO_SW0, LOW);
-				digitalWrite(AUDIO_SW1, LOW);
 
-				digitalWrite(SPDIF_SW, LOW);
+				#ifndef U5_ERR
+				digitalWrite(AUDIO_SW1, LOW);
+				#else
+				digitalWrite(AUDIO_SW1, HIGH);
+				#endif
+
+				setDigitalActiveMode(false);
 			} else if(current_source_id == ID_RADIO) {
 				digitalWrite(AUDIO_ON_SW, LOW);
 				const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
 				if(sub_id < 3) { //Tuner.
 					digitalWrite(AUDIO_SW0, LOW);
+					#ifndef U5_ERR
 					digitalWrite(AUDIO_SW1, LOW);
+					#else
+					digitalWrite(AUDIO_SW1, HIGH);
+					#endif
 				} else { //Aux.
 					digitalWrite(AUDIO_SW0, LOW);
+					#ifndef U5_ERR
 					digitalWrite(AUDIO_SW1, HIGH);
+					#else
+					digitalWrite(AUDIO_SW1, LOW);
+					#endif
 				}
-				setDigitalActiveMode();
+				setDigitalActiveMode(false);
 			} else { //AIBus.
 				digitalWrite(AUDIO_ON_SW, LOW);
 				digitalWrite(AUDIO_SW0, HIGH);
+
+				#ifndef U5_ERR
 				digitalWrite(AUDIO_SW1, HIGH);
+				#else
+				digitalWrite(AUDIO_SW1, LOW);
+				#endif
 
 				setDigitalActiveMode();
 			}
@@ -370,9 +402,15 @@ void loop() {
 			
 			digitalWrite(AUDIO_ON_SW, LOW);
 			digitalWrite(AUDIO_SW0, HIGH);
+
+			#ifndef U5_ERR
 			digitalWrite(AUDIO_SW1, LOW);
+			#else
+			digitalWrite(AUDIO_SW1, HIGH);
+			#endif
 
 			digitalWrite(SPDIF_SW, LOW);
+			adc_handler.setADCOn();
 		}
 	}
 	
@@ -402,6 +440,19 @@ void loop() {
 	}
 
 	parameters.timer_active = info_timer_enabled || source_text_timer_enabled || imid_timer_enabled || MINUTE_TIMER - parameters.minute_timer <= 100 || SCREEN_PING_DELAY - screen_ping_timer <= 100;
+
+	if(rds_imid_timer > RDS_IMID_TIMER) {
+		if(source_handler.getCurrentSourceID() != ID_RADIO)
+			rds_imid_timer = 0;
+
+		const uint8_t port = adc_handler.getOutputPort();
+
+		uint8_t port_data[] = {0xA1, 0x68, port};
+		AIData port_msg(sizeof(port_data), ID_RADIO, 0xFF);
+		port_msg.refreshAIData(port_data);
+
+		aibus_handler.writeAIData(&port_msg, false);
+	}
 
 	if(parameters.handshake_timer_active && parameters.handshake_timer > 200) {
 		parameters.handshake_timer_active = false;
@@ -767,10 +818,19 @@ void setDigitalActiveMode() {
 	const int d_state = digitalRead(DIGITAL_MODE);
 	*digital_mode = d_state == LOW;
 
-	if(*digital_mode)
+	setDigitalActiveMode(*digital_mode);
+}
+
+//Set the digital mode.
+void setDigitalActiveMode(const bool digital) {
+	*digital_mode = digital;
+	if(digital) {
 		digitalWrite(SPDIF_SW, HIGH);
-	else
+		adc_handler.setDigitalOut();
+	} else {
 		digitalWrite(SPDIF_SW, LOW);
+		adc_handler.setADCOn();
+	}
 }
 
 //Send the heartbeat/redundant message to the active source.

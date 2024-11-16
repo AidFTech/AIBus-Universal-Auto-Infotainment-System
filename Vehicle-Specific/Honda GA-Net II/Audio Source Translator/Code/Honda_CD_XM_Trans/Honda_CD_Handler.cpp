@@ -6,6 +6,8 @@ HondaCDHandler::HondaCDHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_drive
 
 	this->imid_handler = imid_handler;
 	this->clearCDText(true, true, true, true, true);
+
+	getCDSettings(&this->autostart, &this->use_function_timer);
 }
 
 void HondaCDHandler::loop() {
@@ -132,6 +134,11 @@ void HondaCDHandler::loop() {
 			text_timer_song = true;
 			text_timer_artist = true;
 			text_timer_album = true;
+		}
+	
+		if(setting_changed) {
+			setting_changed = false;
+			setCDSettings(this->autostart, this->use_function_timer);
 		}
 	}
 }
@@ -602,9 +609,11 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 				case 3: //Autostart.
 					this->autostart = !this->autostart;
 					createCDMainMenuOption(2);
+					setting_changed = true;
 					break;
 				case 4: //CD text.
 					this->use_function_timer = !this->use_function_timer;
+					setting_changed = true;
 
 					if(parameter_list->imid_connected) {
 						if(use_function_timer) {

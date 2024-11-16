@@ -23,17 +23,19 @@ void BackgroundTuneHandler::loop() {
 		const uint16_t freq = br_tuner->getFrequency();
 
 		const uint8_t rssi = br_tuner->getRSSI();
-		br_tuner->getCallsign(&rds);
+		const bool callsign_broadcast = br_tuner->getCallsign(&rds);
 
 		//if(rssi >= FM_STEREO_THRESH && seek_timer_limit < 10000)
 		//	seek_timer_limit = 10000;
 
 		rssi_mean += rssi;
 		rssi_count += 1;
+		if(callsign_broadcast)
+			rds_mean += 2;
 		
 		if(seek_timer > seek_timer_limit) {
 			if(rssi_count > 0) {
-				if(rssi_mean/rssi_count >= FM_STEREO_THRESH || rds.length() > 0) { //List this station.
+				if(rssi_mean/rssi_count >= FM_STEREO_THRESH || (rds.length() > 0 && rds_mean > 1)) { //List this station.
 					addFrequency(freq, rds);
 				} else { //Remove this station.
 					int index = -1;
@@ -53,6 +55,7 @@ void BackgroundTuneHandler::loop() {
 
 			rssi_count = 0;
 			rssi_mean = 0;
+			rds_mean = 0;
 			rds = "";
 
 			seek_timer = 0;

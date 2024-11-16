@@ -58,17 +58,17 @@ public:
 
 	virtual void sendAcknowledgement(const uint16_t sender, const uint16_t receiver) volatile;
 	
-	virtual bool getInputOn();
+	virtual inline bool getInputOn();
 
 protected:
-	void sendBit(const bool data) volatile;
-	void sendAckBit() volatile;
-	void sendStartBit() volatile;
-	void sendBits(const uint16_t data, const uint8_t size) volatile;
-	void sendBits(const uint16_t data, const uint8_t size, const bool send_parity, const bool ack) volatile;
+	inline void sendBit(const bool data) volatile;
+	inline void sendAckBit() volatile;
+	inline void sendStartBit() volatile;
+	inline void sendBits(const uint16_t data, const uint8_t size) volatile;
+	inline void sendBits(const uint16_t data, const uint8_t size, const bool send_parity, const bool ack) volatile;
 
-	int8_t readBit() volatile;
-	int readBits(const uint8_t length, const bool with_parity, const bool with_ack, bool send_ack) volatile;
+	inline int8_t readBit() volatile;
+	inline int readBits(const uint8_t length, const bool with_parity, const bool with_ack, bool send_ack) volatile;
 
 	int8_t rx_pin = -1, tx_pin = -1;
 	

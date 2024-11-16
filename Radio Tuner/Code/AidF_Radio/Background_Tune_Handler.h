@@ -11,7 +11,7 @@
 
 #define MAXIMUM_FREQUENCY_COUNT 32
 
-#define SEEK_TIME 2000
+#define SEEK_TIME 1000
 
 class BackgroundTuneHandler {
 	public:
@@ -40,7 +40,7 @@ class BackgroundTuneHandler {
 
 		bool station_seek = true; //True if stations should be seeked.
 
-		int rssi_mean = 0, rssi_count = 0;
+		int rssi_mean = 0, rssi_count = 0, rds_mean = 0;
 		String rds = "";
 
 		elapsedMillis seek_timer;

@@ -15,6 +15,9 @@
 
 #define MENU_PRESET_LIST 0x1A
 #define MENU_DIRECT_TUNE 0x1B
+#define MENU_CHANNEL 0x1C
+
+#define SUPPORTED_CHANNEL_COUNT 255
 
 #define N_TEXT_NONE -1
 #define N_CHANNEL_NAME 0
@@ -33,7 +36,7 @@
 
 #define XM_FULL_TIMER 200
 
-#define XM_STATION_TIMER 500
+#define XM_STATION_TIMER 1500
 #define XM_QUERY_TIMER 1000
 #define PRESET_QUERY_TIMER 120000
 
@@ -61,6 +64,8 @@ private:
 	
 	uint16_t xm1_preset[6] = {1, 1, 1, 1, 1, 1};
 	uint16_t xm2_preset[6] = {1, 1, 1, 1, 1, 1};
+
+	String channel_names[SUPPORTED_CHANNEL_COUNT];
 
 	String xm1_preset_name[6], xm2_preset_name[6];
 
@@ -141,6 +146,8 @@ private:
 	void createXMDirectMenu();
 	void createXMDirectMenuOption(const uint8_t option);
 	void appendDirectNumber(const uint8_t num);
+
+	void createXMChannelMenu();
 
 	void clearUpperField();
 };

@@ -31,6 +31,8 @@ struct ParameterList {
 
 	uint16_t screen_w = 800, screen_h = 480;
 	elapsedMillis *screen_request_timer;
+	
+	elapsedMillis last_iebus_msg = 0;
 };
 
 #endif

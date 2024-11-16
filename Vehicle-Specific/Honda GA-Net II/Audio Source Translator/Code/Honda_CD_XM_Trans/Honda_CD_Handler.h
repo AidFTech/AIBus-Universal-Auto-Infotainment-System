@@ -7,6 +7,8 @@
 #include "Honda_IMID_Handler.h"
 #include "IE_CD_Status.h"
 
+#include "Trans_EEPROM.h"
+
 #include <stdint.h>
 #include <Arduino.h>
 #include <elapsedMillis.h>
@@ -85,6 +87,7 @@ private:
 	uint8_t song_title_stage = 0, artist_stage = 0, album_stage = 0, folder_stage = 0, filename_stage = 0;
 
 	bool autostart = false;
+	bool setting_changed = false;
 
 	//Timer to send all CD-text info to the IMID if it is connected, to prevent hanging.
 	bool text_timer_enabled = false, text_timer_song = false, text_timer_artist = false, text_timer_album = false, text_timer_folder = false, text_timer_file = false;

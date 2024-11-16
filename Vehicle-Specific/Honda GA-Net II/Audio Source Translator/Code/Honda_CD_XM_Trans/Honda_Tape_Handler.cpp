@@ -4,10 +4,17 @@ HondaTapeHandler::HondaTapeHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_d
 	this->device_ie_id = IE_ID_TAPE;
 	this->device_ai_id = ID_TAPE;
 	this->imid_handler = imid_handler;
+
+	getTapeSettings(&this->autostart, &this->fwd_start);
 }
 
 void HondaTapeHandler::loop() {
 	if(this->source_sel) {
+		if(*active_menu == MENU_TAPE && setting_changed) {
+			setting_changed = false;
+			setTapeSettings(this->autostart, this->fwd_start);
+		}
+
 		if(nr_timer_enabled && nr_timer > MODE_FLASH_TIMER) {
 			nr_timer_enabled = false;
 
@@ -271,10 +278,12 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			switch(the_message->data[2]) {
 			case 1: //Start in forward mode.
 				this->fwd_start = !this->fwd_start;
+				setting_changed = true;
 				createTapeMenuOption(0);
 				break;
 			case 2: //Autostart.
 				this->autostart = !this->autostart;
+				setting_changed = true;
 				createTapeMenuOption(1);
 				break;
 			case 3: //Radio settings.

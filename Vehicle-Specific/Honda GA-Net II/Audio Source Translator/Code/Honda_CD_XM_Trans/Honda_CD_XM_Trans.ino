@@ -98,6 +98,7 @@ void loop() {
 				check_msg.data[i] = ie_msg.data[i];
 
 			if(ie_msg.checkVaildity()) {
+				parameters.last_iebus_msg = 0;
 				if(ie_msg.receiver == IE_ID_RADIO && ie_msg.l >= 1 && ie_msg.data[0] != 0x80) {
 					ie_handler.sendAcknowledgement(ie_msg.receiver, ie_msg.sender);
 					interpretIEData(ie_msg);

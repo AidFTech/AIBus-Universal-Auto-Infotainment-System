@@ -167,6 +167,14 @@ void setup() {
 
 	//attachInterrupt(digitalPinToInterrupt(KNOB_A), volumeKnobIncrement, FALLING);
 
+	button_handler = new ButtonHandler(&mcp_in, &mcp_out, &ai_handler, &parameters, &mcp_knob, KNOB_MCP_VOL_PUSH);
+	jog_handler = new JogHandler(&mcp_out, OUTPUT_MCP_TOGGLE_UP, &mcp_out, OUTPUT_MCP_TOGGLE_DOWN, &mcp_in, INPUT_MCP_TOGGLE_LEFT, &mcp_in, INPUT_MCP_TOGGLE_RIGHT, &mcp_in, INPUT_MCP_TOGGLE_ENTER, &ai_handler, &parameters);
+	open_handler = new OpenCloseHandler(&mcp_out, OUTPUT_MCP_PUSH_OPEN, &mcp_out, OUTPUT_MCP_PUSH_CLOSE, &mcp_knob, KNOB_MCP_MOTOR_OPEN, &mcp_knob, KNOB_MCP_MOTOR_CLOSE, NULL, MOTOR_STOP_OUT, &mcp_knob, KNOB_MCP_MOTOR_STOP_IND, &mcp_knob, KNOB_MCP_CLOSE_ANODE, MOTOR_POSITION, &ai_handler, &parameters);
+	light_handler = new LightController(ILL_CATHODE, KNOB_MCP_ANODE, &mcp_knob);
+
+	light_handler->lightOff();
+	digitalWrite(ILL_CATHODE, LOW);
+
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM2, HIGH);
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM3, HIGH);
 	mcp_out.digitalWriteIO(OUTPUT_MCP_COM4, HIGH);
@@ -178,11 +186,6 @@ void setup() {
 	mcp_knob.digitalWriteIO(KNOB_MCP_CLOSE_ANODE, LOW);
 	mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
 	mcp_knob.digitalWriteIO(KNOB_MCP_BACKLIGHT, LOW);
-
-	button_handler = new ButtonHandler(&mcp_in, &mcp_out, &ai_handler, &parameters, &mcp_knob, KNOB_MCP_VOL_PUSH);
-	jog_handler = new JogHandler(&mcp_out, OUTPUT_MCP_TOGGLE_UP, &mcp_out, OUTPUT_MCP_TOGGLE_DOWN, &mcp_in, INPUT_MCP_TOGGLE_LEFT, &mcp_in, INPUT_MCP_TOGGLE_RIGHT, &mcp_in, INPUT_MCP_TOGGLE_ENTER, &ai_handler, &parameters);
-	open_handler = new OpenCloseHandler(&mcp_out, OUTPUT_MCP_PUSH_OPEN, &mcp_out, OUTPUT_MCP_PUSH_CLOSE, &mcp_knob, KNOB_MCP_MOTOR_OPEN, &mcp_knob, KNOB_MCP_MOTOR_CLOSE, NULL, MOTOR_STOP_OUT, &mcp_knob, KNOB_MCP_MOTOR_STOP_IND, &mcp_knob, KNOB_MCP_CLOSE_ANODE, MOTOR_POSITION, &ai_handler, &parameters);
-	light_handler = new LightController(ILL_CATHODE, KNOB_MCP_ANODE, &mcp_knob);
 }
 
 void loop() {

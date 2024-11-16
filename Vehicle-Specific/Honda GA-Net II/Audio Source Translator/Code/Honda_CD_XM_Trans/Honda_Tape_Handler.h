@@ -5,6 +5,8 @@
 #include "Honda_Source_Handler.h"
 #include "Honda_IMID_Handler.h"
 
+#include "Trans_EEPROM.h"
+
 #include <stdint.h>
 #include <Arduino.h>
 
@@ -45,6 +47,8 @@ private:
 
 	bool autostart = false, fwd_start = false;
 	bool change_dir = false; //Change direction at next play message.
+
+	bool setting_changed = false;
 
 	bool nr_timer_enabled = false;
 	elapsedMillis nr_timer;
