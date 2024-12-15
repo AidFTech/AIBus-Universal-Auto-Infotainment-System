@@ -1,6 +1,6 @@
 #include "Audio_Source.h"
 
-SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, uint16_t source_count) {
+SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, VolumeHandler* volume_handler, uint16_t source_count) {
 	this->source_count = source_count;
 	this->source_list = new AudioSource[source_count];
 
@@ -14,6 +14,7 @@ SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_m
 	this->parameter_list = parameter_list;
 	this->tuner_main = tuner_main;
 	this->tuner_background = tuner_background;
+	this->volume_handler = volume_handler;
 }
 
 SourceHandler::~SourceHandler() {
@@ -255,6 +256,56 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				}
 			}
 
+			if(parameter_list->bass_adjust || parameter_list->treble_adjust || parameter_list->balance_adjust || parameter_list->fader_adjust) {
+				if(button != 0x2A && button != 0x2B && state == 2) {
+					if(menu_open == TONE_MENU) {
+						if(parameter_list->bass_adjust) {
+							parameter_list->bass_adjust = false;
+							createToneMenuItem(0);
+						}
+						if(parameter_list->treble_adjust) {
+							parameter_list->treble_adjust = false;
+							createToneMenuItem(1);
+						}
+						if(parameter_list->balance_adjust) {
+							parameter_list->balance_adjust = false;
+							createToneMenuItem(2);
+						}
+						if(parameter_list->fader_adjust) {
+							parameter_list->fader_adjust = false;
+							createToneMenuItem(3);
+						}
+					} else {
+						parameter_list->bass_adjust = false;
+						parameter_list->treble_adjust = false;
+						parameter_list->balance_adjust = false;
+						parameter_list->fader_adjust = false;
+					}
+
+					{
+						uint8_t data[] = {0x77, parameter_list->last_control, 0x10};
+
+						AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
+						screen_msg.refreshAIData(data);
+						ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
+					}
+				} else if(state == 2) {
+					volume_handler->setAIBusParameter(ai_d);
+
+					if(menu_open == TONE_MENU) {
+						if(parameter_list->bass_adjust)
+							createToneMenuItem(0);
+						if(parameter_list->treble_adjust)
+							createToneMenuItem(1);
+						if(parameter_list->balance_adjust)
+							createToneMenuItem(2);
+						if(parameter_list->fader_adjust)
+							createToneMenuItem(3);
+					}
+				}
+				return true;
+			}
+
 			if(button == 0x6 && state == 2) //Press volume knob.
 				audio_on = !audio_on;
 			else if(button == 0x23 && state == 2) { //Source button.
@@ -424,6 +475,10 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 
 				if(new_src > 0 && new_src < source_count && new_src != current_source)
 					setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
+			} else if(button == 0x52 && state == 2) { //Tone button.
+				if(!parameter_list->digital_amp)
+					this->createToneMenu();
+				//TODO: For a digital amp, ask the amp to create the tone menu.
 			} else if(button >= 0x11 && button <= 0x16) { //Presets.
 				const uint8_t preset = (button&0xF) - 1;
 				if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
@@ -458,12 +513,28 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			}
 			
 		} else if(ai_d->data[0] == 0x32) { //Knob turn.
+			ack = false;
+			ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+
 			const uint8_t steps = ai_d->data[2]&0xF;
 			const bool clockwise = (ai_d->data[2]&0x10) != 0;
 			if(ai_d->data[1] == 0x7) { //Function knob.
 				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected) && source_list[current_source].source_id == ID_RADIO) {
 					manualTuneIncrement(clockwise, steps);
 					parameter_list->tune_changed = true;
+				} else if(parameter_list->bass_adjust || parameter_list->treble_adjust || parameter_list->balance_adjust || parameter_list->fader_adjust) {
+					volume_handler->setAIBusParameter(ai_d);
+
+					if(menu_open == TONE_MENU) {
+						if(parameter_list->bass_adjust)
+							createToneMenuItem(0);
+						if(parameter_list->treble_adjust)
+							createToneMenuItem(1);
+						if(parameter_list->balance_adjust)
+							createToneMenuItem(2);
+						if(parameter_list->fader_adjust)
+							createToneMenuItem(3);
+					}
 				}
 			}
 		}
@@ -561,6 +632,43 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 
 					}
 					clearMenu();
+				} else if(menu_open == TONE_MENU) {
+					const uint8_t selection = ai_d->data[2]-1;
+
+					if(selection < TONE_OPTION_SVC) {
+						bool* switch_mode;
+
+						switch(selection) {
+						case TONE_OPTION_BASS:
+							switch_mode = &parameter_list->bass_adjust;
+							break;
+						case TONE_OPTION_TREBLE:
+							switch_mode = &parameter_list->treble_adjust;
+							break;
+						case TONE_OPTION_BALANCE:
+							switch_mode = &parameter_list->balance_adjust;
+							break;
+						case TONE_OPTION_FADER:
+							switch_mode = &parameter_list->fader_adjust;
+							break;
+						}
+
+						*switch_mode = !*switch_mode;
+
+						createToneMenuItem(selection);
+
+						{
+							uint8_t data[] = {0x77, ID_RADIO, 0x10};
+							if(*switch_mode)
+								data[2] |= 0x20;
+							else
+								data[1] = parameter_list->last_control;
+
+							AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
+							screen_msg.refreshAIData(data);
+							ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
+						}
+					}
 				}
 				return true;
 			} else if(ai_d->data[1] == 0x4A) {
@@ -828,8 +936,8 @@ bool SourceHandler::createMenu(const String title, const int items) {
 	menu_header_data[7] = 0x8C;
 	menu_header_data[8] = (width&0xFF00)>>8;
 	menu_header_data[9] = width&0xFF;
-	menu_header_data[10] = 0x0;
-	menu_header_data[11] = 0x23;
+	menu_header_data[10] = (parameter_list->option_height&0xFF00)>>8;
+	menu_header_data[11] = parameter_list->option_height&0xFF;
 	for(uint8_t i=0;i<title.length();i+=1)
 		menu_header_data[i+12] = uint8_t(title.charAt(i));
 
@@ -971,6 +1079,141 @@ void SourceHandler::createStationListMenu() {
 	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = STATION_MENU;
+}
+
+//Create the tone menu.
+void SourceHandler::createToneMenu() {
+	if(!createMenu("Tone", 5))
+		return;
+	
+	for(int i=0;i<5;i+=1)
+		createToneMenuItem(i);
+
+	uint8_t display_data[] = {0x2B, 0x52, 0x1};
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
+	display_msg.refreshAIData(display_data);
+	bool ack = ai_handler->writeAIData(&display_msg);
+	if(ack)
+		menu_open = TONE_MENU;
+}
+
+//Create an item in the tone menu.
+void SourceHandler::createToneMenuItem(const int item) {
+	const uint8_t slider_max = DEFAULT_SLIDER_RANGE;
+	uint8_t slider_pos = 0xFF;
+	
+	int slider_parameter = 0;
+	String option_text = "";
+
+	switch(item) {
+	case TONE_OPTION_BASS:
+		option_text = "Bass";
+		slider_parameter = volume_handler->getBass();
+		break;
+	case TONE_OPTION_TREBLE:
+		option_text = "Treble";
+		slider_parameter = volume_handler->getTreble();
+		break;
+	case TONE_OPTION_BALANCE:
+		option_text = "Balance";
+		slider_parameter = volume_handler->getBalance();
+		break;
+	case TONE_OPTION_FADER:
+		option_text = "Fader";
+		slider_parameter = volume_handler->getFader();
+		break;
+	case TONE_OPTION_SVC:
+		option_text = "SVC";
+		break;
+	}
+
+	String slider_text = "";
+
+	if(item == TONE_OPTION_BASS || item == TONE_OPTION_TREBLE) {
+		slider_pos = slider_parameter*slider_max/DEFAULT_TONE_RANGE;
+
+		if(item == TONE_OPTION_TREBLE) {	
+			if((DEFAULT_TONE_RANGE - slider_parameter)*90/DEFAULT_TONE_RANGE > 0)
+				slider_text += "-";
+			slider_text += String((DEFAULT_TONE_RANGE - slider_parameter)*90/DEFAULT_TONE_RANGE/10) + ".";
+			slider_text += (DEFAULT_TONE_RANGE - slider_parameter)*90/DEFAULT_TONE_RANGE%10;
+		} else {
+			if((DEFAULT_TONE_RANGE - slider_parameter)*11/DEFAULT_TONE_RANGE > 0)
+				slider_text += "-";
+			slider_text += (DEFAULT_TONE_RANGE - slider_parameter)*11/DEFAULT_TONE_RANGE;
+			//TODO: This is not linear.
+		}
+
+		slider_text += "dB";
+	} else if(item == TONE_OPTION_BALANCE || item == TONE_OPTION_FADER) {
+		if(slider_parameter < 0) {
+			if(item == TONE_OPTION_BALANCE)
+				slider_text += "L";
+			else
+				slider_text += "B";
+		} else if(slider_parameter > 0) {
+			if(item == TONE_OPTION_BALANCE)
+				slider_text += "R";
+			else
+				slider_text += "F";
+		} else
+			slider_text += "C";
+
+		if(slider_parameter != 0)
+			slider_text += abs(slider_parameter)*slider_max/DEFAULT_TONE_RANGE;
+
+		slider_parameter += DEFAULT_TONE_RANGE/2;
+		slider_pos = slider_parameter*slider_max/DEFAULT_TONE_RANGE;
+	}
+
+	uint8_t option_data[3 + option_text.length()];
+	option_data[0] = 0x2B;
+	option_data[1] = 0x51;
+	option_data[2] = item&0xFF;
+	for(int i=0;i<option_text.length();i+=1)
+		option_data[i+3] = uint8_t(option_text.charAt(i));
+
+	AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
+	option_msg.refreshAIData(option_data);
+
+	ai_handler->writeAIData(&option_msg, parameter_list->computer_connected);
+	
+	if(item < TONE_OPTION_SVC) {
+		uint8_t slider_data[6 + slider_text.length()];
+		slider_data[0] = 0x2B;
+		slider_data[1] = 0x54;
+		slider_data[2] = item&0xFF;
+		slider_data[3] = slider_pos;
+		slider_data[4] = slider_max;
+		slider_data[5] = 0;
+
+		switch(item) {
+		case TONE_OPTION_BASS:
+			if(parameter_list->bass_adjust)
+				slider_data[5] = 1;
+			break;
+		case TONE_OPTION_TREBLE:
+			if(parameter_list->treble_adjust)
+				slider_data[5] = 1;
+			break;
+		case TONE_OPTION_BALANCE:
+			if(parameter_list->balance_adjust)
+				slider_data[5] = 1;
+			break;
+		case TONE_OPTION_FADER:
+			if(parameter_list->fader_adjust)
+				slider_data[5] = 1;
+			break;
+		}
+		
+		for(int i=0;i<slider_text.length();i+=1)
+			slider_data[i+6] = uint8_t(slider_text.charAt(i));
+
+		AIData slider_msg(sizeof(slider_data), ID_RADIO, ID_NAV_COMPUTER);
+		slider_msg.refreshAIData(slider_data);
+
+		ai_handler->writeAIData(&slider_msg, parameter_list->computer_connected);
+	}
 }
 
 //Set the current source to the desired ID and sub ID.

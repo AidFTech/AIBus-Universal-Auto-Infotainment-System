@@ -15,7 +15,7 @@
 
 #include "Radio_EEPROM.h"
 
-#define U5_ERR //True if the design error involving U5 is present.
+//#define U5_ERR //True if the design error involving U5 is present.
 
 #ifdef __AVR_ATmegax09__
 #define AI_RX PIN_PA7
@@ -103,7 +103,7 @@ VolumeHandler volume_handler(&vol_controller, &treble_controller, &bass_controll
 
 Si4735Controller tuner(TUNER_RESET, HIGH, &parameters), br_tuner(TUNER_RESET, LOW, &parameters);
 BackgroundTuneHandler background_tuner(&br_tuner, &parameters);
-SourceHandler source_handler(&aibus_handler, &tuner, &background_tuner, &parameters, SOURCE_COUNT);
+SourceHandler source_handler(&aibus_handler, &tuner, &background_tuner, &parameters, &volume_handler, SOURCE_COUNT);
 
 PCM9211Handler adc_handler(ADC_CS);
 
@@ -441,19 +441,6 @@ void loop() {
 
 	parameters.timer_active = info_timer_enabled || source_text_timer_enabled || imid_timer_enabled || MINUTE_TIMER - parameters.minute_timer <= 100 || SCREEN_PING_DELAY - screen_ping_timer <= 100;
 
-	if(rds_imid_timer > RDS_IMID_TIMER) {
-		if(source_handler.getCurrentSourceID() != ID_RADIO)
-			rds_imid_timer = 0;
-
-		const uint8_t port = adc_handler.getOutputPort();
-
-		uint8_t port_data[] = {0xA1, 0x68, port};
-		AIData port_msg(sizeof(port_data), ID_RADIO, 0xFF);
-		port_msg.refreshAIData(port_data);
-
-		aibus_handler.writeAIData(&port_msg, false);
-	}
-
 	if(parameters.handshake_timer_active && parameters.handshake_timer > 200) {
 		parameters.handshake_timer_active = false;
 
@@ -609,6 +596,8 @@ void loop() {
 						AIData station_name = getTextMessage(parameters.rds_station_name, 1, 1);
 						station_name.data[1] |= 0x10;
 						aibus_handler.writeAIData(&station_name, parameters.computer_connected);
+
+						text_handler.sendIMIDCallsignMessage(parameters.rds_station_name);
 					}
 				}
 
@@ -684,7 +673,11 @@ void loop() {
 		pingComputer();
 
 	if(screen_ping_timer >= SCREEN_PING_DELAY)
-		getScreenControlRequest(!parameters.computer_connected || parameters.manual_tune_mode);
+		getScreenControlRequest(!parameters.computer_connected || parameters.manual_tune_mode
+																|| parameters.bass_adjust
+																|| parameters.treble_adjust
+																|| parameters.balance_adjust
+																|| parameters.fader_adjust);
 
 	background_tuner.loop();
 

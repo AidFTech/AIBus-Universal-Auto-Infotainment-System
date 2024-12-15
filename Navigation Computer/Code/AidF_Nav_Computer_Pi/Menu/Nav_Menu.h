@@ -4,6 +4,7 @@
 #include <SDL2/SDL.h>
 #include <time.h>
 
+#include "Nav_Slider.h"
 #include "../Text_Box.h"
 #include "../Window/Attribute_List.h"
 
@@ -37,6 +38,10 @@ public:
 	void setTextItems();
 	void drawMenu();
 
+	void setSlider(std::string text, const uint8_t max, const uint8_t val, const uint16_t item);
+	NavSlider* getSlider(const uint16_t index);
+	TextBox* getSliderTextBox(const uint16_t index);
+
 	void setSelected(const uint16_t selected);
 	uint16_t getSelected();
 
@@ -60,7 +65,9 @@ private:
 	std::string title;
 	std::string* items;
 	TextBox* title_box;
-	std::vector<TextBox*> item_box;
+	std::vector<TextBox*> item_text_box;
+	std::vector<NavSlider*> item_slider;
+	std::vector<TextBox*> item_slider_text;
 
 	uint16_t length = 0, selected = 0;
 	AidFColorProfile* color_profile;

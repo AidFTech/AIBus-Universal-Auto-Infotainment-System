@@ -8,6 +8,7 @@
 #include "Text_Handler.h"
 #include "Si4735_AidF.h"
 #include "Background_Tune_Handler.h"
+#include "Volume_Handler.h"
 
 #include "Radio_EEPROM.h"
 
@@ -18,6 +19,13 @@
 #define SOURCE_MENU 1
 #define PRESET_MENU 2
 #define STATION_MENU 3
+#define TONE_MENU 4
+
+#define TONE_OPTION_BASS 0
+#define TONE_OPTION_TREBLE 1
+#define TONE_OPTION_BALANCE 2
+#define TONE_OPTION_FADER 3
+#define TONE_OPTION_SVC 4
 
 struct AudioSource {
 	uint8_t source_id, sub_id;
@@ -29,7 +37,7 @@ class SourceHandler {
 		AudioSource* source_list;
 		uint16_t source_count;
 	
-		SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, uint16_t source_count);
+		SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, VolumeHandler* volume_handler, uint16_t source_count);
 		~SourceHandler();
 
 		void sendRadioHandshake();
@@ -63,6 +71,8 @@ class SourceHandler {
 
 		ParameterList* parameter_list;
 
+		VolumeHandler* volume_handler;
+
 		bool query = false; //True if the query function is active to prevent recursive loops.
 		
 		int getFirstOccurenceOf(const uint8_t source);
@@ -77,9 +87,13 @@ class SourceHandler {
 
 		void clearMenu();
 		bool createMenu(const String title, const int items);
+
 		void createSourceMenu();
 		void createPresetMenu(const uint8_t group);
 		void createStationListMenu();
+
+		void createToneMenu();
+		void createToneMenuItem(const int item);
 
 		void sendManualTuneMessage();
 		

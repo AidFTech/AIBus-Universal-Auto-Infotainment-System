@@ -35,6 +35,7 @@ public:
 	void sendIMIDRDSMessage(String text);
 	void sendIMIDRDSMessage(const uint16_t frequency, String text);
 	void sendIMIDInfoMessage(String text);
+	void sendIMIDCallsignMessage(String text);
 
 	void sendTime();
 

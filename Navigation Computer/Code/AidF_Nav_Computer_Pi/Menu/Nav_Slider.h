@@ -15,6 +15,8 @@ public:
 	void setValue(const uint8_t new_value);
 	uint8_t getValue();
 
+	uint8_t getMax();
+
 	void incrementValue(const uint8_t inc);
 	void decrementValue(const uint8_t inc);
 

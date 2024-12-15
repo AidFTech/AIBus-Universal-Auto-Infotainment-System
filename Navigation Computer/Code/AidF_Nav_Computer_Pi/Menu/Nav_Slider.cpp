@@ -22,8 +22,14 @@ void NavSlider::setValue(const uint8_t new_value) {
 		this->value_text->setText(std::to_string(int(this->value)));
 }
 
+//Get the set value.
 uint8_t NavSlider::getValue() {
 	return this->value;
+}
+
+//Get the maximum value.
+uint8_t NavSlider::getMax() {
+	return this->max;
 }
 
 void NavSlider::setSelected(const bool selected) {

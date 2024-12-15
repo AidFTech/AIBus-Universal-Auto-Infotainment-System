@@ -26,6 +26,7 @@ public:
 	SymbolHandler();
 	~SymbolHandler();
 	std::string removeSymbolText(std::string text);
+	
 	void drawSymbols(SDL_Renderer* renderer, SDL_Texture* texture, TTF_Font* font, std::string text, const int16_t start_x, const int16_t start_y, const uint16_t size, uint32_t* text_color);
 private:
 	uint16_t* symbol_pos;

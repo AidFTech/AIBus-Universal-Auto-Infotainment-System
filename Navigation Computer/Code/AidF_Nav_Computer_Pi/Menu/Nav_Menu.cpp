@@ -60,7 +60,9 @@ NavMenu::NavMenu(AttributeList* attribute_list,
 				h_indent = ALIGN_H_C;
 		}
 
-		this->item_box.push_back(new TextBox(this->renderer, x_pos, y_pos, text_w-SQ_WIDTH, text_h, h_indent, ALIGN_V_M, size, &this->attribute_list->color_profile->text));
+		this->item_text_box.push_back(new TextBox(this->renderer, x_pos, y_pos, text_w-SQ_WIDTH, text_h, h_indent, ALIGN_V_M, size, &this->attribute_list->color_profile->text));
+		this->item_slider.push_back(NULL);
+		this->item_slider_text.push_back(NULL);
 	}
 }
 
@@ -68,9 +70,19 @@ NavMenu::~NavMenu() {
 	delete[] this->items;
 	
 	delete this->title_box;
-	while(this->item_box.size() > 0) {
-		delete this->item_box.back();
-		this->item_box.erase(this->item_box.end());
+	while(this->item_text_box.size() > 0) {
+		delete this->item_text_box.back();
+		this->item_text_box.erase(this->item_text_box.end());
+	}
+	
+	while(this->item_slider.size() > 0) {
+		delete this->item_slider.back();
+		this->item_slider.erase(this->item_slider.end());
+	}
+
+	while(this->item_slider_text.size() > 0) {
+		delete this->item_slider_text.back();
+		this->item_slider_text.erase(this->item_slider_text.end());
 	}
 }
 
@@ -89,8 +101,40 @@ void NavMenu::setItem(std::string text, const uint16_t item) {
 //Refresh all listings on the menu.
 void NavMenu::setTextItems() {
 	for(uint16_t i=0;i<this->length;i+=1) {
-		this->item_box[i]->setText(this->items[i]);
+		this->item_text_box[i]->setText(this->items[i]);
 	}
+}
+
+//Set a slider at index.
+void NavMenu::setSlider(std::string text, const uint8_t max, const uint8_t val, const uint16_t item) {
+	int16_t slider_x, slider_y;
+	this->getIndexPosition(item, &slider_x, &slider_y);
+	const int16_t text_y = slider_y;
+	
+	slider_x = this->x;
+	slider_x += this->w/2;
+	slider_y += this->text_h/2 - this->text_h*4/7/2;
+
+	this->item_slider[item] = new NavSlider(this->attribute_list, slider_x, slider_y, this->w/3, this->text_h*4/7, max, val, false);
+	this->item_slider_text[item] = new TextBox(this->renderer, slider_x + this->w/3 + 5, text_y, this->w/3 - 5, this->text_h, ALIGN_H_L, ALIGN_V_M, this->text_h*5/8, &this->attribute_list->color_profile->text);
+
+	this->item_slider_text[item]->setText(text);
+}
+
+//Get slider at index or null.
+NavSlider* NavMenu::getSlider(const uint16_t index) {
+	if(index < this->item_slider.size())
+		return this->item_slider[index];
+	else
+		return NULL;
+}
+
+//Get the slider text box at index.
+TextBox* NavMenu::getSliderTextBox(const uint16_t index) {
+	if(index < this->item_slider_text.size())
+		return this->item_slider_text[index];
+	else
+		return NULL;
 }
 
 void NavMenu::setSelected(const uint16_t selected) {
@@ -291,18 +335,24 @@ void NavMenu::drawMenu() {
 
 	const uint16_t row_fit_count = ((this->h-this->y-title_height)/this->text_h)*(this->length/this->rows);
 
-	for(uint16_t i=0;i<this->item_box.size();i+=1) {
+	for(uint16_t i=0;i<this->item_text_box.size();i+=1) {
 		if((this->selected - 1)/row_fit_count != i/row_fit_count)
 			continue;
 
-		this->item_box[i]->drawText();
+		this->item_text_box[i]->drawText();
+
+		if(i < this->item_slider.size() && this->item_slider[i] != NULL)
+			this->item_slider[i]->drawSlider();
+
+		if(i < this->item_slider_text.size() && this->item_slider_text[i] != NULL)
+			this->item_slider_text[i]->drawText();
 	}
 
 	uint8_t last_r, last_g, last_b, last_a;
 	const uint32_t button_color = this->color_profile->button, outline_color = this->color_profile->outline;
 	SDL_GetRenderDrawColor(renderer, &last_r, &last_g, &last_b, &last_a);
 
-	for(uint16_t i=0;i<this->item_box.size();i+=1) {
+	for(uint16_t i=0;i<this->item_text_box.size();i+=1) {
 		if(this->items[i].compare("") == 0 || this->items[i].compare(" ") == 0)
 			continue;
 
@@ -332,9 +382,13 @@ void NavMenu::drawMenu() {
 			getIndexPosition(i, &x_pos, &y_pos);
 			if(!right_square)
 				x_pos -= SQ_WIDTH;
+
+			uint16_t outline_w = text_w;
+			if(item_slider[i] != NULL)
+				outline_w = outline_w/2 - 10;
 			
 			for(uint8_t s=0;s<OUTLINE_THICKNESS;s+=1) {
-				SDL_Rect outline_rect = {x_pos+s, y_pos+s, text_w-2*s, text_h-2*s};
+				SDL_Rect outline_rect = {x_pos+s, y_pos+s, outline_w-2*s, text_h-2*s};
 				SDL_RenderDrawRect(renderer, &outline_rect);
 			}
 		}
@@ -346,8 +400,8 @@ void NavMenu::drawMenu() {
 void NavMenu::refreshItems() {
 	title_box->renderText();
 
-	for(uint8_t i=0;i<this->item_box.size();i+=1)
-		this->item_box[i]->renderText();
+	for(uint8_t i=0;i<this->item_text_box.size();i+=1)
+		this->item_text_box[i]->renderText();
 }
 
 void NavMenu::getIndexPosition(uint16_t index, int16_t* x_pos, int16_t* y_pos) {

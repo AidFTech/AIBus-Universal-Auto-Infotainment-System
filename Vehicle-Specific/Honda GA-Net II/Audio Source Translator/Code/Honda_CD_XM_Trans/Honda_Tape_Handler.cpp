@@ -452,7 +452,7 @@ void HondaTapeHandler::sendTapeTextMessage() {
 
 	if(!nr_timer_enabled) {
 		String imid_mode_msg = F("Tape ");
-		if((parameter_list->external_imid_char < 11 || parameter_list->external_imid_lines > 1) && !imid_handler->getEstablished())
+		if(((parameter_list->external_imid_char < 11 && tape_mode != TAPE_MODE_IDLE) || parameter_list->external_imid_lines > 1) && !imid_handler->getEstablished())
 			imid_mode_msg = F("");
 		
 		switch(tape_mode) {

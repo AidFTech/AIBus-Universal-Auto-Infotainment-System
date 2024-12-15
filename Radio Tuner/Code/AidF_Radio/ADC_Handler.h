@@ -24,6 +24,7 @@
 #define REG_DIT_FUNCTION0 0x60
 #define REG_DIT_FUNCTION1 0x61
 #define REG_DIT_FUNCTION2 0x62
+#define REG_OUTPUT_MUTE 0x6A
 #define REG_OUTPUT_PORT 0x6B
 #define REG_AUX_OUTPUT 0x6C
 #define REG_MPIOCA_HIZ 0x6E
@@ -39,8 +40,6 @@ public:
 
 	void setADCOn();
 	void setDigitalOut();
-
-	uint8_t getOutputPort();
 	
 private:
 	int pcm9211_sel = -1;

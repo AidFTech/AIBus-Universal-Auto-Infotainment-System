@@ -237,14 +237,18 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 	} else if(the_message->sender == ID_RADIO && the_message->l >= 6 && the_message->data[0] == 0x67) { //Frequency change message.		
 		const uint16_t frequency = (the_message->data[1]<<8) | the_message->data[2];
 		writeIMIDRadioMessage(frequency, the_message->data[3], the_message->data[4]&0xF, (the_message->data[4]&0xF0)>>4);
-	} else if(the_message->sender == ID_RADIO && the_message->data[0] == 0x63) { //RDS.
+	} else if(the_message->sender == ID_RADIO && the_message->data[0] == 0x63 && the_message->l >= 3) { //RDS.
+		ack = false;
+		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+		
 		String rds_str = "";
 		for(int i=2;i<the_message->l;i+=1)
 			rds_str += char(the_message->data[i]);
 		
-		writeIMIDRDSMessage(rds_str);
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+		if(the_message->data[1] == 0x61) // True RDS.
+			writeIMIDRDSMessage(rds_str);
+		else if(the_message->data[1] == 0x60) //Call sign.
+			writeIMIDCallsignMessage(rds_str);
 	} else if(the_message->sender == ID_XM && the_message->data[0] == 0x39) { //XM channel change message.
 		const uint16_t channel = (the_message->data[2]<<8) | the_message->data[3];
 		const uint8_t preset = the_message->data[4]&0x3F;
@@ -539,6 +543,37 @@ void HondaIMIDHandler::writeIMIDRadioMessage(const uint16_t frequency, const int
 	IE_Message tuning_msg(sizeof(tuning_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
 	tuning_msg.refreshIEData(tuning_data);
 	ie_driver->sendMessage(&tuning_msg, true, true);
+}
+
+void HondaIMIDHandler::writeIMIDCallsignMessage(String msg) {
+	uint8_t callsign_data[] = {0x60,
+								0x7,
+								0x11,
+								0x0,
+								0x1,
+								0x11,
+								0x0, //Length?
+								0x0,
+								0x0,
+								0x0,
+								0x0,
+								0x0,
+								0x0,
+								0x0,
+								0x0};
+								
+	int len = msg.length();
+	if(len > 8)
+		len = 8;
+	
+	callsign_data[6] = len&0xFF;
+	
+	for(int i=0;i<len;i+=1)
+		callsign_data[i+7] = uint8_t(msg.charAt(i));
+	
+	IE_Message callsign_msg(sizeof(callsign_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	callsign_msg.refreshIEData(callsign_data);
+	ie_driver->sendMessage(&callsign_msg, true, true);
 }
 
 void HondaIMIDHandler::writeIMIDRDSMessage(String msg) {

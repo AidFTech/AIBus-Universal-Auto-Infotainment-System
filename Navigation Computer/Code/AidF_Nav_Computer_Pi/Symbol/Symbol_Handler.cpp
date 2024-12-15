@@ -27,8 +27,6 @@ std::string SymbolHandler::removeSymbolText(std::string text) {
 			the_return.replace(found_pos, 4, "#");
 		else if(the_return.substr(found_pos, 4).compare(SYM_FF) == 0 || the_return.substr(found_pos, 4).compare(SYM_REW) == 0)
 			the_return.replace(found_pos, 4, "    ");
-		//else if(the_return.substr(found_pos, 4).compare(SYM_RIGHTOFF) == 0 || the_return.substr(found_pos, 4).compare(SYM_RIGHTON) == 0)
-		//	the_return.replace(found_pos, 4, " ");
 		else
 			the_return.replace(found_pos, 4, "  ");
 	}
@@ -51,8 +49,6 @@ std::string SymbolHandler::removeSymbolText(std::string text) {
 }
 
 void SymbolHandler::drawSymbols(SDL_Renderer* renderer, SDL_Texture* texture, TTF_Font* font, std::string text, const int16_t start_x, const int16_t start_y, const uint16_t size, uint32_t* text_color){
-	SDL_Color black = {0,0,0,0xFF};
-
 	for(uint16_t s=0;s<symbol_count;s+=1) {
 		uint16_t sym_x = start_x;
 

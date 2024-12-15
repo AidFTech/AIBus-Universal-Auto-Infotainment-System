@@ -1086,15 +1086,13 @@ impl <'a> AMirror<'a> {
 		}
 	}
 
-	//Write the settings menu.
-	fn write_settings_menu(&mut self) {
-		let settings_count = 7;
+	fn create_menu(&mut self, title: String, size: u8) -> bool {
 		let y_pos: u16 = 140;
 		let menu_h: u16 = 35;
 		
-		let mut menu_req_data = [0x2B, 0x5A, settings_count, settings_count, 0, 0, (y_pos>>8) as u8, (y_pos&0xFF) as u8, (self.w>>8) as u8, (self.w&0xFF) as u8, (menu_h>>8) as u8, (menu_h&0xFF) as u8].to_vec();
+		let mut menu_req_data = [0x2B, 0x5A, size, size, 0, 0, (y_pos>>8) as u8, (y_pos&0xFF) as u8, (self.w>>8) as u8, (self.w&0xFF) as u8, (menu_h>>8) as u8, (menu_h&0xFF) as u8].to_vec();
 
-		let menu_header_bytes = "Mirror Settings".as_bytes();
+		let menu_header_bytes = title.as_bytes();
 
 		for i in 0..menu_header_bytes.len() {
 			menu_req_data.push(menu_header_bytes[i]);
@@ -1111,7 +1109,7 @@ impl <'a> AMirror<'a> {
 		let mut stream = match self.stream.try_lock() {
 			Ok(stream) => stream,
 			Err(_) => {
-				return;
+				return false;
 			}
 		};
 
@@ -1144,7 +1142,7 @@ impl <'a> AMirror<'a> {
 								stream = match self.stream.try_lock() {
 									Ok(stream) => stream,
 									Err(_) => {
-										return;
+										return false;
 									}
 								};
 							}
@@ -1163,7 +1161,14 @@ impl <'a> AMirror<'a> {
 
 		std::mem::drop(stream);
 
-		if no_stream {
+		return !no_stream;
+	}
+
+	//Write the settings menu.
+	fn write_settings_menu(&mut self) {
+		let settings_count = 7;
+		
+		if !self.create_menu("Mirror Settings".to_string(), settings_count) {
 			return;
 		}
 

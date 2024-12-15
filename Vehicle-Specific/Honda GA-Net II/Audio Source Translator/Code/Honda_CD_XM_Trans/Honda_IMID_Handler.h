@@ -37,6 +37,7 @@ public:
 
 	void writeIMIDRadioMessage(const uint16_t frequency, const int8_t decimal, const uint8_t preset, const uint8_t stereo_mode);
 	void writeIMIDRDSMessage(String msg);
+	void writeIMIDCallsignMessage(String msg);
 
 	void writeIMIDSiriusNumberMessage(const uint8_t preset, const uint16_t channel, const bool xm2);
 	void writeIMIDSiriusTextMessage(const uint8_t position, String text);

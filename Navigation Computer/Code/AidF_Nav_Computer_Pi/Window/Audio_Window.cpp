@@ -43,6 +43,9 @@ Audio_Window::~Audio_Window() {
 
 //Handle an AIBus message. Return true if the message is meant for the audio screen.
 bool Audio_Window::handleAIBus(AIData* msg) {
+	if(msg->receiver != ID_NAV_COMPUTER)
+		return false;
+	
 	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	if(msg->data[0] == 0x20 || msg->data[0] == 0x23) {
@@ -94,6 +97,33 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 				title += msg->data[i];
 
 			this->settings_menu->setTitle(title);
+		} else if(msg->data[1] == 0x54 && this->settings_menu != NULL && msg->l >= 6) { //Create a menu slider.
+			const uint8_t index = msg->data[2];
+			const uint8_t max = msg->data[4], value = msg->data[3];
+			const bool sel = msg->data[5] != 0;
+
+			std::string value_text = "";
+			for(uint8_t i=6;i<msg->l;i+=1)
+				value_text += msg->data[i];
+
+			if(this->settings_menu->getSlider(index) != NULL) {
+				NavSlider* slider = this->settings_menu->getSlider(index);
+				if(max != slider->getMax()) {
+					this->settings_menu->setSlider(value_text, max, value, index);
+					this->settings_menu->getSlider(index)->setSelected(sel);
+				} else {
+					slider->setValue(value);
+					slider->setSelected(sel);
+					
+					TextBox* slider_text = this->settings_menu->getSliderTextBox(index);
+					if(slider_text != NULL)
+						slider_text->setText(value_text);
+				}
+			} else {
+				this->settings_menu->setSlider(value_text, max, value, index);
+				this->settings_menu->getSlider(index)->setSelected(sel);
+			}
+
 		} else if(msg->data[1] == 0x4A && this->settings_menu != NULL) { //Clear the menu.
 			this->settings_menu_active = false;
 			this->settings_menu_prep = false;

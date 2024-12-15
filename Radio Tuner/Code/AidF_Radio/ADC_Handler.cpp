@@ -17,6 +17,7 @@ void PCM9211Handler::init() {
 	writeRegister(REG_SOURCE_SCLK, 0x1A);
 	writeRegister(REG_SOURCE_SECONDARY_CLOCK2, 0x22);
 	writeRegister(REG_ERROR_OUTPUT, 0x0);
+	writeRegister(REG_ERROR_CAUSE, 0x1);
 	writeRegister(REG_OSCILLATION_CONTROL, 0x0);
 	writeRegister(REG_ADC_CLK, 0x81);
 	writeRegister(REG_SOURCE_SECONDARY_CLOCK2, 0x22);
@@ -34,8 +35,10 @@ void PCM9211Handler::init() {
 
 	writeRegister(REG_MPIOCA_HIZ, 0xF);
 	writeRegister(REG_MPIOABC_GROUP, 0x40);
+
 	writeRegister(REG_OUTPUT_PORT, 0x22);
-	writeRegister(REG_DIR_INPUT_SOURCE, 0xF);
+	writeRegister(REG_DIR_INPUT_SOURCE, 0xCF);
+	writeRegister(REG_OUTPUT_MUTE, 0xCC);
 }
 
 //Turn the ADC off.
@@ -47,14 +50,14 @@ void PCM9211Handler::powerOff() {
 void PCM9211Handler::setADCOn() {
 	writeRegister(REG_OUTPUT_PORT, 0x22);
 	writeRegister(REG_RECOUT0_SOURCE, 0xF);
-	writeRegister(REG_DIR_INPUT_SOURCE, 0xF);
+	writeRegister(REG_DIR_INPUT_SOURCE, 0xCF);
 }
 
 //Set the output to digital input.
 void PCM9211Handler::setDigitalOut() {
-	writeRegister(REG_OUTPUT_PORT, 0x11);
-	writeRegister(REG_RECOUT0_SOURCE, 0x0);
-	writeRegister(REG_DIR_INPUT_SOURCE, 0x0);
+	writeRegister(REG_OUTPUT_PORT, 0x33);
+	writeRegister(REG_RECOUT0_SOURCE, 0xF);
+	writeRegister(REG_DIR_INPUT_SOURCE, 0xCF);
 }
 
 //Set the MPO0 and MPO1 outputs.
@@ -79,9 +82,4 @@ uint8_t PCM9211Handler::readRegister(const uint8_t reg) {
 	digitalWrite(pcm9211_sel, HIGH);
 	
 	return value;
-}
-
-uint8_t PCM9211Handler::getOutputPort() {
-	const uint8_t output = readRegister(0x39);
-	return output;
 }

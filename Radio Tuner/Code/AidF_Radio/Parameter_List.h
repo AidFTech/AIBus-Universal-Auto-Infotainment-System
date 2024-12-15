@@ -15,7 +15,9 @@ struct ParameterList {
 	bool power_on = true;
 	
 	uint16_t vehicle_speed = 0;
-	bool computer_connected = false, screen_connected = false, amp_connected = false, manual_tune_mode = false;
+	bool computer_connected = false, screen_connected = false, amp_connected = false;
+	
+	bool manual_tune_mode = false, bass_adjust = false, treble_adjust = false, balance_adjust = false, fader_adjust = false;
 
 	uint8_t imid_char = 0, imid_lines = 0;
 	bool imid_connected = false, imid_radio = false;
@@ -56,6 +58,7 @@ struct ParameterList {
 	bool phone_active = false, digital_amp = false;
 
 	uint16_t screen_w = 800, screen_h = 480;
+	uint16_t option_height = 0x23;
 };
 
 #endif

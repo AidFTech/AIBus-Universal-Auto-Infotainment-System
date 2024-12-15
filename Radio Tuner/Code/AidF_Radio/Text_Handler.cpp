@@ -213,7 +213,7 @@ void TextHandler::sendIMIDSourceMessage(const uint8_t source, const uint8_t subs
 
 //Send the frequency message to the IMID.
 void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8_t subsrc, const uint8_t preset) {
-	if(!parameter_list->imid_connected || parameter_list->info_mode)
+	if(!parameter_list->imid_connected || parameter_list->info_mode || subsrc > SUB_AM)
 		return;
 
 	if(parameter_list->imid_radio) {
@@ -250,15 +250,30 @@ void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8
 				freq_text += "-" + String(preset) + " ";
 			else
 				freq_text += "   ";
+		} else {
+			if(preset > 0)
+				freq_text += String(preset) + " ";
+			else
+				freq_text += "  ";
+
+			if(frequency < 10000)
+				freq_text += " ";
 		}
 			
 		if(subsrc != SUB_AM) {
 			if(frequency%100 >= 10)
-				freq_text += String(frequency/100) + "." + String(frequency%100) + "MHz";
+				freq_text += String(frequency/100) + "." + String(frequency%100);
 			else
-				freq_text += String(frequency/100) + ".0" + String(frequency%100) + "MHz";
-		} else
-			freq_text += String(frequency) + "kHz";
+				freq_text += String(frequency/100) + ".0" + String(frequency%100);
+
+			if(parameter_list->imid_char >= 15)
+				freq_text += "MHz";
+		} else {
+			freq_text += String(frequency);
+
+			if(parameter_list->imid_char >= 12)
+				freq_text += "kHz";
+		}
 
 		if(freq_text.length() + 4 < parameter_list->imid_char && parameter_list->fm_stereo)
 			freq_text += " St.";
@@ -341,6 +356,24 @@ void TextHandler::sendIMIDInfoMessage(String text) {
 		info_msg.data[i+4] = uint8_t(text.charAt(i));
 
 	ai_handler->writeAIData(&info_msg);
+}
+
+//Send a callsign message to the IMID.
+void TextHandler::sendIMIDCallsignMessage(String text) {
+	if(!parameter_list->imid_connected || parameter_list->info_mode)
+		return;
+	
+	if(parameter_list->imid_radio) {
+		AIData cs_msg(2 + text.length(), ID_RADIO, ID_IMID_SCR);
+
+		cs_msg.data[0] = 0x63;
+		cs_msg.data[1] = 0x60;
+
+		for(unsigned int i=0;i<text.length();i+=1)
+			cs_msg.data[i+2] = uint8_t(text.charAt(i));
+
+		ai_handler->writeAIData(&cs_msg);
+	} 
 }
 
 //Send the time message.

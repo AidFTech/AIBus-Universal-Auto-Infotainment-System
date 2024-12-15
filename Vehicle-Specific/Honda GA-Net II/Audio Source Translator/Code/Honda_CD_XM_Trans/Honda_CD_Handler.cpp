@@ -279,8 +279,8 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 
 			if(text_control) {
 				if(timer != last_timer || disc_and_track != ((disc<<8) | track) || getIECDStatus(ai_cd_status) != last_status || getIECDRepeat(ai_cd_status) != last_repeat) {
-					if(getIECDRepeat(ai_cd_status) != last_repeat &&
-					parameter_list->imid_connected || (parameter_list->external_imid_char > 0 && parameter_list-> external_imid_char < 16 && parameter_list->external_imid_lines == 1 && !parameter_list->external_imid_cd)) {
+					if(getIECDRepeat(ai_cd_status) != last_repeat && (disc_and_track&0xFF00) == (disc<<8) &&
+					(parameter_list->imid_connected || (parameter_list->external_imid_char > 0 && parameter_list-> external_imid_char < 16 && parameter_list->external_imid_lines == 1 && !parameter_list->external_imid_cd))) {
 						this->mode_timer_enabled = true;
 						this->mode_timer = 0;
 					}
@@ -1209,7 +1209,7 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 			ai_driver->writeAIData(&timer_msg);
 		} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
 			if(display_parameter == TEXT_NONE) {
-				if(parameter_list->external_imid_lines >= 2 || (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY) {
+				if(parameter_list->external_imid_lines >= 2 || (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY || (ai_cd_status&AI_CD_STATUS_PAUSE) == AI_CD_STATUS_PAUSE || (ai_cd_status&AI_CD_STATUS_READING) == AI_CD_STATUS_READING) {
 					String function_text = "";
 					if(parameter_list->external_imid_char > 10) {
 						function_text = "CD" + String(int(disc));
@@ -1242,15 +1242,20 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 								function_text += " ";
 						}
 					} else {
-						if(track > 0 && track <= 99)
+						if(track > 0 && track <= 99) {
+							if(track < 10)
+								function_text += ' ';
 							function_text += String(int(track));
-						else
+						} else
 							function_text += "D" + String(int(disc));
 
-						function_text += " ";
+						function_text += ' ';
 					}
 					
 					if(timer >= 0) {
+						if(timer/60 < 10)
+							function_text += ' ';
+
 						function_text += String(int(timer/60)) + ":";
 						if(timer%60 >= 10)
 							function_text += String(int(timer%60));
@@ -1262,7 +1267,12 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 					AIData function_msg(4+function_text.length(), ID_CDC, ID_IMID_SCR);
 					function_msg.data[0] = 0x23;
 					function_msg.data[1] = 0x60;
-					function_msg.data[2] = parameter_list->external_imid_char/2-function_text.length()/2;
+
+					if(parameter_list->external_imid_char > 10)
+						function_msg.data[2] = parameter_list->external_imid_char/2-function_text.length()/2;
+					else
+						function_msg.data[2] = 0;
+
 					function_msg.data[3] = 1;
 					for(int i=0;i<function_text.length();i+=1)
 						function_msg.data[i+4] = uint8_t(function_text.charAt(i));
