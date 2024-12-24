@@ -22,7 +22,7 @@ void getTapeSettings(bool* auto_start, bool* fwd_start) {
 }
 
 //Save CD settings to EEPROM.
-void setCDSettings(const bool auto_start, const bool imid_text) {
+void setCDSettings(const bool auto_start, const bool imid_text, const bool split) {
 	uint8_t save_byte = 0;
 
 	if(auto_start)
@@ -31,13 +31,17 @@ void setCDSettings(const bool auto_start, const bool imid_text) {
 	if(imid_text)
 		save_byte |= CD_SETTINGS_IMID;
 
+	if(split)
+		save_byte |= CD_SETTINGS_SPLIT;
+
 	EEPROM.write(CD_SETTINGS_MAIN, save_byte);
 }
 
 //Load CD settings from EEPROM.
-void getCDSettings(bool* auto_start, bool* imid_text) {
+void getCDSettings(bool* auto_start, bool* imid_text, bool* split) {
 	const uint8_t load_byte = EEPROM.read(CD_SETTINGS_MAIN);
 
 	*auto_start = (load_byte&CD_SETTINGS_AUTOSTART) != 0;
 	*imid_text = (load_byte&CD_SETTINGS_IMID) != 0;
+	*split = (load_byte&CD_SETTINGS_SPLIT) != 0;
 }

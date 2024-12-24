@@ -3,6 +3,7 @@ mod ipc;
 mod context;
 mod amirror;
 mod mirror;
+mod text_split;
 
 use std::sync::{Arc, Mutex};
 

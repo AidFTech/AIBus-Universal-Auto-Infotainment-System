@@ -4,6 +4,12 @@
 #include "AIBus_Handler.h"
 #include "Parameter_List.h"
 
+#ifndef __AVR__
+#define __AVR__
+#endif
+
+#include "Text_Split.h"
+
 #ifndef text_handler_h
 #define text_handler_h
 
@@ -49,6 +55,5 @@ private:
 };
 
 AIData getTextMessage(String text, const uint8_t group, const uint8_t area);
-void splitText(const uint16_t len, String text, String* sub_text, const int num);
 
 #endif

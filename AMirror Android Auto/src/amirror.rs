@@ -8,6 +8,8 @@ use crate::context::Context;
 use crate::mirror::handler::*;
 use crate::ipc::*;
 
+use crate::text_split::split_text;
+
 const APP_NAME: u8 = 0x0;
 const SONG_NAME: u8 = 0x1;
 const ARTIST_NAME: u8 = 0x2;
@@ -27,6 +29,9 @@ pub struct AMirror<'a> {
 	display_phone: bool,
 	
 	imid_scroll: i8,
+	imid_split: bool,
+	imid_scroll_pos: usize,
+	imid_refresh: bool,
 
 	local_radio_connected: bool,
 	local_imid_native: bool,
@@ -38,6 +43,7 @@ pub struct AMirror<'a> {
 	w: u16,
 
 	source_request_timer: Instant,
+	scroll_timer: Instant,
 	pub run: bool,
 }
 
@@ -55,7 +61,11 @@ impl <'a> AMirror<'a> {
 			display_album: false,
 			display_app: false,
 			display_phone: false,
+
 			imid_scroll: -1,
+			imid_split: true,
+			imid_scroll_pos: 0,
+			imid_refresh: false,
 
 			local_radio_connected: false,
 			local_imid_native: false,
@@ -67,6 +77,7 @@ impl <'a> AMirror<'a> {
 			w,
 
 			source_request_timer: Instant::now(),
+			scroll_timer: Instant::now(),
 			run: true,
 		};
 	}
@@ -90,6 +101,8 @@ impl <'a> AMirror<'a> {
 
 		let playing = context.playing;
 		let phone_active = context.phone_active;
+
+		let mut change_imid = false;
 
 		std::mem::drop(context);
 
@@ -280,6 +293,8 @@ impl <'a> AMirror<'a> {
 							if imid_y <= context.imid_row_count {
 								self.write_imid_text(context.song_title.clone(), imid_x as u8, imid_y);
 							}
+						} else if self.imid_scroll >= 0 {
+							change_imid = true;
 						}
 					}
 				}
@@ -312,6 +327,8 @@ impl <'a> AMirror<'a> {
 							if imid_y <= context.imid_row_count {
 								self.write_imid_text(context.artist.clone(), imid_x as u8, imid_y);
 							}
+						} else if self.imid_scroll >= 0 {
+							change_imid = true;
 						}
 					}
 				}
@@ -347,6 +364,8 @@ impl <'a> AMirror<'a> {
 							if imid_y <= context.imid_row_count {
 								self.write_imid_text(context.album.clone(), imid_x as u8, imid_y);
 							}
+						} else if self.imid_scroll >= 0 {
+							change_imid = true;
 						}
 					}
 				}
@@ -385,6 +404,8 @@ impl <'a> AMirror<'a> {
 							if imid_y <= context.imid_row_count {
 								self.write_imid_text(context.app.clone(), imid_x as u8, imid_y);
 							}
+						} else if self.imid_scroll >= 0 {
+							change_imid = true;
 						}
 					}
 				}
@@ -431,6 +452,72 @@ impl <'a> AMirror<'a> {
 				});
 			}
 		}
+
+		let mut scroll_limit = 300;
+		if self.imid_split {
+			scroll_limit = 3000;
+		}
+
+		if self.imid_scroll >= 0 && (Instant::now() - self.scroll_timer > Duration::from_millis(scroll_limit) || change_imid || self.imid_refresh) {
+			if context.audio_text && context.imid_row_count > 0 && context.imid_text_len > 0 {
+				let mut scroll_param = "".to_string();
+
+				if self.imid_scroll == 0 {
+					scroll_param = context.phone_name.clone();
+				} else if self.imid_scroll == 1 {
+					scroll_param = context.song_title.clone();
+				} else if self.imid_scroll == 2 {
+					scroll_param = context.artist.clone();
+				} else if self.imid_scroll == 3 {
+					scroll_param = context.album.clone();
+				} else if self.imid_scroll == 4 {
+					scroll_param = context.app.clone();
+				}
+
+				if Instant::now() - self.scroll_timer > Duration::from_millis(scroll_limit) {
+					self.imid_scroll_pos += 1;
+					self.scroll_timer = Instant::now();
+				} else if change_imid || self.imid_refresh {
+					self.imid_scroll_pos = 0;
+				}
+
+				if self.imid_refresh {
+					self.imid_refresh = false;
+				}
+
+				let mut imid_y = 1;
+				if context.imid_row_count >= 2 {
+					imid_y = context.imid_row_count/2;
+				}
+
+				if self.imid_split {
+					let scroll_split = split_text(context.imid_text_len as usize, &scroll_param);
+					if self.imid_scroll_pos >= scroll_split.len() {
+						self.imid_scroll_pos = 0;
+					}
+
+					if scroll_split[self.imid_scroll_pos].len() == 0 {
+						self.imid_scroll_pos = 0;
+					}
+
+					self.write_imid_text(scroll_split[self.imid_scroll_pos].clone(), 0, imid_y);
+				} else {
+					if scroll_param.len() - self.imid_scroll_pos > context.imid_text_len as usize {
+						let scroll_string = scroll_param[self.imid_scroll_pos..self.imid_scroll_pos + context.imid_text_len as usize].to_string();
+						self.write_imid_text(scroll_string, 0, imid_y);
+					}
+				}
+			}
+		}
+
+		if self.imid_refresh && self.imid_scroll < 0 {
+			self.imid_refresh = false;
+			if context.audio_text {
+				std::mem::drop(context);
+				self.write_all_imid_text();
+			}
+		}
+	
 	}
 
 	pub fn handle_aibus_message(&mut self, ai_msg: AIBusMessage) {
@@ -489,6 +576,8 @@ impl <'a> AMirror<'a> {
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x40 && ai_msg.data[1] == 0x10 { //Source change.
 				let new_device = ai_msg.data[2];
 				if new_device == AIBUS_DEVICE_AMIRROR { //Selected!
+					self.imid_scroll = -1;
+					self.imid_refresh = true;
 					context.audio_selected = true;
 					
 					if context.phone_type != 0 {
@@ -518,6 +607,9 @@ impl <'a> AMirror<'a> {
 					});
 					
 				} else { //Deselected!
+					self.imid_scroll = -1;
+					self.imid_refresh = true;
+
 					if context.phone_type != 0 {
 						self.handler.send_carplay_command(PHONE_COMMAND_PAUSE);
 					}
@@ -689,6 +781,22 @@ impl <'a> AMirror<'a> {
 							self.handler.send_carplay_command(PHONE_COMMAND_DAY);
 						}
 					}
+				}
+			}
+		} else if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN {
+			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x30 {
+				let button = ai_msg.data[1];
+				let state = ai_msg.data[2]>>6;
+
+				if button == 0x53 && state == 0x0 && context.audio_selected && context.audio_text { //Info button.
+					if self.imid_scroll < 4 {
+						self.imid_scroll += 1;
+					} else {
+						self.imid_scroll = -1;
+					}
+					self.imid_refresh = true;
+					self.imid_scroll_pos = 0;
+					self.scroll_timer = Instant::now();
 				}
 			}
 		}
@@ -871,7 +979,7 @@ impl <'a> AMirror<'a> {
 
 		self.write_aibus_message(meta_msg);
 	}
-	
+
 	//Write all metadata to the radio after being selected.
 	fn write_all_metadata(&mut self) {
 		let context = match self.context.try_lock() {

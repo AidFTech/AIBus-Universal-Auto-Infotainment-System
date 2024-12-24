@@ -5,7 +5,13 @@
 #include "Parameter_List.h"
 #include "Honda_Source_Handler.h"
 #include "Honda_IMID_Handler.h"
+
 #include "IE_CD_Status.h"
+
+#ifndef __AVR__
+#define __AVR__
+#endif
+#include "Text_Split.h"
 
 #include "Trans_EEPROM.h"
 
@@ -49,9 +55,12 @@
 #define DISPLAY_INFO_TIMER 750
 #define SCROLL_TIMER 300
 #define SCROLL_TIMER_0 600
+#define SCROLL_TIMER_FULL 3000
 #define FUNCTION_CHANGE_TIMER 2500
 #define SHORT_CHANGE_TIMER 5
 #define MP3_REQUEST_TIMER 1500
+
+#define SPLIT_COUNT 5
 
 #define MENU_SELECT_DISC 0x16
 
@@ -101,6 +110,7 @@ private:
 	bool display_timer_enabled = false;
 	elapsedMillis display_timer, scroll_timer;
 	int8_t display_parameter = TEXT_NONE, scroll_state = 0;
+	bool split = false;
 
 	//Timer to change the disc.
 	bool disc_change_timer_enabled = false;

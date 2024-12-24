@@ -120,7 +120,7 @@ void TextHandler::sendLongRDSMessage(String text) {
 		}
 		
 		String sub_text[5] = {"","","","",""};
-
+		
 		splitText(14, text, sub_text, 5);
 		
 		for(int i=0;i<5;i+=1) {
@@ -424,63 +424,4 @@ AIData getTextMessage(String text, const uint8_t group, const uint8_t area) {
 	
 	return text_message;
 	
-}
-
-//Split text by spaces.
-void splitText(const uint16_t len, String text, String* sub_text, const int num) {
-	if(text.length() > 0) {
-		int text_end = text.length();
-		for(int i=text.length()-1; i >= 0; i-= 1) {
-			if(text.charAt(i) > ' ')
-				break;
-			else
-				text_end = i;
-		}
-		text = text.substring(0, text_end);
-
-		for(int i=0;i<text.length();i+=1) {
-			if(text.charAt(i) < 0x20 && text.charAt(i) != 0) {
-				text.remove(i);
-				i -= 1;
-			}
-		}
-
-		text += " ";
-	}
-
-	for(int i=0;i<num;i+=1) {
-		if(text.length() > 0) {
-			int last_space = -1, space = -1;
-
-			if(text.charAt(0) == ' ')
-				text.remove(0);
-			
-			do {
-				last_space = space;
-				space = text.indexOf(' ', last_space + 1);
-				
-				if(space >= len || space < 0 || space >= text.length() - 1)
-					break;
-			} while(space >= 0);
-
-			if(space >= text.length() - 1 && i >= num - 1)
-				text.remove(text.length() - 1);
-			
-			if(last_space >= 0 && last_space < len && space > len) {
-				sub_text[i] = text.substring(0, last_space);
-				text = text.substring(last_space + 1, text.length());
-			} else if(space == len) {
-				sub_text[i] = text.substring(0,len);
-				text = text.substring(len + 1,text.length());
-			} else {
-				if(text.length() >= len) {
-					sub_text[i] = text.substring(0,len);
-					text = text.substring(len,text.length());
-				} else {
-					sub_text[i] = text;
-					text = "";
-				}
-			}
-		}
-	}
 }

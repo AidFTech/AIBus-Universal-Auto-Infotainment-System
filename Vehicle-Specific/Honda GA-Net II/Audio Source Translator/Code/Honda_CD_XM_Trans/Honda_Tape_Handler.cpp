@@ -366,90 +366,6 @@ void HondaTapeHandler::sendTapeTextMessage() {
 	if(!text_control)
 		return;
 
-	String mode_msg = " ";
-	switch(tape_mode) {
-		case TAPE_MODE_PLAY:
-			mode_msg = "Play";
-			if(repeat_on)
-				mode_msg += " Repeat";
-			break;
-		case TAPE_MODE_REVSKIP:
-		case TAPE_MODE_REW:
-			mode_msg = "Rew";
-			break;
-		case TAPE_MODE_FWDSKIP:
-		case TAPE_MODE_FF:
-			mode_msg = "FF";
-			break;
-		case TAPE_MODE_LOAD:
-			mode_msg = "Load";
-			break;
-		case TAPE_MODE_EJECT:
-			mode_msg = "Eject";
-			break;
-		case TAPE_MODE_IDLE:
-			mode_msg = "No Tape";
-			break;
-	}
-
-	if(tape_mode == TAPE_MODE_FWDSKIP || tape_mode == TAPE_MODE_REVSKIP) {
-		mode_msg += " ";
-		mode_msg += String(this->track_count);
-	}
-
-	if(getDisplaySymbol()) {
-		if(fwd) 
-			mode_msg += " #UP ";
-		else
-			mode_msg += " #DN ";
-	}
-
-	String mode_symbol = " ";
-	switch(tape_mode) {
-		case TAPE_MODE_PLAY:
-			if(fwd)
-				mode_symbol = "#FWD";
-			else
-				mode_symbol = "#REV";
-			break;
-		case TAPE_MODE_FF:
-		case TAPE_MODE_FWDSKIP:
-			if(fwd)
-				mode_symbol = "#FF ";
-			else
-				mode_symbol = "#REW";
-			break;
-		case TAPE_MODE_REW:
-		case TAPE_MODE_REVSKIP:
-			if(fwd)
-				mode_symbol = "#REW";
-			else
-				mode_symbol = "#FF ";
-	}
-
-	String nr_msg = " ";
-	if(nr_on)
-		nr_msg = "NR";
-
-	String bias_msg = " ";
-	if(tape_mode != TAPE_MODE_EJECT && tape_mode != TAPE_MODE_LOAD && tape_mode != TAPE_MODE_IDLE) {
-		if(cro2)
-			bias_msg = "High Bias";
-		else
-			bias_msg = "Type I Bias";
-	}
-
-	AIData text_msg1 = getTextMessage(ID_TAPE, mode_msg, 0, 1, false);
-	AIData text_msg2 = getTextMessage(ID_TAPE, mode_symbol, 0, 3, false);
-
-	AIData sub_msg1 = getTextMessage(ID_TAPE, nr_msg, 1, 0, false);
-	AIData sub_msg2 = getTextMessage(ID_TAPE, bias_msg, 1, 1, true);
-
-	ai_driver->writeAIData(&text_msg1, parameter_list->computer_connected);
-	ai_driver->writeAIData(&text_msg2, parameter_list->computer_connected);
-	ai_driver->writeAIData(&sub_msg1, parameter_list->computer_connected);
-	ai_driver->writeAIData(&sub_msg2, parameter_list->computer_connected);
-
 	if(!nr_timer_enabled) {
 		String imid_mode_msg = F("Tape ");
 		if(((parameter_list->external_imid_char < 11 && tape_mode != TAPE_MODE_IDLE) || parameter_list->external_imid_lines > 1) && !imid_handler->getEstablished())
@@ -551,6 +467,90 @@ void HondaTapeHandler::sendTapeTextMessage() {
 			ai_driver->writeAIData(&imid_text_msg);
 		}
 	}
+
+	String mode_msg = " ";
+	switch(tape_mode) {
+		case TAPE_MODE_PLAY:
+			mode_msg = "Play";
+			if(repeat_on)
+				mode_msg += " Repeat";
+			break;
+		case TAPE_MODE_REVSKIP:
+		case TAPE_MODE_REW:
+			mode_msg = "Rew";
+			break;
+		case TAPE_MODE_FWDSKIP:
+		case TAPE_MODE_FF:
+			mode_msg = "FF";
+			break;
+		case TAPE_MODE_LOAD:
+			mode_msg = "Load";
+			break;
+		case TAPE_MODE_EJECT:
+			mode_msg = "Eject";
+			break;
+		case TAPE_MODE_IDLE:
+			mode_msg = "No Tape";
+			break;
+	}
+
+	if(tape_mode == TAPE_MODE_FWDSKIP || tape_mode == TAPE_MODE_REVSKIP) {
+		mode_msg += " ";
+		mode_msg += String(this->track_count);
+	}
+
+	if(getDisplaySymbol()) {
+		if(fwd) 
+			mode_msg += " #UP ";
+		else
+			mode_msg += " #DN ";
+	}
+
+	String mode_symbol = " ";
+	switch(tape_mode) {
+		case TAPE_MODE_PLAY:
+			if(fwd)
+				mode_symbol = "#FWD";
+			else
+				mode_symbol = "#REV";
+			break;
+		case TAPE_MODE_FF:
+		case TAPE_MODE_FWDSKIP:
+			if(fwd)
+				mode_symbol = "#FF ";
+			else
+				mode_symbol = "#REW";
+			break;
+		case TAPE_MODE_REW:
+		case TAPE_MODE_REVSKIP:
+			if(fwd)
+				mode_symbol = "#REW";
+			else
+				mode_symbol = "#FF ";
+	}
+
+	String nr_msg = " ";
+	if(nr_on)
+		nr_msg = "NR";
+
+	String bias_msg = " ";
+	if(tape_mode != TAPE_MODE_EJECT && tape_mode != TAPE_MODE_LOAD && tape_mode != TAPE_MODE_IDLE) {
+		if(cro2)
+			bias_msg = "High Bias";
+		else
+			bias_msg = "Type I Bias";
+	}
+
+	AIData text_msg1 = getTextMessage(ID_TAPE, mode_msg, 0, 1, false);
+	AIData text_msg2 = getTextMessage(ID_TAPE, mode_symbol, 0, 3, false);
+
+	AIData sub_msg1 = getTextMessage(ID_TAPE, nr_msg, 1, 0, false);
+	AIData sub_msg2 = getTextMessage(ID_TAPE, bias_msg, 1, 1, true);
+
+	ai_driver->writeAIData(&text_msg1, parameter_list->computer_connected);
+	ai_driver->writeAIData(&text_msg2, parameter_list->computer_connected);
+	ai_driver->writeAIData(&sub_msg1, parameter_list->computer_connected);
+	ai_driver->writeAIData(&sub_msg2, parameter_list->computer_connected);
 }
 
 void HondaTapeHandler::sendFunctionTextMessage() {

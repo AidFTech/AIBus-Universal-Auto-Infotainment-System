@@ -13,6 +13,8 @@
 #include "Background_Tune_Handler.h"
 #include "ADC_Handler.h"
 
+#include "Text_Split.h"
+
 #include "Radio_EEPROM.h"
 
 //#define U5_ERR //True if the design error involving U5 is present.

@@ -7,7 +7,7 @@ HondaCDHandler::HondaCDHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_drive
 	this->imid_handler = imid_handler;
 	this->clearCDText(true, true, true, true, true);
 
-	getCDSettings(&this->autostart, &this->use_function_timer);
+	getCDSettings(&this->autostart, &this->use_function_timer, &this->split);
 }
 
 void HondaCDHandler::loop() {
@@ -77,7 +77,9 @@ void HondaCDHandler::loop() {
 		}
 
 		unsigned int scroll_limit = SCROLL_TIMER;
-		if(scroll_state <= 0)
+		if(split)
+			scroll_limit = SCROLL_TIMER_FULL;
+		else if(scroll_state <= 0)
 			scroll_limit =  SCROLL_TIMER_0;
 
 		if(display_parameter != TEXT_NONE && !text_timer_enabled && !display_timer_enabled && scroll_timer >= scroll_limit) {
@@ -138,7 +140,7 @@ void HondaCDHandler::loop() {
 	
 		if(setting_changed) {
 			setting_changed = false;
-			setCDSettings(this->autostart, this->use_function_timer);
+			setCDSettings(this->autostart, this->use_function_timer, this->split);
 		}
 	}
 }
@@ -424,13 +426,13 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 			*parameter_list->screen_request_timer = SCREEN_REQUEST_TIMER;
 			sendAICDStatusMessage(ID_RADIO);
 			if(this->text_control) {
-				sendCDTrackMessage();
-				sendCDTimeMessage();
-
 				if(!parameter_list->imid_connected && !parameter_list->external_imid_cd)
 					clearExternalIMID();
 
 				sendCDIMIDTrackandTimeMessage();
+				
+				sendCDTrackMessage();
+				sendCDTimeMessage();
 
 				startTextTimer(TEXT_SONG);
 				startTextTimer(TEXT_ALBUM);
@@ -465,13 +467,13 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 	
 		this->text_control = the_message->data[2] == device_ai_id;
 		if(this->text_control) {
-			sendCDTrackMessage();
-			sendCDTimeMessage();
-
 			if(!parameter_list->imid_connected && !parameter_list->external_imid_cd)
 				clearExternalIMID();
 
 			sendCDIMIDTrackandTimeMessage();
+			
+			sendCDTrackMessage();
+			sendCDTimeMessage();
 
 			startTextTimer(TEXT_SONG);
 			startTextTimer(TEXT_ALBUM);
@@ -627,7 +629,12 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 
 					createCDMainMenuOption(3);
 					break;
-				case 5: //Radio settings.
+				case 5: //Scrolling.
+					this->split = !this->split;
+					createCDMainMenuOption(4);
+					setting_changed = true;
+					break;
+				case 6: //Radio settings.
 					//TODO: Request radio settings.
 					break;
 				}
@@ -1278,6 +1285,8 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 						function_msg.data[i+4] = uint8_t(function_text.charAt(i));
 
 					ai_driver->writeAIData(&function_msg);
+				} else {
+					//Write a status message.
 				}
 			}
 		}
@@ -1365,16 +1374,34 @@ void HondaCDHandler::sendIMIDInfoMessage(const bool resend) {
 	if(parameter_list->imid_connected)
 		max_length = 11;
 
-	if(text_to_send.length() > max_length) {
-		if(text_to_send.length() - scroll_state < max_length) {
+	if(!split) {
+		if(text_to_send.length() > max_length) {
+			if(text_to_send.length() - scroll_state < max_length) {
+				scroll_changed = false;
+				display_timer = 0;
+				display_timer_enabled = true;
+			} else {
+				text_to_send = text_to_send.substring(scroll_state, text_to_send.length());
+			}
+		} else
 			scroll_changed = false;
-			display_timer = 0;
-			display_timer_enabled = true;
-		} else {
-			text_to_send = text_to_send.substring(scroll_state, text_to_send.length());
+	} else {
+		String sub_text[SPLIT_COUNT];
+		splitText(max_length, text_to_send, sub_text, SPLIT_COUNT);
+		
+		if(scroll_state < 0 || scroll_state >= SPLIT_COUNT)
+			scroll_state = 0;
+		
+		if(sub_text[scroll_state].length() <= 0 || sub_text[scroll_state].equals(" "))
+			scroll_state = 0;
+		
+		text_to_send = sub_text[scroll_state];
+		
+		if(!display_timer_enabled && max_length < 10) {
+			for(int i=text_to_send.length();i<max_length;i+=1)
+				text_to_send += " ";
 		}
-	} else
-		scroll_changed = false;
+	}
 	
 	if(resend && !parameter_list->imid_connected && parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines >= 2) {
 		switch(display_parameter) {
@@ -1635,7 +1662,12 @@ void HondaCDHandler::createCDMainMenuOption(const uint8_t option) {
 		}
 		break;
 	case 4:
-		appendAudioMenu(4, "Audio Settings");
+		if(split)
+			appendAudioMenu(4, "#ROF Scroll Info Text");
+		else
+			appendAudioMenu(4, "#RON Scroll Info Text");
+	case 5:
+		appendAudioMenu(5, "Audio Settings");
 		break;
 	}
 }
