@@ -6,6 +6,7 @@
 
 #include "../AidF_Color_Profile.h"
 #include "Triangle.h"
+#include "Circle.h"
 
 #ifndef symbol_handler_h
 #define symbol_handler_h
@@ -20,6 +21,8 @@
 
 #define SYM_RIGHTOFF "#ROF"
 #define SYM_RIGHTON "#RON"
+#define SYM_CIRCLEOFF "#COF"
+#define SYM_CIRCLEON "#CON"
 
 class SymbolHandler {
 public:

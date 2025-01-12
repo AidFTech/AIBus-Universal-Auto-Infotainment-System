@@ -87,25 +87,37 @@ void loop() {
 	#endif
 
 	IE_Message ie_msg;
-	AIData ai_msg;
 
 	const uint8_t last_source = parameters.active_source, last_subsource = parameters.active_subsource;
 
-	if(ie_handler.getInputOn()) {
-		if(ie_handler.readMessage(&ie_msg, true, IE_ID_RADIO) == 0) {
-			IE_Message check_msg(ie_msg.l-1, ie_msg.sender, ie_msg.receiver, ie_msg.control, ie_msg.direct);
-			for(int i=0;i<ie_msg.l-1;i+=1)
-				check_msg.data[i] = ie_msg.data[i];
+	elapsedMillis ie_timer;
+	bool first_ie = false;
 
-			if(ie_msg.checkVaildity()) {
-				parameters.last_iebus_msg = 0;
-				if(ie_msg.receiver == IE_ID_RADIO && ie_msg.l >= 1 && ie_msg.data[0] != 0x80) {
-					ie_handler.sendAcknowledgement(ie_msg.receiver, ie_msg.sender);
-					interpretIEData(ie_msg);
+	while(ie_timer < 50) {
+		//ai_handler.cacheAllPending();
+		if(ie_handler.getInputOn()) {
+			if(!first_ie) {
+				first_ie = true;
+				ie_timer = 0;
+			}
+
+			if(ie_handler.readMessage(&ie_msg, true, IE_ID_RADIO) == 0) {
+				IE_Message check_msg(ie_msg.l-1, ie_msg.sender, ie_msg.receiver, ie_msg.control, ie_msg.direct);
+				for(int i=0;i<ie_msg.l-1;i+=1)
+					check_msg.data[i] = ie_msg.data[i];
+
+				if(ie_msg.checkVaildity()) {
+					parameters.last_iebus_msg = 0;
+					if(ie_msg.receiver == IE_ID_RADIO && ie_msg.l >= 1 && ie_msg.data[0] != 0x80) {
+						ie_handler.sendAcknowledgement(ie_msg.receiver, ie_msg.sender);
+						interpretIEData(ie_msg);
+					}
 				}
 			}
 		}
 	}
+	
+	AIData ai_msg;
 
 	do {
 		bool ai_received = false;

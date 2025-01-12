@@ -1026,6 +1026,35 @@ void HondaCDHandler::sendTextRequest() {
 
 	uint8_t function_data[] = {0x6, 0x0};
 	sendFunctionMessage(ie_driver, true, IE_ID_CDC, function_data, sizeof(function_data));
+	
+	/*elapsedMillis ie_timer;
+
+	IE_Message msg_cache[5];
+	int current_msg = 0;
+
+	while(ie_timer < 50 && current_msg < sizeof(msg_cache)/sizeof(IE_Message)) {
+		if(ie_driver->getInputOn()) {
+			//ie_timer = 0;
+
+			IE_Message ie_msg;
+			if(ie_driver->readMessage(&ie_msg, true, IE_ID_RADIO) == 0) {
+				IE_Message check_msg(ie_msg.l-1, ie_msg.sender, ie_msg.receiver, ie_msg.control, ie_msg.direct);
+				for(int i=0;i<ie_msg.l-1;i+=1)
+					check_msg.data[i] = ie_msg.data[i];
+
+				if(ie_msg.checkVaildity()) {
+					if(ie_msg.receiver == IE_ID_RADIO && ie_msg.sender == IE_ID_CDC && ie_msg.l >= 1 && ie_msg.data[0] != 0x80) {
+						ie_driver->sendAcknowledgement(ie_msg.receiver, ie_msg.sender);
+						msg_cache->refreshIEData(ie_msg);
+						current_msg += 1;
+					}
+				}
+			}
+		}
+	}
+
+	for(int i=0;i<current_msg;i+=1)
+		this->interpretCDMessage(&msg_cache[i]);*/
 }
 
 //Send text to the IMID.

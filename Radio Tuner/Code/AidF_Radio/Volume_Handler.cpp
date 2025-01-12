@@ -27,7 +27,7 @@ VolumeHandler::VolumeHandler(MCP4251* vol_mcp, MCP4251* treble_mcp, MCP4251* bas
 
 //Handle an AIBus message.
 bool VolumeHandler::handleAIBus(AIData *msg) {
-	if(msg->receiver == ID_RADIO && msg->sender == ID_NAV_SCREEN) {
+	if(msg->receiver == ID_RADIO && msg->sender == ID_NAV_SCREEN) { //Volume knob.
 		if(msg->l >= 3 && msg->data[0] == 0x32) {
 			if(msg->data[1] == 0x6) {
 				ai_handler->sendAcknowledgement(ID_RADIO, msg->sender);
@@ -40,6 +40,18 @@ bool VolumeHandler::handleAIBus(AIData *msg) {
 				setVolume(new_volume);
 				return true;
 			}
+		}
+	} else if(msg->receiver == ID_RADIO) {
+		if(msg->l >= 4 && msg->data[0] == 0x33 && msg->data[1] == 0x6) { //Volume range.
+			ai_handler->sendAcknowledgement(ID_RADIO, msg->sender);
+
+			const uint16_t new_max = (msg->data[2]<<8)|msg->data[3], old_max = this->vol_range;
+			this->vol_range = new_max;
+			
+			this->volume = this->volume*new_max/old_max;
+			this->setVolume();
+			
+			return true;
 		}
 	}
 
@@ -121,6 +133,9 @@ void VolumeHandler::setVolume() {
 
 //Set the volume.
 void VolumeHandler::setVolume(const uint16_t volume) {
+	if(this->volume != volume)
+		volume_changed = true;
+
 	this->volume = volume;
 	if(this->volume > this->vol_range)
 		this->volume = this->vol_range;
@@ -225,4 +240,12 @@ int16_t VolumeHandler::getBalance() {
 //Get the set fader.
 int16_t VolumeHandler::getFader() {
 	return this->fader;
+}
+
+//Return whether the volume changed.
+bool VolumeHandler::getVolumeChanged() {
+	const bool return_changed = this->volume_changed;
+	this->volume_changed = false;
+
+	return return_changed;
 }

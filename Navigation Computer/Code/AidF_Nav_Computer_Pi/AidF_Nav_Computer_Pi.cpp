@@ -99,6 +99,12 @@ void AidF_Nav_Computer::loop() {
 			this->main_window->refreshWindow();
 		this->window_handler->refresh();
 	}
+	
+	if(this->vol_timer_enabled && (clock() - vol_timer)/(CLOCKS_PER_SEC/1000) >= 700) {
+		this->vol_timer_enabled = false;
+		//TODO: Other data here?
+		this->window_handler->setText("", 1);
+	}
 
 	this->br->drawBackground(renderer, 0, 0, lw, lh);
 	this->window_handler->drawWindow();
@@ -147,7 +153,15 @@ void AidF_Nav_Computer::loop() {
 						if(ai_msg.receiver == ID_NAV_COMPUTER)
 							this->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_msg.sender);
 
-						if(ai_msg.sender == ID_NAV_SCREEN && ai_msg.data[0] == 0x30) { //Button press.
+						if(ai_msg.sender == ID_RADIO && ai_msg.l >= 3 && ai_msg.data[0] == 0x26) { //Volume bar.
+							const uint8_t vol = ai_msg.data[1];
+							std::string vol_text = "Vol: " + std::to_string(vol);
+							
+							this->window_handler->setText(vol_text, 1);
+							
+							this->vol_timer_enabled = true;
+							this->vol_timer = clock();
+						} else if(ai_msg.sender == ID_NAV_SCREEN && ai_msg.l >= 3 && ai_msg.data[0] == 0x30) { //Button press.
 							const uint8_t button = ai_msg.data[1], state = ai_msg.data[2]>>6;
 							if(button == 0x26 && state == 0x2) { //Audio button.
 								this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_AUDIO;

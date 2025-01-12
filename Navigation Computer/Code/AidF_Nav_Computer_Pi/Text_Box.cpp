@@ -56,6 +56,10 @@ void TextBox::setText(const char* text) {
 
 void TextBox::setText(std::string text) {
 	this->text = text;
+
+	if(text.size() <= 0)
+		this->text = " ";
+
 	if(this->renderer == NULL)
 		return;
 

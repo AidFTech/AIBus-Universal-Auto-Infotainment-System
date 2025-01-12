@@ -17,10 +17,13 @@ const ALBUM_NAME: u8 = 0x3;
 
 const MENU_NONE: u8 = 0;
 const MENU_SETTINGS: u8 = 1;
+const MENU_DISPLAY: u8 = 2;
 pub struct AMirror<'a> {
 	context: &'a Arc<Mutex<Context>>,
 	stream: &'a Arc<Mutex<UnixStream>>,
 	handler: MirrorHandler<'a>,
+
+	aibus_list: Vec<AIBusMessage>,
 
 	display_title: bool,
 	display_artist: bool,
@@ -55,6 +58,8 @@ impl <'a> AMirror<'a> {
 			context,
 			stream,
 			handler: mutex_mirror_handler,
+
+			aibus_list: Vec::new(),
 
 			display_title: false,
 			display_artist: false,
@@ -456,9 +461,11 @@ impl <'a> AMirror<'a> {
 		let mut scroll_limit = 300;
 		if self.imid_split {
 			scroll_limit = 3000;
+		} else if self.imid_scroll_pos == 0 { 
+			scroll_limit = 750;
 		}
 
-		if self.imid_scroll >= 0 && (Instant::now() - self.scroll_timer > Duration::from_millis(scroll_limit) || change_imid || self.imid_refresh) {
+		if self.imid_scroll >= 0 && context.phone_type != 0 && (Instant::now() - self.scroll_timer > Duration::from_millis(scroll_limit) || change_imid || self.imid_refresh) {
 			if context.audio_text && context.imid_row_count > 0 && context.imid_text_len > 0 {
 				let mut scroll_param = "".to_string();
 
@@ -473,6 +480,27 @@ impl <'a> AMirror<'a> {
 				} else if self.imid_scroll == 4 {
 					scroll_param = context.app.clone();
 				}
+
+				let ascii = scroll_param.is_ascii();
+				if !ascii {
+					let scroll_param_copy = scroll_param.clone();
+					let scroll_bytes = scroll_param_copy.as_bytes();
+					scroll_param = "".to_string();
+					for i in 0..scroll_bytes.len() {
+						if scroll_bytes[i] >= b' ' {
+							let char_byte = match String::from_utf8([scroll_bytes[i]].to_vec()) {
+								Ok(b) => b,
+								Err(_) => {
+									continue;
+								}
+							};
+							scroll_param += char_byte.as_str();
+						}
+					}
+				}
+
+				let last_scroll_pos = self.imid_scroll_pos;
+				let update = change_imid || self.imid_refresh;
 
 				if Instant::now() - self.scroll_timer > Duration::from_millis(scroll_limit) {
 					self.imid_scroll_pos += 1;
@@ -500,11 +528,29 @@ impl <'a> AMirror<'a> {
 						self.imid_scroll_pos = 0;
 					}
 
-					self.write_imid_text(scroll_split[self.imid_scroll_pos].clone(), 0, imid_y);
+					let mut imid_x = 0;
+					if context.imid_text_len >= 10 {
+						imid_x = (context.imid_text_len/2) as isize - (context.phone_name.len()/2) as isize;
+						if imid_x < 0 || imid_x > context.imid_text_len as isize {
+							imid_x = 0;
+						}
+					}
+
+					if self.imid_scroll_pos != last_scroll_pos || update {
+						self.write_imid_text(scroll_split[self.imid_scroll_pos].clone(), imid_x as u8, imid_y);
+					}
 				} else {
-					if scroll_param.len() - self.imid_scroll_pos > context.imid_text_len as usize {
-						let scroll_string = scroll_param[self.imid_scroll_pos..self.imid_scroll_pos + context.imid_text_len as usize].to_string();
-						self.write_imid_text(scroll_string, 0, imid_y);
+					if (scroll_param.len() as isize - self.imid_scroll_pos as isize) < (context.imid_text_len as isize) {
+						self.imid_scroll_pos = 0;
+					}
+
+					if self.imid_scroll_pos != last_scroll_pos || update {
+						if scroll_param.len() > context.imid_text_len as usize {
+							let scroll_string = scroll_param[self.imid_scroll_pos..self.imid_scroll_pos + context.imid_text_len as usize].to_string();
+							self.write_imid_text(scroll_string, 0, imid_y);
+						} else {
+							self.write_imid_text(scroll_param, 0, imid_y);
+						}
 					}
 				}
 			}
@@ -515,7 +561,26 @@ impl <'a> AMirror<'a> {
 			if context.audio_text {
 				std::mem::drop(context);
 				self.write_all_imid_text();
+
+				context = match self.context.try_lock() {
+					Ok(context) => context,
+					Err(_) => {
+						println!("AMirror Process: Context Locked");
+						return;
+					}
+				};
 			}
+		}
+
+		if self.aibus_list.len() > 0 {
+			std::mem::drop(context);
+
+			for i in 0..self.aibus_list.len() {
+				let ai_msg = &self.aibus_list[i];
+				self.handle_aibus_message(ai_msg.clone());
+			}
+
+			self.aibus_list.clear();
 		}
 	
 	}
@@ -576,8 +641,14 @@ impl <'a> AMirror<'a> {
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x40 && ai_msg.data[1] == 0x10 { //Source change.
 				let new_device = ai_msg.data[2];
 				if new_device == AIBUS_DEVICE_AMIRROR { //Selected!
-					self.imid_scroll = -1;
+					if context.imid_row_count != 1 || context.imid_native_mirror {
+						self.imid_scroll = -1;
+					} else {
+						self.imid_scroll = 1;
+					}
 					self.imid_refresh = true;
+					self.imid_scroll_pos = 0;
+					self.scroll_timer = Instant::now();
 					context.audio_selected = true;
 					
 					if context.phone_type != 0 {
@@ -695,27 +766,116 @@ impl <'a> AMirror<'a> {
 					self.menu_open = MENU_NONE;
 				} else if ai_msg.l() >= 3 && ai_msg.data[1] == 0x60 { //Entry selected.
 					if self.menu_open == MENU_SETTINGS {
+						let native_mirror = context.imid_native_mirror;
+						let rows = context.imid_row_count;
+						let char_count = context.imid_text_len;
+						
+						std::mem::drop(context);
+
+						let option = ai_msg.data[2];
+						if option == 1 && rows > 0 && char_count > 0 { //Open display menu.
+							if !native_mirror {
+								self.write_display_menu();
+							}
+						}
+
+						context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								println!("AMirror Handle AIBus Message Handle Menu Option: Context Locked");
+								return;
+							}
+						};
+					} else if self.menu_open == MENU_DISPLAY {
 						std::mem::drop(context);
 
 						let option = ai_msg.data[2];
 						if option == 1 { //Display phone name.
 							self.display_phone = !self.display_phone;
-							self.write_settings_menu_option(option - 1);	
+							self.write_display_menu_option(option - 1);	
 						} else if option == 2 { //Display song title.
 							self.display_title = !self.display_title;
-							self.write_settings_menu_option(option - 1);
+							self.write_display_menu_option(option - 1);
 						} else if option == 3 { //Display artist name.
 							self.display_artist = !self.display_artist;
-							self.write_settings_menu_option(option - 1);
+							self.write_display_menu_option(option - 1);
 						} else if option == 4 { //Display album name.
 							self.display_album = !self.display_album;
-							self.write_settings_menu_option(option - 1);
+							self.write_display_menu_option(option - 1);
 						} else if option == 5 { //Display app name.
 							self.display_app = !self.display_app;
-							self.write_settings_menu_option(option - 1);
+							self.write_display_menu_option(option - 1);
+						} else if option == 6 { //Scroll.
+							self.imid_split = !self.imid_split;
+							self.write_display_menu_option(option - 1);
+							self.imid_refresh = true;
+							self.imid_scroll_pos = 0;
 						}
 
 						if option <= 5 {
+							context = match self.context.try_lock() {
+								Ok(context) => context,
+								Err(_) => {
+									println!("AMirror Handle AIBus Message Handle Menu Option: Context Locked");
+									return;
+								}
+							};
+
+							let row_count = context.imid_row_count;
+							let native_mirror = context.imid_native_mirror;
+							std::mem::drop(context);
+
+							if row_count == 1 && !native_mirror {
+								self.imid_scroll = (option - 1) as i8;
+								self.imid_refresh = true;
+								self.imid_scroll_pos = 0;
+							}
+
+							let mut display_selected = 0;
+							
+							if self.display_phone {
+								display_selected += 1;
+							}
+							if self.display_title {
+								display_selected += 1;
+							}
+							if self.display_artist {
+								display_selected += 1;
+							}
+							if self.display_album {
+								display_selected += 1;
+							}
+							if self.display_app {
+								display_selected += 1;
+							}
+
+							if display_selected > row_count {
+								if option != 1 && display_selected > row_count && self.display_phone {
+									self.display_phone = false;
+									self.write_display_menu_option(0);
+									display_selected -= 1;
+								}
+								if option != 2 && display_selected > row_count && self.display_title {
+									self.display_title = false;
+									self.write_display_menu_option(1);
+									display_selected -= 1;
+								}
+								if option != 3 && display_selected > row_count && self.display_artist {
+									self.display_artist = false;
+									self.write_display_menu_option(2);
+									display_selected -= 1;
+								}
+								if option != 4 && display_selected > row_count && self.display_album {
+									self.display_album = false;
+									self.write_display_menu_option(3);
+									display_selected -= 1;
+								}
+								if option != 5 && display_selected > row_count && self.display_app {
+									self.display_app = false;
+									self.write_display_menu_option(4);
+								}
+							}
+
 							self.write_all_imid_text();
 						}
 
@@ -792,8 +952,17 @@ impl <'a> AMirror<'a> {
 					if self.imid_scroll < 4 {
 						self.imid_scroll += 1;
 					} else {
-						self.imid_scroll = -1;
+						if context.imid_row_count != 1 || context.imid_native_mirror {
+							self.imid_scroll = -1;
+						} else {
+							self.imid_scroll = 0;
+						}
 					}
+					
+					if context.imid_row_count == 1 {
+						self.reset_imid_info_display();
+					}
+
 					self.imid_refresh = true;
 					self.imid_scroll_pos = 0;
 					self.scroll_timer = Instant::now();
@@ -850,6 +1019,23 @@ impl <'a> AMirror<'a> {
 						let rx_msg = get_aibus_message(msg.data.clone());
 						if rx_msg.receiver == msg_copy.sender && rx_msg.sender == msg_copy.receiver && rx_msg.l() >= 1 && rx_msg.data[0] == 0x80 {
 							ack = true;
+						} else if rx_msg.receiver == AIBUS_DEVICE_AMIRROR {
+							std::mem::drop(stream);
+							self.write_aibus_message(AIBusMessage {
+								sender: AIBUS_DEVICE_AMIRROR,
+								receiver: rx_msg.sender,
+								data: [0x80].to_vec(),
+							});
+
+							self.aibus_list.push(rx_msg);
+
+							stream = match self.stream.try_lock() {
+								Ok(stream) => stream,
+								Err(_) => {
+									println!("AMirror Write AIBus Message: Stream Locked");
+									return;
+								}
+							};
 						}
 					}
 				}
@@ -1194,6 +1380,28 @@ impl <'a> AMirror<'a> {
 		}
 	}
 
+	//Reset the info display if the info state changed.
+	fn reset_imid_info_display(&mut self) {
+		self.display_album = false;
+		self.display_app = false;
+		self.display_artist = false;
+		self.display_title = false;
+		self.display_phone = false;
+
+		if self.imid_scroll == 0 {
+			self.display_phone = true;
+		} else if self.imid_scroll == 1 {
+			self.display_title = true;
+		} else if self.imid_scroll == 2 {
+			self.display_artist = true;
+		} else if self.imid_scroll == 3 {
+			self.display_album = true;
+		} else if self.imid_scroll == 4 {
+			self.display_app = true;
+		}
+	}
+
+	//Send the menu creation message and wait for denial. Return true if successful (i.e. not denied).
 	fn create_menu(&mut self, title: String, size: u8) -> bool {
 		let y_pos: u16 = 140;
 		let menu_h: u16 = 35;
@@ -1259,7 +1467,7 @@ impl <'a> AMirror<'a> {
 								no_stream = true;
 								break;
 							} else {
-								//TODO: Cache.
+								self.aibus_list.push(test_ai_msg);
 							}
 						}
 					}
@@ -1272,9 +1480,71 @@ impl <'a> AMirror<'a> {
 		return !no_stream;
 	}
 
+	//Clear the active menu.
+	fn clear_menu(&mut self) -> bool {
+		self.write_aibus_message(AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_NAV_COMPUTER,
+			data: [0x2B, 0x4A].to_vec(),
+		});
+
+		let mut stream = match self.stream.try_lock() {
+			Ok(stream) => stream,
+			Err(_) => {
+				return false;
+			}
+		};
+
+		let stream_timer = Instant::now();
+
+		while Instant::now() - stream_timer < Duration::from_millis(100) {
+			let mut msg_list = Vec::new();
+
+			if read_socket_message(&mut stream, &mut msg_list) > 0 {
+				for i in 0..msg_list.len() {
+					let test_msg = &msg_list[i];
+
+					if test_msg.opcode == OPCODE_AIBUS_RECV {
+						let test_ai_msg = get_aibus_message(test_msg.data.clone());
+
+						if test_ai_msg.receiver == AIBUS_DEVICE_AMIRROR {
+							if test_ai_msg.l() >= 1 && test_ai_msg.data[0] != 0x80 {
+								std::mem::drop(stream);
+
+								let mut ack_msg = AIBusMessage {
+									sender: AIBUS_DEVICE_AMIRROR,
+									receiver: test_ai_msg.sender,
+									data: Vec::new(),
+								};
+								ack_msg.data.push(0x80);
+					
+								self.write_aibus_message(ack_msg);
+
+								stream = match self.stream.try_lock() {
+									Ok(stream) => stream,
+									Err(_) => {
+										return false;
+									}
+								};
+							}
+
+							if test_ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER && test_ai_msg.l() >= 2 && test_ai_msg.data[0] == 0x2B && test_ai_msg.data[1] == 0x40 {
+								return true;
+							} else {
+								self.aibus_list.push(test_ai_msg);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
 	//Write the settings menu.
 	fn write_settings_menu(&mut self) {
-		let settings_count = 7;
+		let settings_count = 2;
 		
 		if !self.create_menu("Mirror Settings".to_string(), settings_count) {
 			return;
@@ -1284,16 +1554,29 @@ impl <'a> AMirror<'a> {
 			self.write_settings_menu_option(i);
 		}
 
+		let mut sel = 0x2;
+		match self.context.try_lock() {
+			Ok(context) => {
+				if context.imid_row_count > 0 {
+					sel = 0x1;
+				}
+			}
+			Err(_) => {
+				println!("AMirror Settings Menu: Context Locked.");
+				return;
+			}
+		}
+
 		self.write_aibus_message(AIBusMessage {
 			sender: AIBUS_DEVICE_AMIRROR,
 			receiver: AIBUS_DEVICE_NAV_COMPUTER,
-			data: [0x2B, 0x52, 0x1].to_vec(),
+			data: [0x2B, 0x52, sel].to_vec(),
 		});
 
 		self.menu_open = MENU_SETTINGS;
 	}
 
-	//Write a menu option.
+	//Write a settings menu option.
 	fn write_settings_menu_option(&mut self, option: u8) {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
@@ -1307,53 +1590,129 @@ impl <'a> AMirror<'a> {
 
 		let mut req_text: String = "".to_string();
 
-		if context.imid_row_count > 0 && context.imid_text_len > 0 && option <= 5 {
-			if option == 0 {
-				if self.display_phone {
-					req_text = "#RON".to_string();
-				} else {
-					req_text = "#ROF".to_string();
-				}
-				req_text += " Display Phone Name"
-			} else if option == 1 {
-				if self.display_title {
-					req_text = "#RON".to_string();
-				} else {
-					req_text = "#ROF".to_string();
-				}
-				req_text += " Display Song Title";
-			} else if option == 2 {
-				if self.display_artist {
-					req_text = "#RON".to_string();
-				} else {
-					req_text = "#ROF".to_string();
-				}
-				req_text += " Display Artist";
-			} else if option == 3 {
-				if self.display_album {
-					req_text = "#RON".to_string();
-				} else {
-					req_text = "#ROF".to_string();
-				}
-				req_text += " Display Album";
-			} else if option == 4 {
-				if self.display_app {
-					req_text = "#RON".to_string();
-				} else {
-					req_text = "#ROF".to_string();
-				}
-				req_text += " Display App Name";
-			} else if option == 5 {
-				if self.imid_scroll < 0 {
+		if option == 0 && context.imid_row_count > 0 && context.imid_text_len > 0 {
+			if !context.imid_native_mirror {
+				req_text = "Cluster Display Text".to_string();
+			} else {
+				if self.imid_split {
 					req_text = "#ROF".to_string();
 				} else {
 					req_text = "#RON".to_string();
 				}
-				req_text += " Scroll Cluster Display";
+
+				req_text += "Scroll Info Text";
 			}
-		} else if option > 5 {
-			if option == 6 {
-				req_text = "Auto Music Start".to_string();
+		}
+
+		if option == 1 {
+			req_text = "Auto Music Start".to_string();
+		}
+
+		let req_text_b = req_text.as_bytes();
+		for i in 0..req_text_b.len() {
+			menu_req_data.push(req_text_b[i]);
+		}
+
+		if req_text_b.len() > 0 {
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_NAV_COMPUTER,
+				data: menu_req_data,
+			});
+		}
+	}
+
+	//Write the display menu.
+	fn write_display_menu(&mut self) {
+		if !self.clear_menu() {
+			return;
+		}
+
+		let settings_count = 6;
+		
+		if !self.create_menu("Cluster Display Text".to_string(), settings_count) {
+			return;
+		}
+
+		for i in 0..settings_count {
+			self.write_display_menu_option(i);
+		}
+
+		self.write_aibus_message(AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_NAV_COMPUTER,
+			data: [0x2B, 0x52, 0x1].to_vec(),
+		});
+
+		self.menu_open = MENU_DISPLAY;
+	}
+
+	//Write a display menu option.
+	fn write_display_menu_option(&mut self, option: u8) {
+		let context = match self.context.try_lock() {
+			Ok(context) => context,
+			Err(_) => {
+				println!("AMirror Display Menu Option: Context Locked.");
+				return;
+			}
+		};
+
+		let mut menu_req_data = [0x2B, 0x51, option].to_vec();
+
+		let mut req_text = "".to_string();
+		let mut unchecked_text = "#ROF";
+		let mut checked_text = "#RON";
+
+		if context.imid_row_count == 1 {
+			unchecked_text = "#COF";
+			checked_text = "#CON";
+		}
+
+		if option == 0 {
+			if self.display_phone {
+				req_text = checked_text.to_string();
+			} else {
+				req_text = unchecked_text.to_string();
+			}
+			req_text += " Display Phone Name"
+		} else if option == 1 {
+			if self.display_title {
+				req_text = checked_text.to_string();
+			} else {
+				req_text = unchecked_text.to_string();
+			}
+			req_text += " Display Song Title";
+		} else if option == 2 {
+			if self.display_artist {
+				req_text = checked_text.to_string();
+			} else {
+				req_text = unchecked_text.to_string();
+			}
+			req_text += " Display Artist";
+		} else if option == 3 {
+			if self.display_album {
+				req_text = checked_text.to_string();
+			} else {
+				req_text = unchecked_text.to_string();
+			}
+			req_text += " Display Album";
+		} else if option == 4 {
+			if self.display_app {
+				req_text = checked_text.to_string();
+			} else {
+				req_text = unchecked_text.to_string();
+			}
+			req_text += " Display App Name";
+		} else if option == 5 {
+			if self.imid_split {
+				req_text = "#ROF".to_string();
+			} else {
+				req_text = "#RON".to_string();
+			}
+			if context.imid_row_count != 1 {
+				req_text += " Scroll Cluster Display";
+			} else {
+				req_text += " Scroll Info Text";
 			}
 		}
 

@@ -90,6 +90,18 @@ void SymbolHandler::drawSymbols(SDL_Renderer* renderer, SDL_Texture* texture, TT
 				SDL_Rect rect = {sym_x+i + offset, start_y+i + offset, size-i*2 - offset, size-i*2 - offset};
 				SDL_RenderDrawRect(renderer, &rect);
 			}
+		} else if(symbol[s].compare(SYM_CIRCLEOFF) == 0 || symbol[s].compare(SYM_CIRCLEON) == 0) {
+			const int radius = size*5/12;
+
+			if(symbol[s].compare(SYM_CIRCLEON) == 0) {
+				SDL_SetRenderDrawColor(renderer, getRedComponent(*text_color), getGreenComponent(*text_color), getBlueComponent(*text_color), getAlphaComponent(*text_color));
+				SDL_FillCircle(renderer, sym_x + size/2, start_y + size/2, radius - 9);
+			}
+
+			SDL_SetRenderDrawColor(renderer, getRedComponent(*text_color), getGreenComponent(*text_color), getBlueComponent(*text_color), getAlphaComponent(*text_color));
+			
+			for(int i=0;i<5;i+=1)
+				SDL_DrawCircle(renderer, sym_x + size/2, start_y + size/2, radius - i);
 		}
 	}
 }

@@ -33,6 +33,8 @@ public:
 	
 	int16_t getBalance();
 	int16_t getFader();
+
+	bool getVolumeChanged();
 private:
 	MCP4251 *vol_mcp, *treble_mcp, *bass_mcp, *fader_mcp;
 	AIBusHandler* ai_handler;
@@ -42,6 +44,8 @@ private:
 	uint16_t vol_range = DEFAULT_TONE_RANGE;
 	uint16_t volume = 0, treble = DEFAULT_TONE_RANGE, bass = 0;
 	int16_t balance = 0, fader = 0;
+
+	bool volume_changed = false;
 
 	void setVolume();
 };

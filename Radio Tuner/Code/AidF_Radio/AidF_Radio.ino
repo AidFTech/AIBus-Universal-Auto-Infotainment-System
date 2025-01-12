@@ -685,6 +685,31 @@ void loop() {
 
 	if(parameters.send_time && parameters.hour >= 0 && parameters.min >= 0 && (parameters.hour != last_hour || parameters.min != last_min))
 		text_handler.sendTime();
+
+	//Send the volume IMID message.
+	if(volume_handler.getVolumeChanged()) {
+		const uint16_t volume = volume_handler.getVolume(), range = volume_handler.getVolRange();
+		
+		uint8_t max_vol = 255;
+		if(range < 255)
+			max_vol = range&0xFF;
+
+		uint8_t set_vol = 255;
+		if(volume < 255)
+			set_vol = volume&0xFF;
+
+		uint8_t vol_data[] = {0x26, set_vol, max_vol};
+		AIData vol_msg(sizeof(vol_data), ID_RADIO, ID_NAV_COMPUTER);
+		vol_msg.refreshAIData(vol_data);
+
+		aibus_handler.writeAIData(&vol_msg, parameters.computer_connected);
+
+		vol_data[0] = 0x62;
+		vol_msg.data[0] = 0x62;
+		vol_msg.receiver = ID_IMID_SCR;
+
+		aibus_handler.writeAIData(&vol_msg, parameters.imid_connected);
+	}
 }
 
 //Interpret a received AIBus message.

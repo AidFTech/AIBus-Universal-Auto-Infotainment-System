@@ -266,14 +266,13 @@ void Color_Picker_Window::handleEnterButton() {
 }
 
 void Color_Picker_Window::setDayNightOption() {
-	//TODO: Radio buttons.
-	std::string day_sel = "#ROF";
+	std::string day_sel = "#COF";
 	if(this->attribute_list->day_night_settings == DAY_NIGHT_DAY)
-		day_sel = "#RON";
+		day_sel = "#CON";
 	
-	std::string night_sel = "#ROF";
+	std::string night_sel = "#COF";
 	if(this->attribute_list->day_night_settings == DAY_NIGHT_NIGHT)
-		night_sel = "#RON";
+		night_sel = "#CON";
 
 	this->color_menu->setItem(day_sel + "  Day", 7);
 	this->color_menu->setItem(night_sel + "  Night", 8);

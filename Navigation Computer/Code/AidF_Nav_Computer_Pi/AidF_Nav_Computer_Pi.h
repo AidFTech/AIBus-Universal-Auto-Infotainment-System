@@ -76,7 +76,10 @@ private:
 	pthread_t socket_thread;
 	SocketHandlerParameters socket_parameters;
 
-	clock_t aibus_read_time = 0;
+	clock_t aibus_read_time = clock();
+	
+	bool vol_timer_enabled = false;
+	clock_t vol_timer = clock();
 };
 
 void setup(AidF_Nav_Computer* nav_computer);

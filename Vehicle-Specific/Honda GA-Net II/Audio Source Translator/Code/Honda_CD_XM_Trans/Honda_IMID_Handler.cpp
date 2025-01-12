@@ -249,6 +249,11 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 			writeIMIDRDSMessage(rds_str);
 		else if(the_message->data[1] == 0x60) //Call sign.
 			writeIMIDCallsignMessage(rds_str);
+	} else if(the_message->sender == ID_RADIO && the_message->l >= 3 && the_message->data[0] == 0x62) { //Volume control display.
+		const int max_vol = 40;
+		const uint8_t new_vol = the_message->data[1]*max_vol/the_message->data[2];
+
+		writeIMIDVolumeMessage(new_vol);
 	} else if(the_message->sender == ID_XM && the_message->data[0] == 0x39) { //XM channel change message.
 		const uint16_t channel = (the_message->data[2]<<8) | the_message->data[3];
 		const uint8_t preset = the_message->data[4]&0x3F;
@@ -319,6 +324,16 @@ void HondaIMIDHandler::writeTimeAndDayMessage(const uint8_t hour, const uint8_t 
 	time_msg.refreshIEData(time_data);
 	ie_driver->sendMessage(&time_msg, true, true);
 	getIEAckMessage(device_ie_id);
+}
+
+//Write the volume to the screen.
+void HondaIMIDHandler::writeIMIDVolumeMessage(const uint8_t volume) {
+	uint8_t volume_data[] = {0x60, 0x2, 0x11, 0x0, 0x2, 0x0, volume, 0x10, 0x0, 0x30, 0x0, 0x0, 0x9, 0x0, 0x0, 0x0};
+
+	IE_Message volume_msg(sizeof(volume_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	volume_msg.refreshIEData(volume_data);
+
+	ie_driver->sendMessage(&volume_msg, true, true);
 }
 
 bool HondaIMIDHandler::writeIMIDTextMessage(String text) {

@@ -7,7 +7,7 @@
 #ifndef si4735_aidf_h
 #define si4735_aidf_h
 
-#define FM_STEREO_THRESH 50
+#define FM_STEREO_THRESH 30
 
 class Si4735Controller {
 public:
