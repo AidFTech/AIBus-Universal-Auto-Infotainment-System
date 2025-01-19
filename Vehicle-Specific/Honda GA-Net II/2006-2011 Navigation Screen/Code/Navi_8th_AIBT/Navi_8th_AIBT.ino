@@ -8,31 +8,8 @@
 #include "Open_Close_Handler.h"
 #include "AIBT_Parameters.h"
 
-#ifndef __AVR__
-#define TCNT2 _SFR_MEM8(0xB2)
-#define TCCR2B _SFR_MEM8(0xB1)
-#endif
-
-#if defined(TCNT2)
-#define TIMER TCNT2
-#elif defined(TCNT2L)
-#define TIMER TCNT2L
-#else
-#error Timer Not Defined
-#endif
-
-#if defined(TCCR2B)
-#define TIMER_SCALER TCCR2B
-#else
-#error Scale Not Defined
-#endif
-
-#define KNOB_WAIT int(5e-3*F_CPU/1024)
-
-#define KNOB_A 2
-#define KNOB_B 3
-
 #define AI_RX 4
+#define CS_VOL 5
 #define ILL_CATHODE 6
 #define MOTOR_STOP_OUT 7
 #define CS_KNOB 8
@@ -68,15 +45,25 @@
 #define OUTPUT_MCP_TOGGLE_UP 6
 #define OUTPUT_MCP_TOGGLE_DOWN 7
 
+#define VOL_MCP_D0 0
+#define VOL_MCP_D1 1
+#define VOL_MCP_D2 2
+#define VOL_MCP_D3 3
+#define VOL_MCP_D4 4
+#define VOL_MCP_D5 5
+#define VOL_MCP_DIR 6
+#define VOL_MCP_RESET 7
+
 #define CONTROL_TIMER 7000
 #define DOOR_TIMER 30000
-#define VOL_REVERSE_TIMER 50
+#define VOL_TIMER 50
 
 #define AISerial Serial
 
 MCP23S08 mcp_knob(CS_KNOB);
 MCP23S08 mcp_out(CS_OUT);
 MCP23S08 mcp_in(CS_IN);
+MCP23S08 mcp_vol(CS_VOL);
 
 AIBusHandler ai_handler(&AISerial, AI_RX);
 
@@ -87,7 +74,7 @@ bool all_timer_enabled = false, radio_timer_enabled = false, source_timer_enable
 elapsedMillis door_timer;
 bool door_timer_enabled = false;
 
-elapsedMillis vol_reverse_timer;
+elapsedMillis vol_timer;
 
 LightController* light_handler;
 
@@ -95,18 +82,12 @@ ButtonHandler* button_handler;
 JogHandler* jog_handler;
 OpenCloseHandler* open_handler;
 
-volatile int32_t vol_steps = 0;
-volatile int8_t last_int = 0;
-volatile uint8_t vol_a_state, vol_b_state;
+int32_t vol_steps = 0;
 
 uint8_t key_position = 0, door_position = 0;
 bool power_off_with_door = false; //Turn the power off when the door opens.
 
 void setup() {
-	TIMER_SCALER &= 0xF8;
-	TIMER_SCALER |= 0x2;
-	TIMER = 0;
-
 	AISerial.begin(AI_BAUD);
 	pinMode(AI_RX, INPUT);
 
@@ -118,10 +99,12 @@ void setup() {
 	pinMode(CS_KNOB, OUTPUT);
 	pinMode(CS_IN, OUTPUT);
 	pinMode(CS_OUT, OUTPUT);
+	pinMode(CS_VOL, OUTPUT);
 
 	digitalWrite(CS_KNOB, HIGH);
 	digitalWrite(CS_IN, HIGH);
 	digitalWrite(CS_OUT, HIGH);
+	digitalWrite(CS_VOL, HIGH);
 
 	delay(100);
 
@@ -132,6 +115,7 @@ void setup() {
 	mcp_knob.begin();
 	mcp_out.begin();
 	mcp_in.begin();
+	mcp_vol.begin();
 
 	mcp_knob.pinModeIO(KNOB_MCP_MOTOR_CLOSE, OUTPUT);
 	mcp_knob.pinModeIO(KNOB_MCP_MOTOR_OPEN, OUTPUT);
@@ -160,12 +144,14 @@ void setup() {
 	mcp_in.pinModeIO(INPUT_MCP_TOGGLE_LEFT, INPUT_PULLUP);
 	mcp_in.pinModeIO(INPUT_MCP_TOGGLE_RIGHT, INPUT_PULLUP);
 
-	pinMode(KNOB_A, INPUT_PULLUP);
-	pinMode(KNOB_B, INPUT_PULLUP);
-	vol_a_state = digitalRead(KNOB_A);
-	vol_b_state = digitalRead(KNOB_B);
-
-	//attachInterrupt(digitalPinToInterrupt(KNOB_A), volumeKnobIncrement, FALLING);
+	mcp_vol.pinModeIO(VOL_MCP_D0, INPUT_PULLUP);
+	mcp_vol.pinModeIO(VOL_MCP_D1, INPUT_PULLUP);
+	mcp_vol.pinModeIO(VOL_MCP_D2, INPUT_PULLUP);
+	mcp_vol.pinModeIO(VOL_MCP_D3, INPUT_PULLUP);
+	mcp_vol.pinModeIO(VOL_MCP_D4, INPUT_PULLUP);
+	mcp_vol.pinModeIO(VOL_MCP_D5, INPUT_PULLUP);
+	mcp_vol.pinModeIO(VOL_MCP_DIR, INPUT);
+	mcp_vol.pinModeIO(VOL_MCP_RESET, OUTPUT);
 
 	button_handler = new ButtonHandler(&mcp_in, &mcp_out, &ai_handler, &parameters, &mcp_knob, KNOB_MCP_VOL_PUSH);
 	jog_handler = new JogHandler(&mcp_out, OUTPUT_MCP_TOGGLE_UP, &mcp_out, OUTPUT_MCP_TOGGLE_DOWN, &mcp_in, INPUT_MCP_TOGGLE_LEFT, &mcp_in, INPUT_MCP_TOGGLE_RIGHT, &mcp_in, INPUT_MCP_TOGGLE_ENTER, &ai_handler, &parameters);
@@ -186,6 +172,8 @@ void setup() {
 	mcp_knob.digitalWriteIO(KNOB_MCP_CLOSE_ANODE, LOW);
 	mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
 	mcp_knob.digitalWriteIO(KNOB_MCP_BACKLIGHT, LOW);
+
+	mcp_vol.digitalWriteIO(VOL_MCP_RESET, LOW);
 }
 
 void loop() {
@@ -314,10 +302,10 @@ void loop() {
 	jog_handler->loop();
 	open_handler->loop();
 
-	if(vol_reverse_timer > VOL_REVERSE_TIMER) {
+	if(vol_timer > VOL_TIMER) {
+		vol_timer = 0;
+		readVolumeKnob();
 		handleVolumeKnob();
-		if(last_int == 0)
-			vol_reverse_timer = 0;
 	}
 
 	if(all_timer_enabled && all_timer > CONTROL_TIMER) {
@@ -349,11 +337,9 @@ void loop() {
 		door_timer_enabled = false;
 		mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
 	}
-
-	if(last_int != 0 && vol_reverse_timer > VOL_REVERSE_TIMER)
-		last_int = 0;
 }
 
+//Respond to a button query.
 void sendButtonsPresent(const uint8_t receiver) {
 	uint8_t button_data[] = {0x31, 0x30, 0x4, 0x6, 0x36, 0x38, 0x26, 0x39, 0x25, 0x24, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x27, 0x51, 0x20, 0x55, 0x53, 0x28, 0x29, 0x2A, 0x2B, 0x7};
 	AIData button_msg(sizeof(button_data), ID_NAV_SCREEN, receiver);
@@ -362,110 +348,25 @@ void sendButtonsPresent(const uint8_t receiver) {
 	ai_handler.writeAIData(&button_msg);
 }
 
-void volumeKnobIncrement() {
-	/*noInterrupts();
-	TIMER_SCALER &= 0xF8;
-	TIMER_SCALER |= 0x5;
-	TIMER = 0;
+//Read the value of the volume counter.
+void readVolumeKnob() {
+	const uint8_t vol_state = mcp_vol.getInputStates()&0x3F;
+	const bool vol_up = mcp_vol.digitalReadIO(VOL_MCP_DIR) != 0;
 
-	const uint8_t last_vol_a = vol_a_state, last_vol_b = vol_b_state;
-
-	vol_a_state = digitalRead(KNOB_A);
-	vol_b_state = digitalRead(KNOB_B);
-	TIMER = 0;
-
-	if(vol_a_state == last_vol_a && vol_b_state == last_vol_b)
-		return;
-	
-	if(vol_a_state == HIGH && vol_b_state == HIGH) {
-		while(TIMER < KNOB_WAIT);
-		vol_a_state = digitalRead(KNOB_A);
-		vol_b_state = digitalRead(KNOB_B);
-		TIMER = 0;
-	}
-
-	int32_t steps = 0;
-
-	if(vol_a_state != last_vol_a && vol_b_state != last_vol_b) {
-		if(last_int < 0)
-			steps += -2;
-		else if(last_int > 0)
-			steps += 2;
-	} else {
-		int8_t increment = 0;
-		if(vol_a_state != last_vol_a) {
-			if(vol_b_state == LOW)
-				increment = 1;
-			else
-				increment = -1;
-
-			if(vol_a_state == HIGH && last_vol_a == LOW)
-				steps += increment;
-			else
-				steps -= increment;
-		} 
+	if(vol_state != 0) {
+		if(vol_up)
+			vol_steps = vol_state;
+		else
+			vol_steps = -(0x3F - vol_state + 1);
 		
-		if(vol_b_state != last_vol_b) {
-			if(vol_a_state == HIGH)
-				increment = 1;
-			else
-				increment = -1;
-
-			if(vol_b_state == HIGH && last_vol_b == LOW)
-				steps += increment;
-			else
-				steps -= increment;
-		}
+		mcp_vol.digitalWriteIO(VOL_MCP_RESET, true);
+		mcp_vol.digitalWriteIO(VOL_MCP_RESET, false);
 	}
-
-	while(TIMER < KNOB_WAIT);
-	vol_a_state = digitalRead(KNOB_A);
-	vol_b_state = digitalRead(KNOB_B);
-
-	vol_steps += steps;
-	interrupts();
-	TIMER_SCALER &= 0xF8;
-	TIMER_SCALER |= 0x2;
-	TIMER = 0;*/
-
-	noInterrupts();
-	TIMER_SCALER &= 0xF8;
-	TIMER_SCALER |= 0x5;
-	TIMER = 0;
-
-	while(TIMER < KNOB_WAIT);
-
-	vol_a_state = digitalRead(KNOB_A);
-	vol_b_state = digitalRead(KNOB_B);
-
-	if(vol_b_state == HIGH)
-		vol_steps += 1;
-	else
-		vol_steps -= 1;
-
-	TIMER_SCALER &= 0xF8;
-	TIMER_SCALER |= 0x2;
-	interrupts();
 }
 
+//Send a volume change message as required.
 void handleVolumeKnob() {
 	if(vol_steps != 0) {
-		if(last_int == 0) {
-			if(vol_steps < 0)
-				last_int = -1;
-			else if(vol_steps > 0)
-				last_int = 1;
-			else
-				last_int = 0;
-		}
-
-		if((vol_steps < 0 && last_int > 0) || (vol_steps > 0 && last_int < 0)) {
-			vol_steps = 0;
-			return;
-		}
-
-		vol_reverse_timer = 0;
-
 		uint8_t vol_knob_data[] = {0x32, 0x6, abs(vol_steps)&0xF};
 		if(vol_steps > 0)
 			vol_knob_data[2] |= 0x10;
