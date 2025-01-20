@@ -3,6 +3,7 @@ mod ipc;
 mod context;
 mod amirror;
 mod mirror;
+mod aap;
 mod text_split;
 
 use std::sync::{Arc, Mutex};
@@ -11,6 +12,7 @@ use aibus::*;
 use ipc::*;
 use context::*;
 use amirror::*;
+use mirror::mpv::MpvVideo;
 
 fn main() {
 	let amirror_stream = match init_default_socket() {
@@ -34,9 +36,24 @@ fn main() {
 		}
 	};
 
+	let mut mpv_video = None;
+	let mut mpv_found = 0;
+
+	while mpv_found < 1 {
+		match MpvVideo::new(800, 480) {
+			Err(e) => println!("Failed to Start Mpv: {}", e.to_string()),
+			Ok(mpv) => {
+				mpv_video = Some(mpv);
+				mpv_found += 1;
+			}
+		};
+	}
+
+	let mutex_mpv = Arc::new(Mutex::new(mpv_video.unwrap()));
+
 	let mutex_stream = Arc::new(Mutex::new(amirror_stream));
 	let mutex_context = Arc::new(Mutex::new(Context::new()));
-	let mut amirror = AMirror::new(&mutex_context, &mutex_stream, 800, 480);
+	let mut amirror = AMirror::new(&mutex_context, &mutex_stream, &mutex_mpv, 800, 480);
 
 	while amirror.run {
 		amirror.process();

@@ -2,7 +2,9 @@ use std::os::unix::net::UnixStream;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::aap::aa_handler::AapHandler;
 use crate::mirror::messages::*;
+use crate::mirror::mpv::MpvVideo;
 use crate::{aibus::*, write_aibus_message};
 use crate::context::Context;
 use crate::mirror::handler::*;
@@ -21,7 +23,10 @@ const MENU_DISPLAY: u8 = 2;
 pub struct AMirror<'a> {
 	context: &'a Arc<Mutex<Context>>,
 	stream: &'a Arc<Mutex<UnixStream>>,
-	handler: MirrorHandler<'a>,
+	mpv_video: &'a Arc<Mutex<MpvVideo>>,
+
+	dongle_handler: MirrorHandler<'a>,
+	aa_handler: AapHandler<'a>,
 
 	aibus_list: Vec<AIBusMessage>,
 
@@ -51,13 +56,17 @@ pub struct AMirror<'a> {
 }
 
 impl <'a> AMirror<'a> {
-	pub fn new(context: &'a Arc<Mutex<Context>>, stream: &'a Arc<Mutex<UnixStream>>, w: u16, h: u16) -> Self {
-		let mutex_mirror_handler = MirrorHandler::new(context, w, h);
+	pub fn new(context: &'a Arc<Mutex<Context>>, stream: &'a Arc<Mutex<UnixStream>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, w: u16, h: u16) -> Self {
+		let mutex_mirror_handler = MirrorHandler::new(context, mpv_video, w, h);
+		let mutex_aa_handler = AapHandler::new(context, mpv_video, w, h);
 
 		return Self{
 			context,
 			stream,
-			handler: mutex_mirror_handler,
+			mpv_video,
+
+			dongle_handler: mutex_mirror_handler,
+			aa_handler:mutex_aa_handler,
 
 			aibus_list: Vec::new(),
 
@@ -111,7 +120,8 @@ impl <'a> AMirror<'a> {
 
 		std::mem::drop(context);
 
-		self.handler.process();
+		self.dongle_handler.process();
+		self.aa_handler.process();
 
 		context = match self.context.try_lock() {
 			Ok(context) => context,
@@ -123,7 +133,7 @@ impl <'a> AMirror<'a> {
 
 		if context.phone_active != phone_active || context.home_held {
 			context.home_held = false;
-			self.handler.set_minimize(!context.phone_active);
+			self.dongle_handler.set_minimize(!context.phone_active);
 
 			let mut phone_connect_byte = 0x1;
 			if !context.phone_active {
@@ -173,9 +183,9 @@ impl <'a> AMirror<'a> {
 				context.app = "".to_string();
 			} else {
 				if context.night {
-					self.handler.send_carplay_command(PHONE_COMMAND_NIGHT);
+					self.dongle_handler.send_carplay_command(PHONE_COMMAND_NIGHT);
 				} else {
-					self.handler.send_carplay_command(PHONE_COMMAND_DAY);
+					self.dongle_handler.send_carplay_command(PHONE_COMMAND_DAY);
 				}
 			}
 
@@ -652,7 +662,7 @@ impl <'a> AMirror<'a> {
 					context.audio_selected = true;
 					
 					if context.phone_type != 0 {
-						self.handler.send_carplay_command(PHONE_COMMAND_PLAY);
+						self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAY);
 					}
 					
 					std::mem::drop(context);
@@ -682,7 +692,7 @@ impl <'a> AMirror<'a> {
 					self.imid_refresh = true;
 
 					if context.phone_type != 0 {
-						self.handler.send_carplay_command(PHONE_COMMAND_PAUSE);
+						self.dongle_handler.send_carplay_command(PHONE_COMMAND_PAUSE);
 					}
 					
 					context.audio_selected = false;
@@ -733,7 +743,7 @@ impl <'a> AMirror<'a> {
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x48 && ai_msg.data[1] == 0x8E { //Turn on/off the interface.
-				self.handler.set_minimize(ai_msg.data[2] == 0);
+				self.dongle_handler.set_minimize(ai_msg.data[2] == 0);
 				context.phone_active = ai_msg.data[2] != 0;
 
 				if context.phone_active {
@@ -750,7 +760,7 @@ impl <'a> AMirror<'a> {
 
 					if context.phone_req_off {
 						context.phone_req_off = false;
-						self.handler.send_carplay_command(PHONE_COMMAND_HOME);
+						self.dongle_handler.send_carplay_command(PHONE_COMMAND_HOME);
 					}
 				} else {
 					self.write_aibus_message(AIBusMessage {
@@ -935,10 +945,11 @@ impl <'a> AMirror<'a> {
 					context.night = (ai_msg.data[3]&0x80) != 0;
 
 					if context.night != night {
+						self.aa_handler.set_night_mode(context.night);
 						if context.night {
-							self.handler.send_carplay_command(PHONE_COMMAND_NIGHT);
+							self.dongle_handler.send_carplay_command(PHONE_COMMAND_NIGHT);
 						} else {
-							self.handler.send_carplay_command(PHONE_COMMAND_DAY);
+							self.dongle_handler.send_carplay_command(PHONE_COMMAND_DAY);
 						}
 					}
 				}
@@ -971,7 +982,8 @@ impl <'a> AMirror<'a> {
 		}
 
 		std::mem::drop(context);
-		self.handler.handle_aibus_message(ai_msg);
+		self.dongle_handler.handle_aibus_message(ai_msg.clone());
+		self.aa_handler.handle_aibus_message(ai_msg);
 	}
 
 	fn write_aibus_message(&mut self, ai_msg: AIBusMessage) {

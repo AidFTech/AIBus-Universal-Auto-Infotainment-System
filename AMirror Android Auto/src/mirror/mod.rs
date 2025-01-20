@@ -1,4 +1,4 @@
 pub mod handler;
 pub mod messages;
-pub mod usb;
+pub mod dongle_usb;
 pub mod mpv;

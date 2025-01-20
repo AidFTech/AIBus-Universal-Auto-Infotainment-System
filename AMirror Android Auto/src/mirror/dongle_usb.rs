@@ -19,7 +19,7 @@ struct Endpoint {
 	rx_address: u8,
 }
 
-pub struct USBConnection {
+pub struct DongleUSBConnection {
 	pub connected: bool,
 
 	device: Option<Device<USBContext>>,
@@ -29,10 +29,10 @@ pub struct USBConnection {
 	tx: u8,
 }
 
-impl USBConnection {
+impl DongleUSBConnection {
 
-	pub fn new() -> USBConnection {
-		return USBConnection {
+	pub fn new() -> DongleUSBConnection {
+		return DongleUSBConnection {
 			connected: false,
 
 			device: None,
@@ -216,7 +216,7 @@ impl USBConnection {
 	}
 
 	// Write a message to the socket.
-	pub fn write_message(&mut self, message: MirrorMessage) {
+	pub fn write_dongle_message(&mut self, message: MirrorMessage) {
 		if !self.connected {
 			return;
 		}

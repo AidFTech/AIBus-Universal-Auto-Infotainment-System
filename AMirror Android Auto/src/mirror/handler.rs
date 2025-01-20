@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use crate::{Context, AIBusMessage};
-use crate::mirror::usb::USBConnection;
+use crate::mirror::dongle_usb::DongleUSBConnection;
 use crate::mirror::messages::*;
 
 use crate::aibus::*;
@@ -23,10 +23,14 @@ use super::mpv::RdAudio;
 
 pub struct MirrorHandler<'a> {
 	context: &'a Arc<Mutex<Context>>,
-	usb_conn: USBConnection,
+	dongle_usb_conn: DongleUSBConnection,
+
+	w: u16,
+	h: u16,
+
 	run: bool,
 	startup: bool,
-	mpv_video: MpvVideo,
+	mpv_video: &'a Arc<Mutex<MpvVideo>>,
 	rd_audio: RdAudio,
 	nav_audio: RdAudio,
 	heartbeat_time: SystemTime,
@@ -40,21 +44,12 @@ pub struct MirrorHandler<'a> {
 }
 
 impl<'a> MirrorHandler<'a> {
-	pub fn new(context: &'a Arc<Mutex<Context>>, w: u16, h: u16) -> MirrorHandler <'a> {
+	pub fn new(context: &'a Arc<Mutex<Context>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, w: u16, h: u16) -> MirrorHandler <'a> {
 		let mut mpv_found = 0;
-		let mut mpv_video: Option<MpvVideo> = None;
 		let mut rd_audio: Option<RdAudio> = None;
 		let mut nav_audio: Option<RdAudio> = None;
 
-		while mpv_found < 3 {
-			match MpvVideo::new(w, h) {
-				Err(e) => println!("Failed to Start Mpv: {}", e.to_string()),
-				Ok(mpv) => {
-					mpv_video = Some(mpv);
-					mpv_found += 1;
-				}
-			};
-
+		while mpv_found < 2 {
 			match RdAudio::new() {
 				Err(e) => println!("Failed to Start Rodio: {}", e.to_string()),
 				Ok(rodio) => {
@@ -108,7 +103,7 @@ impl<'a> MirrorHandler<'a> {
 			}
 		};
 		
-		//Send AidF Apple.png...
+		//Load AidF Apple.png...
 		let mut carplay_icon_data: Vec<u8> = Vec::new();
 		match File::open(Path::new("AidF Apple.png")) {
 			Ok(mut file) => {
@@ -128,13 +123,16 @@ impl<'a> MirrorHandler<'a> {
 
 		return MirrorHandler {
 			context,
-			usb_conn: USBConnection::new(),
+			dongle_usb_conn: DongleUSBConnection::new(),
 			run: true,
 			startup: false,
-			mpv_video: mpv_video.unwrap(),
+			mpv_video,
 			rd_audio: rd_audio.unwrap(),
 			nav_audio: nav_audio.unwrap(),
 			heartbeat_time: SystemTime::now(),
+
+			w,
+			h,
 
 			enter_hold: false,
 			home_hold: false,
@@ -149,9 +147,27 @@ impl<'a> MirrorHandler<'a> {
 		if !self.run {
 			return;
 		}
-		if !self.usb_conn.connected {
+
+		let context = match self.context.try_lock() {
+			Ok(context) => context,
+			Err(_) => {
+				println!("AA Handler process: Context locked.");
+				return;
+			}
+		};
+
+		let phone_type = context.phone_type;
+		std::mem::drop(context);
+
+		if phone_type == 5 { //AA active.
+			self.heartbeat();
+			return;
+		}
+
+		//Carplay stuff.
+		if !self.dongle_usb_conn.connected {
 			self.startup = false;
-			let run = self.usb_conn.connect();
+			let run = self.dongle_usb_conn.connect();
 
 			if !run {
 				return; //TODO: Should we still run full_loop even if no dongle is connected?
@@ -161,7 +177,7 @@ impl<'a> MirrorHandler<'a> {
 		} else if !self.startup {
 			self.send_dongle_startup();
 		}
-		let mirror_message = self.usb_conn.read();
+		let mirror_message = self.dongle_usb_conn.read();
 
 		match mirror_message {
 			Some(mirror_message) => self.interpret_message(&mirror_message),
@@ -173,18 +189,29 @@ impl<'a> MirrorHandler<'a> {
 	fn heartbeat(&mut self) {
 		if self.heartbeat_time.elapsed().unwrap().as_millis() > 2000 {
 			self.heartbeat_time = SystemTime::now();
-			self.usb_conn.write_message(get_heartbeat_message());
+			self.dongle_usb_conn.write_dongle_message(get_heartbeat_message());
 		}
 	}
 
 	pub fn send_carplay_command(&mut self, command: u32) {
 		let msg = get_carplay_command_message(command);
-		self.usb_conn.write_message(msg);
+		self.dongle_usb_conn.write_dongle_message(msg);
 	}
 
 	pub fn handle_aibus_message(&mut self, ai_msg: AIBusMessage) {
 		if ai_msg.receiver != AIBUS_DEVICE_AMIRROR {
 			return;
+		}
+
+		match self.context.try_lock() {
+			Ok(context) => {
+				if context.phone_type != 3 {
+					return;
+				}
+			}
+			Err(_) => {
+				
+			}
 		}
 
 		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN {
@@ -261,25 +288,25 @@ impl<'a> MirrorHandler<'a> {
 
 	fn send_dongle_startup(&mut self) {
 		let mut dongle_message_dpi = get_sendint_message(String::from("/tmp/screen_dpi"), 160);
-		let mut dongle_message_android = get_sendint_message(String::from("/etc/android_work_mode"), 1);
+		//let mut dongle_message_android = get_sendint_message(String::from("/etc/android_work_mode"), 1);
 		let dongle_message_open = get_open_message(800, 480, 30, 5, 49152, 2, 2);
 
-		self.usb_conn.write_message(dongle_message_dpi.get_mirror_message());
-		self.usb_conn.write_message(dongle_message_android.get_mirror_message());
-		self.usb_conn.write_message(dongle_message_open);
+		self.dongle_usb_conn.write_dongle_message(dongle_message_dpi.get_mirror_message());
+		//self.dongle_usb_conn.write_dongle_message(dongle_message_android.get_mirror_message());
+		self.dongle_usb_conn.write_dongle_message(dongle_message_open);
 		
 		let mut config_msg = get_sendfile_message("/etc/airplay.conf".to_string(), self.config_data.clone());
-		self.usb_conn.write_message(config_msg.get_mirror_message());
+		self.dongle_usb_conn.write_dongle_message(config_msg.get_mirror_message());
 
 		let mut android_icon_msg = get_sendfile_message("/etc/oem_icon.png".to_string(), self.android_icon_data.clone());
-		self.usb_conn.write_message(android_icon_msg.get_mirror_message());
+		self.dongle_usb_conn.write_dongle_message(android_icon_msg.get_mirror_message());
 		
 		let mut carplay_icon_msg = get_sendfile_message("/etc/icon_120x120.png".to_string(), self.carplay_icon_data.clone());
-		self.usb_conn.write_message(carplay_icon_msg.get_mirror_message());
+		self.dongle_usb_conn.write_dongle_message(carplay_icon_msg.get_mirror_message());
 		carplay_icon_msg = get_sendfile_message("/etc/icon_180x180.png".to_string(), self.carplay_icon_data.clone());
-		self.usb_conn.write_message(carplay_icon_msg.get_mirror_message());
+		self.dongle_usb_conn.write_dongle_message(carplay_icon_msg.get_mirror_message());
 		carplay_icon_msg = get_sendfile_message("/etc/icon_256x256.png".to_string(), self.carplay_icon_data.clone());
-		self.usb_conn.write_message(carplay_icon_msg.get_mirror_message());
+		self.dongle_usb_conn.write_dongle_message(carplay_icon_msg.get_mirror_message());
 	}
 
 	fn interpret_message(&mut self, message: &MirrorMessage) {
@@ -295,26 +322,26 @@ impl<'a> MirrorHandler<'a> {
 			let mut startup_msg_name = get_sendstring_message(String::from("/etc/box_name"), String::from("AMirror"));
 			let startup_msg_carplay = get_carplay_command_message(101);
 
-			self.usb_conn.write_message(startup_msg_manufacturer);
-			self.usb_conn.write_message(startup_msg_night.get_mirror_message());
-			self.usb_conn.write_message(startup_msg_hand_drive.get_mirror_message());
-			self.usb_conn.write_message(startup_msg_charge.get_mirror_message());
-			self.usb_conn.write_message(startup_msg_name.get_mirror_message());
-			self.usb_conn.write_message(startup_msg_carplay);
+			self.dongle_usb_conn.write_dongle_message(startup_msg_manufacturer);
+			self.dongle_usb_conn.write_dongle_message(startup_msg_night.get_mirror_message());
+			self.dongle_usb_conn.write_dongle_message(startup_msg_hand_drive.get_mirror_message());
+			self.dongle_usb_conn.write_dongle_message(startup_msg_charge.get_mirror_message());
+			self.dongle_usb_conn.write_dongle_message(startup_msg_name.get_mirror_message());
+			self.dongle_usb_conn.write_dongle_message(startup_msg_carplay);
 
 			let mut startup_msg_meta = MetaDataMessage::new(25);
 			startup_msg_meta.add_int(String::from("mediaDelay"), 300);
-			startup_msg_meta.add_int(String::from("androidAutoSizeW"), 800);
-			startup_msg_meta.add_int(String::from("androidAutoSizeH"), 480);
-			self.usb_conn.write_message(startup_msg_meta.get_mirror_message());
+			startup_msg_meta.add_int(String::from("androidAutoSizeW"), self.w as i32);
+			startup_msg_meta.add_int(String::from("androidAutoSizeH"), self.h as i32);
+			self.dongle_usb_conn.write_dongle_message(startup_msg_meta.get_mirror_message());
 
 			let mut msg_91 = MirrorMessage::new(9);
 			msg_91.push_int(1);
-			self.usb_conn.write_message(msg_91);
+			self.dongle_usb_conn.write_dongle_message(msg_91);
 
 			let mut msg_88 = MirrorMessage::new(0x88);
 			msg_88.push_int(1);
-			self.usb_conn.write_message(msg_88);
+			self.dongle_usb_conn.write_dongle_message(msg_88);
 			self.heartbeat_time = SystemTime::now();
 		} else if message.message_type == 2 {
 			println!("Phone trying to connect...");
@@ -340,7 +367,14 @@ impl<'a> MirrorHandler<'a> {
 				}
 			}
 			
-			self.mpv_video.start();
+			match self.mpv_video.try_lock() {
+				Ok(mut mpv_video) => {
+					mpv_video.start();
+				}
+				Err(_) => {
+					println!("Carplay Handler: MPV Video Locked")
+				}
+			}
 
 			if selected {
 				self.send_carplay_command(PHONE_COMMAND_PLAY);
@@ -348,7 +382,14 @@ impl<'a> MirrorHandler<'a> {
 
 		} else if message.message_type == 4 {
 			// Phone disconnected.
-			self.mpv_video.stop();
+			match self.mpv_video.try_lock() {
+				Ok(mut mpv_video) => {
+					mpv_video.stop();
+				}
+				Err(_) => {
+					println!("Carplay Handler: MPV Video Locked")
+				}
+			}
 
 			match self.context.try_lock() {
 				Ok(mut context) => {
@@ -368,7 +409,15 @@ impl<'a> MirrorHandler<'a> {
 			for i in 20..message.data.len() {
 				data.push(message.data[i]);
 			}
-			self.mpv_video.send_video(&data);
+
+			match self.mpv_video.try_lock() {
+				Ok(mut mpv_video) => {
+					mpv_video.send_video(&data);
+				}
+				Err(_) => {
+					println!("Carplay Handler: MPV Video Locked")
+				}
+			}
 		} else if message.message_type == 7 { //Audio.
 			if message.data.len() > 16 {
 				let (current_sample, current_bits, current_channel) = self.rd_audio.get_audio_profile();
@@ -489,6 +538,13 @@ impl<'a> MirrorHandler<'a> {
 	}
 
 	pub fn set_minimize(&mut self, minimize: bool) {
-		self.mpv_video.set_minimize(minimize);
+		match self.mpv_video.try_lock() {
+			Ok(mut mpv_video) => {
+				mpv_video.set_minimize(minimize);
+			}
+			Err(_) => {
+				println!("Carplay Handler: MPV Video Locked")
+			}
+		}
 	}
 }
