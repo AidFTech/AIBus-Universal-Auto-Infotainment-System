@@ -331,6 +331,8 @@ void loop() {
 				tuner.setPower(false);
 			
 			setSourceName();
+
+			parameters.audio_on = current_source_id != 0;
 			
 			if(current_source_id != 0 && current_source_id != ID_RADIO) {
 				function_msg.receiver = current_source_id;
@@ -390,6 +392,8 @@ void loop() {
 				setDigitalActiveMode();
 			}
 		} else {
+			parameters.audio_on = true;
+
 			uint8_t function_data[] = {0x40, 0x10, 0x0};
 			AIData function_msg(sizeof(function_data), ID_RADIO, last_active_source_id);
 			function_msg.refreshAIData(function_data);

@@ -22,6 +22,8 @@ use crate::aap::aap_channel_descriptor::*;
 
 use super::aap_messages::*;
 use super::aap_usb::AndroidUSBConnection;
+use super::media_messages::MediaMetaMessage;
+use super::media_messages::MediaPlaybackMessage;
 use super::media_messages::VideoMsg;
 use super::sensor_messages::SensorMessage;
 
@@ -103,6 +105,9 @@ pub struct AapHandler <'a> {
 	had_sdr: bool,
 	first_video: bool,
 
+	enter_hold: bool,
+	home_hold: bool,
+
 	connection_start: Instant,
 }
 
@@ -129,6 +134,9 @@ impl<'a> AapHandler <'a>{
 
 			had_sdr: false,
 			first_video: false,
+
+			enter_hold: false,
+			home_hold: false,
 
 			connection_start: Instant::now(),
 		}
@@ -364,7 +372,7 @@ impl<'a> AapHandler <'a>{
 				return false;
 			}
 
-			let mut encrypted_data = vec![0;MAX_FRAME_PAYLOAD_SIZE];
+			let mut encrypted_data = vec![0;0x10000];
 			let encrypted_data_ptr = encrypted_data.as_mut_ptr() as *mut c_void;
 			let encrypted_data_len;
 			
@@ -389,7 +397,12 @@ impl<'a> AapHandler <'a>{
 				}
 			}
 
-			for i in 0..encrypted_data_len as usize {
+			let mut push_len = encrypted_data_len;
+			if push_len > 0xFFFF || push_len < 0 {
+				push_len = 0xFFFF;
+			}
+
+			for i in 0..push_len as usize {
 				buffer.push(encrypted_data[i]);
 			}
 				
@@ -409,11 +422,11 @@ impl<'a> AapHandler <'a>{
 		}
 
 		let current_channel = data[0];
-		if current_channel as i16 != self.channel && self.channel >= 0 {
+		/*if current_channel as i16 != self.channel && self.channel >= 0 {
 			println!("Error: Channel mismatch.");
 			self.clear_data();
 			return;
-		} else if self.channel < 0 {
+		} else*/ if self.channel < 0 {
 			self.channel = current_channel as i16;
 		}
 
@@ -422,7 +435,7 @@ impl<'a> AapHandler <'a>{
 		let len_bytes = [data[2], data[3]];
 		let len = u16::from_be_bytes(len_bytes);
 
-		if len as usize > MAX_FRAME_PAYLOAD_SIZE {
+		if len as usize > 0xFFFF {// MAX_FRAME_PAYLOAD_SIZE {
 			println!("Error: Message is too big.");
 			return;
 		}
@@ -547,6 +560,61 @@ impl<'a> AapHandler <'a>{
 				video_data.set_data(&self.current_data);
 				self.handle_video_message(video_data);
 			}
+		} else if self.channel as u8 == PhoneStatusChannel as u8 {
+			if msg_type == MediaInfoMessage::MediaInfoMessagePlayback as u16 {
+				let mut playback_msg = MediaPlaybackMessage::new();
+				let mut msg_read = false;
+				match playback_msg.merge_from_bytes(&self.current_data[2..]) {
+					Ok(_) => {
+						msg_read = true;
+					}
+					Err(e) => {
+						println!("Error: {}", e);
+					}
+				}
+
+				if msg_read {
+					let mut context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							println!("AAP message processing: Context Locked.");
+							return;
+						}
+					};
+
+					context.track_time = playback_msg.track_progress;
+
+					context.app = playback_msg.media_app;
+					context.playing = playback_msg.playback_state == 2;
+				}
+			} else if msg_type == MediaInfoMessage::MediaInfoMessageMeta as u16 {
+				let mut meta_msg = MediaMetaMessage::new();
+				let mut msg_read = false;
+
+				match meta_msg.merge_from_bytes(&self.current_data[2..]) {
+					Ok(_) => {
+						msg_read = true;
+					}
+					Err(e) => {
+						println!("Error: {}", e);
+					}
+				}
+
+				if msg_read {
+					let mut context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							println!("AAP message processing: Context Locked.");
+							return;
+						}
+					};
+
+					context.song_title = meta_msg.track_name;
+					context.artist = meta_msg.artist_name;
+					context.album = meta_msg.album_name;
+				}
+				
+			}
 		} else if self.channel as u8 == TouchChannel as u8 {
 			if msg_type == InputChannelMessageBindingRequest as u16 {
 				self.handle_binding_request(self.channel as u8);
@@ -595,14 +663,28 @@ impl<'a> AapHandler <'a>{
 					self.send_button_message(InputButton::ButtonUp as u32);
 				} else if button == 0x29 && state == 0x0 { //Toggle down.
 					self.send_button_message(InputButton::ButtonDown as u32);
-				} else if button == 0x7 && state == 0x2 { //Enter.
-					self.send_button_message(InputButton::ButtonEnter as u32);
+				} else if button == 0x7 && state == 2 { //Enter.
+					if !self.enter_hold {
+						self.send_button_message(InputButton::ButtonEnter as u32);
+					}
+					self.enter_hold = false;
+				} else if button == 0x7 && state == 1 {
+					self.enter_hold = true;
 				} else if button == 0x27 && state == 0x0 { //Back.
 					self.send_button_message(InputButton::ButtonBack as u32);
 				} else if button == 0x51 && state == 0x0 { //Menu.
 					self.send_button_message(InputButton::ButtonMenu as u32);
-				} else if button == 0x20 && state == 0x0 { //Home.
-					self.send_button_message(InputButton::ButtonHome as u32);
+				} else if button == 0x20 && state == 0x2 { //Home.
+					if !self.home_hold {
+						self.send_button_message(InputButton::ButtonHome as u32);
+					}
+					self.home_hold = false;
+				} else if button == 0x20 && state == 0x1 {
+					self.home_hold = true;
+				} else if button == 0x25 && state == 0x0 { //Next track.
+					self.send_button_message(InputButton::ButtonNext as u32);
+				} else if button == 0x24 && state == 0x0 { //Prev track.
+					self.send_button_message(InputButton::ButtonPrev as u32);
 				}
 			}
 		}
@@ -620,6 +702,15 @@ impl<'a> AapHandler <'a>{
 		night_sensor.night_mode = night;
 
 		self.write_message(true, SensorChannel as u8, sensor_msg, 0x8003, Duration::from_millis(5000), true);
+	}
+
+	//Start playing audio if start is true.
+	pub fn start_stop_audio(&mut self, start: bool) {
+		if start {
+			self.send_button_message(InputButton::ButtonStart as u32);
+		} else {
+			self.send_button_message(InputButton::ButtonStop as u32);
+		}
 	}
 
 	//Internal message handles:
@@ -772,7 +863,7 @@ impl<'a> AapHandler <'a>{
 		let mut send_data = Vec::new();
 
 		let mut os = CodedOutputStream::vec(&mut send_data);
-		let _ = os.write_uint64(1, (Instant::now() - self.connection_start).as_nanos() as u64);
+		let _ = os.write_uint64(1, self.get_timestamp());
 		let _ = os.write_bytes(4, &press_data);
 
 		std::mem::drop(os);
@@ -782,7 +873,7 @@ impl<'a> AapHandler <'a>{
 		let mut send_rel_data = Vec::new();
 
 		let mut os = CodedOutputStream::vec(&mut send_rel_data);
-		let _ = os.write_uint64(1, (Instant::now() - self.connection_start).as_nanos() as u64);
+		let _ = os.write_uint64(1, self.get_timestamp());
 		let _ = os.write_bytes(4, &release_data);
 
 		std::mem::drop(os);
@@ -813,12 +904,18 @@ impl<'a> AapHandler <'a>{
 		let mut send_data = Vec::new();
 
 		let mut os = CodedOutputStream::vec(&mut send_data);
-		let _ = os.write_uint64(1, (Instant::now() - self.connection_start).as_nanos() as u64);
+		let _ = os.write_uint64(1, self.get_timestamp());
 		let _ = os.write_bytes(6, &scroll_data);
 
 		std::mem::drop(os);
 
 		self.write_block(true, TouchChannel as u8, send_data, InputChannelMessageInputEvent as u16, Duration::from_millis(5000), true);
+	}
+
+	//Get the current timestamp.
+	fn get_timestamp(&self) -> u64 {
+		let time = (Instant::now() - self.connection_start).as_nanos();
+		return (time&0xFFFFFFFFFFFFFF) as u64;
 	}
 
 	//Handle a service discovery request.
@@ -888,7 +985,7 @@ impl<'a> AapHandler <'a>{
 
 		sensor_list.add_config().sensor_type = SensorType::SensorTypeDrivingStatus as u32;
 		sensor_list.add_config().sensor_type = SensorType::SensorTypeNightData as u32;
-		sensor_list.add_config().sensor_type = SensorType::SensorTypeLocation as u32;
+		//sensor_list.add_config().sensor_type = SensorType::SensorTypeLocation as u32;
 		//sensor_list.add_config().sensor_type = SensorType::SensorTypeSpeed as u32;
 		//sensor_list.add_config().sensor_type = SensorType::SensorTypeGear as u32;
 

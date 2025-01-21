@@ -13,6 +13,8 @@ pub struct Context {
 	pub album: String, // The album name.
 	pub app: String, //The app name.
 
+	pub track_time: i32, //The current song runtime.
+
 	pub night: bool, //True if the system is in night mode.
 
 	pub phone_req_off: bool, //True if the phone has requested a return to the factory UI.
@@ -49,6 +51,8 @@ impl Context {
 			artist: "".to_string(),
 			album: "".to_string(),
 			app: "".to_string(),
+
+			track_time: -1,
 
 			night: false,
 

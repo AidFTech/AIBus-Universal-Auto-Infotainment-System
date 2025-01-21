@@ -53,6 +53,8 @@ void HondaIMIDHandler::interpretIMIDMessage(IE_Message* the_message) {
 					ai_driver->writeAIData(&ping, parameter_list->radio_connected);
 					
 					writeScreenLayoutMessage();
+					if(parameter_list->radio_connected)
+						writeVolumeLimitMessage();
 
 					//uint8_t audio_off_data[] = {0x0, 0x0};
 					//sendFunctionMessage(ie_driver, true, IE_ID_IMID, audio_off_data, sizeof(audio_off_data));
@@ -295,6 +297,15 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 
 	if(ack)
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+}
+
+//Write the volume limit message.
+void HondaIMIDHandler::writeVolumeLimitMessage() {
+	uint8_t vol_limit_data[] = {0x33, 0x6, VOL_LIMIT>>8, VOL_LIMIT&0xFF};
+	AIData vol_limit_msg(sizeof(vol_limit_data), ID_IMID_SCR, ID_RADIO);
+
+	vol_limit_msg.refreshAIData(vol_limit_data);
+	ai_driver->writeAIData(&vol_limit_msg);
 }
 
 //Write the screen layout message.

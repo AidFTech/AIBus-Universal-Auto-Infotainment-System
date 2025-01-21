@@ -113,6 +113,8 @@ impl <'a> AMirror<'a> {
 		let album = context.album.clone();
 		let app = context.app.clone();
 
+		let track_time = context.track_time;
+
 		let playing = context.playing;
 		let phone_active = context.phone_active;
 
@@ -213,6 +215,8 @@ impl <'a> AMirror<'a> {
 				};
 			}
 
+			context.track_time = -1;
+
 			if context.radio_connected {
 				std::mem::drop(context);
 
@@ -281,6 +285,7 @@ impl <'a> AMirror<'a> {
 					self.write_nav_text("#FWD".to_string(), 1, 1, true);
 				} else {
 					self.write_nav_text("||".to_string(), 1, 1, true);
+					context.track_time = -1;
 				}
 			}
 		}
@@ -422,6 +427,34 @@ impl <'a> AMirror<'a> {
 						} else if self.imid_scroll >= 0 {
 							change_imid = true;
 						}
+					}
+				}
+			}
+		}
+
+		if context.track_time != track_time {
+			if context.audio_selected {
+				if context.audio_text {
+					if context.track_time >= 0 {
+						let min = context.track_time/60;
+						let sec = context.track_time%60;
+
+						let mut time_text = min.to_string() + ":";
+						if sec >= 10 {
+							time_text += &sec.to_string();
+						} else {
+							time_text += "0";
+							time_text += &sec.to_string();
+						}
+
+						self.write_nav_text(time_text, 0, 1, true);
+					} else {
+						let clear_data = [0x20, 0x71, 0x0].to_vec();
+						self.write_aibus_message(AIBusMessage {
+							sender: AIBUS_DEVICE_AMIRROR,
+							receiver: AIBUS_DEVICE_NAV_COMPUTER,
+							data: clear_data,
+						});
 					}
 				}
 			}
@@ -663,6 +696,7 @@ impl <'a> AMirror<'a> {
 					
 					if context.phone_type != 0 {
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAY);
+						self.aa_handler.start_stop_audio(true);
 					}
 					
 					std::mem::drop(context);
@@ -693,6 +727,7 @@ impl <'a> AMirror<'a> {
 
 					if context.phone_type != 0 {
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_PAUSE);
+						self.aa_handler.start_stop_audio(false);
 					}
 					
 					context.audio_selected = false;

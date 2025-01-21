@@ -152,6 +152,9 @@ void loop() {
 					tape_handler.sendSourceNameMessage();
 				if(xm_handler.getEstablished())
 					xm_handler.sendSourceNameMessage();
+
+				if(imid_handler.getEstablished())
+					imid_handler.writeVolumeLimitMessage();
 			}
 			#endif
 

@@ -18,6 +18,9 @@ pub struct ChannelDescriptor {
 	//Output stream channel.
 	output_stream_params: Vec<OutputStreamChannel>,
 	input_stream_params: Vec<InputStreamChannel>,
+
+	//Vendor extensions.
+	//vendor_extension_params: Vec<VendorExtensionChannel>,
 	
 	//Empty channels.
 	empty_params: Vec<u32>,
@@ -71,6 +74,12 @@ impl ChannelDescriptor {
 		let index = self.navigation_status_params.len() - 1;
 		return &mut self.navigation_status_params[index];
 	}
+
+	/*pub fn add_vendor_extension(&mut self) -> &mut VendorExtensionChannel {
+		self.vendor_extension_params.push(VendorExtensionChannel::new());
+		let index = self.vendor_extension_params.len() - 1;
+		return &mut self.vendor_extension_params[index];
+	}*/
 	
 	pub fn add_empty_channel(&mut self, param: u32) {
 		self.empty_params.push(param);
@@ -145,6 +154,17 @@ impl Message for ChannelDescriptor {
 				}
 			}
 		}
+
+		/*for v in &self.vendor_extension_params {
+			match v.write_to_bytes() {
+				Ok(data) => {
+					os.write_bytes(12, &data)?;
+				}
+				Err(e) => {
+					println!("Error: {}", e);
+				}
+			}
+		}*/
 		
 		for e in &self.empty_params {
 			os.write_bytes(*e, &[])?;
@@ -178,6 +198,10 @@ impl Message for ChannelDescriptor {
 		for s in &self.navigation_status_params {
 			total_size += s.compute_size();
 		}
+
+		/*for v in &self.vendor_extension_params {
+			total_size += v.compute_size();
+		}*/
 		
 		for _e in &self.empty_params {
 			total_size += 2;
@@ -208,6 +232,8 @@ impl Message for ChannelDescriptor {
 			input_stream_params: Vec::new(),
 
 			navigation_status_params: Vec::new(),
+
+			//vendor_extension_params: Vec::new(),
 			
 			empty_params: Vec::new(),
 
@@ -1125,3 +1151,79 @@ impl Message for NavigationStatusService {
 		return INSTANCE.get(NavigationStatusService::new);
 	}
 }
+
+/*#[derive(Default, PartialEq, Clone)]
+pub struct VendorExtensionChannel {
+	pub name: String,
+	pub data: Vec<u8>,
+
+	special_fields: protobuf::SpecialFields,
+}
+
+impl Message for VendorExtensionChannel {
+	const NAME: &'static str = "Vendor Extension Channel";
+
+	fn is_initialized(&self) -> bool {
+		return true;
+	}
+
+	fn merge_from(&mut self, is: &mut protobuf::CodedInputStream) -> protobuf::Result<()> {
+		while let Some(tag) = is.read_raw_tag_or_eof()? {
+			match tag {
+				10 => {
+					self.name = is.read_string()?;
+				}
+				26 => {
+					self.data = is.read_bytes()?;
+				}
+				tag => {
+					read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+				}
+			}
+		}
+
+		return Ok(());
+	}
+
+	fn write_to_with_cached_sizes(&self, os: &mut protobuf::CodedOutputStream) -> protobuf::Result<()> {
+		os.write_string(1, &self.name)?;
+		os.write_bytes(3, &self.data)?;
+
+		os.write_unknown_fields(self.special_fields.unknown_fields())?;
+
+		return Ok(());
+	}
+
+	fn compute_size(&self) -> u64 {
+		let mut total_size = 0;
+
+		total_size += string_size(1, &self.name);
+		total_size += bytes_size(3, &self.data);
+		
+		total_size += unknown_fields_size(self.special_fields.unknown_fields());
+		self.special_fields.cached_size().set(total_size as u32);
+
+		return total_size;
+	}
+
+	fn special_fields(&self) -> &protobuf::SpecialFields {
+		return &self.special_fields;
+	}
+
+	fn mut_special_fields(&mut self) -> &mut protobuf::SpecialFields {
+		return &mut self.special_fields;
+	}
+
+	fn new() -> Self {
+		return Self {
+			name: "".to_string(),
+			data: Vec::new(),
+			special_fields: protobuf::SpecialFields::default(),
+		}
+	}
+
+	fn default_instance() -> &'static Self {
+		static INSTANCE: Lazy<VendorExtensionChannel> = Lazy::new();
+		return INSTANCE.get(VendorExtensionChannel::new);
+	}
+}*/

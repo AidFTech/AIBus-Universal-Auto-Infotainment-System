@@ -51,7 +51,7 @@
 #define VOL_MCP_D3 3
 #define VOL_MCP_D4 4
 #define VOL_MCP_D5 5
-#define VOL_MCP_DIR 6
+#define VOL_MCP_OVR 6
 #define VOL_MCP_RESET 7
 
 #define CONTROL_TIMER 7000
@@ -150,7 +150,7 @@ void setup() {
 	mcp_vol.pinModeIO(VOL_MCP_D3, INPUT_PULLUP);
 	mcp_vol.pinModeIO(VOL_MCP_D4, INPUT_PULLUP);
 	mcp_vol.pinModeIO(VOL_MCP_D5, INPUT_PULLUP);
-	mcp_vol.pinModeIO(VOL_MCP_DIR, INPUT);
+	mcp_vol.pinModeIO(VOL_MCP_OVR, INPUT);
 	mcp_vol.pinModeIO(VOL_MCP_RESET, OUTPUT);
 
 	button_handler = new ButtonHandler(&mcp_in, &mcp_out, &ai_handler, &parameters, &mcp_knob, KNOB_MCP_VOL_PUSH);
@@ -351,7 +351,7 @@ void sendButtonsPresent(const uint8_t receiver) {
 //Read the value of the volume counter.
 void readVolumeKnob() {
 	const uint8_t vol_state = mcp_vol.getInputStates()&0x3F;
-	const bool vol_up = mcp_vol.digitalReadIO(VOL_MCP_DIR) != 0;
+	const bool vol_up = mcp_vol.digitalReadIO(VOL_MCP_OVR) == 0;
 
 	if(vol_state != 0) {
 		if(vol_up)

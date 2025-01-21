@@ -86,6 +86,11 @@ pub enum MediaChannelMessage {
 	MediaChannelMessageVideoFocus,
 }
 
+pub enum MediaInfoMessage {
+	MediaInfoMessagePlayback = 0x8001,
+	MediaInfoMessageMeta = 0x8003,
+}
+
 pub enum InputButton {
 	ButtonMic1 = 1,
 	ButtonMenu,

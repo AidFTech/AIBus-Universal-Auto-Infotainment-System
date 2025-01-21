@@ -14,6 +14,7 @@
 #define honda_imid_handler_h
 
 #define LINES 1
+#define VOL_LIMIT 40
 
 #define TEXT_MODE_BLANK 0 //Any CD text absent.
 #define TEXT_MODE_WITH_TEXT 1 //CD text present.
@@ -29,6 +30,7 @@ public:
 	void readAIBusMessage(AIData* the_message);
 
 	void writeScreenLayoutMessage();
+	void writeVolumeLimitMessage();
 
 	void writeTimeAndDayMessage(const uint8_t hour, const uint8_t minute, const uint8_t month, const uint8_t day, const uint16_t year);
 	

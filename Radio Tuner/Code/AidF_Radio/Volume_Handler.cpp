@@ -32,6 +32,9 @@ bool VolumeHandler::handleAIBus(AIData *msg) {
 			if(msg->data[1] == 0x6) {
 				ai_handler->sendAcknowledgement(ID_RADIO, msg->sender);
 
+				if(!parameters->audio_on)
+					return true;
+				
 				uint16_t new_volume = volume;
 				if((msg->data[2]&0x10) != 0)
 					new_volume += msg->data[2]&0xF;

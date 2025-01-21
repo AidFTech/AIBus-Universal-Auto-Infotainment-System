@@ -185,6 +185,17 @@ impl AndroidUSBConnection {
 				}
 				Err(e) => {
 					println!("Error: {}", e);
+
+					match e {
+						rusb::Error::Timeout => {
+							//Do nothing.
+						}
+						_=> {
+							println!("Error: {}", e);
+							self.aa_activated = false;
+							return false;
+						}
+					}
 					
 					if !retry {
 						return false;

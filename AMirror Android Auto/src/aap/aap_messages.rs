@@ -19,7 +19,7 @@ impl Message for AuthCompleteResponse {
 	fn merge_from(&mut self, is: &mut protobuf::CodedInputStream) -> protobuf::Result<()> {
 		while let Some(tag) = is.read_raw_tag_or_eof()? {
 			match tag {
-				1 => {
+				8 => {
 					match is.read_int32() {
 						Ok(status) => {
 							self.status = status;
@@ -28,9 +28,6 @@ impl Message for AuthCompleteResponse {
 							return Err(e);
 						}
 					}
-				}
-				0 => {
-					break;
 				}
 				tag => {
 					read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
@@ -120,9 +117,6 @@ impl Message for ServiceDiscoveryRequest {
 						}
 					}
 				}
-				0 => {
-					break;
-				}
 				tag => {
 					read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
 				}
@@ -133,7 +127,7 @@ impl Message for ServiceDiscoveryRequest {
 	}
 
 	fn write_to_with_cached_sizes(&self, os: &mut protobuf::CodedOutputStream) -> protobuf::Result<()> {
-		match os.write_string(42, &self.phone_name) {
+		match os.write_string(5, &self.phone_name) {
 			Ok(_) => {
 
 			}
@@ -149,7 +143,7 @@ impl Message for ServiceDiscoveryRequest {
 	fn compute_size(&self) -> u64 {
 		let mut total_size = 0;
 
-		total_size += string_size(4, &self.phone_name);
+		total_size += string_size(5, &self.phone_name);
 
 		total_size += unknown_fields_size(self.special_fields.unknown_fields());
 		self.special_fields.cached_size().set(total_size as u32);

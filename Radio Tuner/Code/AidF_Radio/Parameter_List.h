@@ -12,7 +12,7 @@
 #define MINUTE_TIMER 60000
 
 struct ParameterList {
-	bool power_on = true;
+	bool power_on = true, audio_on = false;
 	
 	uint16_t vehicle_speed = 0;
 	bool computer_connected = false, screen_connected = false, amp_connected = false;
