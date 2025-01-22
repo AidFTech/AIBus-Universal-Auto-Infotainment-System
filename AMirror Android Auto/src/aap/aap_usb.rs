@@ -170,7 +170,9 @@ impl AndroidUSBConnection {
 		};
 
 		let mut sent = false;
-		while !sent {
+		let start_time = Instant::now();
+
+		while !sent && Instant::now() - start_time < timeout {
 			match handle.write_bulk(1, &buffer, timeout) {
 				Ok(l) => {
 					if l != buffer.len() {
@@ -206,7 +208,7 @@ impl AndroidUSBConnection {
 			}
 		}
 
-		return true;
+		return sent;
 	}
 }
 

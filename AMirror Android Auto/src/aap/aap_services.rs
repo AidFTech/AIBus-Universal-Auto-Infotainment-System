@@ -11,7 +11,7 @@ pub enum ServiceChannels {
 	PhoneStatusChannel,
 	NotificationChannel,
 	NavigationChannel,
-	MaximumChannel = 256
+	MaximumChannel=256,
 }
 
 pub enum SensorType {

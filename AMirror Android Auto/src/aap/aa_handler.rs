@@ -82,6 +82,8 @@ eCXS4VrhEf4/HYMWP7GB5MFUOEVtlLiLM05ruUL7CrphdfgayDXVcTPfk75lLhmu\n\
 KAwp3tIHPoJOQiKNQ3/qks5km/9dujUGU2ARiU3qmxLMdgegFz8e\n\
 -----END RSA PRIVATE KEY-----\n";
 
+const CHANNEL_COUNT: usize = MaximumChannel as usize;
+
 pub struct AapHandler <'a> {
 	usb_handler: AndroidUSBConnection,
 	context: &'a Arc<Mutex<Context>>,
@@ -90,10 +92,9 @@ pub struct AapHandler <'a> {
 	w: u16,
 	h: u16,
 
-	current_data: Vec<u8>,
-	channel: i16,
+	current_data: [Vec<u8>; CHANNEL_COUNT],
 
-	data_complete: bool,
+	data_complete: [bool; CHANNEL_COUNT],
 
 	bio_write: *mut BIO,
 	bio_read: *mut BIO,
@@ -111,6 +112,8 @@ pub struct AapHandler <'a> {
 	connection_start: Instant,
 }
 
+const EMPTY_DATA_ARRAY: Vec<u8> = Vec::new();
+
 impl<'a> AapHandler <'a>{
 	pub fn new(context: &'a Arc<Mutex<Context>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, w: u16, h: u16) -> Self {
 		return Self {
@@ -121,9 +124,8 @@ impl<'a> AapHandler <'a>{
 			w,
 			h,
 
-			current_data: Vec::new(),
-			channel: -1,
-			data_complete: false,
+			current_data: [EMPTY_DATA_ARRAY; CHANNEL_COUNT],
+			data_complete: [false; CHANNEL_COUNT],
 
 			bio_write: std::ptr::null_mut(),
 			bio_read: std::ptr::null_mut(),
@@ -206,15 +208,16 @@ impl<'a> AapHandler <'a>{
 
 		if data.len() > 0 {
 			self.process_bytes(data);
-			self.process_message();
+			for i in 0..CHANNEL_COUNT {
+				self.process_message(i);
+			}
 		}
 	}
 
 	//Clear the message currently being read.
-	fn clear_data(&mut self) {
-		self.channel = -1;
-		self.current_data = Vec::new();
-		self.data_complete = false;
+	fn clear_data(&mut self, chan: usize) {
+		self.current_data[chan] = Vec::new();
+		self.data_complete[chan] = false;
 	}
 
 	//Write a protobuf message.
@@ -421,15 +424,7 @@ impl<'a> AapHandler <'a>{
 			return;
 		}
 
-		let current_channel = data[0];
-		/*if current_channel as i16 != self.channel && self.channel >= 0 {
-			println!("Error: Channel mismatch.");
-			self.clear_data();
-			return;
-		} else*/ if self.channel < 0 {
-			self.channel = current_channel as i16;
-		}
-
+		let current_channel = data[0] as usize;
 		let flags = data[1];
 
 		let len_bytes = [data[2], data[3]];
@@ -441,8 +436,8 @@ impl<'a> AapHandler <'a>{
 		}
 
 		if (flags&AAP_FRAME_FIRST_FRAME) != 0 {
-			self.current_data = Vec::new();
-			self.data_complete = false;
+			self.current_data[current_channel] = Vec::new();
+			self.data_complete[current_channel] = false;
 		}
 
 		let mut start = 4;
@@ -454,7 +449,7 @@ impl<'a> AapHandler <'a>{
 			let bio_write = self.bio_write;
 			if bio_write == std::ptr::null_mut() {
 				println!("Error: Write BIO not defined.");
-				self.clear_data();
+				self.clear_data(current_channel);
 				return;
 			}
 
@@ -462,7 +457,7 @@ impl<'a> AapHandler <'a>{
 
 			if ssl == std::ptr::null_mut() {
 				println!("Error: SSL not defined.");
-				self.clear_data();
+				self.clear_data(current_channel);
 				return;
 			}
 
@@ -475,7 +470,7 @@ impl<'a> AapHandler <'a>{
 
 			if bytes_written <= 0 {
 				println!("Error: Invalid bytes written.");
-				self.clear_data();
+				self.clear_data(current_channel);
 				return;
 			}
 
@@ -489,53 +484,57 @@ impl<'a> AapHandler <'a>{
 
 			if bytes_read <= 0 || bytes_read > (data.len() - start) as i32 {
 				println!("Error: Invalid bytes read.");
-				self.clear_data();
+				self.clear_data(current_channel);
 				return;
 			}
 
 			for i in 0..bytes_read as usize {
-				self.current_data.push(decoded_data[i]);
+				self.current_data[current_channel].push(decoded_data[i]);
 			}
 		} else {
 			for i in start..data.len() {
-				self.current_data.push(data[i]);
+				self.current_data[current_channel].push(data[i]);
 			}
 		}
 
 		if (flags&AAP_FRAME_LAST_FRAME) != 0 { //Last frame.
-			self.data_complete = true;
+			self.data_complete[current_channel] = true;
+		} else {
+			println!("Long message on ch {}", current_channel);
 		}
 	}
 
 	//Process a read message.
-	fn process_message(&mut self) {
-		if !self.data_complete {
+	fn process_message(&mut self, chan: usize) {
+		if !self.data_complete[chan] {
 			return;
 		}
 
-		if self.current_data.len() < 2 {
+		let full_msg_data = self.current_data[chan].clone();
+		if full_msg_data.len() < 2 {
 			return;
 		}
 
-		let msg_type = u16::from_be_bytes([self.current_data[0], self.current_data[1]]);
+		let msg_type = u16::from_be_bytes([full_msg_data[0], full_msg_data[1]]);
+		let msg_data = &full_msg_data[2..];
 
-		if self.channel != VideoChannel as i16 && self.channel != MediaAudioChannel as i16 && self.current_data.len() < 100 {
-			println!("Received message type {}, on channel {}, length {}.", msg_type, self.channel, self.current_data.len() - 2);
-			println!("Message: {:X?}", self.current_data);
-		}
+		/*if chan != VideoChannel as usize && chan != MediaAudioChannel as usize && full_msg_data.len() < 100 {
+			println!("Received message type {}, on channel {}, length {}.", msg_type, chan as u8, msg_data.len() - 2);
+			//println!("Message: {:X?}", msg_data);
+		}*/
 
 		if msg_type == ControlMessage::ControlMessageVersionResponse as u16 { //Version response.
 			self.begin_ssl_handshake();
 		} else if msg_type == ControlMessage::ControlMessageSSLHandshake as u16 { //Handshake response.
-			self.handle_ssl_handshake(self.current_data[2..].to_vec());
+			self.handle_ssl_handshake(msg_data.to_vec());
 		} else if msg_type == ControlMessage::ControlMessageServiceDiscoveryRequest as u16 { //Service request.
-			self.handle_service_discovery_request();
+			self.handle_service_discovery_request(chan);
 		} else if msg_type == ProtocolMessage::ProtocolMessageAudioFocusRequest as u16 { //Audio focus request.
 			let mut request = AudioFocusRequest::new();
-			let request_data = &self.current_data[2..];
+			let request_data = msg_data;
 			match request.merge_from_bytes(request_data) {
 				Ok(_) => {
-					self.handle_audio_focus_request(self.channel as u8, request);
+					self.handle_audio_focus_request(chan as u8, request);
 				}
 				Err(e) => {
 					println!("Error: {}", e);
@@ -543,10 +542,10 @@ impl<'a> AapHandler <'a>{
 			}
 		} else if msg_type == ProtocolMessage::ProtocolMessageChannelOpenRequest as u16 { //Channel open request.
 			let mut request = ChannelOpenRequest::new();
-			let request_data = &self.current_data[2..];
+			let request_data = msg_data;
 			match request.merge_from_bytes(request_data) {
 				Ok(_) => {
-					self.handle_channel_open_request(self.channel as u8, request.channel_id);
+					self.handle_channel_open_request(chan as u8, request.channel_id);
 				}
 				Err(e) => {
 					println!("Error: {}", e);
@@ -554,17 +553,39 @@ impl<'a> AapHandler <'a>{
 			}
 		} else if msg_type == ProtocolMessage::ProtocolMessageMediaData as u16 || msg_type == ProtocolMessage::ProtocolMessageMediaDataTime as u16 {
 			//TODO: Project media.
-			self.send_media_ack(self.channel as u8);
-			if self.channel as u8 == VideoChannel as u8 {
+			self.send_media_ack(chan as u8);
+			if chan == VideoChannel as usize {
 				let mut video_data = VideoMsg::new();
-				video_data.set_data(&self.current_data);
+				video_data.set_data(&full_msg_data);
 				self.handle_video_message(video_data);
 			}
-		} else if self.channel as u8 == PhoneStatusChannel as u8 {
+		} else if msg_type == ProtocolMessage::ProtocolMessagePingRequest as u16 {
+			let mut ping = PingMessage::new();
+			let mut timestamp = self.get_timestamp();
+
+			match ping.merge_from_bytes(msg_data) {
+				Ok(_) => {
+					timestamp = ping.timestamp as u64;
+				}
+				Err(_) => {
+
+				}
+			}
+
+			let mut response = PingMessage::new();
+			response.timestamp = timestamp as i64;
+
+			self.write_message(true, chan as u8, response, ProtocolMessage::ProtocolMessagePingResponse as u16, Duration::from_millis(5000), true);
+		} else if msg_type == ProtocolMessage::ProtocolMessageNavigationFocusRequest as u16 {
+			let mut response = NavigationFocusMessage::new();
+			response.focus_type = 2;
+
+			self.write_message(true, chan as u8, response, ProtocolMessage::ProtocolMessageNavigationFocusResponse as u16, Duration::from_millis(5000), true);
+		} else if chan == PhoneStatusChannel as usize {
 			if msg_type == MediaInfoMessage::MediaInfoMessagePlayback as u16 {
 				let mut playback_msg = MediaPlaybackMessage::new();
 				let mut msg_read = false;
-				match playback_msg.merge_from_bytes(&self.current_data[2..]) {
+				match playback_msg.merge_from_bytes(msg_data) {
 					Ok(_) => {
 						msg_read = true;
 					}
@@ -591,7 +612,7 @@ impl<'a> AapHandler <'a>{
 				let mut meta_msg = MediaMetaMessage::new();
 				let mut msg_read = false;
 
-				match meta_msg.merge_from_bytes(&self.current_data[2..]) {
+				match meta_msg.merge_from_bytes(msg_data) {
 					Ok(_) => {
 						msg_read = true;
 					}
@@ -615,22 +636,22 @@ impl<'a> AapHandler <'a>{
 				}
 				
 			}
-		} else if self.channel as u8 == TouchChannel as u8 {
+		} else if chan == TouchChannel as usize {
 			if msg_type == InputChannelMessageBindingRequest as u16 {
-				self.handle_binding_request(self.channel as u8);
+				self.handle_binding_request(chan as u8);
 			}
-		} else if self.channel as u8 == SensorChannel as u8 {
+		} else if chan == SensorChannel as usize {
 			if msg_type == SensorChannelMessageStartRequest as u16 {
-				self.handle_sensor_start_request(self.channel as u8);
+				self.handle_sensor_start_request(chan as u8);
 			}
-		} else if self.channel as u8 == MediaAudioChannel as u8 || self.channel as u8 == Audio1Channel as u8 ||
-				self.channel as u8 == Audio2Channel as u8 || self.channel as u8 == VideoChannel as u8 || self.channel as u8 == MicrophoneChannel as u8 {
+		} else if chan == MediaAudioChannel as usize || chan == Audio1Channel as usize ||
+			chan == Audio2Channel as usize || chan == VideoChannel as usize || chan == MicrophoneChannel as usize {
 			if msg_type == MediaChannelMessageSetupRequest as u16 {
-				self.handle_media_setup_request(self.channel as u8);
+				self.handle_media_setup_request(chan as u8);
 			}
 		}
 
-		self.clear_data();
+		self.clear_data(chan);
 	}
 
 	//Handle an AIBus message.
@@ -663,12 +684,12 @@ impl<'a> AapHandler <'a>{
 					self.send_button_message(InputButton::ButtonUp as u32);
 				} else if button == 0x29 && state == 0x0 { //Toggle down.
 					self.send_button_message(InputButton::ButtonDown as u32);
-				} else if button == 0x7 && state == 2 { //Enter.
+				} else if button == 0x7 && state == 0x2 { //Enter.
 					if !self.enter_hold {
 						self.send_button_message(InputButton::ButtonEnter as u32);
 					}
 					self.enter_hold = false;
-				} else if button == 0x7 && state == 1 {
+				} else if button == 0x7 && state == 0x1 {
 					self.enter_hold = true;
 				} else if button == 0x27 && state == 0x0 { //Back.
 					self.send_button_message(InputButton::ButtonBack as u32);
@@ -685,6 +706,17 @@ impl<'a> AapHandler <'a>{
 					self.send_button_message(InputButton::ButtonNext as u32);
 				} else if button == 0x24 && state == 0x0 { //Prev track.
 					self.send_button_message(InputButton::ButtonPrev as u32);
+				} else if button == 0x50 && state == 0x0 { //Phone.
+					self.send_button_message(InputButton::ButtonPhone as u32);
+				} else if button == 0x55 && state == 0x0 { //Map.
+					self.send_button_message(InputButton::ButtonNavigation as u32);
+				}
+			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x32 && ai_msg.data[1] == 0x7 {
+				let clockwise = (ai_msg.data[2]&0x10) != 0;
+				let steps = ai_msg.data[2]&0xF;
+
+				for _i in 0..steps {
+					self.send_scroll_message(clockwise);
 				}
 			}
 		}
@@ -701,11 +733,15 @@ impl<'a> AapHandler <'a>{
 
 		night_sensor.night_mode = night;
 
-		self.write_message(true, SensorChannel as u8, sensor_msg, 0x8003, Duration::from_millis(5000), true);
+		self.write_message(true, SensorChannel as u8, sensor_msg, SensorChannelMessageEvent as u16, Duration::from_millis(5000), true);
 	}
 
 	//Start playing audio if start is true.
 	pub fn start_stop_audio(&mut self, start: bool) {
+		if !self.usb_handler.get_connected() {
+			return;
+		}
+
 		if start {
 			self.send_button_message(InputButton::ButtonStart as u32);
 		} else {
@@ -919,13 +955,13 @@ impl<'a> AapHandler <'a>{
 	}
 
 	//Handle a service discovery request.
-	fn handle_service_discovery_request(&mut self) {
+	fn handle_service_discovery_request(&mut self, chan: usize) {
 		if self.had_sdr {
 			return;
 		}
 
 		let mut request = ServiceDiscoveryRequest::new();
-		let request_data = &self.current_data[2..];
+		let request_data = &self.current_data[chan][2..];
 
 		match request.merge_from_bytes(request_data) {
 			Ok(_) => {
@@ -985,7 +1021,7 @@ impl<'a> AapHandler <'a>{
 
 		sensor_list.add_config().sensor_type = SensorType::SensorTypeDrivingStatus as u32;
 		sensor_list.add_config().sensor_type = SensorType::SensorTypeNightData as u32;
-		//sensor_list.add_config().sensor_type = SensorType::SensorTypeLocation as u32;
+		sensor_list.add_config().sensor_type = SensorType::SensorTypeLocation as u32;
 		//sensor_list.add_config().sensor_type = SensorType::SensorTypeSpeed as u32;
 		//sensor_list.add_config().sensor_type = SensorType::SensorTypeGear as u32;
 
@@ -1045,7 +1081,7 @@ impl<'a> AapHandler <'a>{
 		
 		//println!("Message: {:X?}", self.current_data);
 		println!("Response: {:X?}", response.write_to_bytes());
-		self.write_message(true, self.channel as u8, response, ControlMessage::ControlMessageServiceDiscoveryResponse as u16, Duration::from_millis(2000), true);
+		self.write_message(true, chan as u8, response, ControlMessage::ControlMessageServiceDiscoveryResponse as u16, Duration::from_millis(2000), false);
 
 		self.had_sdr = true;
 	}
@@ -1154,7 +1190,7 @@ impl<'a> AapHandler <'a>{
 				mpv_video.send_video(&mpv_data);
 			}
 			Err(_) => {
-
+				println!("MPV handler locked.");
 			}
 		}
 

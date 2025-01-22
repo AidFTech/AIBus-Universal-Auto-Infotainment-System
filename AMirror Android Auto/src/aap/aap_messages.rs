@@ -994,6 +994,145 @@ impl Message for MediaAck {
 }
 
 #[derive(Default, PartialEq, Clone)]
+pub struct PingMessage {
+	pub timestamp: i64,
+
+	special_fields: protobuf::SpecialFields,
+}
+
+impl Message for PingMessage {
+	const NAME: &'static str = "Ping Message";
+
+	fn is_initialized(&self) -> bool {
+		return true;
+	}
+
+	fn merge_from(&mut self, is: &mut protobuf::CodedInputStream) -> protobuf::Result<()> {
+		while let Some(tag) = is.read_raw_tag_or_eof()? {
+			match tag {
+				8 => {
+					self.timestamp = is.read_int64()?;
+				}
+				tag => {
+					read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+				}
+			}
+		}
+
+		return Ok(());
+	}
+
+	fn write_to_with_cached_sizes(&self, os: &mut protobuf::CodedOutputStream) -> protobuf::Result<()> {
+		os.write_int64(1, self.timestamp)?;
+		
+		os.write_unknown_fields(self.special_fields.unknown_fields())?;
+		return Ok(());
+	}
+
+	fn compute_size(&self) -> u64 {
+		let mut total_size = 1;
+		if self.timestamp >= 0 {
+			total_size += compute_raw_varint64_size(self.timestamp as u64);
+		} else {
+			total_size += 10;
+		}
+		
+		total_size += unknown_fields_size(self.special_fields.unknown_fields());
+		self.special_fields.cached_size().set(total_size as u32);
+
+		return total_size;
+	}
+
+	fn special_fields(&self) -> &protobuf::SpecialFields {
+		return &self.special_fields;
+	}
+
+	fn mut_special_fields(&mut self) -> &mut protobuf::SpecialFields {
+		return &mut self.special_fields;
+	}
+
+	fn new() -> Self {
+		return Self {
+			timestamp: 0,
+
+			special_fields: protobuf::SpecialFields::default(),
+		}
+	}
+
+	fn default_instance() -> &'static Self {
+		static INSTANCE: Lazy<PingMessage> = Lazy::new();
+		return INSTANCE.get(PingMessage::new);
+	}
+}
+
+#[derive(Default, PartialEq, Clone)]
+pub struct NavigationFocusMessage {
+	pub focus_type: u32,
+
+	special_fields: protobuf::SpecialFields,
+}
+
+impl Message for NavigationFocusMessage {
+	const NAME: &'static str = "Navigation Focus Message";
+
+	fn is_initialized(&self) -> bool {
+		return true;
+	}
+
+	fn merge_from(&mut self, is: &mut protobuf::CodedInputStream) -> protobuf::Result<()> {
+		while let Some(tag) = is.read_raw_tag_or_eof()? {
+			match tag {
+				8 => {
+					self.focus_type = is.read_uint32()?;
+				}
+				tag => {
+					read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+				}
+			}
+		}
+
+		return Ok(());
+	}
+
+	fn write_to_with_cached_sizes(&self, os: &mut protobuf::CodedOutputStream) -> protobuf::Result<()> {
+		os.write_uint32(1, self.focus_type)?;
+		
+		os.write_unknown_fields(self.special_fields.unknown_fields())?;
+		return Ok(());
+	}
+
+	fn compute_size(&self) -> u64 {
+		let mut total_size = 1 + compute_raw_varint64_size(self.focus_type as u64);
+		
+		total_size += unknown_fields_size(self.special_fields.unknown_fields());
+		self.special_fields.cached_size().set(total_size as u32);
+
+		return total_size;
+	}
+
+	fn special_fields(&self) -> &protobuf::SpecialFields {
+		return &self.special_fields;
+	}
+
+	fn mut_special_fields(&mut self) -> &mut protobuf::SpecialFields {
+		return &mut self.special_fields;
+	}
+
+	fn new() -> Self {
+		return Self {
+			focus_type: 0,
+
+			special_fields: protobuf::SpecialFields::default(),
+		}
+	}
+
+	fn default_instance() -> &'static Self {
+		static INSTANCE: Lazy<NavigationFocusMessage> = Lazy::new();
+		return INSTANCE.get(NavigationFocusMessage::new);
+	}
+}
+
+#[derive(Default, PartialEq, Clone)]
 pub struct VideoFocus {
 	pub mode: bool,
 	pub unrequested: bool,
