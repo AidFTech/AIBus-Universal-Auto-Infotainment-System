@@ -106,7 +106,9 @@ fn main() {
 				let msg_copy = ai_msg.clone();
 				let mut send_ack = ai_msg.l() >=1 && ai_msg.data[0] != 0x80;
 				
-				if ai_msg.receiver == 0xFF {
+				if !send_ack {
+					//Do nothing.
+				} else if ai_msg.receiver == 0xFF {
 					send_ack = false;
 				} else if ai_msg.receiver == AIBUS_DEVICE_RADIO {
 					match radio_connected_aibus.try_lock() {
