@@ -8,6 +8,7 @@
 #include "Open_Close_Handler.h"
 #include "AIBT_Parameters.h"
 
+#define ACTIVE 3
 #define AI_RX 4
 #define CS_VOL 5
 #define ILL_CATHODE 6
@@ -89,6 +90,7 @@ bool power_off_with_door = false; //Turn the power off when the door opens.
 
 void setup() {
 	AISerial.begin(AI_BAUD);
+	pinMode(ACTIVE, INPUT);
 	pinMode(AI_RX, INPUT);
 
 	pinMode(MOTOR_STOP_OUT, OUTPUT);

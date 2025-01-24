@@ -1,14 +1,13 @@
-use std::os::unix::net::UnixStream;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::aap::aa_handler::AapHandler;
+use crate::aibus_handler::AIBusHandler;
 use crate::mirror::messages::*;
 use crate::mirror::mpv::MpvVideo;
-use crate::{aibus::*, write_aibus_message};
+use crate::aibus::*;
 use crate::context::Context;
 use crate::mirror::handler::*;
-use crate::ipc::*;
 
 use crate::text_split::split_text;
 
@@ -735,13 +734,12 @@ const AIDF_SPLASH_480: &[u8] = &[
 
 pub struct AMirror<'a> {
 	context: &'a Arc<Mutex<Context>>,
-	stream: &'a Arc<Mutex<UnixStream>>,
 	mpv_video: &'a Arc<Mutex<MpvVideo>>,
 
 	dongle_handler: MirrorHandler<'a>,
 	aa_handler: AapHandler<'a>,
 
-	aibus_list: Vec<AIBusMessage>,
+	aibus_handler: Arc<Mutex<AIBusHandler>>,
 
 	display_title: bool,
 	display_artist: bool,
@@ -771,19 +769,18 @@ pub struct AMirror<'a> {
 }
 
 impl <'a> AMirror<'a> {
-	pub fn new(context: &'a Arc<Mutex<Context>>, stream: &'a Arc<Mutex<UnixStream>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, w: u16, h: u16) -> Self {
+	pub fn new(context: &'a Arc<Mutex<Context>>, aibus_handler: Arc<Mutex<AIBusHandler>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, w: u16, h: u16) -> Self {
 		let mutex_mirror_handler = MirrorHandler::new(context, mpv_video, w, h);
 		let mutex_aa_handler = AapHandler::new(context, mpv_video, w, h);
 
 		return Self{
 			context,
-			stream,
 			mpv_video,
 
 			dongle_handler: mutex_mirror_handler,
-			aa_handler:mutex_aa_handler,
+			aa_handler: mutex_aa_handler,
 
-			aibus_list: Vec::new(),
+			aibus_handler,
 
 			display_title: false,
 			display_artist: false,
@@ -1347,15 +1344,25 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
-		if self.aibus_list.len() > 0 {
-			std::mem::drop(context);
+		std::mem::drop(context);
+		let mut ai_rx_list = Vec::new();
 
-			for i in 0..self.aibus_list.len() {
-				let ai_msg = &self.aibus_list[i];
-				self.handle_aibus_message(ai_msg.clone());
+		match self.aibus_handler.try_lock() {
+			Ok(mut aibus_handler) => {
+				let ai_rx = aibus_handler.get_ai_rx();
+				for ai_data in &mut *ai_rx {
+					ai_rx_list.push(ai_data.clone());
+				}
+
+				ai_rx.clear();
 			}
+			Err(_) => {
+				
+			}
+		}
 
-			self.aibus_list.clear();
+		for ai_data in ai_rx_list {
+			self.handle_aibus_message(ai_data);
 		}
 	
 	}
@@ -1400,7 +1407,16 @@ impl <'a> AMirror<'a> {
 			self.write_aibus_message(ack_msg);
 		}
 
-		if ai_msg.sender == AIBUS_DEVICE_RADIO {
+		if ai_msg.l() >= 2 && ai_msg.data[0] == 0x23 { //Overlay.
+			match self.mpv_video.try_lock() {
+				Ok(mut mpv) => {
+					mpv.set_overlay();
+				}
+				Err(_) => {
+					println!("Overlay: MPV handler locked.");
+				}
+			}
+		} else if ai_msg.sender == AIBUS_DEVICE_RADIO {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x4 && ai_msg.data[1] == 0xE6 && ai_msg.data[2] == 0x10 { //Name request.
 				std::mem::drop(context);
 
@@ -1753,8 +1769,32 @@ impl <'a> AMirror<'a> {
 		self.aa_handler.handle_aibus_message(ai_msg);
 	}
 
+	pub fn get_context(&mut self) -> &'a Arc<Mutex<Context>> {
+		return self.context;
+	}
+
 	fn write_aibus_message(&mut self, ai_msg: AIBusMessage) {
-		let mut stream = match self.stream.try_lock() {
+		let mut aibus_handler = match self.aibus_handler.try_lock() {
+			Ok(aibus_handler) => aibus_handler,
+			Err(_) => {
+				let ai_handler;
+				loop {
+					 ai_handler = match self.aibus_handler.try_lock() {
+						Ok(aibus_handler) => aibus_handler,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				ai_handler
+			}
+		};
+
+		let ai_tx = aibus_handler.get_ai_tx();
+		ai_tx.push(ai_msg);
+
+		/*let mut stream = match self.stream.try_lock() {
 			Ok(stream) => stream,
 			Err(_) => {
 				println!("AMirror Write AIBus Message: Stream Locked");
@@ -1826,7 +1866,7 @@ impl <'a> AMirror<'a> {
 					num_tries += 1;
 				}
 			}
-		}
+		}*/
 	}
 
 	//Write metadata.
@@ -2201,62 +2241,35 @@ impl <'a> AMirror<'a> {
 
 		self.write_aibus_message(ai_request);
 
-		let mut stream = match self.stream.try_lock() {
-			Ok(stream) => stream,
-			Err(_) => {
-				return false;
-			}
-		};
-
-		let mut no_stream = false;
 		let stream_timer = Instant::now();
 
 		while Instant::now() - stream_timer < Duration::from_millis(100) {
-			let mut msg_list = Vec::new();
+			let mut aibus_handler = match self.aibus_handler.try_lock() {
+				Ok(aibus_handler) => aibus_handler,
+				Err(_) => {
+					let thread_delay = Instant::now();
+					while Instant::now() - thread_delay < Duration::from_millis(20) {
 
-			if read_socket_message(&mut stream, &mut msg_list) > 0 {
-				for i in 0..msg_list.len() {
-					let test_msg = &msg_list[i];
-
-					if test_msg.opcode == OPCODE_AIBUS_RECV {
-						let test_ai_msg = get_aibus_message(test_msg.data.clone());
-
-						if test_ai_msg.receiver == AIBUS_DEVICE_AMIRROR {
-							if test_ai_msg.l() >= 1 && test_ai_msg.data[0] != 0x80 {
-								std::mem::drop(stream);
-
-								let mut ack_msg = AIBusMessage {
-									sender: AIBUS_DEVICE_AMIRROR,
-									receiver: test_ai_msg.sender,
-									data: Vec::new(),
-								};
-								ack_msg.data.push(0x80);
-					
-								self.write_aibus_message(ack_msg);
-
-								stream = match self.stream.try_lock() {
-									Ok(stream) => stream,
-									Err(_) => {
-										return false;
-									}
-								};
-							}
-
-							if test_ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER && test_ai_msg.l() >= 2 && test_ai_msg.data[0] == 0x2B && test_ai_msg.data[1] == 0x40 {
-								no_stream = true;
-								break;
-							} else {
-								self.aibus_list.push(test_ai_msg);
-							}
-						}
 					}
+					continue;
+				}
+			};
+
+			let rx_list = aibus_handler.get_ai_rx();
+			for test_ai_msg in rx_list {
+				if test_ai_msg.receiver != AIBUS_DEVICE_AMIRROR {
+					continue;
+				}
+
+				if test_ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER && test_ai_msg.l() >= 2 && test_ai_msg.data[0] == 0x2B && test_ai_msg.data[1] == 0x40 {
+					return false;
 				}
 			}
+
+			std::mem::drop(aibus_handler);
 		}
 
-		std::mem::drop(stream);
-
-		return !no_stream;
+		return true;
 	}
 
 	//Clear the active menu.
@@ -2267,55 +2280,32 @@ impl <'a> AMirror<'a> {
 			data: [0x2B, 0x4A].to_vec(),
 		});
 
-		let mut stream = match self.stream.try_lock() {
-			Ok(stream) => stream,
-			Err(_) => {
-				return false;
-			}
-		};
-
 		let stream_timer = Instant::now();
 
 		while Instant::now() - stream_timer < Duration::from_millis(100) {
-			let mut msg_list = Vec::new();
+			let mut aibus_handler = match self.aibus_handler.try_lock() {
+				Ok(aibus_handler) => aibus_handler,
+				Err(_) => {
+					let thread_delay = Instant::now();
+					while Instant::now() - thread_delay < Duration::from_millis(20) {
 
-			if read_socket_message(&mut stream, &mut msg_list) > 0 {
-				for i in 0..msg_list.len() {
-					let test_msg = &msg_list[i];
-
-					if test_msg.opcode == OPCODE_AIBUS_RECV {
-						let test_ai_msg = get_aibus_message(test_msg.data.clone());
-
-						if test_ai_msg.receiver == AIBUS_DEVICE_AMIRROR {
-							if test_ai_msg.l() >= 1 && test_ai_msg.data[0] != 0x80 {
-								std::mem::drop(stream);
-
-								let mut ack_msg = AIBusMessage {
-									sender: AIBUS_DEVICE_AMIRROR,
-									receiver: test_ai_msg.sender,
-									data: Vec::new(),
-								};
-								ack_msg.data.push(0x80);
-					
-								self.write_aibus_message(ack_msg);
-
-								stream = match self.stream.try_lock() {
-									Ok(stream) => stream,
-									Err(_) => {
-										return false;
-									}
-								};
-							}
-
-							if test_ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER && test_ai_msg.l() >= 2 && test_ai_msg.data[0] == 0x2B && test_ai_msg.data[1] == 0x40 {
-								return true;
-							} else {
-								self.aibus_list.push(test_ai_msg);
-							}
-						}
 					}
+					continue;
+				}
+			};
+
+			let rx_list = aibus_handler.get_ai_rx();
+			for test_ai_msg in rx_list {
+				if test_ai_msg.receiver != AIBUS_DEVICE_AMIRROR {
+					continue;
+				}
+
+				if test_ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER && test_ai_msg.l() >= 2 && test_ai_msg.data[0] == 0x2B && test_ai_msg.data[1] == 0x40 {
+					return true;
 				}
 			}
+
+			std::mem::drop(aibus_handler);
 		}
 
 		return false;

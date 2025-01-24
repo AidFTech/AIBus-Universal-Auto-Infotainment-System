@@ -419,10 +419,12 @@ impl<'a> AapHandler <'a>{
 	}
 
 	//Process read bytes.
-	fn process_bytes(&mut self, mut data: Vec<u8>) {
-		if data.len() < 4 {
+	fn process_bytes(&mut self, full_data: Vec<u8>) {
+		if full_data.len() < 4 {
 			return;
 		}
+
+		let mut data = full_data.clone();
 
 		let current_channel = data[0] as usize;
 		let flags = data[1];
@@ -470,7 +472,7 @@ impl<'a> AapHandler <'a>{
 
 			if bytes_written <= 0 {
 				println!("Error: Invalid bytes written.");
-				self.clear_data(current_channel);
+				//self.clear_data(current_channel);
 				return;
 			}
 
@@ -484,7 +486,7 @@ impl<'a> AapHandler <'a>{
 
 			if bytes_read <= 0 || bytes_read > (data.len() - start) as i32 {
 				println!("Error: Invalid bytes read.");
-				self.clear_data(current_channel);
+				//self.clear_data(current_channel);
 				return;
 			}
 
@@ -499,7 +501,7 @@ impl<'a> AapHandler <'a>{
 
 		if (flags&AAP_FRAME_LAST_FRAME) != 0 { //Last frame.
 			self.data_complete[current_channel] = true;
-		} else {
+		} else if (flags&AAP_FRAME_FIRST_FRAME) != 0 {
 			println!("Long message on ch {}", current_channel);
 		}
 	}

@@ -1,6 +1,7 @@
 use core::str;
 use std::io::Cursor;
 use std::io::Write;
+use std::os::unix::net::UnixStream;
 use std::process::Command;
 use std::process::Stdio;
 use std::process::Child;
@@ -10,13 +11,17 @@ use rodio::OutputStream;
 use rodio::OutputStreamHandle;
 use rodio::Sink;
 
+use crate::ipc;
+
 pub struct MpvVideo {
 	process: Child,
+	//mpv_ipc: UnixStream,
 }
 
 impl MpvVideo {
 	pub fn new(width: u16, height: u16) -> Result<MpvVideo, String> {
 		let mut mpv_cmd = Command::new("mpv");
+		let process;
 		//mpv_cmd.arg(format!("--geometry={}x{}", width, height));
 		mpv_cmd.arg("--hwdec=rpi");
 		mpv_cmd.arg("--demuxer-rawvideo-fps=60");
@@ -28,15 +33,40 @@ impl MpvVideo {
 		mpv_cmd.arg("-");
 		match mpv_cmd.stdin(Stdio::piped()).spawn() {
 			Err(e) => return Err(format!("Could not start video Mpv: {} ", e)),
-			Ok(process) => {
-				return Ok(MpvVideo { process: process });
+			Ok(match_process) => {
+				process = Some(match_process);
 			}
 		}
+
+		/*let sock = ipc::init_socket("/tmp/mka_cmd.sock".to_string());
+
+		match sock {
+			None => {
+				return Err(format!("Could not start mpv socket."));
+			}
+			Some(sock) => {
+				return Ok(MpvVideo { process: process.unwrap(), mpv_ipc: sock });
+			}
+		}*/
+
+		return Ok(MpvVideo { process: process.unwrap() });
 	}
 
 	pub fn send_video(&mut self, data: &[u8]) {
 		let mut child_stdin = self.process.stdin.as_ref().unwrap();
 		let _ = child_stdin.write(&data);
+	}
+
+	pub fn set_overlay(&mut self) {
+		/*let overlay_str = "overlay-add 0 0 0 \"/tmp/AidF Overlay.png\" 0 bgra 800 30 3200";
+		match self.mpv_ipc.write(overlay_str.as_bytes()) {
+			Ok(_) => {
+
+			}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}*/
 	}
 	
 	pub fn start(&mut self) {
