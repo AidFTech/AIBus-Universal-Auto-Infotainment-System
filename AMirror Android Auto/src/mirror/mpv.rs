@@ -1,7 +1,6 @@
 use core::str;
 use std::io::Cursor;
 use std::io::Write;
-use std::os::unix::net::UnixStream;
 use std::process::Command;
 use std::process::Stdio;
 use std::process::Child;
@@ -10,8 +9,6 @@ use rodio::Decoder as AudioDecoder;
 use rodio::OutputStream;
 use rodio::OutputStreamHandle;
 use rodio::Sink;
-
-use crate::ipc;
 
 pub struct MpvVideo {
 	process: Child,
@@ -22,12 +19,14 @@ impl MpvVideo {
 	pub fn new(width: u16, height: u16) -> Result<MpvVideo, String> {
 		let mut mpv_cmd = Command::new("mpv");
 		let process;
-		//mpv_cmd.arg(format!("--geometry={}x{}", width, height));
+		mpv_cmd.arg(format!("--geometry={}x{}", width, height));
 		mpv_cmd.arg("--hwdec=rpi");
 		mpv_cmd.arg("--demuxer-rawvideo-fps=60");
 		mpv_cmd.arg("--untimed");
 		mpv_cmd.arg("--osc=no");
 		mpv_cmd.arg("--fps=60");
+		mpv_cmd.arg("--profile=low-latency");
+		mpv_cmd.arg("--no-correct-pts");
 		mpv_cmd.arg(format!("--video-aspect-override={}/{}", width, height));
 		mpv_cmd.arg("--input-ipc-server=/tmp/mka_cmd.sock");
 		mpv_cmd.arg("-");
