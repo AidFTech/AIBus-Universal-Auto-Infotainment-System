@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use crate::aap::aa_handler::AapHandler;
 use crate::aibus_handler::AIBusHandler;
 use crate::mirror::messages::*;
-use crate::mirror::mpv::MpvVideo;
+use crate::mirror::mpv::{MpvVideo, RdAudio};
 use crate::aibus::*;
 use crate::context::Context;
 use crate::mirror::handler::*;
@@ -769,9 +769,9 @@ pub struct AMirror<'a> {
 }
 
 impl <'a> AMirror<'a> {
-	pub fn new(context: &'a Arc<Mutex<Context>>, aibus_handler: Arc<Mutex<AIBusHandler>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, w: u16, h: u16) -> Self {
-		let mutex_mirror_handler = MirrorHandler::new(context, mpv_video, w, h);
-		let mutex_aa_handler = AapHandler::new(context, mpv_video, w, h);
+	pub fn new(context: &'a Arc<Mutex<Context>>, aibus_handler: Arc<Mutex<AIBusHandler>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, rd_audio: &'a Arc<Mutex<RdAudio>>, nav_audio: &'a Arc<Mutex<RdAudio>>, w: u16, h: u16) -> Self {
+		let mutex_mirror_handler = MirrorHandler::new(context, mpv_video, rd_audio, nav_audio, w, h);
+		let mutex_aa_handler = AapHandler::new(context, mpv_video, rd_audio, nav_audio, w, h);
 
 		return Self{
 			context,
@@ -846,19 +846,6 @@ impl <'a> AMirror<'a> {
 				return;
 			}
 		};
-
-		/*if context.phone_type == 0 && Instant::now() - self.frame_timer > Duration::from_millis(1000/60) {
-			self.frame_timer = Instant::now();
-
-			match self.mpv_video.try_lock() {
-				Ok(mut mpv) => {
-					mpv.send_video(AIDF_SPLASH_480);
-				}
-				Err(_) => {
-					println!("Couldn't send splash.");
-				}
-			}
-		}*/
 
 		if context.phone_active != phone_active || context.home_held {
 			context.home_held = false;

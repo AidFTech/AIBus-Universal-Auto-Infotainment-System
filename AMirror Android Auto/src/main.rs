@@ -16,16 +16,18 @@ use aibus_handler::AIBusHandler;
 use ipc::*;
 use context::*;
 use amirror::*;
-use mirror::mpv::MpvVideo;
+use mirror::mpv::{MpvVideo, RdAudio};
 
 fn main() {
 	let aibus_handler = Arc::new(Mutex::new(AIBusHandler::new()));
 	let aibus_thread = Arc::clone(&aibus_handler);
 
 	let mut mpv_video = None;
+	let mut rd_audio = None;
+	let mut nav_audio = None;
 	let mut mpv_found = 0;
 
-	while mpv_found < 1 {
+	while mpv_found < 3 {
 		match MpvVideo::new(800, 480) {
 			Err(e) => println!("Failed to Start Mpv: {}", e.to_string()),
 			Ok(mpv) => {
@@ -33,12 +35,30 @@ fn main() {
 				mpv_found += 1;
 			}
 		};
+
+		match RdAudio::new() {
+			Err(e) => println!("Failed to Start Rodio: {}", e.to_string()),
+			Ok(rodio) => {
+				rd_audio = Some(rodio);
+				mpv_found += 1;
+			}
+		}
+		
+		match RdAudio::new() {
+			Err(e) => println!("Failed to Start Rodio: {}", e.to_string()),
+			Ok(rodio) => {
+				nav_audio = Some(rodio);
+				mpv_found += 1;
+			}
+		}
 	}
 
 	let mutex_mpv = Arc::new(Mutex::new(mpv_video.unwrap()));
+	let mutex_rdaudio = Arc::new(Mutex::new(rd_audio.unwrap()));
+	let mutex_navaudio = Arc::new(Mutex::new(nav_audio.unwrap()));
 
 	let mutex_context = Arc::new(Mutex::new(Context::new()));
-	let mut amirror = AMirror::new(&mutex_context, aibus_handler, &mutex_mpv, 800, 480);
+	let mut amirror = AMirror::new(&mutex_context, aibus_handler, &mutex_mpv, &mutex_rdaudio, &mutex_navaudio, 800, 480);
 
 	let mutex_run = Arc::new(Mutex::new(true));
 	let mutex_run_clone = Arc::clone(&mutex_run);

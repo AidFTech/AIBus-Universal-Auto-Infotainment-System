@@ -31,8 +31,8 @@ pub struct MirrorHandler<'a> {
 	run: bool,
 	startup: bool,
 	mpv_video: &'a Arc<Mutex<MpvVideo>>,
-	rd_audio: RdAudio,
-	nav_audio: RdAudio,
+	rd_audio: &'a Arc<Mutex<RdAudio>>,
+	nav_audio: &'a Arc<Mutex<RdAudio>>,
 	heartbeat_time: SystemTime,
 
 	enter_hold: bool,
@@ -44,29 +44,7 @@ pub struct MirrorHandler<'a> {
 }
 
 impl<'a> MirrorHandler<'a> {
-	pub fn new(context: &'a Arc<Mutex<Context>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, w: u16, h: u16) -> MirrorHandler <'a> {
-		let mut mpv_found = 0;
-		let mut rd_audio: Option<RdAudio> = None;
-		let mut nav_audio: Option<RdAudio> = None;
-
-		while mpv_found < 2 {
-			match RdAudio::new() {
-				Err(e) => println!("Failed to Start Rodio: {}", e.to_string()),
-				Ok(rodio) => {
-					rd_audio = Some(rodio);
-					mpv_found += 1;
-				}
-			}
-			
-			match RdAudio::new() {
-				Err(e) => println!("Failed to Start Rodio: {}", e.to_string()),
-				Ok(rodio) => {
-					nav_audio = Some(rodio);
-					mpv_found += 1;
-				}
-			}
-		}
-
+	pub fn new(context: &'a Arc<Mutex<Context>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, rd_audio: &'a Arc<Mutex<RdAudio>>, nav_audio: &'a Arc<Mutex<RdAudio>>, w: u16, h: u16) -> MirrorHandler <'a> {
 		//Load airplay.conf...
 		let mut config_data = Vec::new();
 		match File::open(Path::new("airplay.conf")) {
@@ -127,8 +105,8 @@ impl<'a> MirrorHandler<'a> {
 			run: true,
 			startup: false,
 			mpv_video,
-			rd_audio: rd_audio.unwrap(),
-			nav_audio: nav_audio.unwrap(),
+			rd_audio,
+			nav_audio,
 			heartbeat_time: SystemTime::now(),
 
 			w,
@@ -420,7 +398,23 @@ impl<'a> MirrorHandler<'a> {
 			}
 		} else if message.message_type == 7 { //Audio.
 			if message.data.len() > 16 {
-				let (current_sample, current_bits, current_channel) = self.rd_audio.get_audio_profile();
+				let mut rd_audio = match self.rd_audio.try_lock() {
+					Ok(rd_audio) => rd_audio,
+					Err(_) => {
+						println!("Audio handler locked.");
+						return;
+					}
+				};
+
+				let mut nav_audio = match self.nav_audio.try_lock() {
+					Ok(nav_audio) => nav_audio,
+					Err(_) => {
+						println!("Nav audio handler locked.");
+						return;
+					}
+				};
+
+				let (current_sample, current_bits, current_channel) = rd_audio.get_audio_profile();
 
 				let decode_num = u32::from_le_bytes([message.data[0], message.data[1], message.data[2], message.data[3]]);
 				let (new_sample, new_bits, new_channel) = get_decode_type(decode_num);
@@ -429,9 +423,9 @@ impl<'a> MirrorHandler<'a> {
 
 				if new_sample != current_sample || new_bits != current_bits || new_channel != current_channel {
 					if audio_type == 1 {
-						self.rd_audio.set_audio_profile(new_sample, new_bits, new_channel);
+						rd_audio.set_audio_profile(new_sample, new_bits, new_channel);
 					} else if audio_type == 2 {
-						self.nav_audio.set_audio_profile(new_sample, new_bits, new_channel);
+						nav_audio.set_audio_profile(new_sample, new_bits, new_channel);
 					}
 				}
 
@@ -448,9 +442,9 @@ impl<'a> MirrorHandler<'a> {
 						Err(_) => {
 						}
 					}
-					self.rd_audio.send_audio(&data);
+					rd_audio.send_audio(&data);
 				} else if audio_type == 2 {
-					self.nav_audio.send_audio(&data);
+					nav_audio.send_audio(&data);
 				}
 			}
 		} else if message.message_type == 8 { //Phone specific command.

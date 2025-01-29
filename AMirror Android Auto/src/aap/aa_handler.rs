@@ -10,6 +10,7 @@ use openssl_sys::*;
 
 use crate::mirror::mpv::MpvVideo;
 use crate::aibus::*;
+use crate::mirror::mpv::RdAudio;
 use crate::Context;
 
 use crate::aap::aap_services::*;
@@ -22,9 +23,7 @@ use crate::aap::aap_channel_descriptor::*;
 
 use super::aap_messages::*;
 use super::aap_usb::AndroidUSBConnection;
-use super::media_messages::MediaMetaMessage;
-use super::media_messages::MediaPlaybackMessage;
-use super::media_messages::VideoMsg;
+use super::media_messages::*;
 use super::sensor_messages::SensorMessage;
 
 const AAP_FRAME_FIRST_FRAME: u8 = 1;
@@ -87,14 +86,18 @@ const CHANNEL_COUNT: usize = MaximumChannel as usize;
 pub struct AapHandler <'a> {
 	usb_handler: AndroidUSBConnection,
 	context: &'a Arc<Mutex<Context>>,
+	
 	mpv_video: &'a Arc<Mutex<MpvVideo>>,
+	rd_audio: &'a Arc<Mutex<RdAudio>>,
+	nav_audio: &'a Arc<Mutex<RdAudio>>,
 
 	w: u16,
 	h: u16,
 
 	current_data: [Vec<u8>; CHANNEL_COUNT],
-
+	total_size: [u32; CHANNEL_COUNT],
 	data_complete: [bool; CHANNEL_COUNT],
+	channel_session: [i32; CHANNEL_COUNT],
 
 	bio_write: *mut BIO,
 	bio_read: *mut BIO,
@@ -110,22 +113,28 @@ pub struct AapHandler <'a> {
 	home_hold: bool,
 
 	connection_start: Instant,
+	ping_timer: Instant,
 }
 
 const EMPTY_DATA_ARRAY: Vec<u8> = Vec::new();
 
 impl<'a> AapHandler <'a>{
-	pub fn new(context: &'a Arc<Mutex<Context>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, w: u16, h: u16) -> Self {
+	pub fn new(context: &'a Arc<Mutex<Context>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, rd_audio: &'a Arc<Mutex<RdAudio>>, nav_audio: &'a Arc<Mutex<RdAudio>>, w: u16, h: u16) -> Self {
 		return Self {
 			usb_handler: AndroidUSBConnection::new(),
 			context,
+
 			mpv_video,
+			rd_audio,
+			nav_audio,
 
 			w,
 			h,
 
 			current_data: [EMPTY_DATA_ARRAY; CHANNEL_COUNT],
+			total_size: [0; CHANNEL_COUNT],
 			data_complete: [false; CHANNEL_COUNT],
+			channel_session: [0; CHANNEL_COUNT],
 
 			bio_write: std::ptr::null_mut(),
 			bio_read: std::ptr::null_mut(),
@@ -141,6 +150,7 @@ impl<'a> AapHandler <'a>{
 			home_hold: false,
 
 			connection_start: Instant::now(),
+			ping_timer: Instant::now(),
 		}
 	}
 
@@ -169,36 +179,10 @@ impl<'a> AapHandler <'a>{
 				self.write_block(true, 0, [0x0, 0x1, 0x0, 0x1].to_vec(), ControlMessage::ControlMessageVersionRequest as u16, Duration::from_millis(2000), false);
 
 				if phone_type != 5 {
-					self.connection_start = Instant::now();
-					match self.context.try_lock() {
-						Ok(mut context) => {
-							context.phone_type = 5;
-						}
-						Err(_) => {
-							println!("AA Handler process: Context locked.")
-						}
-					}
+					self.start_connection();
 				}
 			} else {
-				self.had_sdr = false;
-				self.first_video = false;
-
-				self.bio_write = std::ptr::null_mut();
-				self.bio_read = std::ptr::null_mut();
-				self.ssl = std::ptr::null_mut();
-				self.ssl_method = std::ptr::null_mut();
-				self.ssl_context = std::ptr::null_mut();
-
-				if phone_type != 0 {
-					match self.context.try_lock() {
-						Ok(mut context) => {
-							context.phone_type = 0;
-						}
-						Err(_) => {
-							println!("AA Handler process: Context locked.")
-						}
-					}
-				}
+				self.stop_connection();
 			}
 
 			data = [].to_vec();
@@ -210,6 +194,50 @@ impl<'a> AapHandler <'a>{
 			self.process_bytes(data);
 			for i in 0..CHANNEL_COUNT {
 				self.process_message(i);
+			}
+		}
+
+		if phone_type == 5 && Instant::now() - self.ping_timer > Duration::from_millis(2000) {
+			self.ping_timer = Instant::now();
+			
+			let ping_msg = PingMessage::new();
+			self.write_message(true, ControlChannel as u8, ping_msg, ProtocolMessage::ProtocolMessagePingRequest as u16, Duration::from_millis(5000), true);
+		}
+	}
+
+	//Start a connection to the phone.
+	fn start_connection(&mut self) {
+		self.connection_start = Instant::now();
+		match self.context.try_lock() {
+			Ok(mut context) => {
+				context.phone_type = 5;
+			}
+			Err(_) => {
+				println!("AA Handler start connection: Context locked.")
+			}
+		}
+
+		self.refresh_media_audio();
+		self.refresh_nav_audio();
+	}
+
+	//End the connection to the phone.
+	fn stop_connection(&mut self) {
+		self.had_sdr = false;
+		self.first_video = false;
+
+		self.bio_write = std::ptr::null_mut();
+		self.bio_read = std::ptr::null_mut();
+		self.ssl = std::ptr::null_mut();
+		self.ssl_method = std::ptr::null_mut();
+		self.ssl_context = std::ptr::null_mut();
+
+		match self.context.try_lock() {
+			Ok(mut context) => {
+				context.phone_type = 0;
+			}
+			Err(_) => {
+				println!("AA Handler stop connection: Context locked.")
 			}
 		}
 	}
@@ -442,9 +470,18 @@ impl<'a> AapHandler <'a>{
 			self.data_complete[current_channel] = false;
 		}
 
+		let mut large_message = false;
+
 		let mut start = 4;
 		if (flags&AAP_FRAME_FIRST_FRAME) != 0 && (flags&AAP_FRAME_LAST_FRAME) == 0 {
 			start += 4;
+
+			if full_data.len() < 6 {
+				return;
+			}
+			
+			self.total_size[current_channel] = u32::from_be_bytes([data[2], data[3], data[4], data[5]]);
+			large_message = true;
 		}
 
 		if (flags&AAP_FRAME_ENCRYPTED) != 0 { //Encrypted data.
@@ -472,21 +509,28 @@ impl<'a> AapHandler <'a>{
 
 			if bytes_written <= 0 {
 				println!("Error: Invalid bytes written.");
-				//self.clear_data(current_channel);
+				self.clear_data(current_channel);
 				return;
 			}
 
-			let decoded_data: &mut [u8] = &mut vec![0;data.len() - start];
+			let mut decoded_len = data.len() - start;
+			if large_message {
+				if self.total_size[current_channel] as usize > decoded_len {
+					decoded_len = self.total_size[current_channel] as usize;
+				}
+			}
+
+			let decoded_data: &mut [u8] = &mut vec![0;decoded_len];
 			let bytes_read;
 
 			unsafe {
 				let decoded_data_mut = decoded_data.as_mut_ptr() as *mut c_void;
-				bytes_read = SSL_read(ssl, decoded_data_mut, (data.len() - start) as i32);
+				bytes_read = SSL_read(ssl, decoded_data_mut, (decoded_len) as i32);
 			}
 
-			if bytes_read <= 0 || bytes_read > (data.len() - start) as i32 {
+			if bytes_read <= 0 || bytes_read > (decoded_len) as i32 {
 				println!("Error: Invalid bytes read.");
-				//self.clear_data(current_channel);
+				self.clear_data(current_channel);
 				return;
 			}
 
@@ -501,8 +545,6 @@ impl<'a> AapHandler <'a>{
 
 		if (flags&AAP_FRAME_LAST_FRAME) != 0 { //Last frame.
 			self.data_complete[current_channel] = true;
-		} else if (flags&AAP_FRAME_FIRST_FRAME) != 0 {
-			println!("Long message on ch {}", current_channel);
 		}
 	}
 
@@ -536,6 +578,7 @@ impl<'a> AapHandler <'a>{
 			let request_data = msg_data;
 			match request.merge_from_bytes(request_data) {
 				Ok(_) => {
+					println!("Audio focus request on ch {}", chan);
 					self.handle_audio_focus_request(chan as u8, request);
 				}
 				Err(e) => {
@@ -560,6 +603,12 @@ impl<'a> AapHandler <'a>{
 				let mut video_data = VideoMsg::new();
 				video_data.set_data(&full_msg_data);
 				self.handle_video_message(video_data);
+			} else if chan == Audio1Channel as usize || chan == MediaAudioChannel as usize {
+				let mut audio_data = AudioMsg::new();
+				audio_data.set_data(&full_msg_data);
+				audio_data.set_channel(chan as u8);
+
+				self.handle_audio_message(audio_data);
 			}
 		} else if msg_type == ProtocolMessage::ProtocolMessagePingRequest as u16 {
 			let mut ping = PingMessage::new();
@@ -605,10 +654,17 @@ impl<'a> AapHandler <'a>{
 						}
 					};
 
-					context.track_time = playback_msg.track_progress;
+					let playing = playback_msg.playback_state == 2;
+					let loading = playback_msg.playback_state == 1;
 
-					context.app = playback_msg.media_app;
-					context.playing = playback_msg.playback_state == 2;
+					if context.audio_selected {
+						context.track_time = playback_msg.track_progress;
+
+						context.app = playback_msg.media_app;
+						context.playing = playing;
+					} else if playing || loading {
+						self.send_button_message(InputButton::ButtonStop as u32);
+					}
 				}
 			} else if msg_type == MediaInfoMessage::MediaInfoMessageMeta as u16 {
 				let mut meta_msg = MediaMetaMessage::new();
@@ -648,8 +704,21 @@ impl<'a> AapHandler <'a>{
 			}
 		} else if chan == MediaAudioChannel as usize || chan == Audio1Channel as usize ||
 			chan == Audio2Channel as usize || chan == VideoChannel as usize || chan == MicrophoneChannel as usize {
+			//self.send_media_ack(chan as u8);
 			if msg_type == MediaChannelMessageSetupRequest as u16 {
 				self.handle_media_setup_request(chan as u8);
+			} else if msg_type == MediaChannelMessageStartRequest as u16 {
+				let mut request = MediaStartRequest::new();
+				match request.merge_from_bytes(msg_data) {
+					Ok(_) => {
+						self.channel_session[chan] = request.session;
+					}
+					Err(e) => {
+						println!("Error: {}", e);
+					}
+				}
+			} else if msg_type == MediaChannelMessageStopRequest as u16 {
+				self.channel_session[chan] = 0;
 			}
 		}
 
@@ -1178,6 +1247,7 @@ impl<'a> AapHandler <'a>{
 	//Send a media acknowledgement.
 	fn send_media_ack(&mut self, channel: u8) {
 		let mut ack_msg = MediaAck::new();
+		ack_msg.session = self.channel_session[channel as usize];
 		ack_msg.value = 1;
 
 		self.write_message(true, channel, ack_msg, MediaChannelMessage::MediaChannelMessageAck as u16, Duration::from_millis(5000), true);
@@ -1196,5 +1266,68 @@ impl<'a> AapHandler <'a>{
 			}
 		}
 
+	}
+
+	//Handle a piece of audio.
+	fn handle_audio_message(&mut self, audio_msg: AudioMsg) {
+		let rd_data = audio_msg.get_data();
+		let channel = audio_msg.get_channel();
+
+		println!("Audio message at channel {} of length {}", channel, rd_data.len());
+
+		if channel == MediaAudioChannel as u8 {
+			match self.context.try_lock() {
+				Ok(context) => {
+					if !context.audio_selected {
+						return;
+					}
+				}
+				Err(_) => {
+					println!("Handle audio message: Context locked.");
+				}
+			}
+
+			match self.rd_audio.try_lock() {
+				Ok(mut rd_audio) => {
+					rd_audio.send_audio(&rd_data);
+				}
+				Err(_) => {
+					println!("Media audio handler locked.")
+				}
+			}
+		} else if channel == Audio1Channel as u8 {
+			match self.nav_audio.try_lock() {
+				Ok(mut nav_audio) => {
+					nav_audio.send_audio(&rd_data);
+				}
+				Err(_) => {
+					println!("Nav audio handler locked.")
+				}
+			}
+		}
+	}
+
+	//Refresh the media audio handler.
+	fn refresh_media_audio(&mut self) {
+		match self.rd_audio.try_lock() {
+			Ok(mut rd_audio) => {
+				rd_audio.set_audio_profile(48000, 16, 2); //Standard Android audio profile.
+			}
+			Err(_) => {
+				println!("Refresh Audio Handler: Main audio locked.")
+			}
+		}
+	}
+
+	//Refresh the nav audio handler.
+	fn refresh_nav_audio(&mut self) {
+		match self.nav_audio.try_lock() {
+			Ok(mut nav_audio) => {
+				nav_audio.set_audio_profile(16000, 16, 1); //Android nav audio profile.
+			}
+			Err(_) => {
+				println!("Refresh Audio Handler: Nav audio locked.")
+			}
+		}
 	}
 }
