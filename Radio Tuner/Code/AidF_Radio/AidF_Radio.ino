@@ -604,6 +604,7 @@ void loop() {
 						aibus_handler.writeAIData(&station_name, parameters.computer_connected);
 
 						text_handler.sendIMIDCallsignMessage(parameters.rds_station_name);
+						text_handler.sendMirrorMessage(parameters.rds_station_name, 3, false);
 					}
 				}
 
@@ -661,6 +662,7 @@ void loop() {
 				AIData text_msg = getTextMessage(header_text, 0, 0);
 				aibus_handler.writeAIData(&text_msg, parameters.computer_connected);
 
+				text_handler.sendMirrorMessage(header_text, 0, true);
 				text_handler.sendTunedFrequencyMessage(current_preset, *current_frequency, sub_id != SUB_AM, true);
 			}
 			
@@ -708,6 +710,9 @@ void loop() {
 
 		aibus_handler.writeAIData(&vol_msg, parameters.computer_connected);
 
+		vol_msg.receiver = ID_ANDROID_AUTO;
+		aibus_handler.writeAIData(&vol_msg, parameters.mirror_connected);
+
 		vol_data[0] = 0x62;
 		vol_msg.data[0] = 0x62;
 		vol_msg.receiver = ID_IMID_SCR;
@@ -722,6 +727,9 @@ void handleAIBus(AIData* msg) {
 		if((msg->data[2]&0x10) != 0)
 			parameters.last_control = msg->data[1];
 	}
+
+	if(!parameters.mirror_connected && msg->sender == ID_ANDROID_AUTO)
+		parameters.mirror_connected = true;
 
 	if(msg->receiver != ID_RADIO && msg->receiver != 0xFF)
 		return;
@@ -901,11 +909,13 @@ void setSourceName() {
 	if(source_handler.getCurrentSourceID() == 0) {
 		text_handler.setBlankHeader(audio_off_msg);
 		text_handler.sendIMIDSourceMessage(0,0);
+		text_handler.sendMirrorMessage(audio_off_msg, 0, true);
 		return;
 	}
 
 	if(source_handler.source_list[source_handler.getCurrentSource()].source_name.compareTo("") != 0) {
 		text_handler.setBlankHeader(source_handler.source_list[source_handler.getCurrentSource()].source_name);
+		text_handler.sendMirrorMessage(source_handler.source_list[source_handler.getCurrentSource()].source_name, 0, true);
 	} else {
 		const uint8_t source = source_handler.getCurrentSourceID();
 		String source_name = "";
@@ -935,6 +945,7 @@ void setSourceName() {
 		}
 
 		text_handler.setBlankHeader(source_name);
+		text_handler.sendMirrorMessage(source_name, 0, true);
 	}
 
 	text_handler.sendIMIDSourceMessage(source_handler.getCurrentSourceID(), source_handler.source_list[source_handler.getCurrentSource()].sub_id);
@@ -982,6 +993,9 @@ void clearFMData() {
 		clear_msg.refreshAIData(clear_data);
 
 		aibus_handler.writeAIData(&clear_msg, parameters.computer_connected);
+
+		text_handler.sendIMIDCallsignMessage("");
+		text_handler.sendMirrorMessage("", 3, false);
 	}
 }
 

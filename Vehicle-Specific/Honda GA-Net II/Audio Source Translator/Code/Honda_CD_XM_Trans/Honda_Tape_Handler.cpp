@@ -551,6 +551,9 @@ void HondaTapeHandler::sendTapeTextMessage() {
 	ai_driver->writeAIData(&text_msg2, parameter_list->computer_connected);
 	ai_driver->writeAIData(&sub_msg1, parameter_list->computer_connected);
 	ai_driver->writeAIData(&sub_msg2, parameter_list->computer_connected);
+
+	this->sendMirrorMessage(mode_msg, 1, true);
+	this->sendMirrorMessage(nr_msg, 4, true);
 }
 
 void HondaTapeHandler::sendFunctionTextMessage() {
@@ -567,6 +570,7 @@ void HondaTapeHandler::sendFunctionTextMessage() {
 	ai_driver->writeAIData(&function3, parameter_list->computer_connected);
 	ai_driver->writeAIData(&function4, parameter_list->computer_connected);
 	ai_driver->writeAIData(&function5, parameter_list->computer_connected);
+	this->sendMirrorMessage(F("Tape"), 0, true);
 }
 
 void HondaTapeHandler::sendTapeUpdateMessage(const uint8_t receiver) {

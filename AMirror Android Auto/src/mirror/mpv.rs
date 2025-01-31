@@ -1,18 +1,43 @@
 use core::str;
 use std::io::Cursor;
 use std::io::Write;
+use std::os::unix::net::UnixStream;
 use std::process::Command;
 use std::process::Stdio;
 use std::process::Child;
+use std::time::Duration;
+use std::time::Instant;
 
+use ab_glyph::FontRef;
+use ab_glyph::PxScale;
+use image::imageops::flip_vertical;
+use image::Rgba;
+use image::RgbaImage;
+use imageproc::drawing::draw_filled_rect;
+use imageproc::drawing::draw_text_mut;
+
+use imageproc::rect::Rect;
 use rodio::Decoder as AudioDecoder;
 use rodio::OutputStream;
 use rodio::OutputStreamHandle;
 use rodio::Sink;
 
+use crate::ipc;
+
+const OVERLAY_STR_COUNT: usize = 5;
+const EMPTY_STRING: String = String::new();
+
 pub struct MpvVideo {
 	process: Child,
-	//mpv_ipc: UnixStream,
+	mpv_ipc: Option<UnixStream>,
+
+	w: u16,
+	h: u16,
+
+	overlay_str: [String; OVERLAY_STR_COUNT],
+
+	text_color: Rgba<u8>,
+	header_color: Rgba<u8>,
 }
 
 impl MpvVideo {
@@ -28,7 +53,7 @@ impl MpvVideo {
 		mpv_cmd.arg("--profile=low-latency");
 		mpv_cmd.arg("--no-correct-pts");
 		mpv_cmd.arg(format!("--video-aspect-override={}/{}", width, height));
-		mpv_cmd.arg("--input-ipc-server=/tmp/mka_cmd.sock");
+		mpv_cmd.arg("--input-ipc-server=/tmp/mka_cmd");
 		mpv_cmd.arg("-");
 		match mpv_cmd.stdin(Stdio::piped()).spawn() {
 			Err(e) => return Err(format!("Could not start video Mpv: {} ", e)),
@@ -37,18 +62,32 @@ impl MpvVideo {
 			}
 		}
 
-		/*let sock = ipc::init_socket("/tmp/mka_cmd.sock".to_string());
+		let sock_wait = Instant::now();
+		while Instant::now() - sock_wait < Duration::from_millis(500) {
+
+		}
+
+		let sock = ipc::init_socket("/tmp/mka_cmd".to_string());
 
 		match sock {
 			None => {
-				return Err(format!("Could not start mpv socket."));
+				println!("Could not start mpv socket.");
 			}
-			Some(sock) => {
-				return Ok(MpvVideo { process: process.unwrap(), mpv_ipc: sock });
+			Some(_) => {
+				
 			}
-		}*/
+		}
 
-		return Ok(MpvVideo { process: process.unwrap() });
+		return Ok(MpvVideo {
+			process: process.unwrap(),
+			mpv_ipc: sock,
+			w: width,
+			h: height,
+			overlay_str: [EMPTY_STRING; OVERLAY_STR_COUNT],
+
+			text_color: Rgba([0,0,0,255]),
+			header_color: Rgba([0xFF, 0xFF, 0x3A, 255]),
+		 });
 	}
 
 	pub fn send_video(&mut self, data: &[u8]) {
@@ -56,16 +95,66 @@ impl MpvVideo {
 		let _ = child_stdin.write(&data);
 	}
 
-	pub fn set_overlay(&mut self) {
-		/*let overlay_str = "overlay-add 0 0 0 \"/tmp/AidF Overlay.png\" 0 bgra 800 30 3200";
-		match self.mpv_ipc.write(overlay_str.as_bytes()) {
-			Ok(_) => {
+	//Set the overlay text color.
+	pub fn set_overlay_text_color(&mut self, color: Rgba<u8>) {
+		self.text_color = color;
+		self.save_overlay_image();
+	}
 
+	//Set the header text color.
+	pub fn set_header_text_color(&mut self, color: Rgba<u8>) {
+		self.header_color = color;
+		self.save_overlay_image();
+	}
+
+	//Set the overlay text.
+	pub fn set_overlay_text(&mut self, text: String, index: usize) {
+		if index >= OVERLAY_STR_COUNT {
+			return;
+		}
+
+		self.overlay_str[index] = text;
+		//TODO: Symbols.
+	}
+
+	//Show the overlay.
+	pub fn show_overlay(&mut self) {
+		let mut mpv_ipc = match &self.mpv_ipc {
+			Some(mpv_ipc) => mpv_ipc,
+			None => return,
+		};
+
+		self.save_overlay_image();
+
+		let overlay_height = self.h/10;
+
+		let overlay_str = "overlay-add 0 0 0 \"/tmp/overlay.bmp\" 122 bgra ".to_string() + &self.w.to_string() + &" ".to_string() + &overlay_height.to_string() + &" 3200\n".to_string();
+		match mpv_ipc.write(overlay_str.as_bytes()) {
+			Ok(_) => {
+				
 			}
 			Err(e) => {
 				println!("Error: {}", e);
 			}
-		}*/
+		}
+	}
+
+	//Clear the overlay.
+	pub fn clear_overlay(&mut self) {
+		let mut mpv_ipc = match &self.mpv_ipc {
+			Some(mpv_ipc) => mpv_ipc,
+			None => return,
+		};
+
+		let overlay_str = "overlay-remove 0\n";
+		match mpv_ipc.write(overlay_str.as_bytes()) {
+			Ok(_) => {
+				
+			}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
 	}
 	
 	pub fn start(&mut self) {
@@ -116,6 +205,46 @@ impl MpvVideo {
 			}
 		}
 	}
+
+	//Save an overlay image.
+	fn save_overlay_image(&self) {
+		let mut overlay_image = RgbaImage::new(self.w as u32, self.h as u32/10);
+
+		overlay_image = draw_filled_rect(&mut overlay_image, Rect::at(0, 0).of_size(self.w as u32, self.h as u32 / 10), self.header_color);
+
+		let font = match FontRef::try_from_slice(include_bytes!("AidF Font.ttf")) {
+			Ok(font) => font,
+			Err(e) => {
+				println!("Error: {}", e);
+				return;
+			}
+		};
+
+		for i in 0..OVERLAY_STR_COUNT {
+			let height;
+			
+			if i == 0 {
+				height = (self.h/10) as f32*6.0/7.0;
+			} else {
+				height = (self.h/10) as f32*3.0/5.0;
+			}
+			let scale = PxScale {
+				x: height,
+				y: height,
+			};
+
+			draw_text_mut(&mut overlay_image, self.text_color, (i*(self.w as usize/OVERLAY_STR_COUNT)) as i32, (self.h/20 - (height as u16)/2) as i32, scale, &font, &self.overlay_str[i]);
+		}
+
+		overlay_image = flip_vertical(&mut overlay_image);
+
+		match overlay_image.save("/tmp/overlay.bmp") {
+			Ok(_) => {}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
+	}
 }
 
 pub struct RdAudio {
@@ -157,14 +286,7 @@ impl RdAudio {
 				return;
 			}
 		};
-		/*match self.handler.play_raw(source.convert_samples()) {
-			Ok(_) => {
-
-			}
-			Err(err) => {
-				println!("Play Error: {}", err);
-			}
-		}*/
+		
 		self.sink.append(source);
 	}
 	

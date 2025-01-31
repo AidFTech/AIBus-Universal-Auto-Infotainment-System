@@ -43,6 +43,8 @@ public:
 	void sendIMIDInfoMessage(String text);
 	void sendIMIDCallsignMessage(String text);
 
+	void sendMirrorMessage(String text, const uint8_t index, const bool refresh);
+
 	void sendTime();
 
 private: 

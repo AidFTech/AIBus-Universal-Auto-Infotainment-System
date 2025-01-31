@@ -25,6 +25,7 @@ public:
 	bool getSelected();
 
 	void requestControl();
+	void sendMirrorMessage(String text, const uint8_t index, const bool refresh);
 protected:
 	EnIEBusHandler* ie_driver;
 	AIBusHandler* ai_driver;

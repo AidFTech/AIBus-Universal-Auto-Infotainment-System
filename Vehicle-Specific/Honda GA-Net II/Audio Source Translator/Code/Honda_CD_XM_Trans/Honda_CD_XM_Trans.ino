@@ -141,6 +141,9 @@ void loop() {
 
 			if(!parameters.screen_connected && ai_msg.sender == ID_NAV_SCREEN)
 				parameters.screen_connected = true;
+
+			if(!parameters.mirror_connected && ai_msg.sender == ID_ANDROID_AUTO)
+				parameters.mirror_connected = true;
 				
 			#ifndef AI_DEBUG
 			if(!parameters.radio_connected && ai_msg.sender == ID_RADIO) {

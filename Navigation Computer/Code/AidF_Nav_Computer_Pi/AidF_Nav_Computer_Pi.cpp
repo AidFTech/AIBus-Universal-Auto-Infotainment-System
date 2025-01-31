@@ -41,6 +41,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 
 	this->canslator_connected = &attribute_list->canslator_connected;
 	this->radio_connected = &attribute_list->radio_connected;
+	this->mirror_connected = false;
 
 	this->socket_parameters.running = &this->running;
 	this->socket_parameters.ai_serial = aibus_handler->getPortPointer();
@@ -82,6 +83,10 @@ void AidF_Nav_Computer::loop() {
 		setDayNight(false);
 	else if(attribute_list->day_night_settings == DAY_NIGHT_NIGHT)
 		setDayNight(true);
+
+	if((attribute_list->background_changed || attribute_list->text_changed) && mirror_connected) {
+		this->setMirrorColors();
+	}
 
 	if(attribute_list->background_changed) {
 		attribute_list->background_changed = false;
@@ -133,6 +138,9 @@ void AidF_Nav_Computer::loop() {
 
 				if(!*radio_connected && ai_msg.sender == ID_RADIO)
 					*radio_connected = true;
+
+				if(!mirror_connected && ai_msg.sender == ID_ANDROID_AUTO)
+					mirror_connected = true;
 
 				if(ai_msg.sender == ID_NAV_COMPUTER)
 					continue;
@@ -267,6 +275,27 @@ void AidF_Nav_Computer::setDayNight(const bool night) {
 	if(this->main_window != NULL)
 		this->main_window->refreshWindow();
 	this->window_handler->refresh();
+
+	this->setMirrorColors();
+}
+
+//Set the colors at the phone mirror.
+void AidF_Nav_Computer::setMirrorColors() {
+	if(!this->mirror_connected)
+		return;
+
+	const uint32_t header = attribute_list->color_profile->background, text = attribute_list->color_profile->text;
+
+	uint8_t header_data[] = {0x60, 0x22, uint8_t((header&0xFF000000) >> 24), uint8_t((header&0xFF0000) >> 16), uint8_t((header&0xFF00)>>8)};
+	AIData header_msg(sizeof(header_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
+	header_msg.refreshAIData(header_data);
+
+	uint8_t text_data[] = {0x60, 0x21, uint8_t((text&0xFF000000) >> 24), uint8_t((text&0xFF0000) >> 16), uint8_t((text&0xFF00)>>8)};
+	AIData text_msg(sizeof(text_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
+	text_msg.refreshAIData(text_data);
+
+	mirror_connected = aibus_handler->writeAIData(&header_msg, this->mirror_connected);
+	aibus_handler->writeAIData(&text_msg, this->mirror_connected);
 }
 
 AidFColorProfile* AidF_Nav_Computer::getColorProfile() {

@@ -1,6 +1,8 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use image::Rgba;
+
 use crate::aap::aa_handler::AapHandler;
 use crate::aibus_handler::AIBusHandler;
 use crate::mirror::messages::*;
@@ -763,7 +765,11 @@ pub struct AMirror<'a> {
 
 	source_request_timer: Instant,
 	scroll_timer: Instant,
-	frame_timer: Instant,
+
+	overlay_timer: Instant,
+	overlay_on: bool,
+
+	audio_held: bool,
 
 	pub run: bool,
 }
@@ -804,7 +810,11 @@ impl <'a> AMirror<'a> {
 
 			source_request_timer: Instant::now(),
 			scroll_timer: Instant::now(),
-			frame_timer: Instant::now(),
+
+			overlay_timer: Instant::now(),
+			overlay_on: false,
+
+			audio_held: false,
 
 			run: true,
 		};
@@ -929,6 +939,16 @@ impl <'a> AMirror<'a> {
 						return;
 					}
 				};
+			}
+
+			match self.mpv_video.try_lock() {
+				Ok(mut mpv_video) => {
+					self.overlay_on = false;
+					mpv_video.clear_overlay();
+				}
+				Err(_) => {
+					println!("AMirror Process Phone Type: MPV Locked.");
+				}
 			}
 
 			context.track_time = -1;
@@ -1331,6 +1351,18 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
+		if Instant::now() - self.overlay_timer > Duration::from_millis(3500) && self.overlay_on {
+			self.overlay_on = false;
+			match self.mpv_video.try_lock() {
+				Ok(mut mpv_video) => {
+					mpv_video.clear_overlay();
+				}
+				Err(_) => {
+					println!("AMirror Process: MPV Locked.")
+				}
+			}
+		}
+
 		std::mem::drop(context);
 		let mut ai_rx_list = Vec::new();
 
@@ -1395,13 +1427,57 @@ impl <'a> AMirror<'a> {
 		}
 
 		if ai_msg.l() >= 2 && ai_msg.data[0] == 0x23 { //Overlay.
+			let set_overlay = (ai_msg.data[1]&0x10) != 0;
+
+			let text;
+			if ai_msg.l() >= 3 {
+				text = match std::str::from_utf8(&ai_msg.data[2..]) {
+					Ok(text) => text,
+					Err(e) => {
+						println!("Error: {}", e);
+						return;
+					}
+				};
+			} else {
+				text = "";
+			}
+
+			let index = (ai_msg.data[1]&0xF) as usize;
+
 			match self.mpv_video.try_lock() {
-				Ok(mut mpv) => {
-					mpv.set_overlay();
+				Ok(mut mpv) => {		
+					mpv.set_overlay_text(text.to_string(), index);
+
+					if set_overlay {
+						self.overlay_on = true;
+						self.overlay_timer = Instant::now();
+						mpv.show_overlay();
+					} else if self.overlay_on {
+						mpv.show_overlay();
+					}
 				}
 				Err(_) => {
 					println!("Overlay: MPV handler locked.");
 				}
+			}
+		} else if ai_msg.l() >= 5 && ai_msg.data[0] == 0x60 { //Color change.
+			let color = Rgba([ai_msg.data[2], ai_msg.data[3], ai_msg.data[4], 0xFF]);
+			let mut mpv = match self.mpv_video.try_lock() {
+				Ok(mpv) => mpv,
+				Err(_) => {
+					println!("Color changed: MPV handler locked.");
+					return;
+				}
+			};
+
+			if ai_msg.data[1] == 0x21 { //Text color.
+				mpv.set_overlay_text_color(color);
+			} else if ai_msg.data[1] == 0x22 { //Background color.
+				mpv.set_header_text_color(color);
+			}
+
+			if self.overlay_on {
+				mpv.show_overlay();
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_RADIO {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x4 && ai_msg.data[1] == 0xE6 && ai_msg.data[2] == 0x10 { //Name request.
@@ -1747,6 +1823,31 @@ impl <'a> AMirror<'a> {
 					self.imid_refresh = true;
 					self.imid_scroll_pos = 0;
 					self.scroll_timer = Instant::now();
+				} else if button == 0x26 { //Audio button.
+					if state == 0x2 {
+						if !self.audio_held {
+							if !context.audio_selected {
+								match self.mpv_video.try_lock() {
+									Ok(mut mpv) => {
+										self.overlay_on = true;
+										self.overlay_timer = Instant::now();
+										mpv.show_overlay();
+									}
+									Err(_) => {
+										println!("Audio button: MPV handler locked.");
+									}
+								}
+							} else {
+								self.aa_handler.show_audio_window();
+							}
+						} else {
+							//TODO: Open the nav audio window.
+						}
+
+						self.audio_held = false;
+					} else if state == 0x1 {
+						self.audio_held = true;
+					}
 				}
 			}
 		}

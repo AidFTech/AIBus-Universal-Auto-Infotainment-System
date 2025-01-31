@@ -66,7 +66,9 @@ void HondaXMHandler::loop() {
 		}
 
 		unsigned int scroll_limit = XM_SCROLL_TIMER;
-		if(scroll_state <= 0)
+		if(this->split)
+			scroll_limit = XM_SCROLL_TIMER_FULL;
+		else if(scroll_state <= 0)
 			scroll_limit =  XM_SCROLL_TIMER_0;
 
 		if(display_parameter != N_TEXT_NONE && !text_timer_enabled && !display_timer_enabled && scroll_timer >= scroll_limit) {
@@ -740,10 +742,14 @@ void HondaXMHandler::setNumberDisplay() {
 
 		AIData channel_msg = getTextMessage(ID_XM, "CH " + String(int(*channel)), 0x1, 0x2, true);
 		ai_driver->writeAIData(&channel_msg,parameter_list->computer_connected);
+
+		this->sendMirrorMessage(preset_text, 0, true);
+		this->sendMirrorMessage("CH " + String(int(*channel)), 1, true);
 	}
 
 	if(display_parameter == N_TEXT_NONE)
 		sendIMIDNumberMessage();
+
 }
 
 void HondaXMHandler::setTextDisplay(const uint8_t field) {
@@ -795,6 +801,9 @@ void HondaXMHandler::setTextDisplay(const uint8_t field) {
 		AIData text_msg = getTextMessage(ID_XM, selected, nav_group, nav_area, true);
 		ai_driver->writeAIData(&text_msg, parameter_list->computer_connected);
 	}
+
+	if(field == N_CHANNEL_NAME)
+		this->sendMirrorMessage(selected, 3, true);
 
 	setIMIDTextDisplay(field, selected);
 }
@@ -1182,16 +1191,34 @@ void HondaXMHandler::sendIMIDInfoMessage(const bool resend) {
 	if(parameter_list->imid_connected)
 		max_length = 11;
 
-	if(text_to_send.length() > max_length) {
-		if(text_to_send.length() - scroll_state < max_length) {
-			scroll_changed = false;
-			display_timer = 0;
-			display_timer_enabled = true;
-		} else {
-			text_to_send = text_to_send.substring(scroll_state, text_to_send.length());
+	if(this->split) {
+		String sub_text[XM_SPLIT_COUNT];
+		splitText(max_length, text_to_send, sub_text, XM_SPLIT_COUNT);
+
+		if(scroll_state < 0 || scroll_state >= XM_SPLIT_COUNT)
+			scroll_state = 0;
+		
+		if(sub_text[scroll_state].length() <= 0 || sub_text[scroll_state].equals(" "))
+			scroll_state = 0;
+		
+		text_to_send = sub_text[scroll_state];
+		
+		if(!display_timer_enabled && max_length < 10) {
+			for(int i=text_to_send.length();i<max_length;i+=1)
+				text_to_send += " ";
 		}
-	} else
-		scroll_changed = false;
+	} else {
+		if(text_to_send.length() > max_length) {
+			if(text_to_send.length() - scroll_state < max_length) {
+				scroll_changed = false;
+				display_timer = 0;
+				display_timer_enabled = true;
+			} else {
+				text_to_send = text_to_send.substring(scroll_state, text_to_send.length());
+			}
+		} else
+			scroll_changed = false;
+	}
 	
 	if(resend && !parameter_list->imid_connected && parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines >= 2) {
 		switch(display_parameter) {
@@ -1308,6 +1335,7 @@ void HondaXMHandler::clearAIXMText(const bool song_title, const bool artist, con
 		clear_msg.refreshAIData(clear_data);
 
 		ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
+		this->sendMirrorMessage("", 3, true);
 	}
 
 	if(genre) {

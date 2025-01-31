@@ -38,8 +38,8 @@ public:
 	bool readAIData(AIData* ai_d);
 	bool readAIData(AIData* ai_d, const bool cache);
 	
-	void writeAIData(AIData* ai_d);
-	void writeAIData(AIData* ai_d, const bool acknowledge);
+	bool writeAIData(AIData* ai_d);
+	bool writeAIData(AIData* ai_d, const bool acknowledge);
 
 	void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
 

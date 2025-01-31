@@ -20,6 +20,9 @@ void TextHandler::clearAllText(const bool refresh) {
 	clear_msg.refreshAIData(data);
 
 	ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
+	
+	for(int i=0;i<5;i+=1)
+		this->sendMirrorMessage("", i, false);
 }
 
 //Set a preliminary header.
@@ -73,6 +76,7 @@ void TextHandler::sendTunedFrequencyMessage(const uint8_t preset, const uint16_t
 	ai_handler->writeAIData(&frequency_message, parameter_list->computer_connected);
 
 	this->sendIMIDFrequencyMessage(frequency, parameter_list->last_sub, preset);
+	this->sendMirrorMessage(frequency_text, 1, true);
 }
 
 //Write an FM Stereo indicator to the screen.
@@ -81,12 +85,15 @@ void TextHandler::sendStereoMessage(const bool stereo) {
 		AIData stereo_message = getTextMessage("St", 0x1, 0);
 		stereo_message.data[1] |= 0x10;
 		ai_handler->writeAIData(&stereo_message, parameter_list->computer_connected);
+		this->sendMirrorMessage("St", 4, false);
 	} else {
 		uint8_t data[] = {0x20, 0x71, 0x0};
 		AIData stereo_message(sizeof(data), ID_RADIO, ID_NAV_COMPUTER);
 		stereo_message.refreshAIData(data);
 		
 		ai_handler->writeAIData(&stereo_message, parameter_list->computer_connected);
+
+		this->sendMirrorMessage("", 4, false);
 	}
 	this->sendIMIDFrequencyMessage(last_frequency, parameter_list->last_sub, parameter_list->current_preset);
 }
@@ -374,6 +381,27 @@ void TextHandler::sendIMIDCallsignMessage(String text) {
 
 		ai_handler->writeAIData(&cs_msg);
 	} 
+}
+
+//Send a text message to the mirror.
+void TextHandler::sendMirrorMessage(String text, const uint8_t index, const bool refresh) {
+	if(!parameter_list->mirror_connected)
+		return;
+
+	uint8_t mirror_data[2 + text.length()];
+	mirror_data[0] = 0x23;
+	mirror_data[1] = 0x60|(index&0xF);
+
+	if(refresh)
+		mirror_data[1] |= 0x10;
+
+	for(int i=0;i<text.length();i+=1)
+		mirror_data[i+2] = uint8_t(text.charAt(i));
+
+	AIData mirror_msg(sizeof(mirror_data), ID_RADIO, ID_ANDROID_AUTO);
+	mirror_msg.refreshAIData(mirror_data);
+
+	parameter_list->mirror_connected = ai_handler->writeAIData(&mirror_msg, parameter_list->mirror_connected);
 }
 
 //Send the time message.

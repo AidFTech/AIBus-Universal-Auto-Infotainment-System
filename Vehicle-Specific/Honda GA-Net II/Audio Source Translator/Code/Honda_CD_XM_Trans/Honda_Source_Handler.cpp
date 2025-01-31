@@ -231,6 +231,27 @@ void HondaSourceHandler::requestControl(const uint8_t id) {
 	ai_driver->writeAIData(&request_msg, parameter_list->screen_connected);
 }
 
+//Send an overlay message to the phone mirror.
+void HondaSourceHandler::sendMirrorMessage(String text, const uint8_t index, const bool refresh) {
+	if(!parameter_list->mirror_connected)
+		return;
+
+	uint8_t mirror_data[2 + text.length()];
+	mirror_data[0] = 0x23;
+	mirror_data[1] = 0x60|(index&0xF);
+
+	if(refresh)
+		mirror_data[1] |= 0x10;
+
+	for(int i=0;i<text.length();i+=1)
+		mirror_data[i+2] = uint8_t(text.charAt(i));
+
+	AIData mirror_msg(sizeof(mirror_data), this->device_ai_id, ID_ANDROID_AUTO);
+	mirror_msg.refreshAIData(mirror_data);
+
+	parameter_list->mirror_connected = ai_driver->writeAIData(&mirror_msg, parameter_list->mirror_connected);
+}
+
 //Get a text message from a string.
 AIData getTextMessage(const uint8_t sender, String text, const uint8_t group, const uint8_t area, const bool refresh) {
 	//text.replace("#","##  ");

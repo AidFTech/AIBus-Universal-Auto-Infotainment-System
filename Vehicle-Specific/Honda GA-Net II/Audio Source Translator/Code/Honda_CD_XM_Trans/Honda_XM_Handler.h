@@ -6,6 +6,11 @@
 #include "Honda_Source_Handler.h"
 #include "Honda_IMID_Handler.h"
 
+#ifndef __AVR__
+#define __AVR__
+#endif
+#include "Text_Split.h"
+
 #include <stdint.h>
 #include <Arduino.h>
 #include <elapsedMillis.h>
@@ -33,12 +38,15 @@
 #define XM_DISPLAY_INFO_TIMER 750
 #define XM_SCROLL_TIMER 300
 #define XM_SCROLL_TIMER_0 600
+#define XM_SCROLL_TIMER_FULL 3000
 
 #define XM_FULL_TIMER 200
 
 #define XM_STATION_TIMER 1500
 #define XM_QUERY_TIMER 1000
 #define PRESET_QUERY_TIMER 120000
+
+#define XM_SPLIT_COUNT 5
 
 class HondaXMHandler : public HondaSourceHandler {
 public:
@@ -90,6 +98,7 @@ private:
 	bool display_timer_enabled = false;
 	elapsedMillis display_timer, scroll_timer;
 	int8_t display_parameter = N_TEXT_NONE, scroll_state = 0;
+	bool split = true;
 
 	//Timer to request text data.
 	elapsedMillis request_timer = 0;

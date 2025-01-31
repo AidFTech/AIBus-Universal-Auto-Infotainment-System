@@ -15,7 +15,7 @@ struct ParameterList {
 	bool power_on = true, audio_on = false;
 	
 	uint16_t vehicle_speed = 0;
-	bool computer_connected = false, screen_connected = false, amp_connected = false;
+	bool computer_connected = false, screen_connected = false, amp_connected = false, mirror_connected = false;
 	
 	bool manual_tune_mode = false, bass_adjust = false, treble_adjust = false, balance_adjust = false, fader_adjust = false;
 

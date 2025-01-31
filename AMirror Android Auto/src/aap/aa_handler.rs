@@ -820,6 +820,11 @@ impl<'a> AapHandler <'a>{
 		}
 	}
 
+	//Show the audio source window.
+	pub fn show_audio_window(&mut self) {
+		self.send_button_message(InputButton::ButtonMusic as u32);
+	}
+
 	//Internal message handles:
 	//Send the initial handshake.
 	fn begin_ssl_handshake(&mut self) {
@@ -1103,7 +1108,15 @@ impl<'a> AapHandler <'a>{
 		video_stream.set_available_in_call(true);
 
 		let video_config = video_stream.add_video_config();
-		video_config.video_resolution = 1;
+
+		if self.w >= 1920 && self.h >= 1080 {
+			video_config.video_resolution = 3;
+		} else if self.w >= 1280 && self.h >= 720 {
+			video_config.video_resolution = 2;
+		} else {
+			video_config.video_resolution = 1;
+		}
+		
 		video_config.video_frame = 1;
 		video_config.margin_width = 0;
 		video_config.margin_height = 0;
@@ -1272,8 +1285,6 @@ impl<'a> AapHandler <'a>{
 	fn handle_audio_message(&mut self, audio_msg: AudioMsg) {
 		let rd_data = audio_msg.get_data();
 		let channel = audio_msg.get_channel();
-
-		println!("Audio message at channel {} of length {}", channel, rd_data.len());
 
 		if channel == MediaAudioChannel as u8 {
 			match self.context.try_lock() {

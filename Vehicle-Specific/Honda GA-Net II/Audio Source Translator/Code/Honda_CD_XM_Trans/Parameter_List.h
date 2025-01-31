@@ -18,7 +18,7 @@ struct ParameterList {
 	uint16_t year = 2011;
 	
 	uint16_t vehicle_speed = 0;
-	bool computer_connected = false, screen_connected = false, radio_connected = false;
+	bool computer_connected = false, screen_connected = false, radio_connected = false, mirror_connected = false;
 	bool imid_connected = false;
 
 	uint8_t external_imid_char = 0, external_imid_lines = 0;

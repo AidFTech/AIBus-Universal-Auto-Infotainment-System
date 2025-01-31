@@ -25,7 +25,8 @@ pub fn init_default_socket() -> Option<UnixStream> {
 pub fn init_socket(socket_path: String) -> Option<UnixStream> {
 	let stream = match UnixStream::connect(socket_path) {
 		Ok(stream) => stream,
-		Err(_) => {
+		Err(e) => {
+			println!("Socket initialization error: {}", e);
 			return None;
 		}
 	};

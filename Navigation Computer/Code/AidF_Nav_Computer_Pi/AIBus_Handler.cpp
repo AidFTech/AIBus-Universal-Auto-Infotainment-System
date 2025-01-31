@@ -246,12 +246,14 @@ bool readAIByteData(AIData* ai_d, uint8_t* data, const uint8_t d_l) {
 }
 
 //Write AIBus data.
-void AIBusHandler::writeAIData(AIData* ai_d) {
-	writeAIData(ai_d, ai_d->receiver != 0xFF && ai_d->data[0] != 0x80);
+bool AIBusHandler::writeAIData(AIData* ai_d) {
+	return writeAIData(ai_d, ai_d->receiver != 0xFF && ai_d->data[0] != 0x80);
 }
 
 //Write AIBus data. Wait for an acknowledgement message if acknowledge is true.
-void AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
+bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
+	bool sent = true;
+
 	if(port_connected) {
 		uint8_t* data = new uint8_t[ai_d->l + 4];
 		ai_d->getBytes(data);
@@ -320,12 +322,13 @@ void AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 		}
 
 		if(acknowledge)
-			awaitAcknowledgement(ai_d);
+			sent = awaitAcknowledgement(ai_d);
 	} else {
 		#ifndef RPI_UART
 		printBytes(ai_d);
 		#endif
 	}
+	return sent;
 }
 
 //Send the acknowledgement message.

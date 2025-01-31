@@ -825,21 +825,26 @@ void HondaCDHandler::sendCDTrackMessage(const bool track) {
 	if((ai_cd_status&AI_CD_REPEAT_T) != 0) {
 		AIData rpt_message = getTextMessage(ID_CDC, "Repeat T", 0x1, 1, true);
 		ai_driver->writeAIData(&rpt_message, parameter_list->computer_connected);
+		this->sendMirrorMessage("Repeat T", 4, true);
 	} else if((ai_cd_status&AI_CD_REPEAT_D) != 0) {
 		AIData rpt_message = getTextMessage(ID_CDC, "Repeat D", 0x1, 1, true);
 		ai_driver->writeAIData(&rpt_message, parameter_list->computer_connected);
+		this->sendMirrorMessage("Repeat D", 4, true);
 	} else if((ai_cd_status&AI_CD_RANDOM_D) != 0) {
 		AIData rnd_message = getTextMessage(ID_CDC, "Random D", 0x1, 1, true);
 		ai_driver->writeAIData(&rnd_message, parameter_list->computer_connected);
+		this->sendMirrorMessage("Random D", 4, true);
 	} else if((ai_cd_status&AI_CD_RANDOM_A) != 0) {
 		AIData rnd_message = getTextMessage(ID_CDC, "Random A", 0x1, 1, true);
 		ai_driver->writeAIData(&rnd_message, parameter_list->computer_connected);
+		this->sendMirrorMessage("Random A", 4, true);
 	} else {
 		uint8_t clear_data[] = {0x20, 0x71, 1};
 		AIData clear_msg(sizeof(clear_data), ID_CDC, ID_NAV_COMPUTER);
 		clear_msg.refreshAIData(clear_data);
 
 		ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
+		this->sendMirrorMessage("", 4, true);
 	}
 
 	if(text_mode == TEXT_MODE_MP3) {
@@ -852,6 +857,8 @@ void HondaCDHandler::sendCDTrackMessage(const bool track) {
 
 		ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
 	}
+
+	this->sendMirrorMessage(track_text, 0, true);
 }
 
 //Send the time to the nav screen.
@@ -869,6 +876,8 @@ void HondaCDHandler::sendCDTimeMessage() {
 	}
 	AIData time_msg = getTextMessage(ID_CDC, time_text, 1, 2, true);
 	ai_driver->writeAIData(&time_msg, parameter_list->computer_connected);
+
+	this->sendMirrorMessage(time_text, 1, false);
 }
 
 //Send the song title to the nav screen.
@@ -934,13 +943,16 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 	if(meta_text.length() > len)
 		meta_text = meta_text.substring(0, len);
 
-	String meta_pound = meta_text;
-	meta_pound.replace("#", "##  ");
+	meta_text.replace("#", "##  ");
 
-	AIData meta_msg = getTextMessage(ID_CDC, meta_pound, 0, ai_field, refresh);
+	AIData meta_msg = getTextMessage(ID_CDC, meta_text, 0, ai_field, refresh);
 	ai_driver->writeAIData(&meta_msg, parameter_list->computer_connected);
 
 	sendCDIMIDTextMessage(field, meta_text);
+
+	if((text_mode == TEXT_MODE_WITH_TEXT && field == TEXT_SONG) ||
+		(text_mode == TEXT_MODE_MP3 && field == 2))
+		this->sendMirrorMessage(meta_text, 2, false);
 }
 
 void HondaCDHandler::sendCDLoadWaitMessage(const uint8_t message_type) {
@@ -1546,6 +1558,7 @@ void HondaCDHandler::clearAICDText(const bool song_title, const bool artist, con
 		clear_msg.refreshAIData(clear_data);
 
 		ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
+		this->sendMirrorMessage("", 2, false);
 	}
 
 	if(artist) {
