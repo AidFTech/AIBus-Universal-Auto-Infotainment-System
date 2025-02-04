@@ -33,7 +33,7 @@ void Main_Menu_Window::setMainMenu() {
 	main_menu->setItem("Settings", 5);
 	main_menu->setItem("Monitor Off", 6);
 	main_menu->setItem("Consumption", 11);
-	main_menu->setItem("Power Flow", 10);
+	main_menu->setItem("Information", 10);
 	main_menu->setItem("Phone Mirror", 9);
 
 	main_menu->setSelected(1);
@@ -135,6 +135,9 @@ void Main_Menu_Window::handleEnterButton() {
 				screen_off_msg.data[1] = 0x0;
 				this->attribute_list->aibus_handler->writeAIData(&screen_off_msg);
 			}
+			break;
+		case 9:
+			attribute_list->next_window = NEXT_WINDOW_MIRROR;
 			break;
 		case 10:
 			attribute_list->next_window = NEXT_WINDOW_VEHICLE_INFO;

@@ -143,8 +143,12 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 	} else if(next_window == NEXT_WINDOW_VEHICLE_INFO) {
 		misc_window = new VehicleInfoWindow(attribute_list, vehicle_info_paramters);
 		this->setActiveWindow(misc_window);
+	} else if(next_window == NEXT_WINDOW_MIRROR) {
+		misc_window = new MirrorWindow(attribute_list);
+		this->setActiveWindow(misc_window);
 	} else if(next_window == NEXT_WINDOW_LAST) {
 		misc_window = this->getLastWindow();
+		misc_window->refreshWindow();
 		this->setActiveWindow(misc_window);
 	} else if(next_window != NEXT_WINDOW_NULL) {
 		attribute_list->next_window = NEXT_WINDOW_NULL;

@@ -18,6 +18,8 @@
 #include "Vehicle_Information/Vehicle_Info_Parameters.h"
 #include "Vehicle_Information/Vehicle_Info_Window.h"
 
+#include "Window/Mirror_Window.h"
+
 #ifndef nav_window_handler_h
 #define nav_window_handler_h
 

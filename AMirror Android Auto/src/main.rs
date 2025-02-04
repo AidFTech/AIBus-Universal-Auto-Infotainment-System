@@ -226,7 +226,7 @@ fn main() {
 
 							ai_rx.push(rx_msg.clone());
 
-							if rx_msg.receiver == AIBUS_DEVICE_AMIRROR {
+							if rx_msg.receiver == AIBUS_DEVICE_AMIRROR && rx_msg.l() >= 1 && rx_msg.data[0] != 0x80 {
 								write_aibus_message(&mut amirror_stream, AIBusMessage {
 									sender: AIBUS_DEVICE_AMIRROR,
 									receiver: rx_msg.sender,

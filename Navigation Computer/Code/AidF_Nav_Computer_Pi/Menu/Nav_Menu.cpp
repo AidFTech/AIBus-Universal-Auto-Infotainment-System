@@ -231,6 +231,9 @@ void NavMenu::navigateSelected(const int8_t direction) {
 	}
 	
 	const uint16_t last_selected = this->selected;
+
+	if(this->rows == this->length && (direction == NAV_LEFT || direction == NAV_RIGHT))
+		return;
 	
 	if(direction == NAV_DOWN || direction == NAV_UP) {
 		if(((!this->loop || ((last_selected-1)/this->rows)%2 != 1) && direction == NAV_DOWN) 

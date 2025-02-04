@@ -632,6 +632,8 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 				case 5: //Scrolling.
 					this->split = !this->split;
 					createCDMainMenuOption(4);
+					scroll_timer = SCROLL_TIMER_FULL;
+					scroll_state = -1;
 					setting_changed = true;
 					break;
 				case 6: //Radio settings.
@@ -956,7 +958,78 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 }
 
 void HondaCDHandler::sendCDLoadWaitMessage(const uint8_t message_type) {
-	if(message_type == 0x16) { //Wait.
+	String message_text = "";
+
+	switch(message_type) {
+	case 0x16:
+		message_text = "Wait";
+		break;
+	case 0x17:
+		message_text = "Load";
+		break;
+	case 0x18:
+		message_text = "Loading...";
+		break;
+	case 0x10:
+		message_text = "Reading disc...";
+		break;
+	case 0x1A:
+		message_text = "Eject";
+		break;
+	case 0x1B:
+		message_text = "Ejected";
+		break;
+	case 0xF3:
+		message_text = "No Disc";
+	}
+	
+	if(message_text.length() > 0) {
+		clearCDText(true, true, true, true, true);
+		clearAICDText(false, true, true, true, true);
+		
+		AIData wait_msg = getTextMessage(ID_CDC, message_text, 0, 1, true);
+		ai_driver->writeAIData(&wait_msg, parameter_list->computer_connected);
+		
+		if(parameter_list->imid_connected) {
+			if(display_parameter == TEXT_NONE) {
+				imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status));
+			}
+		} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
+			if(message_type == 0x18) {
+				if(parameter_list->external_imid_char < 10)
+					message_text = "Loading";
+			} else if(message_type == 0x10) {
+				if(parameter_list->external_imid_lines == 1)
+					return;
+				
+				if(parameter_list->external_imid_char < 10)
+					message_text = "Reading";
+				else if(parameter_list->external_imid_char < 14)
+					message_text = "Reading...";
+			}
+			
+			AIData function_msg(4+message_text.length(), ID_CDC, ID_IMID_SCR);
+			function_msg.data[0] = 0x23;
+			function_msg.data[1] = 0x60;
+
+			if(parameter_list->external_imid_char >= message_text.length())
+				function_msg.data[2] = parameter_list->external_imid_char/2-message_text.length()/2;
+			else
+				function_msg.data[2] = 0;
+
+			if(parameter_list->external_imid_lines >= 2)
+				function_msg.data[3] = 2;
+			else
+				function_msg.data[3] = 1;
+			
+			for(int i=0;i<message_text.length();i+=1)
+				function_msg.data[i+4] = uint8_t(message_text.charAt(i));
+
+			ai_driver->writeAIData(&function_msg);
+		}
+	}
+
+	/*if(message_type == 0x16) { //Wait.
 		clearCDText(true, true, true, true, true);
 		clearAICDText(false, true, true, true, true);
 		AIData wait_msg = getTextMessage(ID_CDC, "Wait", 0, 1, true);
@@ -991,7 +1064,7 @@ void HondaCDHandler::sendCDLoadWaitMessage(const uint8_t message_type) {
 		clearAICDText(false, true, true, true, true);
 		AIData wait_msg = getTextMessage(ID_CDC, "No Disc", 0, 1, true);
 		ai_driver->writeAIData(&wait_msg, parameter_list->computer_connected);
-	}
+	}*/
 }
 
 void HondaCDHandler::startTextTimer(const uint8_t field) {
@@ -1327,7 +1400,7 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 
 					ai_driver->writeAIData(&function_msg);
 				} else {
-					//Write a status message.
+					//Write a status message- this occurs in another function.
 				}
 			}
 		}

@@ -48,13 +48,24 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 	
 	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
-	if(msg->data[0] == 0x20 || msg->data[0] == 0x23) {
+	if(msg->l >= 2 && (msg->data[0] == 0x20 || msg->data[0] == 0x23) && (msg->data[1]&0x60) == 0x60) {
 		aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 		this->interpretAudioScreenChange(msg);
 		return true;
 	} else if (msg->data[0] == 0x2B) { //Menu-related commands.
 		if(!active)
-			return false;
+			attribute_list->next_window = NEXT_WINDOW_AUDIO;
+		//TODO: If the activation message fails..?
+
+		if(attribute_list->phone_active) {
+			uint8_t mirror_off_data[] = {0x48, 0x8E, 0x0};
+			AIData mirror_off_msg(sizeof(mirror_off_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
+
+			mirror_off_msg.refreshAIData(mirror_off_data);
+			aibus_handler->writeAIData(&mirror_off_msg, attribute_list->mirror_connected);
+
+			attribute_list->phone_active = false;
+		}
 
 		bool ack = true;
 

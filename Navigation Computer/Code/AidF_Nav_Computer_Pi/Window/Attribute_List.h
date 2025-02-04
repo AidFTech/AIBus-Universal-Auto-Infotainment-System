@@ -27,6 +27,11 @@
 #define NEXT_WINDOW_SETTINGS_COLOR 11
 #define NEXT_WINDOW_SETTINGS_COLOR_PICKER 12
 #define NEXT_WINDOW_VEHICLE_INFO 13
+#define NEXT_WINDOW_MIRROR 14
+
+#define PHONE_TYPE_NONE 0
+#define PHONE_TYPE_APPLE 3
+#define PHONE_TYPE_ANDROID 5
 
 struct AttributeList {
 	SDL_Renderer* renderer;
@@ -38,10 +43,14 @@ struct AttributeList {
 
 	int8_t next_window = NEXT_WINDOW_NULL;
 	uint8_t day_night_settings = DAY_NIGHT_AUTO;
-	bool canslator_connected = false, radio_connected = false;
+	bool canslator_connected = false, radio_connected = false, mirror_connected = false;
 	
 	bool background_changed = false; //True if the background was changed by the user.
 	bool text_changed = false; //True if the text color was changed.
+
+	bool phone_active = false; //True if a phone mirror is active.
+	uint8_t phone_type = PHONE_TYPE_NONE;
+	std::string phone_name = "";
 
 	AIBusHandler* aibus_handler;
 };

@@ -208,9 +208,10 @@ impl MpvVideo {
 
 	//Save an overlay image.
 	fn save_overlay_image(&self) {
-		let mut overlay_image = RgbaImage::new(self.w as u32, self.h as u32/10);
+		let overlay_h = self.h/10;
+		let mut overlay_image = RgbaImage::new(self.w as u32, overlay_h as u32);
 
-		overlay_image = draw_filled_rect(&mut overlay_image, Rect::at(0, 0).of_size(self.w as u32, self.h as u32 / 10), self.header_color);
+		overlay_image = draw_filled_rect(&mut overlay_image, Rect::at(0, 0).of_size(self.w as u32, overlay_h as u32), self.header_color);
 
 		let font = match FontRef::try_from_slice(include_bytes!("AidF Font.ttf")) {
 			Ok(font) => font,
@@ -224,16 +225,17 @@ impl MpvVideo {
 			let height;
 			
 			if i == 0 {
-				height = (self.h/10) as f32*6.0/7.0;
+				height = (overlay_h) as f32*6.0/7.0;
 			} else {
-				height = (self.h/10) as f32*3.0/5.0;
+				height = (overlay_h) as f32*3.0/5.0;
 			}
 			let scale = PxScale {
 				x: height,
 				y: height,
 			};
 
-			draw_text_mut(&mut overlay_image, self.text_color, (i*(self.w as usize/OVERLAY_STR_COUNT)) as i32, (self.h/20 - (height as u16)/2) as i32, scale, &font, &self.overlay_str[i]);
+			let overlay_text = Self::get_symbol(self.overlay_str[i].clone());
+			draw_text_mut(&mut overlay_image, self.text_color, (i*(self.w as usize/OVERLAY_STR_COUNT)) as i32, (overlay_h/2 - (height as u16)/2) as i32, scale, &font, &overlay_text);
 		}
 
 		overlay_image = flip_vertical(&mut overlay_image);
@@ -244,6 +246,22 @@ impl MpvVideo {
 				println!("Error: {}", e);
 			}
 		}
+	}
+
+	fn get_symbol(text: String) -> String {
+		let mut ret_text = text.clone();
+		
+		ret_text = ret_text.replace("#UP ", "\u{25B2}");
+		ret_text = ret_text.replace("#DN ", "\u{25BC}");
+		ret_text = ret_text.replace("#FWD", "\u{25BA}");
+		ret_text = ret_text.replace("#REV", "\u{25C4}");
+
+		ret_text = ret_text.replace("#REW", "\u{25C4}\u{25C4}");
+		ret_text = ret_text.replace("#FF ", "\u{25BA}\u{25BA}");
+
+		ret_text = ret_text.replace("##  ", "#");
+
+		return ret_text;
 	}
 }
 

@@ -41,7 +41,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 
 	this->canslator_connected = &attribute_list->canslator_connected;
 	this->radio_connected = &attribute_list->radio_connected;
-	this->mirror_connected = false;
+	this->mirror_connected = &attribute_list->mirror_connected;
 
 	this->socket_parameters.running = &this->running;
 	this->socket_parameters.ai_serial = aibus_handler->getPortPointer();
@@ -140,7 +140,7 @@ void AidF_Nav_Computer::loop() {
 					*radio_connected = true;
 
 				if(!mirror_connected && ai_msg.sender == ID_ANDROID_AUTO)
-					mirror_connected = true;
+					*mirror_connected = true;
 
 				if(ai_msg.sender == ID_NAV_COMPUTER)
 					continue;
@@ -172,17 +172,54 @@ void AidF_Nav_Computer::loop() {
 						} else if(ai_msg.sender == ID_NAV_SCREEN && ai_msg.l >= 3 && ai_msg.data[0] == 0x30) { //Button press.
 							const uint8_t button = ai_msg.data[1], state = ai_msg.data[2]>>6;
 							if(button == 0x26 && state == 0x2) { //Audio button.
-								this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_AUDIO;
+								attribute_list->next_window = NEXT_WINDOW_AUDIO;
 							} else if(button == 0x50 && state == 0x2) { //Phone button.
-								this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_PHONE;
+								attribute_list->next_window = NEXT_WINDOW_PHONE;
 							} else if(button == 0x20 && state == 0x2) { //Home button.
-								this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_MAIN;
+								attribute_list->next_window = NEXT_WINDOW_MAIN;
 							}
 						} else if(ai_msg.sender == ID_CANSLATOR && ai_msg.l >= 1 && ai_msg.data[0] == 0x11) { //Light info.
 							InfoParameters* info_parameters = window_handler->getVehicleInfo();
 							setLightState(&ai_msg, info_parameters);
+						} else if((ai_msg.sender == ID_RADIO || ai_msg.sender == ID_ANDROID_AUTO) && ai_msg.l >= 3 && ai_msg.data[0] == 0x27 && ai_msg.data[1] == 0x30 && ai_msg.data[2] == 0x26) { //Open the audio window.
+							uint8_t mirror_off_data[] = {0x48, 0x8E, 0x0};
+							AIData mirror_off_msg(sizeof(mirror_off_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
+
+							mirror_off_msg.refreshAIData(mirror_off_data);
+							aibus_handler->writeAIData(&mirror_off_msg, attribute_list->mirror_connected);
+							
+							attribute_list->phone_active = false;
+							this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_AUDIO;
 						} else if(ai_msg.sender == ID_PHONE && ai_msg.l >= 3 && ai_msg.data[0] == 0x21 && ai_msg.data[1] == 0x00 && ai_msg.data[2] == 0x1) { //Open the phone window.
 							this->window_handler->getAttributeList()->next_window = NEXT_WINDOW_PHONE;
+						} else if(ai_msg.sender == ID_ANDROID_AUTO) {
+							if(ai_msg.l >= 3 && ai_msg.data[0] == 0x48 && ai_msg.data[1] == 0x8E) {
+								const bool last_mirror_state = attribute_list->phone_active;
+								attribute_list->phone_active = ai_msg.data[2] != 0;
+
+								if(last_mirror_state != attribute_list->phone_active) {
+									if(attribute_list->phone_active)
+										attribute_list->next_window = NEXT_WINDOW_MIRROR;
+									else
+										attribute_list->next_window = NEXT_WINDOW_MAIN;
+								}
+							} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x30) { //Phone type.
+								const uint8_t type = ai_msg.data[1];
+								attribute_list->phone_type = type;
+
+								//TODO: Only if the window is the mirror window.
+								window_handler->getActiveWindow()->refreshWindow();
+							} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x23 && ai_msg.data[1] == 0x30) { //Phone name.
+								std::string phone_name = "";
+								
+								for(int i=2;i<ai_msg.l;i+=1)
+									phone_name += char(ai_msg.data[i]);
+									
+								attribute_list->phone_name = phone_name;
+
+								//TODO: Only if the window is the mirror window.
+								window_handler->getActiveWindow()->refreshWindow();
+							}
 						}
 					}
 				}
@@ -281,7 +318,7 @@ void AidF_Nav_Computer::setDayNight(const bool night) {
 
 //Set the colors at the phone mirror.
 void AidF_Nav_Computer::setMirrorColors() {
-	if(!this->mirror_connected)
+	if(!*mirror_connected)
 		return;
 
 	const uint32_t header = attribute_list->color_profile->background, text = attribute_list->color_profile->text;
@@ -294,8 +331,8 @@ void AidF_Nav_Computer::setMirrorColors() {
 	AIData text_msg(sizeof(text_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
 	text_msg.refreshAIData(text_data);
 
-	mirror_connected = aibus_handler->writeAIData(&header_msg, this->mirror_connected);
-	aibus_handler->writeAIData(&text_msg, this->mirror_connected);
+	*mirror_connected = aibus_handler->writeAIData(&header_msg, *this->mirror_connected);
+	aibus_handler->writeAIData(&text_msg, *this->mirror_connected);
 }
 
 AidFColorProfile* AidF_Nav_Computer::getColorProfile() {

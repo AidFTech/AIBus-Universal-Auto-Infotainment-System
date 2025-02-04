@@ -578,7 +578,6 @@ impl<'a> AapHandler <'a>{
 			let request_data = msg_data;
 			match request.merge_from_bytes(request_data) {
 				Ok(_) => {
-					println!("Audio focus request on ch {}", chan);
 					self.handle_audio_focus_request(chan as u8, request);
 				}
 				Err(e) => {
@@ -597,7 +596,6 @@ impl<'a> AapHandler <'a>{
 				}
 			}
 		} else if msg_type == ProtocolMessage::ProtocolMessageMediaData as u16 || msg_type == ProtocolMessage::ProtocolMessageMediaDataTime as u16 {
-			//TODO: Project media.
 			self.send_media_ack(chan as u8);
 			if chan == VideoChannel as usize {
 				let mut video_data = VideoMsg::new();
@@ -632,6 +630,17 @@ impl<'a> AapHandler <'a>{
 			response.focus_type = 2;
 
 			self.write_message(true, chan as u8, response, ProtocolMessage::ProtocolMessageNavigationFocusResponse as u16, Duration::from_millis(5000), true);
+		} else if msg_type == ProtocolMessage::ProtocolMessageShutdownRequest as u16 {
+			self.write_block(true, chan as u8, [].to_vec(), ProtocolMessage::ProtocolMessageShutdownResponse as u16, Duration::from_millis(5000), true);
+			match self.context.try_lock() {
+				Ok(mut context) => {
+					context.phone_active = false;
+					context.phone_req_off = true;
+				}
+				Err(_) => {
+					println!("Shutdown message: Context locked.");
+				}
+			}
 		} else if chan == PhoneStatusChannel as usize {
 			if msg_type == MediaInfoMessage::MediaInfoMessagePlayback as u16 {
 				let mut playback_msg = MediaPlaybackMessage::new();
@@ -719,6 +728,7 @@ impl<'a> AapHandler <'a>{
 				}
 			} else if msg_type == MediaChannelMessageStopRequest as u16 {
 				self.channel_session[chan] = 0;
+				println!("Stop requested on channel {}", chan);
 			}
 		}
 
@@ -769,9 +779,26 @@ impl<'a> AapHandler <'a>{
 				} else if button == 0x20 && state == 0x2 { //Home.
 					if !self.home_hold {
 						self.send_button_message(InputButton::ButtonHome as u32);
+					} else {
+						match self.context.try_lock() {
+							Ok(mut context) => {
+								context.home_held = true;
+							}
+							Err(_) => {
+								println!("Handler AIBus Message: Context Locked")
+							}
+						}
 					}
 					self.home_hold = false;
 				} else if button == 0x20 && state == 0x1 {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							context.phone_active = false;
+						}
+						Err(_) => {
+							println!("Handler AIBus Message: Context Locked")
+						}
+					}
 					self.home_hold = true;
 				} else if button == 0x25 && state == 0x0 { //Next track.
 					self.send_button_message(InputButton::ButtonNext as u32);

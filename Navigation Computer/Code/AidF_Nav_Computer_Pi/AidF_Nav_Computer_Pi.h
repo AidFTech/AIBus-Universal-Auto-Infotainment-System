@@ -57,7 +57,7 @@ private:
 	uint16_t lw, lh;
 	bool night = false;
 
-	bool* canslator_connected, *radio_connected, mirror_connected;
+	bool* canslator_connected, *radio_connected, *mirror_connected;
 
 	SDL_Renderer* renderer;
 	AidFColorProfile active_color_profile, day_profile, night_profile;

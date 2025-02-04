@@ -24,7 +24,7 @@ public:
 	bool getEstablished();
 	bool getSelected();
 
-	void requestControl();
+	virtual void requestControl();
 	void sendMirrorMessage(String text, const uint8_t index, const bool refresh);
 protected:
 	EnIEBusHandler* ie_driver;
@@ -55,7 +55,7 @@ protected:
 	void displayAudioMenu(const uint8_t selected);
 	void setMenuTitle(String title);
 
-	void requestControl(const uint8_t id);
+	virtual void requestControl(const uint8_t id);
 };
 
 AIData getTextMessage(const uint8_t sender, String text, const uint8_t group, const uint8_t area, const bool refresh);

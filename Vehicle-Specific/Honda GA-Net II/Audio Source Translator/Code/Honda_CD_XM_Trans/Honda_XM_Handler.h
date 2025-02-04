@@ -59,6 +59,7 @@ public:
 	bool getXM2();
 	
 	void sendSourceNameMessage();
+	void requestControl();
 private:
 	HondaIMIDHandler* imid_handler;
 
@@ -159,6 +160,7 @@ private:
 	void createXMChannelMenu();
 
 	void clearUpperField();
+	void requestControl(const uint8_t id);
 };
 
 #endif

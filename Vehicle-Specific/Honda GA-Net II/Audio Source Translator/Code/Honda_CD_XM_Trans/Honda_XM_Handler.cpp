@@ -15,6 +15,11 @@ void HondaXMHandler::loop() {
 		preset_received = false;
 	}
 
+	if(station_received) {
+		station_request_increment += 1;
+		station_received = false;
+	}
+
 	if(source_sel) {
 		if(text_timer_enabled && text_timer >= XM_TEXT_REFRESH_TIMER) {
 			text_timer_enabled = false;
@@ -105,7 +110,6 @@ void HondaXMHandler::loop() {
 		getChannel(station_request_increment);
 
 		station_request_timer = 0;
-		station_request_increment += 1;
 
 		if(station_request_increment <= SUPPORTED_CHANNEL_COUNT)
 			station_request_wait = XM_STATION_TIMER;
@@ -265,6 +269,8 @@ void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 				}
 
 				channel_names[channel_number] = channel_name;
+
+				station_received = true;
 			}
 		}
 
@@ -344,6 +350,12 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				manual_tune = false;
 				if(*active_menu == MENU_XM)
 					createXMMainMenuOption(1);
+
+				uint8_t req_data[] = {0x77, 0x1, 0x10}; //TODO: Update if AA is requesting control.
+				AIData req_msg(sizeof(req_data), ID_XM, ID_NAV_SCREEN);
+
+				req_msg.refreshAIData(req_data);
+				ai_driver->writeAIData(&req_msg);
 			}
 
 			if(button == 0x53 && state == 0x2) { //Info button.
@@ -655,6 +667,16 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				case 2: //Direct tune.
 					manual_tune = !manual_tune;
 					createXMMainMenuOption(1);
+
+					this->requestControl();
+					if(!manual_tune) {
+						uint8_t req_data[] = {0x77, 0x1, 0x10}; //TODO: Update if AA is requesting control.
+						AIData req_msg(sizeof(req_data), ID_XM, ID_NAV_SCREEN);
+
+						req_msg.refreshAIData(req_data);
+						ai_driver->writeAIData(&req_msg);
+					}
+					
 					break;
 				case 3: //Channel list.
 					createXMChannelMenu();
@@ -662,7 +684,13 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				case 4: //Manual entry.
 					createXMDirectMenu();
 					break;
-				case 5: //Audio settings.
+				case 5: //Scroll.
+					this->split = !this->split;
+					createXMMainMenuOption(4);
+					scroll_timer = XM_SCROLL_TIMER_FULL;
+					scroll_state = -1;
+					break;
+				case 6: //Audio settings.
 					//TODO: Audio menu from radio.
 					break;
 				}
@@ -1076,8 +1104,8 @@ void HondaXMHandler::sendIMIDNumberMessage() {
 	} else if(parameter_list->external_imid_xm) {
 		sendAINumberMessage(ID_IMID_SCR);
 	} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
+		String xm_text = F("XM");
 		if(parameter_list->external_imid_char > 8) {
-			String xm_text = F("XM");
 			if(xm2)
 				xm_text += "2";
 			else
@@ -1087,22 +1115,30 @@ void HondaXMHandler::sendIMIDNumberMessage() {
 				xm_text += "-";
 				xm_text += int(current_preset);
 			}
-
-			xm_text += " CH";
-			xm_text += int(*channel);
-
-			uint8_t xm_data[4 + xm_text.length()];
-			xm_data[0] = 0x23;
-			xm_data[1] = 0x60;
-			xm_data[2] = parameter_list->external_imid_char/2 - xm_text.length()/2;
-			xm_data[3] = 0x1;
-			for(int i=0;i<xm_text.length();i+=1)
-				xm_data[i+4] = uint8_t(xm_text.charAt(i));
-
-			AIData xm_msg(sizeof(xm_data), ID_XM, ID_IMID_SCR);
-			xm_msg.refreshAIData(xm_data);
-			ai_driver->writeAIData(&xm_msg);
 		}
+
+		xm_text += " CH";
+
+		if(parameter_list->external_imid_char == 8) {
+			if(*channel < 100)
+				xm_text += " ";
+			if(*channel < 10)
+				xm_text += " ";
+		}
+
+		xm_text += int(*channel);
+
+		uint8_t xm_data[4 + xm_text.length()];
+		xm_data[0] = 0x23;
+		xm_data[1] = 0x60;
+		xm_data[2] = parameter_list->external_imid_char/2 - xm_text.length()/2;
+		xm_data[3] = 0x1;
+		for(int i=0;i<xm_text.length();i+=1)
+			xm_data[i+4] = uint8_t(xm_text.charAt(i));
+
+		AIData xm_msg(sizeof(xm_data), ID_XM, ID_IMID_SCR);
+		xm_msg.refreshAIData(xm_data);
+		ai_driver->writeAIData(&xm_msg);
 	}
 }
 
@@ -1348,7 +1384,7 @@ void HondaXMHandler::clearAIXMText(const bool song_title, const bool artist, con
 }
 
 void HondaXMHandler::createXMMainMenu() {
-	const uint8_t menu_size = 255;
+	const uint8_t menu_size = 6;
 	startAudioMenu(menu_size, menu_size, false, "XM Tuner Settings");
 
 	elapsedMillis cancel_wait;
@@ -1389,7 +1425,13 @@ void HondaXMHandler::createXMMainMenuOption(const uint8_t option) {
 		appendAudioMenu(3, "Manual Entry");
 		break;
 	case 4:
-		appendAudioMenu(4, "Audio Settings");
+		if(split)
+			appendAudioMenu(4, "#ROF Scroll Info Text");
+		else
+			appendAudioMenu(4, "#RON Scroll Info Text");
+		break;
+	case 5:
+		appendAudioMenu(5, "Audio Settings");
 		break;
 	}
 }
@@ -1603,4 +1645,22 @@ void HondaXMHandler::createXMChannelMenu() {
 		displayAudioMenu(*channel + 1);
 	else
 		displayAudioMenu(1);
+}
+
+void HondaXMHandler::requestControl() {
+	requestControl(ID_XM);
+}
+
+void HondaXMHandler::requestControl(const uint8_t id) {
+	if(id == 0)
+		return;
+
+	uint8_t request_data[] = {0x77, id, 0x80};
+	if(manual_tune)
+		request_data[2] |= 0x10;
+
+	AIData request_msg(sizeof(request_data), this->device_ai_id, ID_NAV_SCREEN);
+	request_msg.refreshAIData(request_data);
+
+	ai_driver->writeAIData(&request_msg, parameter_list->screen_connected);
 }
