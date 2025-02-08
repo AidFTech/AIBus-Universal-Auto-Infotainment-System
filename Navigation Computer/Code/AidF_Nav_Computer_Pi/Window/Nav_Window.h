@@ -22,7 +22,10 @@ public:
 	virtual void drawWindow();
 	virtual void clearWindow();
 	virtual void refreshWindow();
+	virtual void exitWindow();
+	
 	virtual bool handleAIBus(AIData* msg);
+	
 	virtual void setActive(bool active);
 	virtual bool getActive();
 

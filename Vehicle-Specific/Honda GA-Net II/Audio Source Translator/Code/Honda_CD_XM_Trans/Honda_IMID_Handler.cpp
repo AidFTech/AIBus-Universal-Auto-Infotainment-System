@@ -146,7 +146,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		AIData screen_field_msg(sizeof(screen_field_data), ID_IMID_SCR, the_message->sender);
 		screen_field_msg.refreshAIData(screen_field_data);
 
-		uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM};
+		uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM, ID_ANDROID_AUTO};
 		AIData screen_oem_msg(sizeof(screen_oem_data), ID_IMID_SCR, the_message->sender);
 		screen_oem_msg.refreshAIData(screen_oem_data);
 
@@ -293,6 +293,34 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		writeIMIDSiriusTextMessage(field, text);
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+	} else if(the_message->sender == ID_ANDROID_AUTO && the_message-> l >= 2 && the_message->data[0] == 0x23 && (the_message->data[1]&0xF0) == 0x60) { //Mirror text message.
+		ack = false;
+		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+		
+		uint8_t leader = 0xFF;
+
+		switch(the_message->data[1]) {
+		case 0x61:
+			leader = 0x42;
+			break;
+		case 0x62:
+			leader = 0x43;
+			break;
+		case 0x63:
+			leader = 0x44;
+			break;
+		case 0x64:
+			leader = 0x45;
+			break;
+		default:
+			return;
+		}
+
+		String sent_text = "";
+		for(int i=2;i<the_message->l;i+=1)
+			sent_text += char(the_message->data[i]);
+
+		this->setBTText(leader, sent_text);
 	}
 
 	if(ack)
@@ -314,7 +342,7 @@ void HondaIMIDHandler::writeScreenLayoutMessage() {
 	AIData screen_field_msg(sizeof(screen_field_data), ID_IMID_SCR, 0xFF);
 	screen_field_msg.refreshAIData(screen_field_data);
 
-	uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM};
+	uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM, ID_ANDROID_AUTO};
 	AIData screen_oem_msg(sizeof(screen_oem_data), ID_IMID_SCR, 0xFF);
 	screen_oem_msg.refreshAIData(screen_oem_data);
 
@@ -515,8 +543,197 @@ bool HondaIMIDHandler::setIMIDSource(const uint8_t source, const uint8_t subsour
 		sendFunctionMessage(ie_driver, new_source, IE_ID_IMID, source_data, sizeof(source_data));
 		getIEAckMessage(device_ie_id);
 		return true;
+	} else if(source == ID_ANDROID_AUTO) {
+		uint8_t source_data[] = {0x23, 0x0, 0x0};
+		sendFunctionMessage(ie_driver, new_source, IE_ID_IMID, source_data, sizeof(source_data));
+		getIEAckMessage(device_ie_id);
+
+		if(new_source)
+			setBTMode();
+
+		return true;
 	} else
 		return false;
+}
+
+//Set the screen to show "iPod."
+void HondaIMIDHandler::setIPodMode() {
+	uint8_t ipod_data_0[] = {0x10, 0x12, 0x11, 0x0, 0x0};
+	uint8_t ipod_data_1[] = {0x60, 0x2, 0x11, 0x0, 0x1, 0x0, 0xB, 0x10, 0x0, 0x30, 0x10, 0x0, 0x9, 0x0, 0x0, 0x0};
+	uint8_t ipod_data_2[] = {0x60, 0x12, 0x11, 0x0, 0x0, 0x1, 0x0, 0x0};
+	uint8_t ipod_data_3[] = {0x60, 0x22, 0x11, 0x0, 0x3, 0xA2, 0x7, 0x1};
+	uint8_t ipod_data_4[] = {0x60, 0x22, 0x11, 0x0, 0x3, 0xA1, 0x0, 0x0};
+	uint8_t ipod_data_5[] = {0x60, 0x22, 0x11, 0x0, 0x3, 0xA0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF1, 0xFF, 0xFF, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+	IE_Message ipod_msg_0(sizeof(ipod_data_0), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message ipod_msg_1(sizeof(ipod_data_1), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message ipod_msg_2(sizeof(ipod_data_2), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message ipod_msg_3(sizeof(ipod_data_3), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message ipod_msg_4(sizeof(ipod_data_4), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message ipod_msg_5(sizeof(ipod_data_5), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+
+	ipod_msg_0.refreshIEData(ipod_data_0);
+	ipod_msg_1.refreshIEData(ipod_data_1);
+	ipod_msg_2.refreshIEData(ipod_data_2);
+	ipod_msg_3.refreshIEData(ipod_data_3);
+	ipod_msg_4.refreshIEData(ipod_data_4);
+	ipod_msg_5.refreshIEData(ipod_data_5);
+
+	ie_driver->sendMessage(&ipod_msg_0, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&ipod_msg_1, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&ipod_msg_2, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&ipod_msg_3, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&ipod_msg_4, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&ipod_msg_5, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+		
+	clearIPodText(0xBD);
+	clearIPodText(0xB8);
+	clearIPodText(0xBA);
+	clearIPodText(0xB9);
+	clearIPodText(0xBF);
+		
+	setIPodText(0xBD, "");
+	setIPodText(0xB8, "");
+	setIPodText(0xBA, "");
+	setIPodText(0xB9, "");
+	setIPodText(0xBF, "");
+}
+
+//Clear the iPod text fields.
+void HondaIMIDHandler::clearIPodText(const uint8_t field) {
+	uint8_t text_data[] = {0x60, 0x22, 0x11, 0x0, 0x3, field, 0x2, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
+
+
+	IE_Message text_msg(sizeof(text_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	text_msg.refreshIEData(text_data);
+
+	ie_driver->sendMessage(&text_msg, true, true);
+	
+	text_data[7] = 0x12;
+	text_msg.refreshIEData(text_data);
+	ie_driver->sendMessage(&text_msg, true, true);
+}
+
+//Set an iPod/USB(?) text field.
+void HondaIMIDHandler::setIPodText(const uint8_t field, String text) {
+	uint8_t text_data[] = {0x60, 0x22, 0x11, 0x0, 0x3, field, 0x2, 0x2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+	
+	int limit = text.length();
+	if(limit > 16)
+		limit = 16;
+
+	for(int i=0;i<limit;i+=1)
+		text_data[i+8] = uint8_t(text.charAt(i));
+
+	IE_Message text_msg(sizeof(text_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	text_msg.refreshIEData(text_data);
+
+	ie_driver->sendMessage(&text_msg, true, true);
+}
+
+//Set the screen to show full BTA.
+void HondaIMIDHandler::setBTMode() {
+	this->imid_mode = ID_ANDROID_AUTO;
+
+	uint8_t bta_data1[] = {0x60, 0x23, 0x11, 0x0, 0xD1, 0x10, 0x0, 0x7A};
+	uint8_t bta_data2[] = {0x60, 0x23, 0x11, 0x0, 0xD1, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
+	uint8_t bta_data3[] = {0x60, 0x23, 0x11, 0x0, 0xD1, 0x0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0, 0xFF, 0xF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+	uint8_t bta_data4[] = {0x60, 0x23, 0x11, 0x0, 0x1, 0x0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0, 0xFF, 0xF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+	uint8_t bta_data5[] = {0x60, 0x23, 0x11, 0x0, 0x1, 0x1, 0xFF, 0x3, 0x14, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1}; //Byte [10] indicates BT connected.
+	uint8_t bta_data6[] = {0x60, 0x23, 0x11, 0x0, 0x1, 0x0, 0xFF, 0xFF, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0, 0xFF, 0xF0, 0x0, 0xFF, 0xF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+	IE_Message bta_msg1(sizeof(bta_data1), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message bta_msg2(sizeof(bta_data2), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message bta_msg3(sizeof(bta_data3), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message bta_msg4(sizeof(bta_data4), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message bta_msg5(sizeof(bta_data5), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message bta_msg6(sizeof(bta_data6), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+
+	bta_msg1.refreshIEData(bta_data1);
+	bta_msg2.refreshIEData(bta_data2);
+	bta_msg3.refreshIEData(bta_data3);
+	bta_msg4.refreshIEData(bta_data4);
+	bta_msg5.refreshIEData(bta_data5);
+	bta_msg6.refreshIEData(bta_data6);
+
+	ie_driver->sendMessage(&bta_msg1, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&bta_msg2, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&bta_msg3, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&bta_msg4, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&bta_msg5, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&bta_msg6, true, true);
+}
+
+//Set a BTA text field.
+void HondaIMIDHandler::setBTText(const uint8_t field, String text) {
+	if((this->imid_mode&0xFF) != ID_ANDROID_AUTO)
+		this->setBTMode();
+
+	uint8_t text_data[] = {0x60, 0x23, 0x11, 0x0, 0x1, field, 0x6, 0x1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+	uint8_t text_data2[] = {0x60, 0x23, 0x11, 0x0, 0x1, field, 0x6, 0x11, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+	int limit = text.length();
+	if(limit > 16)
+		limit = 16;
+
+	for(int i=0;i<limit;i+=1)
+		text_data[i+8] = uint8_t(text.charAt(i));
+
+	IE_Message text_msg(sizeof(text_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	text_msg.refreshIEData(text_data);
+
+	ie_driver->sendMessage(&text_msg, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	if(text.length() > 16) {
+		text = text.substring(16);
+
+		limit = text.length();
+		if(limit > 16)
+			limit = 16;
+
+		for(int i=0;i<limit;i+=1)
+			text_data2[i+8] = uint8_t(text.charAt(i));
+	}
+
+	text_msg.refreshIEData(text_data2);
+
+	ie_driver->sendMessage(&text_msg, true, true);
+	if(!getIEAckMessage(device_ie_id))
+	return;
 }
 
 void HondaIMIDHandler::writeIMIDRadioMessage(const uint16_t frequency, const int8_t decimal, const uint8_t preset, const uint8_t stereo_mode) {

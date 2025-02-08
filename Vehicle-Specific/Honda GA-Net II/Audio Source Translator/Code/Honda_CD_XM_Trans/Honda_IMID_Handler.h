@@ -71,6 +71,13 @@ private:
 
 	void sendSourceRequest(const uint8_t source);
 	bool getTuningMessage(uint8_t* frequency_bytes, uint8_t* subsource_byte, uint8_t* stereo_byte, uint8_t* hd_byte);
+
+	void setIPodMode();
+	void clearIPodText(const uint8_t field);
+	void setIPodText(const uint8_t field, String text);
+
+	void setBTMode();
+	void setBTText(const uint8_t field, String text);
 };
 
 #endif

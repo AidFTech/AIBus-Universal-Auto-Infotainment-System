@@ -922,13 +922,13 @@ void SourceHandler::clearMenu() {
 
 //Send the initial request to create a menu. Return whether creation is allowed.
 bool SourceHandler::createMenu(const String title, const int items) {
-	uint8_t audio_window_data[] = {0x27, 0x30, 0x26};
-	AIData audio_window_msg(sizeof(audio_window_data), ID_RADIO, ID_NAV_COMPUTER);
-	audio_window_msg.refreshAIData(audio_window_data);
-	bool ack = ai_handler->writeAIData(&audio_window_msg);
+	//uint8_t audio_window_data[] = {0x27, 0x30, 0x26};
+	//IData audio_window_msg(sizeof(audio_window_data), ID_RADIO, ID_NAV_COMPUTER);
+	//audio_window_msg.refreshAIData(audio_window_data);
+	//bool ack = ai_handler->writeAIData(&audio_window_msg);
 
-	if(!ack)
-		return false;
+	//if(!ack)
+	//	return false;
 
 	uint8_t menu_header_data[12 + title.length()];
 
@@ -951,7 +951,7 @@ bool SourceHandler::createMenu(const String title, const int items) {
 
 	AIData menu_header(sizeof(menu_header_data), ID_RADIO, ID_NAV_COMPUTER);
 	menu_header.refreshAIData(menu_header_data);
-	ack = ai_handler->writeAIData(&menu_header);
+	bool ack = ai_handler->writeAIData(&menu_header);
 
 	if(!ack)
 		return false;
@@ -995,8 +995,8 @@ void SourceHandler::createSourceMenu() {
 		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
 		option_msg.refreshAIData(option_data);
 		bool ack = ai_handler->writeAIData(&option_msg);
-		if(!ack)
-			return;
+		//if(!ack)
+		//	return;
 	}
 
 	uint8_t display_data[] = {0x2B, 0x52, 0x1};

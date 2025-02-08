@@ -118,7 +118,7 @@ pub struct AapHandler <'a> {
 
 const EMPTY_DATA_ARRAY: Vec<u8> = Vec::new();
 
-impl<'a> AapHandler <'a>{
+impl<'a> AapHandler <'a> {
 	pub fn new(context: &'a Arc<Mutex<Context>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, rd_audio: &'a Arc<Mutex<RdAudio>>, nav_audio: &'a Arc<Mutex<RdAudio>>, w: u16, h: u16) -> Self {
 		return Self {
 			usb_handler: AndroidUSBConnection::new(),

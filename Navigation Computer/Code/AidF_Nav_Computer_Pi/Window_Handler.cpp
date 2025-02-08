@@ -114,6 +114,9 @@ void Window_Handler::setActiveWindow(NavWindow* new_window) {
 
 void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_window, NavWindow* phone_window, NavWindow* main_window) {
 	const int next_window = attribute_list->next_window;
+	
+	if(next_window != NEXT_WINDOW_NULL)
+		this->active_window->exitWindow();
 
 	if(next_window == NEXT_WINDOW_AUDIO) {
 		audio_window->setActive(true);

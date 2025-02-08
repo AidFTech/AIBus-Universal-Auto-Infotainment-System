@@ -13,7 +13,7 @@ use crate::mirror::handler::*;
 
 use crate::text_split::split_text;
 
-const APP_NAME: u8 = 0x0;
+const APP_NAME: u8 = 0x4;
 const SONG_NAME: u8 = 0x1;
 const ARTIST_NAME: u8 = 0x2;
 const ALBUM_NAME: u8 = 0x3;
@@ -248,6 +248,16 @@ impl <'a> AMirror<'a> {
 			}
 
 			self.write_aibus_message(phone_type_msg);
+			
+			if context.audio_text && context.imid_native_mirror {
+				let phone_type_msg = AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_IMID,
+					data: [0x30, context.phone_type].to_vec(),
+				};
+
+				self.write_aibus_message(phone_type_msg);
+			}
 
 			if context.audio_selected && context.audio_text {
 				if context.phone_type == 0 {
@@ -378,7 +388,7 @@ impl <'a> AMirror<'a> {
 				if context.audio_text {
 					self.write_nav_text(context.song_title.clone(), 1, 0, true);
 
-					if context.imid_native_mirror  {
+					if context.imid_native_mirror && self.imid_scroll < 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.song_title.clone(), SONG_NAME);
 					} else if context.imid_row_count > 0 && context.imid_text_len > 0 && context.phone_type != 0 {
 						if self.display_title && self.imid_scroll < 0 {
@@ -409,7 +419,7 @@ impl <'a> AMirror<'a> {
 				if context.audio_text {
 					self.write_nav_text(context.artist.clone(), 2, 0, true);
 
-					if context.imid_native_mirror {
+					if context.imid_native_mirror && self.imid_scroll < 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.artist.clone(), ARTIST_NAME);
 					} else if context.imid_row_count > 0 && context.imid_text_len > 0 && context.phone_type != 0 {
 						if self.display_artist && self.imid_scroll < 0 {
@@ -443,7 +453,7 @@ impl <'a> AMirror<'a> {
 				if context.audio_text {
 					self.write_nav_text(context.album.clone(), 3, 0, true);
 
-					if context.imid_native_mirror {
+					if context.imid_native_mirror && self.imid_scroll < 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.album.clone(), ALBUM_NAME);
 					} else if context.imid_row_count > 0 && context.imid_text_len > 0 && context.phone_type != 0 {
 						if self.display_album && self.imid_scroll < 0 {
@@ -480,7 +490,7 @@ impl <'a> AMirror<'a> {
 				if context.audio_text {
 					self.write_nav_text(context.app.clone(), 4, 0, true);
 
-					if context.imid_native_mirror {
+					if context.imid_native_mirror && self.imid_scroll < 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.app.clone(), APP_NAME);
 					} else if context.imid_row_count > 0 && context.imid_text_len > 0 && context.phone_type != 0 {
 						if self.display_app && self.imid_scroll < 0 {
@@ -1486,6 +1496,12 @@ impl <'a> AMirror<'a> {
 		};
 
 		if context.imid_native_mirror {
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_IMID,
+				data: [0x30, context.phone_type].to_vec(),
+			});
+
 			let mut phone_name_data = [0x23, 0x30].to_vec();
 			let phone_name_bytes = context.phone_name.as_bytes();
 
@@ -1831,7 +1847,7 @@ impl <'a> AMirror<'a> {
 					req_text = "#RON".to_string();
 				}
 
-				req_text += "Scroll Info Text";
+				req_text += " Scroll Info Text";
 			}
 		} else if option == 1 {
 			if self.auto_music_start {

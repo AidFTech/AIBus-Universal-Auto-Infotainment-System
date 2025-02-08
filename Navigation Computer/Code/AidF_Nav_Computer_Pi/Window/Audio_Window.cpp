@@ -53,20 +53,6 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 		this->interpretAudioScreenChange(msg);
 		return true;
 	} else if (msg->data[0] == 0x2B) { //Menu-related commands.
-		if(!active)
-			attribute_list->next_window = NEXT_WINDOW_AUDIO;
-		//TODO: If the activation message fails..?
-
-		if(attribute_list->phone_active) {
-			uint8_t mirror_off_data[] = {0x48, 0x8E, 0x0};
-			AIData mirror_off_msg(sizeof(mirror_off_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
-
-			mirror_off_msg.refreshAIData(mirror_off_data);
-			aibus_handler->writeAIData(&mirror_off_msg, attribute_list->mirror_connected);
-
-			attribute_list->phone_active = false;
-		}
-
 		bool ack = true;
 
 		if(msg->data[1] == 0x5A) { //Initialize a new audio menu.
@@ -93,6 +79,23 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 		} else if(msg->data[1] == 0x52 && this->settings_menu != NULL) { //Display the menu.
 			if(msg->sender != this->settings_menu_sender)
 				return false;
+				
+			if(!active) {
+				ack = false;
+				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+				
+				attribute_list->next_window = NEXT_WINDOW_AUDIO;
+
+				if(attribute_list->phone_active && attribute_list->phone_type != 0 && attribute_list->mirror_connected) {
+					uint8_t mirror_off_data[] = {0x48, 0x8E, 0x0};
+					AIData mirror_off_msg(sizeof(mirror_off_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
+
+					mirror_off_msg.refreshAIData(mirror_off_data);
+					aibus_handler->writeAIData(&mirror_off_msg, attribute_list->mirror_connected);
+
+					attribute_list->phone_active = false;
+				}
+			}
 
 			const uint8_t selection = msg->data[2];
 			this->settings_menu->setSelected(selection);
@@ -245,6 +248,15 @@ void Audio_Window::refreshWindow() {
 		this->audio_menu->refreshItems();
 	if(this->settings_menu != NULL)
 		this->settings_menu->refreshItems();
+}
+
+//Exit window function.
+void Audio_Window::exitWindow() {
+	if(this->settings_menu_active) {
+		this->settings_menu_active = false;
+		this->settings_menu_prep = false;
+		sendMenuClose();
+	}
 }
 
 //Change the audio screen.

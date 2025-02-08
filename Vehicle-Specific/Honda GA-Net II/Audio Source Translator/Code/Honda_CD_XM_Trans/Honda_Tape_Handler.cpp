@@ -240,6 +240,8 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			//	clearExternalIMID();
 			sendTapeTextMessage();
 			sendFunctionTextMessage();
+
+			sendStatusRequest();
 		}
 	} else if(sender == ID_NAV_SCREEN) {
 		if(!this->source_sel) {
@@ -356,6 +358,14 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button, const uint8_t tra
 	
 	ie_driver->sendMessage(&button_message, true, true);
 	getIEAckMessage(device_ie_id);
+}
+
+void HondaTapeHandler::sendStatusRequest() {
+	if(!source_sel)
+		return;
+
+	uint8_t function_data[] = {0x13, 0x0};
+	sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function_data, sizeof(function_data));
 }
 
 bool HondaTapeHandler::getDisplaySymbol() {

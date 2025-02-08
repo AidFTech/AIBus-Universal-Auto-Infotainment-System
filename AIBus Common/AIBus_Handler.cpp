@@ -173,7 +173,7 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 	const unsigned int full_length = ai_d->l + 4;
 	ai_d->getBytes(data);
 
-	if(this->rx_pin >= 0 && (ai_d->l > 1 || (ai_d->l >= 1 && ai_d->data[0] != 0x80))) {
+	if(this->rx_pin >= 0) { //&& (ai_d->l > 1 || (ai_d->l >= 1 && ai_d->data[0] != 0x80))) {
 		elapsedMicros timer;
 		while(timer < AI_DELAY_U) {
 			while(micros() >= UINT32_MAX - AI_DELAY_U*2);
@@ -209,7 +209,8 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 				}
 			}
 		}
-	}
+	} else if(ai_d->l == 1 && ai_d->data[0] == 0x80) //Acknowledgement we don't need to reacknowledge.
+		ack_sent = true;
 
 	if(!ack_sent && acknowledge)
 		ack_sent = awaitAcknowledgement(ai_d);

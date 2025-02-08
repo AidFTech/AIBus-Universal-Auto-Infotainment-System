@@ -282,7 +282,7 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			#ifndef RPI_UART
 			int cached_bytes = aiserialBytesAvailable(this->ai_port);
 			#endif
-			while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 20) {
+			while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 30) {
 				#ifdef RPI_UART
 				if(gpioRead(AI_RX) == 0)
 					start = clock();
@@ -294,7 +294,7 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 				#endif
 			}
 			start = clock();
-			while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 20);
+			while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 30);
 		}
 
 		for(uint8_t i=0;i<ai_d->l+4;i+=1)

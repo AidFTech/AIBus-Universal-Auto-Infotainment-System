@@ -15,17 +15,19 @@ MirrorWindow::MirrorWindow(AttributeList *attribute_list) : NavWindow(attribute_
 		message_box->setText("Phone not connected.");
 	}
 
-	this->writeConnectMessage();
+	this->writeConnectDisconnectMessage(true);
 }
 
 MirrorWindow::~MirrorWindow() {
+	this->attribute_list->phone_active = false;
+
 	delete title_box;
 	delete message_box;
 }
 
 void MirrorWindow::refreshWindow() {
 	if(this->active && attribute_list->phone_type != 0)
-		this->writeConnectMessage();
+		this->writeConnectDisconnectMessage(true);
 
 	if(this->attribute_list->phone_type != 0) {
 		if(this->attribute_list->phone_name.length() > 0)
@@ -48,16 +50,23 @@ void MirrorWindow::drawWindow() {
 	this->message_box->drawText();
 }
 
-//Send the connect message to the mirror.
-void MirrorWindow::writeConnectMessage() {
-	if(attribute_list->phone_active)// || attribute_list->phone_type == 0) //Phone is already active or not connected, we don't need to send this.
+void MirrorWindow::exitWindow() {
+	this->writeConnectDisconnectMessage(false);
+}
+
+//Send the connect or disconnect message to the mirror.
+void MirrorWindow::writeConnectDisconnectMessage(const bool connect) {
+	if((attribute_list->phone_active && connect) || (!connect && !attribute_list->phone_active))// //Phone is already active, we don't need to send this.
 		return;
 
-	uint8_t connect_data[] = {0x48, 0x8E, 0x1};
+	uint8_t connect_data[] = {0x48, 0x8E, 0x0};
 	AIData connect_msg(sizeof(connect_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
+
+	if(connect)
+		connect_data[2] = 0x1;
 
 	connect_msg.refreshAIData(connect_data);
 	attribute_list->aibus_handler->writeAIData(&connect_msg, attribute_list->mirror_connected);
 
-	attribute_list->phone_active = true;
+	attribute_list->phone_active = connect;
 }

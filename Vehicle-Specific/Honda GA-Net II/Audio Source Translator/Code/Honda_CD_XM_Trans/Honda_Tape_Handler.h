@@ -66,6 +66,8 @@ private:
 	void sendButtonMessage(const uint8_t button);
 	void sendButtonMessage(const uint8_t button, const uint8_t tracks);
 
+	void sendStatusRequest();
+
 	void sendTapeUpdateMessage(const uint8_t receiver);
 	void sendTapeTextMessage();
 	void sendFunctionTextMessage();

@@ -29,6 +29,10 @@ void NavWindow::clearWindow() {
 		this->attribute_list->br->drawBackground(this->renderer, 0,0,this->w, this->h);
 }
 
+//Function to be called when the window is closed.
+void NavWindow::exitWindow() {
+}
+
 //Generic AIBus-handling message.
 bool NavWindow::handleAIBus(AIData* msg) {
 	return false;

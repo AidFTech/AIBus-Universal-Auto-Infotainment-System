@@ -14,7 +14,9 @@ public:
 	void refreshWindow();
 	void drawWindow();
 
-	void writeConnectMessage();
+	void exitWindow();
+
+	void writeConnectDisconnectMessage(const bool connect);
 private:
 	TextBox* title_box;
 

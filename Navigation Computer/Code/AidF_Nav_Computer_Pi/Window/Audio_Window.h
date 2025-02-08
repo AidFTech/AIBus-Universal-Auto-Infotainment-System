@@ -39,6 +39,8 @@ public:
 	void drawWindow();
 	void refreshWindow();
 
+	void exitWindow();
+
 	bool handleAIBus(AIData* msg);
 	void setText(const uint8_t group, const uint8_t area, std::string text);
 private:

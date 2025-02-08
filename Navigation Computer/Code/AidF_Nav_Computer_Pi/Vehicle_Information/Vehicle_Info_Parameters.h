@@ -51,6 +51,9 @@ struct InfoParameters {
 	bool charge_assist_meter = false; //True if a charge/assist meter is provided.
 	uint8_t hybrid_features = 0; //The hybrid features present.
 	uint8_t hybrid_status_main = 0; //The hybrid system status.
+
+	uint8_t hybrid_battery_state = 0; //The hybrid battery state of charge.
+	uint8_t charge_assist_pos = 0x7F; //The position of the charge/assist meter, centered at 0x7F.
 };
 
 void setLightState(AIData* light_msg, InfoParameters* info_parameters);
