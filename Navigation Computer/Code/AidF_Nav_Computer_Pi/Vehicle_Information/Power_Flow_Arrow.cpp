@@ -128,6 +128,191 @@ void PowerFlowArrow::drawFilled(const uint32_t fill_color1, const uint32_t fill_
 	SDL_SetRenderDrawColor(renderer, last_r, last_g, last_b, last_a);
 }
 
+PowerFlowCorner::PowerFlowCorner(SDL_Renderer* renderer, const int16_t x, const int16_t y, const uint16_t r) {
+	this->renderer = renderer;
+	this->x = x;
+	this->y = y;
+	this->r = r;
+}
+
+PowerFlowCorner::~PowerFlowCorner() {
+
+}
+
+//Draw the outline with no flow.
+void PowerFlowCorner::drawOutline(const uint32_t fill_color, const uint32_t outline_color, const uint8_t angle) {
+	uint8_t last_r, last_g, last_b, last_a;
+	SDL_GetRenderDrawColor(renderer, &last_r, &last_g, &last_b, &last_a);
+
+	for(int i=0;i<256;i+=1)
+		this->drawAngleLine(angle, i, fill_color);
+
+	SDL_SetRenderDrawColor(renderer, getRedComponent(outline_color), getGreenComponent(outline_color), getBlueComponent(outline_color), getAlphaComponent(outline_color));
+	this->drawArc(angle);
+
+	int rect_x = x, rect_y = y;
+
+	if(angle == CORNER_ANGLE_UR || angle == CORNER_ANGLE_DR)
+		rect_x = x + r - 1;
+	if(angle == CORNER_ANGLE_DL || angle == CORNER_ANGLE_DR)
+		rect_y = y + r - 1;
+
+	SDL_Rect dot_rect = {rect_x, rect_y, 2, 2};
+	SDL_RenderFillRect(renderer, &dot_rect);
+
+	SDL_SetRenderDrawColor(renderer, last_r, last_g, last_b, last_a);
+}
+
+//Draw the filled outline.
+void PowerFlowCorner::drawFilled(const uint32_t fill_color1, const uint32_t fill_color2, const uint32_t outline_color, const int frame, const uint8_t angle, const bool cw) {
+	uint8_t last_r, last_g, last_b, last_a;
+	SDL_GetRenderDrawColor(renderer, &last_r, &last_g, &last_b, &last_a);
+
+	const int line_count = 2*this->r;
+
+	uint32_t lines[line_count];
+	for(int i=0;i<line_count;i+=1) {
+		int position = i + frame*(cw ? -1 : 1);
+		while(position < 0)
+			position += 3*GRAD_W;
+
+		const int state = (position/GRAD_W)%3;
+		if(state == 0) {
+			const uint8_t norm_pos = (position%GRAD_W)*256/GRAD_W;
+			lines[i] = calculateGradient(fill_color1, fill_color2, norm_pos);
+		} else if(state == 1) {
+			const uint8_t norm_pos = (position%GRAD_W)*256/GRAD_W;
+			lines[i] = calculateGradient(fill_color2, fill_color1, norm_pos);
+		} else
+			lines[i] = fill_color1;
+	}
+
+	for(int i=0;i<256;i+=1) {
+		int line_pos = i*line_count/256;
+		while(line_pos < 0)
+			line_pos += line_count;
+			
+		this->drawAngleLine(angle, i, lines[line_pos]);
+	}
+
+	SDL_SetRenderDrawColor(renderer, getRedComponent(outline_color), getGreenComponent(outline_color), getBlueComponent(outline_color), getAlphaComponent(outline_color));
+	this->drawArc(angle);
+
+	int rect_x = x, rect_y = y;
+
+	if(angle == CORNER_ANGLE_UR || angle == CORNER_ANGLE_DR)
+		rect_x = x + r - 1;
+	if(angle == CORNER_ANGLE_DL || angle == CORNER_ANGLE_DR)
+		rect_y = y + r - 1;
+
+	SDL_Rect dot_rect = {rect_x, rect_y, 2, 2};
+	SDL_RenderFillRect(renderer, &dot_rect);
+
+	SDL_SetRenderDrawColor(renderer, last_r, last_g, last_b, last_a);
+}
+
+//Draw an arc.
+void PowerFlowCorner::drawArc(const uint8_t angle) {
+	const int radius = this->r + 1;
+
+	int center_x = this->x, center_y = this->y;
+	if(angle == CORNER_ANGLE_DR || angle == CORNER_ANGLE_UR)
+		center_x = this->x + this->r;
+	if(angle == CORNER_ANGLE_DR || angle == CORNER_ANGLE_DL)
+		center_y = this->y + this->r;
+
+	const int diameter = radius*2;
+	int x = radius - 1, y = 0, tx = 1, ty = 1, error = tx - diameter;
+
+	int result = 0;
+	
+	while(x >= y) {
+		if(angle == CORNER_ANGLE_UL) {
+			result = SDL_RenderDrawPoint(renderer, center_x + x, center_y + y);
+			result = SDL_RenderDrawPoint(renderer, center_x + y, center_y + x);
+		}
+
+		if(angle == CORNER_ANGLE_DL) {
+			result = SDL_RenderDrawPoint(renderer, center_x + x, center_y - y);
+			result = SDL_RenderDrawPoint(renderer, center_x + y, center_y - x);
+		}
+
+		if(angle == CORNER_ANGLE_DR) {
+			result = SDL_RenderDrawPoint(renderer, center_x - x, center_y - y);
+			result = SDL_RenderDrawPoint(renderer, center_x - y, center_y - x);
+		}
+
+		if(angle == CORNER_ANGLE_UR) {
+			result = SDL_RenderDrawPoint(renderer, center_x - x, center_y + y);
+			result = SDL_RenderDrawPoint(renderer, center_x - y, center_y + x);
+		}
+
+		if(error <= 0) {
+			y += 1;
+			error += ty;
+			ty += 2;
+		} else if(error > 0) {
+			x -= 1;
+			tx += 2;
+			error += tx - diameter;
+		}
+	}
+}
+
+//Draw a "fill" line.
+void PowerFlowCorner::drawAngleLine(const uint8_t angle, const uint8_t pos, const uint32_t color) {
+	uint8_t last_r, last_g, last_b, last_a;
+	SDL_GetRenderDrawColor(renderer, &last_r, &last_g, &last_b, &last_a);
+
+	const int radius = this->r + 1;
+
+	int center_x = this->x, center_y = this->y;
+	if(angle == CORNER_ANGLE_DR || angle == CORNER_ANGLE_UR)
+		center_x = this->x + this->r;
+	if(angle == CORNER_ANGLE_DR || angle == CORNER_ANGLE_DL)
+		center_y = this->y + this->r;
+
+	const int diameter = radius*2;
+	int x = radius - 1, y = 0, tx = 1, ty = 1, error = tx - diameter;
+
+	const int iter = pos*diameter/255;
+
+	uint8_t max_iter = iter;
+	if(max_iter > radius)
+		max_iter = diameter - iter;
+
+	for(int i=0;i<max_iter;i+=1) {
+		if(error <= 0) {
+			y += 1;
+			error += ty;
+			ty += 2;
+		} else if(error > 0) {
+			x -= 1;
+			tx += 2;
+			error += tx - diameter;
+		}
+	}
+
+	SDL_SetRenderDrawColor(renderer, getRedComponent(color), getGreenComponent(color), getBlueComponent(color), getAlphaComponent(color));
+
+	int ep_x = x, ep_y = y;
+	if(pos > 127) {
+		ep_x = y;
+		ep_y = x;
+	}
+
+	if(angle == CORNER_ANGLE_UL)
+		SDL_RenderDrawLine(renderer, center_x, center_y, center_x + ep_x, center_y + ep_y);
+	else if(angle == CORNER_ANGLE_UR)
+		SDL_RenderDrawLine(renderer, center_x, center_y, center_x - ep_x, center_y + ep_y);
+	else if(angle == CORNER_ANGLE_DR)
+		SDL_RenderDrawLine(renderer, center_x, center_y, center_x - ep_x, center_y - ep_y);
+	else if(angle == CORNER_ANGLE_DL)
+		SDL_RenderDrawLine(renderer, center_x, center_y, center_x + ep_x, center_y - ep_y);
+	
+	SDL_SetRenderDrawColor(renderer, last_r, last_g, last_b, last_a);
+}
+
 uint32_t calculateGradient(const uint32_t color1, const uint32_t color2, uint8_t position) {
 	const uint8_t r1 = getRedComponent(color1), g1 = getGreenComponent(color1), b1 = getBlueComponent(color1), a1 = getAlphaComponent(color1);
 	const uint8_t r2 = getRedComponent(color2), g2 = getGreenComponent(color2), b2 = getBlueComponent(color2), a2 = getAlphaComponent(color2);

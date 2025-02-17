@@ -220,9 +220,9 @@ fn main() {
 				
 							let rx_msg = get_aibus_message(msg.data.clone());
 
-							if rx_msg.receiver != AIBUS_DEVICE_AMIRROR && rx_msg.receiver != 0xFF {
-								continue;
-							}
+							//if rx_msg.receiver != AIBUS_DEVICE_AMIRROR && rx_msg.receiver != 0xFF {
+							//	continue;
+							//}
 
 							ai_rx.push(rx_msg.clone());
 

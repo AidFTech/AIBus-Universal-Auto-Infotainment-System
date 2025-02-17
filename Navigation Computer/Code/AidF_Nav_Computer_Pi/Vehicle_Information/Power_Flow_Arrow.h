@@ -11,6 +11,11 @@
 #define ARROW_DIR_LEFT 3
 #define ARROW_DIR_RIGHT 4
 
+#define CORNER_ANGLE_UL 0
+#define CORNER_ANGLE_UR 1
+#define CORNER_ANGLE_DR 2
+#define CORNER_ANGLE_DL 3
+
 #define GRAD_W 30
 
 class PowerFlowArrow {
@@ -26,6 +31,24 @@ private:
 	
 	int16_t x = 0, y = 0;
 	uint16_t w = 0, h = 0;
+};
+
+class PowerFlowCorner {
+public:
+	PowerFlowCorner(SDL_Renderer* renderer, const int16_t x, const int16_t y, const uint16_t r);
+	~PowerFlowCorner();
+
+	void drawOutline(const uint32_t fill_color, const uint32_t outline_color, const uint8_t angle);
+	void drawFilled(const uint32_t fill_color1, const uint32_t fill_color2, const uint32_t outline_color, const int frame, const uint8_t angle, const bool cw);
+
+private:
+	void drawArc(const uint8_t angle);
+	void drawAngleLine(const uint8_t angle, const uint8_t pos, const uint32_t color);
+
+	SDL_Renderer* renderer;
+	
+	int16_t x = 0, y = 0;
+	uint16_t r = 0;
 };
 
 uint32_t calculateGradient(const uint32_t color1, const uint32_t color2, uint8_t position);

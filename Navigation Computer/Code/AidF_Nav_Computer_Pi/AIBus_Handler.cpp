@@ -1,8 +1,8 @@
 #include "AIBus_Handler.h"
 
 #ifdef RPI_UART
-AIBusHandler::AIBusHandler(std::string port, int* socket_list, const int socket_l) {
-	this->cached_msg = std::vector<AIData>(0);
+AIBusHandler::AIBusHandler(std::string port, int** socket_list, const int socket_l) {
+	this->cached_bytes = std::vector<uint8_t>(0);
 	gpioCfgSetInternals(1<<10);
 	gpioInitialise();
 
@@ -15,6 +15,7 @@ AIBusHandler::AIBusHandler(std::string port, int* socket_list, const int socket_
 	const int test_port = aiserialOpen(c_port);
 	if(test_port<0) {
 		ai_port = 0; //TODO: Throw an error.
+		std::cout<<"AIBus not connected.\n";
 	} else 
 		this->ai_port = test_port;
 
@@ -277,45 +278,41 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			}
 		}
 
-		if(ai_d->l > 1 || (ai_d->l >= 1 && ai_d->data[0] != 0x80)) {
-			clock_t start = clock();
-			#ifndef RPI_UART
-			int cached_bytes = aiserialBytesAvailable(this->ai_port);
-			#endif
-			while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 30) {
-				#ifdef RPI_UART
-				if(gpioRead(AI_RX) == 0)
-					start = clock();
-				#else
-				if(cached_bytes != aiserialBytesAvailable(this->ai_port)) {
-					cached_bytes = aiserialBytesAvailable(this->ai_port);
-					start = clock();
-				}
-				#endif
+		clock_t start = clock();
+		#ifndef RPI_UART
+		int current_cached_bytes = aiserialBytesAvailable(this->ai_port);
+		#endif
+		while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 30) {
+			#ifdef RPI_UART
+			if(gpioRead(AI_RX) == 0)
+				start = clock();
+			#else
+			if(current_cached_bytes != aiserialBytesAvailable(this->ai_port)) {
+				current_cached_bytes = aiserialBytesAvailable(this->ai_port);
+				start = clock();
 			}
-			start = clock();
-			while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 30);
+			#endif
 		}
+		start = clock();
+		while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 30);
 
 		for(uint8_t i=0;i<ai_d->l+4;i+=1)
 			aiserialWriteByte(this->ai_port, data[i]);
 
-		if(ai_d->l > 1 || (ai_d->l >= 1 && ai_d->data[0] != 0x80)) {
-			while(aiserialBytesAvailable(this->ai_port) >= 2) {
-				AIData msg;
-				if(readAIData(&msg, false)) {
-					if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
-						sendAcknowledgement(msg.receiver, msg.sender);
-						
-						if(cached_msg.l <= 0)
-							cached_msg.refreshAIData(msg);
-						else {
-							uint8_t data[msg.l+4];
-							msg.getBytes(data);
+		while(aiserialBytesAvailable(this->ai_port) >= 2) {
+			AIData msg;
+			if(readAIData(&msg, false)) {
+				if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
+					sendAcknowledgement(msg.receiver, msg.sender);
+					
+					if(cached_msg.l <= 0)
+						cached_msg.refreshAIData(msg);
+					else {
+						uint8_t data[msg.l+4];
+						msg.getBytes(data);
 
-							for(int i=0;i<sizeof(data);i+=1)
-								cached_bytes.push_back(data[i]);
-						}
+						for(int i=0;i<sizeof(data);i+=1)
+							cached_bytes.push_back(data[i]);
 					}
 				}
 			}

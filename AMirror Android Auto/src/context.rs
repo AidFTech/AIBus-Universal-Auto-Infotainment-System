@@ -26,12 +26,19 @@ pub struct Context {
 	pub imid_native_mirror: bool,
 
 	//Nav screen buttons:
-	pub vertical_toggle: bool, //Vertical toggle options present.
-	pub horizontal_toggle: bool, //Horizontal toggle options present.
-	pub nav_knob: bool, //Nav knob present.
+	pub aibt_vertical_toggle: bool, //Vertical toggle options present.
+	pub aibt_horizontal_toggle: bool, //Horizontal toggle options present.
+	pub aibt_nav_knob: bool, //Nav knob present.
+	pub aibt_touchscreen: bool, //Touchscreen present.
+	pub aibt_home: bool, //Home button present.
+	pub aibt_menu: bool, //Menu button present.
+	pub aibt_audio: bool, //Audio button present.
+	pub aibt_map: bool, //Nav/map button present.
+	pub aibt_phone: bool, //Phone button present.
 
 	//Devices:
 	pub radio_connected: bool,
+	pub screen_connected: bool,
 }
 
 impl Context {
@@ -63,11 +70,18 @@ impl Context {
 			imid_text_len: 0,
 			imid_native_mirror: false,
 
-			vertical_toggle: false,
-			horizontal_toggle: false,
-			nav_knob: false,
+			aibt_vertical_toggle: false,
+			aibt_horizontal_toggle: false,
+			aibt_nav_knob: false,
+			aibt_touchscreen: false,
+			aibt_home: false,
+			aibt_menu: false,
+			aibt_audio: false,
+			aibt_map: false,
+			aibt_phone: false,
 			
 			radio_connected: false,
+			screen_connected: false,
 		};
 	}
 }

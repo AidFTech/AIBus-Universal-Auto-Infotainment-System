@@ -79,9 +79,11 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 		while(ai_serial->available() < l) {
 			while(millis() >= UINT32_MAX - AI_WAIT*2);
 
-			int8_t rx = digitalRead(this->rx_pin);
-			if(rx == LOW)
-				ai_timer = 0;
+			if(this->rx_pin >= 0) {
+				int8_t rx = digitalRead(this->rx_pin);
+				if(rx == LOW)
+					ai_timer = 0;
+			}
 
 			if(ai_timer > AI_WAIT) {
 				elapsedMicros clear_timer;
@@ -173,18 +175,25 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 	const unsigned int full_length = ai_d->l + 4;
 	ai_d->getBytes(data);
 
-	if(this->rx_pin >= 0) { //&& (ai_d->l > 1 || (ai_d->l >= 1 && ai_d->data[0] != 0x80))) {
-		elapsedMicros timer;
-		while(timer < AI_DELAY_U) {
-			while(micros() >= UINT32_MAX - AI_DELAY_U*2);
+	int byte_count = ai_serial->available();
+	elapsedMicros timer;
+	while(timer < AI_DELAY_U) {
+		while(micros() >= UINT32_MAX - AI_DELAY_U*2);
+		if(this->rx_pin >= 0) {
 			int8_t rx = digitalRead(this->rx_pin);
 			if(rx == LOW)
 				timer = 0;
+		} else {
+			const int new_byte_count = ai_serial->available();
+			if(new_byte_count > byte_count) {
+				byte_count = new_byte_count;
+				timer = 0;
+			}
 		}
-		
-		while(ai_serial->available() > 0)
-			cachePending(ai_d->sender);
 	}
+
+	while(ai_serial->available() > 0)
+		cachePending(ai_d->sender);
 
 	ai_serial->write(data, ai_d->l + 4);
 	ai_serial->flush();

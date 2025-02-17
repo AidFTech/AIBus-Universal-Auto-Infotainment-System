@@ -22,7 +22,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	int* socket_list[] = {&this->socket_parameters.client_socket};
 
 	#ifdef RPI_UART
-	this->aibus_handler = new AIBusHandler("/dev/ttyAMA0", socket_list, 1);
+	this->aibus_handler = new AIBusHandler("/dev/ttyS0", socket_list, 1);
 	#else
 	this->aibus_handler = new AIBusHandler(socket_list, 1);
 	#endif
@@ -47,6 +47,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->socket_parameters.ai_serial = aibus_handler->getPortPointer();
 
 	pthread_create(&socket_thread, NULL, socketThread, (void *)&socket_parameters);
+	pthread_create(&frame_thread, NULL, frameThread, (void*)&attribute_list->frame);
 }
 
 AidF_Nav_Computer::~AidF_Nav_Computer() {
@@ -60,7 +61,10 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	delete misc_window;
 	delete phone_window;
 
+	attribute_list->frame = -1;
+
 	pthread_join(socket_thread, NULL);
+	pthread_join(frame_thread, NULL);
 }
 
 void AidF_Nav_Computer::loop() {
@@ -301,7 +305,8 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 		
 		if(ai_d->l >= 4 && ai_d->data[2] == 0x1) {
 			info_parameters->hybrid_system_present = (ai_d->data[3]&0x7) != 0;
-			info_parameters->hybrid_system_type = ai_d->data[3];
+			info_parameters->hybrid_system_type = ai_d->data[3]&0xF;
+			info_parameters->charge_assist_meter = (ai_d->data[3]&0x10) != 0;
 			if(ai_d->l >= 5)
 				info_parameters->hybrid_features = ai_d->data[4];
 		} else if(ai_d->l >= 6 && ai_d->data[2] == 0x2) {
@@ -411,4 +416,21 @@ int main(int argc, char* args[]) {
 	SDL_DestroyWindow(window);
 	TTF_Quit();
 	SDL_Quit();
+}
+
+//Frame thread function.
+void *frameThread(void* frame_v) {
+	int* frame = (int*)frame_v;
+
+	while(*frame >= 0) {
+		if(*frame < GRAD_W*3 - 1 && *frame >= 0)
+			*frame += 1;
+		else if(*frame >= 0)
+			*frame = 0;
+		
+		usleep(1000000/75);
+	}
+
+	void* result;
+	return result;
 }

@@ -52,6 +52,8 @@ struct AttributeList {
 	uint8_t phone_type = PHONE_TYPE_NONE;
 	std::string phone_name = "";
 
+	int frame = 0;
+
 	AIBusHandler* aibus_handler;
 };
 

@@ -767,6 +767,16 @@ impl <'a> AMirror<'a> {
 			};
 		}
 
+		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN && !context.screen_connected {
+			context.screen_connected = true;
+
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_NAV_SCREEN,
+				data: [0x31, 0x30].to_vec(),
+			});
+		}
+
 		if ai_msg.receiver != AIBUS_DEVICE_AMIRROR && ai_msg.receiver != 0xFF {
 			return;
 		}
@@ -1209,6 +1219,38 @@ impl <'a> AMirror<'a> {
 						self.audio_held = false;
 					} else if state == 0x1 {
 						self.audio_held = true;
+					}
+				}
+			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x31 && ai_msg.data[1] == 0x30 { //Button list.
+				let features = ai_msg.data[2];
+				context.aibt_nav_knob = (features&0x2) != 0;
+				context.aibt_touchscreen = (features&0x1) != 0;
+
+				context.aibt_horizontal_toggle = false;
+				context.aibt_vertical_toggle = false;
+
+				context.aibt_audio = false;
+				context.aibt_home = false;
+				context.aibt_map = false;
+				context.aibt_menu = false;
+				context.aibt_phone = false;
+
+				for i in 3..ai_msg.l() {
+					let d = ai_msg.data[i];
+					if d == 0x28 || d == 0x29 {
+						context.aibt_vertical_toggle = true;
+					} else if d == 0x2A || d == 0x2B {
+						context.aibt_horizontal_toggle = true;
+					} else if d == 0x20 {
+						context.aibt_home = true;
+					} else if d == 0x51 {
+						context.aibt_menu = true;
+					} else if d == 0x26 {
+						context.aibt_audio = true;
+					} else if d == 0x50 {
+						context.aibt_phone = true;
+					} else if d == 0x55 {
+						context.aibt_map = true;
 					}
 				}
 			}

@@ -50,9 +50,6 @@ private:
 				*engine_texture = NULL;
 	
 	SDL_Texture* silhouette_texture = NULL, *silhouette_outline_texture = NULL;
-
-	int frame = 0;
-	clock_t frame_timer;
 };
 
 #endif

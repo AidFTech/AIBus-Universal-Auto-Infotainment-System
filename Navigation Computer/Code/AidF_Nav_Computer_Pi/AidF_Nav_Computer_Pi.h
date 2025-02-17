@@ -22,6 +22,7 @@
 #include "Window/Settings_Display_Window.h"
 
 #include "Vehicle_Information/Vehicle_Info_Parameters.h"
+#include "Vehicle_Information/Power_Flow_Arrow.h"
 
 #include "Socket/AMirror_Socket.h"
 
@@ -74,7 +75,7 @@ private:
 	Main_Menu_Window* main_window;
 	NavWindow* misc_window;
 
-	pthread_t socket_thread;
+	pthread_t socket_thread, frame_thread;
 	SocketHandlerParameters socket_parameters;
 
 	clock_t aibus_read_time = clock();
@@ -87,3 +88,5 @@ void setup(AidF_Nav_Computer* nav_computer);
 void loop(AidF_Nav_Computer* nav_computer);
 
 int main(int argc, char* args[]);
+
+void *frameThread(void* frame_v);

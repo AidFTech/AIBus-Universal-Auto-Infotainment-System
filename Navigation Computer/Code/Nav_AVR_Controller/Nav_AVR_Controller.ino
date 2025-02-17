@@ -26,6 +26,9 @@ uint8_t key_position = 0, door_position = 0;
 bool pi_on = false, shutdown = false;
 bool boot = false, run = false;
 
+elapsedMillis shutdown_timer = 0;
+bool use_shutdown_timer = false;
+
 //Arduino setup.
 void setup() {
 	pinMode(PI_POWER, OUTPUT); //Hard Pi power.
@@ -46,7 +49,7 @@ void loop() {
 	AIData ai_msg;
 	elapsedMillis ai_timer;
 
-	ai_handler.readAIData(&ai_msg);
+	//ai_handler.readAIData(&ai_msg);
 
 	do {
 		if(ai_handler.dataAvailable() > 0) {
@@ -98,20 +101,26 @@ void loop() {
 							ai_handler.writeAIData(&ack_msg, false);
 						}
 					}
+
+					if(ai_msg.l >= 3 && ai_msg.data[0] == 0x2 && ai_msg.data[1] == 0x0 && ai_msg.data[2] == 0x0) {
+						digitalWrite(PI_OFF, LOW);
+						powerOff();
+					}
 				}
 			}
 		}
-	} while(ai_timer < 5);
+	} while(ai_timer < 50);
 
 	const bool last_boot = boot, last_run = run;
 
 	boot = digitalRead(PI_BOOT) == HIGH;
 	run = digitalRead(PI_RUNNING) == HIGH;
 
-	if(last_boot != boot || last_run != run) {
+	if(last_boot != boot || last_run != run || use_shutdown_timer) {
 		if((boot || run) && !shutdown)
 			powerOn();
-		else if(shutdown && !run & !pi_on) { //Pi has shut down.
+		else if(shutdown && shutdown_timer >= 10000 && !boot && !run) { //Pi has shut down.
+			use_shutdown_timer = false;
 			digitalWrite(PI_POWER, LOW);
 			digitalWrite(PI_OFF, LOW);
 			digitalWrite(POWER_ON, LOW);
@@ -130,7 +139,8 @@ void powerOn() {
 
 //Turn full power off.
 void powerOff() {
-	digitalWrite(PI_OFF, LOW);
+	shutdown_timer = 0;
+	use_shutdown_timer = true;
 	pi_on = false;
 	shutdown = true;
 }

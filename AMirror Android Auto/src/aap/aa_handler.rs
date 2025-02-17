@@ -1082,6 +1082,14 @@ impl<'a> AapHandler <'a> {
 				println!("Error: {}", e);
 			}
 		}
+
+		let context = match self.context.try_lock() {
+			Ok(context) => context,
+			Err(_) => {
+				println!("Service discovery request: Context locked.");
+				return;
+			}
+		};
 		
 		let mut response = ServiceDiscoveryResponse::new();
 		//TODO: Configure the response based on the context settings.
@@ -1089,14 +1097,27 @@ impl<'a> AapHandler <'a> {
 		let input_channel = response.add_channel(TouchChannel as u32);
 		let input_touch = input_channel.add_input_event();
 
-		//let touch_config = input_touch.add_touch_parameter();
-		//touch_config.set_dimensions(800, 480);
+		if context.aibt_touchscreen {
+			let touch_config = input_touch.add_touch_parameter();
+			touch_config.set_dimensions(self.w as u32, self.h as u32);
+		}
 
-		input_touch.add_keycode(InputButton::ButtonMenu as u32);
+		if context.aibt_menu {
+			input_touch.add_keycode(InputButton::ButtonMenu as u32);
+		}
+
 		input_touch.add_keycode(InputButton::ButtonMic1 as u32);
-		input_touch.add_keycode(InputButton::ButtonHome as u32);
+
+		if context.aibt_home {
+			input_touch.add_keycode(InputButton::ButtonHome as u32);
+		}
+
 		input_touch.add_keycode(InputButton::ButtonBack as u32);
-		input_touch.add_keycode(InputButton::ButtonPhone as u32);
+
+		if context.aibt_phone {
+			input_touch.add_keycode(InputButton::ButtonPhone as u32);
+		}
+
 		input_touch.add_keycode(InputButton::ButtonCallend as u32);
 		input_touch.add_keycode(InputButton::ButtonUp as u32);
 		input_touch.add_keycode(InputButton::ButtonDown as u32);
@@ -1107,10 +1128,21 @@ impl<'a> AapHandler <'a> {
 		input_touch.add_keycode(InputButton::ButtonPlayPause as u32);
 		input_touch.add_keycode(InputButton::ButtonNext as u32);
 		input_touch.add_keycode(InputButton::ButtonPrev as u32);
-		input_touch.add_keycode(InputButton::ButtonMusic as u32);
-		input_touch.add_keycode(InputButton::ButtonScroll as u32);
+		
+		if context.aibt_audio {
+			input_touch.add_keycode(InputButton::ButtonMusic as u32);
+		}
+
+		if context.aibt_nav_knob || context.aibt_horizontal_toggle || context.aibt_vertical_toggle {
+			input_touch.add_keycode(InputButton::ButtonScroll as u32);
+		}
+
 		input_touch.add_keycode(InputButton::ButtonTel as u32);
-		input_touch.add_keycode(InputButton::ButtonNavigation as u32);
+
+		if context.aibt_map {
+			input_touch.add_keycode(InputButton::ButtonNavigation as u32);
+		}
+
 		input_touch.add_keycode(InputButton::ButtonMedia as u32);
 		input_touch.add_keycode(InputButton::ButtonRadio as u32);
 		input_touch.add_keycode(InputButton::Button1 as u32);

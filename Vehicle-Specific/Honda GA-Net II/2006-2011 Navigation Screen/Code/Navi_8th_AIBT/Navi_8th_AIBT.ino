@@ -57,7 +57,7 @@
 
 #define CONTROL_TIMER 7000
 #define DOOR_TIMER 30000
-#define VOL_TIMER 50
+#define VOL_TIMER 40
 
 #define AISerial Serial
 
@@ -298,7 +298,7 @@ void loop() {
 			if(ack)
 				ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
 		}
-	} while(ai_timer < 50);
+	} while(ai_timer < 50 && vol_steps == 0);
 
 	button_handler->loop();
 	jog_handler->loop();
@@ -353,11 +353,11 @@ void sendButtonsPresent(const uint8_t receiver) {
 //Read the value of the volume counter.
 void readVolumeKnob() {
 	const uint8_t vol_state = mcp_vol.getInputStates()&0x3F;
-	const bool vol_up = mcp_vol.digitalReadIO(VOL_MCP_OVR) == 0;
+	const bool vol_up = mcp_vol.digitalReadIO(VOL_MCP_OVR) != 0;
 
 	if(vol_state != 0) {
 		if(vol_up)
-			vol_steps = vol_state;
+			vol_steps = 0x3F - vol_state + 1;
 		else
 			vol_steps = -(0x3F - vol_state + 1);
 		

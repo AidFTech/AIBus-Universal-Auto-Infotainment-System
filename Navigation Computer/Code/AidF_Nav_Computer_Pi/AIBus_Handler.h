@@ -2,8 +2,9 @@
 #include <pigpio.h>
 #define RPI_UART
 #else
-#include <iostream>
+
 #endif
+#include <iostream>
 
 #include "AIBus/AIBus.h"
 #include "AIBus/AIBus_Serial.h"

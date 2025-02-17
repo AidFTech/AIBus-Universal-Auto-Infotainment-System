@@ -64,8 +64,6 @@ VehicleInfoWindow::VehicleInfoWindow(AttributeList *attribute_list, InfoParamete
 	SDL_SetTextureBlendMode(this->silhouette_outline_texture, SDL_BLENDMODE_BLEND);
 
 	SDL_FreeSurface(silhouette_surface);
-
-	frame_timer = clock();
 }
 
 VehicleInfoWindow::~VehicleInfoWindow() {
@@ -135,13 +133,7 @@ void VehicleInfoWindow::drawWindow() {
 	if(!this->active)
 		return;
 
-	if((clock() - frame_timer)/(CLOCKS_PER_SEC/1000) < 1000/80) {
-		frame_timer = clock();
-		if(frame < GRAD_W*3 - 1)
-			frame += 1;
-		else
-			frame = 0;
-	}
+	const int frame = attribute_list->frame;
 
 	const int16_t silhouette_start_x = 100;
 
@@ -275,6 +267,9 @@ void VehicleInfoWindow::drawWindow() {
 		PowerFlowArrow arrow_eb2(renderer, silhouette_start_x + 345, silhouette_start_y + 115, 15, 45);
 		PowerFlowArrow arrow_eb3(renderer, silhouette_start_x + 305 + (((hybrid_status&0x1) == 0) ? 0 : 10), silhouette_start_y + 160, 30 + (((hybrid_status&0x1) == 0) ? 10 : 0), 15);
 
+		PowerFlowCorner corner_eb12(renderer, silhouette_start_x + 345, silhouette_start_y + 100, 15);
+		PowerFlowCorner corner_eb23(renderer, silhouette_start_x + 344, silhouette_start_y + 159, 15);
+
 		PowerFlowArrow arrow_ge(renderer, silhouette_start_x + 267, silhouette_start_y + 104, 15, 28 + (((hybrid_status&0x40) == 0) ? 10 : 0));
 
 		PowerFlowArrow arrow_ew(renderer, silhouette_start_x + 205 + ((((hybrid_status&0x8) == 0) ? 0 : 10)), silhouette_start_y + 165, 30 + ((((hybrid_status&0x10) == 0 && (hybrid_status&0x8) == 0) ? 10 : 0)), 15);
@@ -283,19 +278,30 @@ void VehicleInfoWindow::drawWindow() {
 			arrow_eb1.drawOutline(dimmed_button, outline_color);
 			arrow_eb2.drawOutline(dimmed_button, outline_color);
 			arrow_eb3.drawOutline(dimmed_button, outline_color);
+			corner_eb12.drawOutline(dimmed_button, outline_color, CORNER_ANGLE_DR);
+			corner_eb23.drawOutline(dimmed_button, outline_color, CORNER_ANGLE_UL);
 		} else {
 			if((hybrid_status&0x1) != 0) { //Battery to motor.
 				arrow_eb1.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_LEFT, false);
 				arrow_eb2.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_DOWN, false);
 				arrow_eb3.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_LEFT, true);
+				
+				corner_eb12.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, CORNER_ANGLE_DR, false);
+				corner_eb23.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, CORNER_ANGLE_UL, true);
 			} else if((hybrid_status&0x2) != 0) { //Motor to battery.
 				arrow_eb1.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_RIGHT, true);
 				arrow_eb2.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_UP, false);
 				arrow_eb3.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_RIGHT, false);
+
+				corner_eb12.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, CORNER_ANGLE_DR, true);
+				corner_eb23.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, CORNER_ANGLE_UL, false);
 			} else if((hybrid_status&0x4) != 0) { //Motor to battery, regen.
 				arrow_eb1.drawFilled(COLOR_REG1, COLOR_REG2, outline_color, frame, ARROW_DIR_RIGHT, true);
 				arrow_eb2.drawFilled(COLOR_REG1, COLOR_REG2, outline_color, frame, ARROW_DIR_UP, false);
 				arrow_eb3.drawFilled(COLOR_REG1, COLOR_REG2, outline_color, frame, ARROW_DIR_RIGHT, false);
+
+				corner_eb12.drawFilled(COLOR_REG1, COLOR_REG2, outline_color, frame, CORNER_ANGLE_DR, true);
+				corner_eb23.drawFilled(COLOR_REG1, COLOR_REG2, outline_color, frame, CORNER_ANGLE_UL, false);
 			}
 		}
 
@@ -317,12 +323,16 @@ void VehicleInfoWindow::drawWindow() {
 			PowerFlowArrow arrow_gw1(renderer, silhouette_start_x + 230, silhouette_start_y + 100, 15, 38);
 			PowerFlowArrow arrow_gw2(renderer, silhouette_start_x + 200, silhouette_start_y + 139, 30, 15);
 
+			PowerFlowCorner corner_gw12(renderer, silhouette_start_x + 229, silhouette_start_y + 137, 15);
+
 			if((hybrid_status&0x20) == 0) {
 				arrow_gw1.drawOutline(dimmed_button, outline_color);
 				arrow_gw2.drawOutline(dimmed_button, outline_color);
+				corner_gw12.drawOutline(dimmed_button, outline_color, CORNER_ANGLE_UL);
 			} else {
 				arrow_gw1.drawFilled(COLOR_ENG1, COLOR_ENG2, outline_color, frame, ARROW_DIR_DOWN, false);
 				arrow_gw2.drawFilled(COLOR_ENG1, COLOR_ENG2, outline_color, frame, ARROW_DIR_LEFT, true);
+				corner_gw12.drawFilled(COLOR_ENG1, COLOR_ENG2, outline_color, frame, CORNER_ANGLE_UL, true);
 			}
 		}
 	}
