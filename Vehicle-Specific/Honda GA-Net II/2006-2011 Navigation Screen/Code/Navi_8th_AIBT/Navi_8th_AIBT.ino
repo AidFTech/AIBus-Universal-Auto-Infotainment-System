@@ -57,7 +57,7 @@
 
 #define CONTROL_TIMER 7000
 #define DOOR_TIMER 30000
-#define VOL_TIMER 40
+#define VOL_TIMER 100
 
 #define AISerial Serial
 
@@ -175,6 +175,7 @@ void setup() {
 	mcp_knob.digitalWriteIO(KNOB_MCP_POWER_ON, LOW);
 	mcp_knob.digitalWriteIO(KNOB_MCP_BACKLIGHT, LOW);
 
+	mcp_vol.digitalWriteIO(VOL_MCP_RESET, HIGH);
 	mcp_vol.digitalWriteIO(VOL_MCP_RESET, LOW);
 }
 
@@ -353,7 +354,7 @@ void sendButtonsPresent(const uint8_t receiver) {
 //Read the value of the volume counter.
 void readVolumeKnob() {
 	const uint8_t vol_state = mcp_vol.getInputStates()&0x3F;
-	const bool vol_up = mcp_vol.digitalReadIO(VOL_MCP_OVR) != 0;
+	const bool vol_up = mcp_vol.digitalReadIO(VOL_MCP_OVR) == 0;
 
 	if(vol_state != 0) {
 		if(vol_up)

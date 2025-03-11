@@ -36,6 +36,8 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	audio_window = new Audio_Window(attribute_list);
 	phone_window = new PhoneWindow(attribute_list);
 	main_window = new Main_Menu_Window(attribute_list);
+	misc_window = new NavWindow(attribute_list);
+
 	this->window_handler->setActiveWindow(main_window);
 	this->window_handler->setText("--:--", 0);
 
@@ -51,6 +53,8 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 }
 
 AidF_Nav_Computer::~AidF_Nav_Computer() {
+	attribute_list->frame = -1;
+
 	SDL_DestroyRenderer(this->renderer);
 	delete this->br;
 	delete this->aibus_handler;
@@ -60,8 +64,6 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	delete main_window;
 	delete misc_window;
 	delete phone_window;
-
-	attribute_list->frame = -1;
 
 	pthread_join(socket_thread, NULL);
 	pthread_join(frame_thread, NULL);
@@ -124,18 +126,6 @@ void AidF_Nav_Computer::loop() {
 		if(!this->aibus_handler->getConnected() || this->aibus_handler->getAvailableBytes() > 0) {
 			if(this->aibus_handler->readAIData(&ai_msg)) {
 				aibus_read_time = clock();
-
-				/*#ifndef SOCKET_AIBUS_TEST
-				if(ai_msg.sender != ID_NAV_COMPUTER)
-				#endif
-				{
-					uint8_t ai_bytes[ai_msg.l + 4];
-					ai_msg.getBytes(ai_bytes);
-
-					SocketMessage ai_sock_msg(OPCODE_AIBUS_SEND, sizeof(ai_bytes));
-					ai_sock_msg.refreshSocketData(ai_bytes);
-					writeSocketMessage(&ai_sock_msg, socket_parameters.client_socket);
-				}*/
 
 				if(!*canslator_connected && ai_msg.sender == ID_CANSLATOR)
 					*canslator_connected = true;
@@ -231,6 +221,14 @@ void AidF_Nav_Computer::loop() {
 
 								//TODO: Only if the window is the mirror window.
 								window_handler->getActiveWindow()->refreshWindow();
+							} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x2C && ai_msg.data[1] == 0xF0) { //Screen size request.
+								const uint16_t w = window_handler->getWidth(), h = window_handler->getHeight();
+
+								uint8_t res_resp_data[] = {0x2C, uint8_t(w>>8), uint8_t(w&0xFF), uint8_t(h>>8), uint8_t(h&0xFF)};
+								AIData res_resp_msg(sizeof(res_resp_data), ID_NAV_COMPUTER, ai_msg.sender);
+								res_resp_msg.refreshAIData(res_resp_data);
+
+								aibus_handler->writeAIData(&res_resp_msg);
 							}
 						}
 					}
@@ -401,14 +399,18 @@ void loop(AidF_Nav_Computer* nav_computer) {
 int main(int argc, char* args[]) {
 	SDL_Init(SDL_INIT_VIDEO);
 	TTF_Init();
-	#ifdef __arm__
-	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, DEFAULT_W, DEFAULT_H, SDL_WINDOW_FULLSCREEN);
+	int screen_w = DEFAULT_W, screen_h = DEFAULT_H;
+	getResolution(&screen_w, &screen_h);
+
+	#ifdef RPI_UART
+	//TODO: Load resolution from a file.
+	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_FULLSCREEN);
 	#else
-	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, DEFAULT_W, DEFAULT_H, SDL_WINDOW_SHOWN);
+	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_SHOWN);
 	#endif
 	//TODO: Hide the cursor.
 
-	AidF_Nav_Computer nav_computer(window, DEFAULT_W, DEFAULT_H);
+	AidF_Nav_Computer nav_computer(window, screen_w, screen_h);
 	setup(&nav_computer);
 	while(nav_computer.running)
 		loop(&nav_computer);
@@ -433,4 +435,51 @@ void *frameThread(void* frame_v) {
 
 	void* result;
 	return result;
+}
+
+//Get a resolution from a saved file.
+void getResolution(int* w, int* h) {
+	std::vector<IniList> dimension_file = loadIniFile(RESOLUTION_FILE);
+
+	bool dimension_loaded = false;
+
+	for(int i=0;i<dimension_file.size();i+=1) {
+		if(dimension_file[i].title.compare("AidF_Navigation_Screen_Dimensions") == 0) {
+			int new_w = *w, new_h = *h;
+
+			for(int n=0;n<dimension_file[i].l_n;n+=1) {
+				if(dimension_file[i].num_vars[n].compare("w") == 0)
+					new_w = dimension_file[i].num_values[n];
+				else if(dimension_file[i].num_vars[n].compare("h") == 0)
+					new_h = dimension_file[i].num_values[n];
+			}
+
+			*w = new_w;
+			*h = new_h;
+			dimension_loaded = true;
+			break;
+		}
+	}
+
+	if(!dimension_loaded) //Dimension file not found.
+		saveResolution(*w, *h);
+}
+
+//Save a resolution to a file.
+void saveResolution(const int w, const int h) {
+	IniList dimension_file(2,0);
+	
+	dimension_file.title = "AidF_Navigation_Screen_Dimensions";
+	dimension_file.num_vars[0] = "w";
+	dimension_file.num_vars[1] = "h";
+
+	dimension_file.num_values[0] = w;
+	dimension_file.num_values[1] = h;
+
+	std::cout<<dimension_file.title<<'\n';
+
+	std::vector<IniList> file_list(0);
+	file_list.push_back(dimension_file);
+
+	saveIniFile(RESOLUTION_FILE, file_list);
 }

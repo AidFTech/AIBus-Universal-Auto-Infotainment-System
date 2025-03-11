@@ -1,13 +1,13 @@
 #include "Phone_Window.h"
 
 PhoneWindow::PhoneWindow(AttributeList *attribute_list) : NavWindow(attribute_list) {
-	main_area_box[0] = new TextBox(this->renderer, TITLE_AREA_X + 64, TITLE_AREA_Y, this->w - (TITLE_AREA_X + 64), AREA_H, ALIGN_H_L, ALIGN_V_M, 50, &this->color_profile->text);
+	main_area_box[0] = new TextBox(this->renderer, title_area_x + 64, title_area_y, this->w - (title_area_x + 64), area_h, ALIGN_H_L, ALIGN_V_M, 50, &this->color_profile->text);
 	for(uint8_t i=1;i<6;i+=1)
-		main_area_box[i] = new TextBox(this->renderer, TITLE_AREA_X, MAIN_AREA_Y + MAIN_AREA_HEIGHT*i, FULL_AREA_W, AREA_H, ALIGN_H_L, ALIGN_V_M, 36, &this->color_profile->text);
+		main_area_box[i] = new TextBox(this->renderer, title_area_x, main_area_y + main_area_height*i, full_area_w, area_h, ALIGN_H_L, ALIGN_V_M, 36, &this->color_profile->text);
 	
 	for(uint8_t i=0;i<2;i+=1)
-		subtitle_area_box[i] = new TextBox(this->renderer, this->w - TITLE_AREA_X - SUB_AREA_WIDTH, TITLE_AREA_Y + AREA_H + SUB_AREA_HEIGHT*(1-i%2), SUB_AREA_WIDTH, SUB_AREA_HEIGHT, ALIGN_H_R, ALIGN_V_M, 26, &this->color_profile->text);
-	subtitle_area_box[2] = new TextBox(this->renderer, TITLE_AREA_X + 64, TITLE_AREA_Y + AREA_H, HALF_AREA_W, SUB_AREA_HEIGHT, ALIGN_H_L, ALIGN_V_M, 29, &this->color_profile->text);
+		subtitle_area_box[i] = new TextBox(this->renderer, this->w - title_area_x - SUB_AREA_WIDTH, title_area_y + area_h + sub_area_height*(1-i%2), SUB_AREA_WIDTH, sub_area_height, ALIGN_H_R, ALIGN_V_M, 26, &this->color_profile->text);
+	subtitle_area_box[2] = new TextBox(this->renderer, title_area_x + 64, title_area_y + area_h, half_area_w, sub_area_height, ALIGN_H_L, ALIGN_V_M, 29, &this->color_profile->text);
 
 	//Clear all the "changed" bools.
 	for(uint8_t i=0;i<6;i+=1)
@@ -16,7 +16,7 @@ PhoneWindow::PhoneWindow(AttributeList *attribute_list) : NavWindow(attribute_li
 	for(uint8_t i=0;i<3;i+=1)
 		subtitle_area_change[i] = false;
 
-	this->side_menu = new NavMenu(this->attribute_list, this->w/2, MAIN_AREA_Y + MAIN_AREA_HEIGHT, this->w/2, MAIN_AREA_HEIGHT, 5, ALIGN_H_R, 36, 5, false, "");
+	this->side_menu = new NavMenu(this->attribute_list, this->w/2, main_area_y + main_area_height, this->w/2, main_area_height, 5, ALIGN_H_R, 36, 5, false, "");
 
 	uint8_t phone_img_data[sizeof(image_data_Phone)];
 	for(int i=0;i<sizeof(image_data_Phone);i+=1)
@@ -34,7 +34,9 @@ PhoneWindow::PhoneWindow(AttributeList *attribute_list) : NavWindow(attribute_li
 
 PhoneWindow::~PhoneWindow() {
 	delete this->side_menu;
-	delete this->settings_menu;
+
+	if(this->settings_menu != NULL)
+		delete this->settings_menu;
 
 	for(uint8_t i=0;i<6;i+=1)
 		delete this->main_area_box[i];
@@ -59,10 +61,10 @@ void PhoneWindow::drawWindow() {
 				subtitle_area_box[i]->drawText();
 		}
 
-		SDL_Rect phone_rect = {TITLE_AREA_X, TITLE_AREA_Y, 64, 82};
+		SDL_Rect phone_rect = {title_area_x, title_area_y, 64, 82};
 		SDL_RenderCopy(this->renderer, this->phone_texture, NULL, &phone_rect);
 	} else {
-		if(this->settings_menu->getY() >= TITLE_AREA_Y + AREA_H + SUB_AREA_HEIGHT) {
+		if(this->settings_menu->getY() >= title_area_y + area_h + sub_area_height) {
 			main_area_box[0]->drawText();
 			for(uint8_t i=0;i<3;i+=1)
 				subtitle_area_box[i]->drawText();
@@ -188,13 +190,13 @@ void PhoneWindow::interpretPhoneScreenChange(AIData* ai_b) {
 	if(group == 0xF) {
 		if(side_menu->getFilledTextItems() > 0) {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(HALF_AREA_W);
+				main_area_box[i]->setWidth(half_area_w);
 				
 			if(side_menu->getSelected() == 0)
 				side_menu->incrementSelected();
 		} else {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(FULL_AREA_W);
+				main_area_box[i]->setWidth(full_area_w);
 			side_menu->setSelected(0);
 		}
 	
@@ -220,12 +222,12 @@ void PhoneWindow::interpretPhoneScreenChange(AIData* ai_b) {
 	if(group == BUTTON_AREA_GROUP) {
 		if(side_menu->getFilledTextItems() > 0) {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(HALF_AREA_W);
+				main_area_box[i]->setWidth(half_area_w);
 			if(side_menu->getSelected() == 0)
 				side_menu->incrementSelected();
 		} else {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(FULL_AREA_W);
+				main_area_box[i]->setWidth(full_area_w);
 			side_menu->setSelected(0);
 		}
 	}

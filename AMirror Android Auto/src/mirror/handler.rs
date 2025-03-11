@@ -267,7 +267,7 @@ impl<'a> MirrorHandler<'a> {
 	fn send_dongle_startup(&mut self) {
 		let mut dongle_message_dpi = get_sendint_message(String::from("/tmp/screen_dpi"), 160);
 		//let mut dongle_message_android = get_sendint_message(String::from("/etc/android_work_mode"), 1);
-		let dongle_message_open = get_open_message(800, 480, 30, 5, 49152, 2, 2);
+		let dongle_message_open = get_open_message(self.w as u32, self.h as u32, 30, 5, 49152, 2, 2);
 
 		self.dongle_usb_conn.write_dongle_message(dongle_message_dpi.get_mirror_message());
 		//self.dongle_usb_conn.write_dongle_message(dongle_message_android.get_mirror_message());

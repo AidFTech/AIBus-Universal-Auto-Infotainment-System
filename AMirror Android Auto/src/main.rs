@@ -27,39 +27,6 @@ fn main() {
 	let mut nav_audio = None;
 	let mut mpv_found = 0;
 
-	while mpv_found < 3 {
-		match MpvVideo::new(800, 480) {
-			Err(e) => println!("Failed to Start Mpv: {}", e.to_string()),
-			Ok(mpv) => {
-				mpv_video = Some(mpv);
-				mpv_found += 1;
-			}
-		};
-
-		match RdAudio::new() {
-			Err(e) => println!("Failed to Start Rodio: {}", e.to_string()),
-			Ok(rodio) => {
-				rd_audio = Some(rodio);
-				mpv_found += 1;
-			}
-		}
-		
-		match RdAudio::new() {
-			Err(e) => println!("Failed to Start Rodio: {}", e.to_string()),
-			Ok(rodio) => {
-				nav_audio = Some(rodio);
-				mpv_found += 1;
-			}
-		}
-	}
-
-	let mutex_mpv = Arc::new(Mutex::new(mpv_video.unwrap()));
-	let mutex_rdaudio = Arc::new(Mutex::new(rd_audio.unwrap()));
-	let mutex_navaudio = Arc::new(Mutex::new(nav_audio.unwrap()));
-
-	let mutex_context = Arc::new(Mutex::new(Context::new()));
-	let mut amirror = AMirror::new(&mutex_context, aibus_handler, &mutex_mpv, &mutex_rdaudio, &mutex_navaudio, 800, 480);
-
 	let mutex_run = Arc::new(Mutex::new(true));
 	let mutex_run_clone = Arc::clone(&mutex_run);
 
@@ -244,6 +211,95 @@ fn main() {
 			thread::sleep(Duration::from_millis(10));
 		}
 	});
+
+	let fullscreen = false; //TODO: Make true if running on a Pi.
+
+	let mut resolution_response = false;
+	let mut resolution_request = false;
+
+	let mut w = 800;
+	let mut h = 480;
+
+	while !resolution_request {
+		match aibus_handler.try_lock() {
+			Ok(mut aibus_handler) => {
+				let tx_list = aibus_handler.get_ai_tx();
+				tx_list.push(AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_NAV_COMPUTER,
+					data: [0x2C, 0xF0].to_vec(),
+				});
+
+				resolution_request = true;
+			}
+			Err(_) => {
+				thread::sleep(Duration::from_millis(20));
+				continue;
+			}
+		}
+	}
+
+	let resolution_start_time = Instant::now();
+
+	while !resolution_response {
+		if Instant::now() - resolution_start_time > Duration::from_millis(2000) {
+			break;
+		}
+
+		match aibus_handler.try_lock() {
+			Ok(mut aibus_handler) => {
+				let rx_list = aibus_handler.get_ai_rx();
+
+				for msg in rx_list {
+					if msg.sender == AIBUS_DEVICE_NAV_COMPUTER && msg.receiver == AIBUS_DEVICE_AMIRROR && msg.l() >= 5 && msg.data[0] == 0x2C { //Resolution info.
+						let x_array = [msg.data[1], msg.data[2]];
+						let y_array = [msg.data[3], msg.data[4]];
+
+						w = u16::from_be_bytes(x_array);
+						h = u16::from_be_bytes(y_array);
+
+						resolution_response = true;
+					}
+				}
+			}
+			Err(_) => {
+				continue;
+			}
+		}
+	}
+
+	while mpv_found < 3 {
+		match MpvVideo::new(w, h, fullscreen) {
+			Err(e) => println!("Failed to Start Mpv: {}", e.to_string()),
+			Ok(mpv) => {
+				mpv_video = Some(mpv);
+				mpv_found += 1;
+			}
+		};
+
+		match RdAudio::new() {
+			Err(e) => println!("Failed to Start Rodio: {}", e.to_string()),
+			Ok(rodio) => {
+				rd_audio = Some(rodio);
+				mpv_found += 1;
+			}
+		}
+		
+		match RdAudio::new() {
+			Err(e) => println!("Failed to Start Rodio: {}", e.to_string()),
+			Ok(rodio) => {
+				nav_audio = Some(rodio);
+				mpv_found += 1;
+			}
+		}
+	}
+
+	let mutex_mpv = Arc::new(Mutex::new(mpv_video.unwrap()));
+	let mutex_rdaudio = Arc::new(Mutex::new(rd_audio.unwrap()));
+	let mutex_navaudio = Arc::new(Mutex::new(nav_audio.unwrap()));
+
+	let mutex_context = Arc::new(Mutex::new(Context::new()));
+	let mut amirror = AMirror::new(&mutex_context, aibus_handler, &mutex_mpv, &mutex_rdaudio, &mutex_navaudio, w, h);
 
 	while amirror.run {
 		amirror.process();

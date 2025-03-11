@@ -38,6 +38,22 @@
 #define ILL_CATHODE 9
 //#define MEMORY_CHECK
 
+#define MAIN_POWER 14
+#define REC_SET 15
+#define REC_CLEAR 16
+
+#define AUDIO_ON 17
+
+#define TRUNK_OPEN 20
+
+#define GAH_READ_H PINA
+#define GAH_READ_L PINC
+
+#define GAH_COUNT_0 10
+#define GAH_COUNT_1 11
+#define GAH_COUNT_2 12
+#define GAH_COUNT_3 13
+
 #define FUNCTION_DELAY 5000
 #define SOURCE_DELAY 5000
 

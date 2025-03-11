@@ -44,6 +44,25 @@ private:
 	void sendMenuClose(const uint8_t receiver);
 
 	void fillText(const uint8_t group, const uint8_t area);
+
+	//Dimensions.
+	int area_w = 400, area_h = 60;
+
+	int title_area_x = 25;
+	int title_area_y = 50;
+	int main_area_y = title_area_y + 65;
+
+	int sub_area_x = 150;
+	int sub_area_y = 40;
+
+	int main_area_height = 42;
+
+	int sub_area_height = 30;
+
+	int function_area_width = 800/6, function_area_height = 64;
+
+	int full_area_w = 800 - title_area_x;
+	int half_area_w = 800/2 - title_area_x;
 };
 
 #endif

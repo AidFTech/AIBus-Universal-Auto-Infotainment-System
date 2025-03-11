@@ -2,7 +2,7 @@ pub struct Context {
 	pub audio_selected: bool, //True if the mirror is selected as the active audio device.
 	pub audio_text: bool, //True if audio text handling is allowed.
 	pub phone_active: bool, //True if phone mirroring is active.
-	pub fullscreen: bool, //True on the final Raspberry Pi, false for testing.
+	//pub fullscreen: bool, //True on the final Raspberry Pi, false for testing.
 	pub playing: bool, //True if the phone is playing music.
 
 	pub phone_type: u8, //The phone type, as defined by the dongle.
@@ -48,7 +48,7 @@ impl Context {
 			audio_selected: false,
 			audio_text: false,
 			phone_active: true,
-			fullscreen: false,
+			//fullscreen: false,
 			playing: false,
 
 			phone_type: 0,

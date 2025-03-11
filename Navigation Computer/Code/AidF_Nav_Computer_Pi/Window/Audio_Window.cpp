@@ -2,18 +2,18 @@
 
 //Audio window constructor.
 Audio_Window::Audio_Window(AttributeList *attribute_list) : NavWindow(attribute_list) {
-	main_area_box[0] = new TextBox(this->renderer, TITLE_AREA_X, TITLE_AREA_Y, AREA_W, AREA_H, ALIGN_H_L, ALIGN_V_M, 65, &this->color_profile->text);
+	main_area_box[0] = new TextBox(this->renderer, title_area_x, title_area_y, area_w, area_h, ALIGN_H_L, ALIGN_V_M, 65, &this->color_profile->text);
 	for(uint8_t i=1;i<6;i+=1)
-		main_area_box[i] = new TextBox(this->renderer, TITLE_AREA_X, MAIN_AREA_Y + MAIN_AREA_HEIGHT*i, FULL_AREA_W, AREA_H, ALIGN_H_L, ALIGN_V_M, 36, &this->color_profile->text);
+		main_area_box[i] = new TextBox(this->renderer, title_area_x, main_area_y + main_area_height*i, full_area_w, area_h, ALIGN_H_L, ALIGN_V_M, 36, &this->color_profile->text);
 	
 	for(uint8_t i=0;i<2;i+=1)
-		subtitle_area_box[i] = new TextBox(this->renderer, this->w - TITLE_AREA_X - SUB_AREA_WIDTH, SUB_AREA_Y + SUB_AREA_HEIGHT*(1-i%2), SUB_AREA_WIDTH, SUB_AREA_HEIGHT, ALIGN_H_R, ALIGN_V_M, 26, &this->color_profile->text);
-	subtitle_area_box[2] = new TextBox(this->renderer, TITLE_AREA_X, TITLE_AREA_Y + AREA_H, HALF_AREA_W, SUB_AREA_HEIGHT, ALIGN_H_L, ALIGN_V_M, 29, &this->color_profile->text);
+		subtitle_area_box[i] = new TextBox(this->renderer, this->w - title_area_x - SUB_AREA_WIDTH, sub_area_y + sub_area_height*(1-i%2), SUB_AREA_WIDTH, sub_area_height, ALIGN_H_R, ALIGN_V_M, 26, &this->color_profile->text);
+	subtitle_area_box[2] = new TextBox(this->renderer, title_area_x, title_area_y + area_h, half_area_w, sub_area_height, ALIGN_H_L, ALIGN_V_M, 29, &this->color_profile->text);
 
 	for(uint8_t i=0;i<6;i+=1)
-		function_area_box[i] = new TextBox(this->renderer, FUNCTION_AREA_WIDTH*i, this->h - FUNCTION_AREA_HEIGHT, FUNCTION_AREA_WIDTH, FUNCTION_AREA_HEIGHT, ALIGN_H_C, ALIGN_V_M, 26, &this->color_profile->text);
+		function_area_box[i] = new TextBox(this->renderer, function_area_width*i, this->h - function_area_height, function_area_width, function_area_height, ALIGN_H_C, ALIGN_V_M, 26, &this->color_profile->text);
 	
-	this->audio_menu = new NavMenu(this->attribute_list, this->w/2, MAIN_AREA_Y + MAIN_AREA_HEIGHT, this->w/2, MAIN_AREA_HEIGHT, 5, ALIGN_H_R, 36, 5, false, "");
+	this->audio_menu = new NavMenu(this->attribute_list, this->w/2, main_area_y + main_area_height, this->w/2, main_area_height, 5, ALIGN_H_R, 36, 5, false, "");
 	
 	//Clear all the "changed" bools.
 	for(uint8_t i=0;i<6;i+=1)
@@ -29,7 +29,9 @@ Audio_Window::Audio_Window(AttributeList *attribute_list) : NavWindow(attribute_
 //Audio window destructor.
 Audio_Window::~Audio_Window() {
 	delete this->audio_menu;
-	delete this->settings_menu;
+
+	if(this->settings_menu != NULL)
+		delete this->settings_menu;
 
 	for(uint8_t i=0;i<6;i+=1)
 		delete this->main_area_box[i];
@@ -66,7 +68,7 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 				this->initializeSettingsMenu(msg);
 			}
 		} else if(msg->data[1] == 0x51 && this->settings_menu != NULL) { //Add a menu entry.
-			if(msg->sender != this->settings_menu_sender)
+			if(!getSettingsMenuValid(msg->sender))
 				return false;
 
 			const uint8_t entry = msg->data[2];
@@ -77,7 +79,7 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 			
 			this->settings_menu->setItem(entry_name, entry);
 		} else if(msg->data[1] == 0x52 && this->settings_menu != NULL) { //Display the menu.
-			if(msg->sender != this->settings_menu_sender)
+			if(!getSettingsMenuValid(msg->sender))
 				return false;
 				
 			if(!active) {
@@ -103,7 +105,7 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 			this->settings_menu_active = true;
 			this->settings_menu_prep = false;
 		} else if(msg->data[1] == 0x53 && this->settings_menu != NULL) { //Change the menu title.
-			if(msg->sender != this->settings_menu_sender)
+			if(!getSettingsMenuValid(msg->sender))
 				return false;
 
 			std::string title = "";
@@ -112,6 +114,9 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 
 			this->settings_menu->setTitle(title);
 		} else if(msg->data[1] == 0x54 && this->settings_menu != NULL && msg->l >= 6) { //Create a menu slider.
+			if(!getSettingsMenuValid(msg->sender))
+				return false;
+
 			const uint8_t index = msg->data[2];
 			const uint8_t max = msg->data[4], value = msg->data[3];
 			const bool sel = msg->data[5] != 0;
@@ -224,7 +229,7 @@ void Audio_Window::drawWindow() {
 				function_area_box[i]->drawText();
 		}
 	} else {
-		if(this->settings_menu->getY() >= TITLE_AREA_Y + AREA_H + SUB_AREA_HEIGHT) {
+		if(this->settings_menu->getY() >= title_area_y + area_h + sub_area_height) {
 			main_area_box[0]->drawText();
 			for(uint8_t i=0;i<3;i+=1)
 				subtitle_area_box[i]->drawText();
@@ -282,23 +287,23 @@ void Audio_Window::interpretAudioScreenChange(AIData* ai_b) {
 		
 		if(audio_menu->getFilledTextItems() > 0) {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(HALF_AREA_W);
+				main_area_box[i]->setWidth(half_area_w);
 		} else {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(FULL_AREA_W);
+				main_area_box[i]->setWidth(full_area_w);
 		}
 		
 		return;
 	} else if(ai_b->data[0] == 0x23 && group == 0xF) {
 		if(audio_menu->getFilledTextItems() > 0) {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(HALF_AREA_W);
+				main_area_box[i]->setWidth(half_area_w);
 				
 			if(audio_menu->getSelected() == 0)
 				audio_menu->incrementSelected();
 		} else {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(FULL_AREA_W);
+				main_area_box[i]->setWidth(full_area_w);
 			audio_menu->setSelected(0);
 		}
 	
@@ -331,12 +336,12 @@ void Audio_Window::interpretAudioScreenChange(AIData* ai_b) {
 	if(group == BUTTON_AREA_GROUP) {
 		if(audio_menu->getFilledTextItems() > 0) {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(HALF_AREA_W);
+				main_area_box[i]->setWidth(half_area_w);
 			if(audio_menu->getSelected() == 0)
 				audio_menu->incrementSelected();
 		} else {
 			for(uint8_t i=1;i<6;i+=1)
-				main_area_box[i]->setWidth(FULL_AREA_W);
+				main_area_box[i]->setWidth(full_area_w);
 			audio_menu->setSelected(0);
 		}
 	}
@@ -523,4 +528,15 @@ void Audio_Window::sendMenuClose(const uint8_t receiver) {
 	close_msg.refreshAIData(data);
 
 	this->attribute_list->aibus_handler->writeAIData(&close_msg);
+}
+
+//Return whether a menu message is for the audio settings menu.
+bool Audio_Window::getSettingsMenuValid(const uint8_t sender) {
+	if(sender != this->settings_menu_sender)
+		return false;
+
+	if(!this->settings_menu_prep && !this->settings_menu_active)
+		return false;
+
+	return true;
 }

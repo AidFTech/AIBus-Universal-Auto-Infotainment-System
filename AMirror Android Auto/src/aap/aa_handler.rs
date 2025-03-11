@@ -1168,17 +1168,40 @@ impl<'a> AapHandler <'a> {
 
 		let video_config = video_stream.add_video_config();
 
-		if self.w >= 1920 && self.h >= 1080 {
+		let mut margin_w = 0;
+		let mut margin_h = 0;
+
+		if self.w >= 1920 || self.h >= 1080 {
 			video_config.video_resolution = 3;
-		} else if self.w >= 1280 && self.h >= 720 {
+
+			if self.h < 1080 {
+				margin_h = 1080 - self.h as u32;
+			}
+			if self.w < 1920 {
+				margin_w = 1920 - self.w as u32;
+			}
+		} else if self.w >= 1280 || self.h >= 720 {
 			video_config.video_resolution = 2;
+			
+			if self.h < 720 {
+				margin_h = 720 - self.h as u32;
+			}
+			if self.w < 1280 {
+				margin_w = 1280 - self.w as u32;
+			}
 		} else {
 			video_config.video_resolution = 1;
+			if self.h < 480 {
+				margin_h = 480 - self.h as u32;
+			}
+			if self.w < 800 {
+				margin_w = 800 - self.w as u32;
+			}
 		}
 		
 		video_config.video_frame = 1;
-		video_config.margin_width = 0;
-		video_config.margin_height = 0;
+		video_config.margin_width = margin_w;
+		video_config.margin_height = margin_h;
 		video_config.dpi = 160;
 		video_config.additional_depth = 0;
 

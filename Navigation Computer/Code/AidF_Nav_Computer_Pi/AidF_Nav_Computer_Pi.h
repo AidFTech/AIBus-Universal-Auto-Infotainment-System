@@ -2,12 +2,15 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <string>
+#include <fstream>
+#include <vector>
 #include <time.h>
 #include <pthread.h>
 
 #include "AidF_Color_Profile.h"
 #include "Window_Handler.h"
 #include "AIBus_Handler.h"
+#include "Ini_Context.h"
 
 #include "Background/Nav_Background.h"
 #include "Background/Nav_Solid_Background.h"
@@ -26,12 +29,17 @@
 
 #include "Socket/AMirror_Socket.h"
 
+#ifndef aidf_nav_computer_pi_h
+#define aidf_nav_computer_pi_h
+
 #define DEFAULT_W 800
 #define DEFAULT_H 480
 
 #define AIBUS_WAIT 5
 
 #define SOCKET_AIBUS_TEST
+
+#define RESOLUTION_FILE "./AidF_Nav_Resolution.ini"
 
 class AidF_Nav_Computer {
 public:
@@ -53,7 +61,7 @@ private:
 
 	void getBackground();
 
-	uint8_t key_position = 0, door_position = 0;
+	uint8_t key_position = 1, door_position = 0;
 
 	uint16_t lw, lh;
 	bool night = false;
@@ -89,4 +97,9 @@ void loop(AidF_Nav_Computer* nav_computer);
 
 int main(int argc, char* args[]);
 
+void getResolution(int* w, int* h);
+void saveResolution(const int w, const int h);
+
 void *frameThread(void* frame_v);
+
+#endif

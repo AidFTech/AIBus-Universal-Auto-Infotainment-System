@@ -41,7 +41,7 @@ pub struct MpvVideo {
 }
 
 impl MpvVideo {
-	pub fn new(width: u16, height: u16) -> Result<MpvVideo, String> {
+	pub fn new(width: u16, height: u16, fullscreen: bool) -> Result<MpvVideo, String> {
 		let mut mpv_cmd = Command::new("mpv");
 		let process;
 		mpv_cmd.arg(format!("--geometry={}x{}", width, height));
@@ -49,10 +49,16 @@ impl MpvVideo {
 		mpv_cmd.arg("--demuxer-rawvideo-fps=60");
 		mpv_cmd.arg("--untimed");
 		mpv_cmd.arg("--osc=no");
+
+		if fullscreen {
+			mpv_cmd.arg("--fs=yes");
+		}
+
 		mpv_cmd.arg("--fps=60");
 		mpv_cmd.arg("--profile=low-latency");
 		mpv_cmd.arg("--no-correct-pts");
-		mpv_cmd.arg(format!("--video-aspect-override={}/{}", width, height));
+		//mpv_cmd.arg(format!("--video-aspect-override={}/{}", width, height));
+		mpv_cmd.arg("--video-unscaled=yes");
 		mpv_cmd.arg("--input-ipc-server=/tmp/mka_cmd");
 		mpv_cmd.arg("-");
 		match mpv_cmd.stdin(Stdio::piped()).spawn() {
@@ -127,8 +133,13 @@ impl MpvVideo {
 		self.save_overlay_image();
 
 		let overlay_height = self.h/10;
+		let file_size = self.w*4;
 
-		let overlay_str = "overlay-add 0 0 0 \"/tmp/overlay.bmp\" 122 bgra ".to_string() + &self.w.to_string() + &" ".to_string() + &overlay_height.to_string() + &" 3200\n".to_string();
+		let overlay_str = "overlay-add 0 0 0 \"/tmp/overlay.bmp\" 122 bgra ".to_string() +
+			&self.w.to_string() + &" ".to_string() + 
+			&overlay_height.to_string() + &" ".to_string() +
+			&file_size.to_string() + &" \n".to_string();
+			
 		match mpv_ipc.write(overlay_str.as_bytes()) {
 			Ok(_) => {
 				
