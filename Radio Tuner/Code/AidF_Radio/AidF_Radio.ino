@@ -233,6 +233,8 @@ void setup() {
 
 //Arduino loop function.
 void loop() {
+	bool power_switched = false; //Keep track if power was just turned on.
+
 	if(parameters.minute_timer > MINUTE_TIMER) {
 		parameters.minute_timer = 0;
 		if(parameters.min >= 0 && parameters.hour >= 0) {
@@ -258,14 +260,24 @@ void loop() {
 			} else if(msg.receiver == 0xFF && msg.data[0] == 0xA1) {
 				if(msg.data[1] == 0x2) { //Key position.
 					const uint8_t pos = msg.data[2];
-					if(pos != 0)
+					if(pos != 0) {
 						*power_on = true;
+						power_switched = true;
+					}
 				}
 			}
 		}
 		
 		delay(500);
-		return;
+
+		if(!power_switched)
+			return;
+	}
+
+	if(power_switched) {
+		digitalWrite(POWER_ON_SW, HIGH);
+		adc_handler.init();
+		source_handler.sendRadioHandshake();
 	}
 	
 	const uint8_t last_active_source_id = source_handler.getCurrentSourceID();
@@ -281,7 +293,6 @@ void loop() {
 	const bool last_phone = parameters.phone_active;
 
 	AIData msg;
-	
 	do {
 		if(aibus_handler.dataAvailable() > 0) {
 			if(aibus_handler.readAIData(&msg)) {
@@ -305,7 +316,7 @@ void loop() {
 	const uint16_t source_count = source_handler.getFilledSources(source_list), current_source = source_handler.getCurrentSource();
 	
 	//Source changed.
-	if(source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source || parameters.phone_active != last_phone) {
+	if(power_switched || source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source || parameters.phone_active != last_phone) {
 		src_ping_timer = 0;
 		parameters.info_mode = false;
 		parameters.current_preset = 0;
@@ -752,9 +763,10 @@ void handleAIBus(AIData* msg) {
 	} else if(msg->receiver == 0xFF && msg->data[0] == 0xA1 && msg->sender != ID_RADIO) {
 		if(msg->data[1] == 0x2) { //Key position.
 			const uint8_t pos = msg->data[2];
-			if(pos == 0)
+			if(pos == 0) {
 				parameters.power_on = false;
-			else
+				powerOff();
+			} else
 				parameters.power_on = true;
 			
 		} else if(msg->data[1] == 0x1F && msg->l >= 3) {
@@ -1060,4 +1072,20 @@ void sendIMIDRequest() {
 
 	if(parameters.min >= 0 && parameters.hour >= 0)
 		text_handler.sendTime();
+}
+
+//Power off procedure.
+void powerOff() {
+	parameters.computer_connected = false;
+	parameters.amp_connected = false;
+	parameters.mirror_connected = false;
+	parameters.imid_connected = false;
+
+	parameters.imid_char = 0;
+	parameters.imid_lines = 0;
+	parameters.imid_radio = false;
+
+	digitalWrite(POWER_ON_SW, LOW);
+	digitalWrite(AUDIO_ON_SW, HIGH);
+	adc_handler.powerOff();
 }

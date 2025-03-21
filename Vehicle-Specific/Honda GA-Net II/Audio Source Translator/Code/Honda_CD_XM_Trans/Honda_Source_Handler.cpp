@@ -116,8 +116,14 @@ void HondaSourceHandler::requestRadioControl() {
 	ai_driver->writeAIData(&request_msg, parameter_list->radio_connected);
 }
 
+//Return established status.
 bool HondaSourceHandler::getEstablished() {
 	return this->source_established;
+}
+
+//Clear established status.
+void HondaSourceHandler::clearEstablished() {
+	this->source_established = false;
 }
 
 bool HondaSourceHandler::getSelected() {

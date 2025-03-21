@@ -24,6 +24,8 @@ public:
 	bool getEstablished();
 	bool getSelected();
 
+	void clearEstablished();
+
 	virtual void requestControl();
 	void sendMirrorMessage(String text, const uint8_t index, const bool refresh);
 protected:

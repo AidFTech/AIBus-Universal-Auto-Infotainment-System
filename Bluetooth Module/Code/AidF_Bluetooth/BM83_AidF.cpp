@@ -73,6 +73,13 @@ void BM83::loop() {
 //Start up the BM83.
 void BM83::init() {
 	this->sendPowerOn();
+
+	uint8_t version_data[] = {0x1};
+	BM83Data version_msg(sizeof(version_data), 0x8);
+	version_msg.refreshBMData(version_data);
+	
+	sendBM83Message(&version_msg);
+
 	this->sendDeviceName("AidF Audio System");
 	this->sendDevicePIN();
 }
@@ -92,12 +99,30 @@ bool BM83::handleAIBus(AIData* ai_msg) {
 					this->activatePairing();
 					break;
 				}
+			} else if(call_status == CALL_STATUS_IDLE && active_device != NULL) { //Phone connected but not in an active call.
+				switch(ai_msg->data[2]) {
+				case 1: //Dial pad.
+					//TODO
+					break;
+				case 2: //Contacts.
+					//TODO
+					break;
+				case 3: //Recent calls.
+					//TODO
+					break;
+				case 5: //Disconnect.
+					disconnect();
+					break;
+				}
 			}
+			return true;
 		}
 	}
 
-	if(ack)
-		ai_handler->sendAcknowledgement(ID_PHONE, ai_msg->sender);
+	if(ack) {
+		if(ai_msg->l >= 1 && ai_msg->data[0] != 0x80)
+			ai_handler->sendAcknowledgement(ID_PHONE, ai_msg->sender);
+	}
 
 	return false;
 }
@@ -122,9 +147,12 @@ void BM83::sendDeviceName(String name) {
 	if(name.length() > 32)
 		name = name.substring(0, 32);
 
-	uint8_t name_bytes[name.length()];
+	uint8_t name_bytes[32];
 	for(int i=0;i<name.length();i+=1)
 		name_bytes[i] = uint8_t(name[i]);
+
+	for(int i=name.length();i<sizeof(name_bytes);i+=1)
+		name_bytes[i] = 0;
 	
 	BM83Data name_msg(name.length(), 0x5);
 	name_msg.refreshBMData(name_bytes);
@@ -149,6 +177,7 @@ void BM83::sendDevicePIN(uint16_t pin) {
 	pin_data[3] = pin%10 + '0';
 
 	BM83Data pin_msg(sizeof(pin_data), 0x6);
+	pin_msg.refreshBMData(pin_data);
 	sendBM83Message(&pin_msg);
 }
 
@@ -178,16 +207,31 @@ void BM83::sendBM83Message(BM83Data* msg) {
 	for(int i=1;i<sizeof(msg_bytes) - 1;i+=1)
 		checksum += msg_bytes[i];
 
-	msg_bytes[sizeof(msg_bytes)-1] = (~(checksum&0xFF) + 1)&0xFF;
+	msg_bytes[sizeof(msg_bytes)-1] = (~checksum + 1)&0xFF;
 
-	serial->write(msg_bytes, msg->l + 5);
+	serial->write(msg_bytes, sizeof(msg_bytes));
 	serial->flush();
+
+	AIData bm83_msg(sizeof(msg_bytes), ID_PHONE, 0xFF);
+	bm83_msg.refreshAIData(msg_bytes);
+	ai_handler->writeAIData(&bm83_msg, false);
 
 	//TODO: Acknowledgement.
 }
 
 //Decode a BM83 message.
 BM83Data BM83::getBM83Message(uint8_t* data, const int l) {
+	{
+		uint8_t bm83_data[l];
+
+		for(int i=0;i<l;i+=1)
+			bm83_data[i] = data[i];
+
+		AIData bm83_msg(sizeof(bm83_data), ID_PHONE, 0xFF);
+		bm83_msg.refreshAIData(bm83_data);
+		ai_handler->writeAIData(&bm83_msg, false);
+	}
+
 	if(l < 5 || data[0] != BM83_START_BYTE)
 		return BM83Data(0,0);
 
@@ -201,22 +245,10 @@ BM83Data BM83::getBM83Message(uint8_t* data, const int l) {
 		rx_msg.data[i] = data[i+4];
 
 	int checksum = 0;
-	for(int i=0;i<l-1;i+=1)
+	for(int i=1;i<l-1;i+=1)
 		checksum += data[i];
 
-	uint8_t checksum_b = (~(checksum&0xFF) + 1)&0xFF;
-
-	{
-		uint8_t bm83_data[rx_msg.l + 1];
-		bm83_data[0] = rx_msg.opcode;
-
-		for(int i=0;i<rx_msg.l;i+=1)
-			bm83_data[i+1] = rx_msg.data[i];
-
-		AIData bm83_msg(sizeof(bm83_data), ID_PHONE, 0xFF);
-		bm83_msg.refreshAIData(bm83_data);
-		ai_handler->writeAIData(&bm83_msg, false);
-	}
+	uint8_t checksum_b = (~checksum + 1)&0xFF;
 
 	if(data[l-1] != checksum_b)
 		return BM83Data(0,0);
@@ -402,6 +434,15 @@ void BM83::sendConnect(BluetoothDevice* device) {
 	sendBM83Message(&connect_msg);
 }
 
+//Disconnect the device.
+void BM83::disconnect() {
+	uint8_t disconnect_data[] = {0x3F};
+	BM83Data disconnect_msg(sizeof(disconnect_data), 0x18);
+
+	disconnect_msg.refreshBMData(disconnect_data);
+	sendBM83Message(&disconnect_msg);
+}
+
 //Activate a Bluetooth device.
 void BM83::activateBTDevice(const uint8_t id) {
 	this->active_device = new BluetoothDevice();
@@ -411,7 +452,7 @@ void BM83::activateBTDevice(const uint8_t id) {
 BM83Data::BM83Data(const uint16_t l, const uint8_t opcode) {
 	this->data = new uint8_t[l];
 	this->l = l;
-	this->opcode = l;
+	this->opcode = opcode;
 }
 
 BM83Data::~BM83Data() {

@@ -136,6 +136,9 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 	if(the_message->l >= 1 && the_message->data[0] == 0x80) //Acknowledgement.
 		return;
 
+	if(!parameter_list->power_on)
+		return;
+
 	bool ack = true;
 
 	if(the_message->l >= 3 && the_message->data[0] == 0x4 && the_message->data[1] == 0xE6 && the_message->data[2] == 0x3B) {

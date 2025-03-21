@@ -44,6 +44,7 @@ void PCM9211Handler::init() {
 //Turn the ADC off.
 void PCM9211Handler::powerOff() {
 	writeRegister(REG_POWER_CONTROL, 0x33);
+	writeRegister(REG_OUTPUT_PORT, 0x33);
 }
 
 //Set the output to the ADC.

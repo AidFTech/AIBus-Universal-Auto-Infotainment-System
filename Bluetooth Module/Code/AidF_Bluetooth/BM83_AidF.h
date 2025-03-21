@@ -69,6 +69,7 @@ private:
 	void activatePairing();
 
 	void sendConnect(BluetoothDevice* device);
+	void disconnect();
 
 	void handleBM83Message(BM83Data* msg);
 	void handleCallerID(BM83Data* msg);

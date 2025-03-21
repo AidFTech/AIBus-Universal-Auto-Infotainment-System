@@ -21,6 +21,10 @@ struct ParameterList {
 	bool computer_connected = false, screen_connected = false, radio_connected = false, mirror_connected = false;
 	bool imid_connected = false;
 
+	uint8_t key_position = 0, door_position = 0;
+
+	int8_t audio_pin = -1;
+
 	uint8_t external_imid_char = 0, external_imid_lines = 0;
 	bool external_imid_tape = false, external_imid_cd = false, external_imid_xm = false;
 

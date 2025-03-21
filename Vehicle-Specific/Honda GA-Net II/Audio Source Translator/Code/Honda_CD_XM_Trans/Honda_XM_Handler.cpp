@@ -328,6 +328,9 @@ void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 	if(the_message->receiver != ID_XM)
 		return;
+
+	if(!parameter_list->power_on)
+		return;
 	
 	bool ack = true;
 	const uint8_t sender = the_message->sender;
@@ -542,6 +545,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 					xm2 = true;
 			}
 
+			if(parameter_list->audio_pin >= 0)
+				digitalWrite(parameter_list->audio_pin, HIGH);
+
 			source_sel = true;
 			sendFunctionMessage(ie_driver, true, IE_ID_SIRIUS, function, sizeof(function));
 			sendFunctionMessage(ie_driver, false, IE_ID_SIRIUS, function, sizeof(function));
@@ -622,6 +628,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				getIEAckMessage(device_ie_id);
 				requestControl(active_source);
 			}
+
+			if(parameter_list->audio_pin >= 0)
+				digitalWrite(parameter_list->audio_pin, LOW);
 
 			this->text_control = false;
 			this->manual_tune = false;
