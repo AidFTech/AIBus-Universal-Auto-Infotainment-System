@@ -149,7 +149,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		AIData screen_field_msg(sizeof(screen_field_data), ID_IMID_SCR, the_message->sender);
 		screen_field_msg.refreshAIData(screen_field_data);
 
-		uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM, ID_ANDROID_AUTO};
+		uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM, ID_PHONE, ID_ANDROID_AUTO};
 		AIData screen_oem_msg(sizeof(screen_oem_data), ID_IMID_SCR, the_message->sender);
 		screen_oem_msg.refreshAIData(screen_oem_data);
 
@@ -296,6 +296,37 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		writeIMIDSiriusTextMessage(field, text);
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+	} else if(the_message->sender == ID_PHONE && the_message->l >= 5 && the_message->data[0] == 0x3B) { //Bluetooth timer.
+		const long time = the_message->data[4] | (the_message->data[3]<<8);
+		setBTTimer(time);
+	} else if(the_message->sender == ID_PHONE && the_message->l >= 3 && the_message->data[0] == 0x23 && (the_message->data[1]&0xF0) == 0x60) { //Bluetooth text message.
+		ack = false;
+		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+		
+		uint8_t leader = 0xFF;
+
+		switch(the_message->data[1]) {
+		case 0x61:
+			leader = 0x42;
+			break;
+		case 0x62:
+			leader = 0x43;
+			break;
+		case 0x63:
+			leader = 0x44;
+			break;
+		case 0x64:
+			leader = 0x41;
+			break;
+		default:
+			return;
+		}
+
+		String sent_text = "";
+		for(int i=3;i<the_message->l;i+=1)
+			sent_text += char(the_message->data[i]);
+
+		this->setBTText(leader, sent_text);
 	} else if(the_message->sender == ID_ANDROID_AUTO && the_message-> l >= 2 && the_message->data[0] == 0x23 && (the_message->data[1]&0xF0) == 0x60) { //Mirror text message.
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
@@ -345,7 +376,7 @@ void HondaIMIDHandler::writeScreenLayoutMessage() {
 	AIData screen_field_msg(sizeof(screen_field_data), ID_IMID_SCR, 0xFF);
 	screen_field_msg.refreshAIData(screen_field_data);
 
-	uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM, ID_ANDROID_AUTO};
+	uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM, ID_PHONE, ID_ANDROID_AUTO};
 	AIData screen_oem_msg(sizeof(screen_oem_data), ID_IMID_SCR, 0xFF);
 	screen_oem_msg.refreshAIData(screen_oem_data);
 
@@ -555,6 +586,13 @@ bool HondaIMIDHandler::setIMIDSource(const uint8_t source, const uint8_t subsour
 			setBTMode();
 
 		return true;
+	} else if (source == ID_PHONE) {
+		uint8_t source_data[] = {0x23, 0x0, 0x0};
+		sendFunctionMessage(ie_driver, new_source, IE_ID_IMID, source_data, sizeof(source_data));
+		getIEAckMessage(device_ie_id);
+
+		if(new_source)
+			setBTMode();
 	} else
 		return false;
 }
@@ -697,6 +735,24 @@ void HondaIMIDHandler::setBTMode() {
 		return;
 
 	ie_driver->sendMessage(&bta_msg6, true, true);
+}
+
+//Set a BTA timer.
+void HondaIMIDHandler::setBTTimer(const long time) {
+	uint8_t timer_data[] = {0x60, 0x23, 0x11, 0x0, 0x1, 0x0, 0xFF, 0xFF, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0, 0xFF, 0xF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+	const int sec = getBCDFromByte(time%60), min = getBCDFromByte(time/60);
+
+	timer_data[17] = uint8_t(sec&0xFF);
+	if(min >= 0x10)
+		timer_data[16] = uint8_t(min&0xFF);
+	else
+		timer_data[16] = uint8_t((min&0xFF) | 0xF0);
+
+	IE_Message timer_msg(sizeof(timer_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	timer_msg.refreshIEData(timer_data);
+
+	ie_driver->sendMessage(&timer_msg, true, true);
 }
 
 //Set a BTA text field.

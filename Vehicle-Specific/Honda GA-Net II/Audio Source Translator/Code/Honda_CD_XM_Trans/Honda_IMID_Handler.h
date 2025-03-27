@@ -77,6 +77,7 @@ private:
 	void setIPodText(const uint8_t field, String text);
 
 	void setBTMode();
+	void setBTTimer(const long time);
 	void setBTText(const uint8_t field, String text);
 };
 

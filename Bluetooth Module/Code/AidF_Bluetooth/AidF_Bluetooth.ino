@@ -126,14 +126,13 @@ void loop() {
 
 			if(!parameters.navi_connected && ai_msg.sender == ID_NAV_COMPUTER) {
 				parameters.navi_connected = true;
-				text_handler.writeNaviText("Phone", 0, 0);
+				text_handler.writeNaviPhoneText("Phone", 0, 0);
 				text_handler.createDisconnectedButtons(false);
 			}
 
 			if(!parameters.radio_connected && ai_msg.sender == ID_RADIO) {
 				parameters.radio_connected = true;
-
-				//TODO: Send source handshake.
+				bm83_handler.sendAIBusHandshake();
 			}
 
 			if(!parameters.imid_connected && ai_msg.sender == ID_IMID_SCR) {

@@ -91,7 +91,42 @@ bool BM83::handleAIBus(AIData* ai_msg) {
 
 	bool ack = true;
 
-	if(ai_msg->sender == ID_NAV_COMPUTER) {
+	if(ai_msg->sender == ID_RADIO) {
+		if(ai_msg->l >= 3 && ai_msg->data[0] == 0x40 && ai_msg->data[1] == 0x10) { //Source change.
+			ack = false;
+			ai_handler->sendAcknowledgement(ID_PHONE, ai_msg->sender);
+			
+			const bool selected = ai_msg->data[2] == ID_PHONE;
+			if(selected) {
+				this->phone_audio_sel = true;
+				this->sendMusicCommand(MUSIC_PLAY);
+			} else {
+				this->phone_audio_sel = true;
+				this->text_control = false;
+				this->sendMusicCommand(MUSIC_STOP);
+			}
+			return true;
+		} else if(ai_msg->l >= 3 && ai_msg->data[0] == 0x40 && ai_msg->data[1] == 0x10) { //Text control.
+			ack = false;
+			ai_handler->sendAcknowledgement(ID_PHONE, ai_msg->sender);
+			
+			const bool text_control = ai_msg->data[2] == ID_PHONE;
+			if(text_control) {
+				this->text_control = true;
+				text_handler->writeSongTitle(this->song_title);
+				text_handler->writeArtist(this->artist);
+				text_handler->writeAlbum(this->album);
+
+				if(this->active_device != NULL)
+					text_handler->writePhoneName(active_device->device_name);
+
+				text_handler->writeTime(this->song_time);
+			} else {
+				this->text_control = false;
+			}
+			return true;
+		}
+	} else if(ai_msg->sender == ID_NAV_COMPUTER) {
 		if(ai_msg->l >= 3 && ai_msg->data[0] == 0x2B && ai_msg->data[1] == 0x6C) { //Menu item selected.
 			if(call_status == CALL_STATUS_IDLE && active_device == NULL) { //Phone not connected.
 				switch(ai_msg->data[2]) {
@@ -125,6 +160,23 @@ bool BM83::handleAIBus(AIData* ai_msg) {
 	}
 
 	return false;
+}
+
+//Send the AIBus radio handshake.
+void BM83::sendAIBusHandshake() {
+	uint8_t ai_handshake_data[] = {0x1, 0x1, ID_PHONE};
+	AIData ai_handshake_msg(sizeof(ai_handshake_data), ID_PHONE, ID_RADIO);
+
+	ai_handshake_msg.refreshAIData(ai_handshake_data);
+	
+	ai_handler->writeAIData(&ai_handshake_msg, parameter_list->radio_connected);
+
+	uint8_t ai_name_data[] = {0x1, 0x23, 0x0, 'B', 'l', 'u', 'e', 't', 'o', 'o', 't', 'h'};
+	AIData ai_name_msg(sizeof(ai_name_data), ID_PHONE, ID_RADIO);
+
+	ai_name_msg.refreshAIData(ai_name_data);
+	
+	ai_handler->writeAIData(&ai_name_msg, parameter_list->radio_connected);
 }
 
 //Send the power on command.
@@ -188,6 +240,15 @@ void BM83::activatePairing() {
 	pair_msg.refreshBMData(pair_data);
 
 	sendBM83Message(&pair_msg);
+}
+
+//Send a music command to the BM83.
+void BM83::sendMusicCommand(const uint8_t command) {
+	uint8_t music_data[] = {0x0, command};
+	BM83Data music_msg(sizeof(music_data), 0x4);
+
+	music_msg.refreshBMData(music_data);
+	sendBM83Message(&music_msg);
 }
 
 //Send a message to the BM83.
@@ -325,8 +386,8 @@ void BM83::handleBM83Message(BM83Data* msg) {
 				this->caller_id = "";
 				this->caller_number = "";
 
-				text_handler->writeNaviText("", 0, 2);
-				text_handler->writeNaviText("", 0, 3);
+				text_handler->writeNaviPhoneText("", 0, 2);
+				text_handler->writeNaviPhoneText("", 0, 3);
 
 				if(active_device != NULL)
 					text_handler->createConnectedButtons();
@@ -362,7 +423,7 @@ void BM83::handleBM83Message(BM83Data* msg) {
 				break;
 			}
 
-			text_handler->writeNaviText(status, 0, 1);
+			text_handler->writeNaviPhoneText(status, 0, 1);
 		}
 
 		call_status = new_call_status;
@@ -403,7 +464,7 @@ void BM83::handleCallerID(BM83Data* msg) {
 
 		ai_handler->writeAIData(&call_msg, parameter_list->radio_connected);
 
-		text_handler->writeNaviText(caller_id, 0, 3);
+		text_handler->writeNaviPhoneText(caller_id, 0, 3);
 	} else {
 		this->caller_number = id_text;
 
@@ -413,7 +474,7 @@ void BM83::handleCallerID(BM83Data* msg) {
 
 		ai_handler->writeAIData(&call_msg, parameter_list->radio_connected);
 
-		text_handler->writeNaviText(caller_number, 0, 2);
+		text_handler->writeNaviPhoneText(caller_number, 0, 2);
 	}
 }
 

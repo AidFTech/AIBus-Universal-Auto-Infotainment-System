@@ -25,6 +25,18 @@
 #define CALL_STATUS_OUTGOING 3
 #define CALL_STATUS_VOICE 4
 
+#define MUSIC_STOP_FF_FR 0x0
+#define MUSIC_FF 0x1
+#define MUSIC_FF_REPEAT 0x2
+#define MUSIC_FR 0x3
+#define MUSIC_FR_REPEAT 0x4
+#define MUSIC_PLAY 0x5
+#define MUSIC_PAUSE 0x6
+#define MUSIC_TOGGLE 0x7
+#define MUSIC_STOP 0x8
+#define MUSIC_NEXT 0x9
+#define MUSIC_BACK 0xA
+
 struct BM83Data {
 	uint8_t* data;
 	uint8_t opcode;
@@ -47,6 +59,7 @@ public:
 	void init();
 
 	bool handleAIBus(AIData* ai_msg);
+	void sendAIBusHandshake();
 private:
 	Stream* serial;
 	AIBusHandler* ai_handler;
@@ -60,6 +73,11 @@ private:
 	uint8_t bm83_status = BM83_STATUS_OFF, call_status = CALL_STATUS_IDLE;
 
 	String caller_number = "", caller_id = "";
+
+	String song_title = "", artist = "", album = "";
+	long song_time = -1;
+
+	bool phone_audio_sel = false, text_control = false;
 	
 	void sendPowerOn();
 	void sendDeviceName(String name);
@@ -78,6 +96,8 @@ private:
 	BM83Data getBM83Message(uint8_t* data, const int l);
 
 	void activateBTDevice(const uint8_t id);
+
+	void sendMusicCommand(const uint8_t command);
 };
 
 #endif
