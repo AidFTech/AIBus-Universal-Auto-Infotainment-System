@@ -296,7 +296,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		writeIMIDSiriusTextMessage(field, text);
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-	} else if(the_message->sender == ID_PHONE && the_message->l >= 5 && the_message->data[0] == 0x3B) { //Bluetooth timer.
+	} else if((the_message->sender == ID_PHONE || the_message->sender == ID_ANDROID_AUTO) && the_message->l >= 5 && the_message->data[0] == 0x3B) { //Bluetooth timer.
 		const long time = the_message->data[4] | (the_message->data[3]<<8);
 		setBTTimer(time);
 	} else if(the_message->sender == ID_PHONE && the_message->l >= 3 && the_message->data[0] == 0x23 && (the_message->data[1]&0xF0) == 0x60) { //Bluetooth text message.
@@ -354,7 +354,11 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		for(int i=2;i<the_message->l;i+=1)
 			sent_text += char(the_message->data[i]);
 
-		this->setBTText(leader, sent_text);
+		if(sent_text.length() >= 0 || leader != 0x45)
+			this->setBTText(leader, sent_text);
+		else {
+			
+		}
 	}
 
 	if(ack)
@@ -593,12 +597,14 @@ bool HondaIMIDHandler::setIMIDSource(const uint8_t source, const uint8_t subsour
 
 		if(new_source)
 			setBTMode();
+
+		return true;
 	} else
 		return false;
 }
 
 //Set the screen to show "iPod."
-void HondaIMIDHandler::setIPodMode() {
+void HondaIMIDHandler::setUSBMode() {
 	uint8_t ipod_data_0[] = {0x10, 0x12, 0x11, 0x0, 0x0};
 	uint8_t ipod_data_1[] = {0x60, 0x2, 0x11, 0x0, 0x1, 0x0, 0xB, 0x10, 0x0, 0x30, 0x10, 0x0, 0x9, 0x0, 0x0, 0x0};
 	uint8_t ipod_data_2[] = {0x60, 0x12, 0x11, 0x0, 0x0, 0x1, 0x0, 0x0};
@@ -644,21 +650,21 @@ void HondaIMIDHandler::setIPodMode() {
 	if(!getIEAckMessage(device_ie_id))
 		return;
 		
-	clearIPodText(0xBD);
-	clearIPodText(0xB8);
-	clearIPodText(0xBA);
-	clearIPodText(0xB9);
-	clearIPodText(0xBF);
+	clearUSBText(0xBD);
+	clearUSBText(0xB8);
+	clearUSBText(0xBA);
+	clearUSBText(0xB9);
+	clearUSBText(0xBF);
 		
-	setIPodText(0xBD, "");
-	setIPodText(0xB8, "");
-	setIPodText(0xBA, "");
-	setIPodText(0xB9, "");
-	setIPodText(0xBF, "");
+	setUSBText(0xBD, "");
+	setUSBText(0xB8, "");
+	setUSBText(0xBA, "");
+	setUSBText(0xB9, "");
+	setUSBText(0xBF, "");
 }
 
 //Clear the iPod text fields.
-void HondaIMIDHandler::clearIPodText(const uint8_t field) {
+void HondaIMIDHandler::clearUSBText(const uint8_t field) {
 	uint8_t text_data[] = {0x60, 0x22, 0x11, 0x0, 0x3, field, 0x2, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
 
 
@@ -673,7 +679,7 @@ void HondaIMIDHandler::clearIPodText(const uint8_t field) {
 }
 
 //Set an iPod/USB(?) text field.
-void HondaIMIDHandler::setIPodText(const uint8_t field, String text) {
+void HondaIMIDHandler::setUSBText(const uint8_t field, String text) {
 	uint8_t text_data[] = {0x60, 0x22, 0x11, 0x0, 0x3, field, 0x2, 0x2, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 	
 	int limit = text.length();
@@ -691,7 +697,7 @@ void HondaIMIDHandler::setIPodText(const uint8_t field, String text) {
 
 //Set the screen to show full BTA.
 void HondaIMIDHandler::setBTMode() {
-	this->imid_mode = ID_ANDROID_AUTO;
+	this->imid_mode = ID_PHONE;
 
 	uint8_t bta_data1[] = {0x60, 0x23, 0x11, 0x0, 0xD1, 0x10, 0x0, 0x7A};
 	uint8_t bta_data2[] = {0x60, 0x23, 0x11, 0x0, 0xD1, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
@@ -737,8 +743,34 @@ void HondaIMIDHandler::setBTMode() {
 	ie_driver->sendMessage(&bta_msg6, true, true);
 }
 
+//Set the screen to show BTA with "device not connected."
+void HondaIMIDHandler::setBTModeNotConnected() {
+	this->imid_mode = 0x100 | ID_PHONE;
+
+	uint8_t bta_data1[] = {0x60, 0x23, 0x11, 0x0, 0xD1, 0x10, 0x0, 0x7A};
+	uint8_t bta_data2[] = {0x60, 0x23, 0x11, 0x0, 0xD1, 0x1, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
+	//TODO: Additional messages as needed.
+
+	IE_Message bta_msg1(sizeof(bta_data1), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+	IE_Message bta_msg2(sizeof(bta_data2), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
+
+	bta_msg1.refreshIEData(bta_data1);
+	bta_msg2.refreshIEData(bta_data2);
+
+	ie_driver->sendMessage(&bta_msg1, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+
+	ie_driver->sendMessage(&bta_msg2, true, true);
+	if(!getIEAckMessage(device_ie_id))
+		return;
+}
+
 //Set a BTA timer.
 void HondaIMIDHandler::setBTTimer(const long time) {
+	if((this->imid_mode&0xFF) != ID_PHONE)
+		this->setBTMode();
+
 	uint8_t timer_data[] = {0x60, 0x23, 0x11, 0x0, 0x1, 0x0, 0xFF, 0xFF, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0, 0xFF, 0xF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 	const int sec = getBCDFromByte(time%60), min = getBCDFromByte(time/60);
@@ -757,7 +789,7 @@ void HondaIMIDHandler::setBTTimer(const long time) {
 
 //Set a BTA text field.
 void HondaIMIDHandler::setBTText(const uint8_t field, String text) {
-	if((this->imid_mode&0xFF) != ID_ANDROID_AUTO)
+	if((this->imid_mode&0xFF) != ID_PHONE)
 		this->setBTMode();
 
 	uint8_t text_data[] = {0x60, 0x23, 0x11, 0x0, 0x1, field, 0x6, 0x1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};

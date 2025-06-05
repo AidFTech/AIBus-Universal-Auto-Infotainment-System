@@ -540,6 +540,8 @@ impl <'a> AMirror<'a> {
 						}
 
 						self.write_nav_text(time_text, 0, 1, true);
+						self.write_time(AIBUS_DEVICE_RADIO, context.track_time as u16);
+						self.write_time(AIBUS_DEVICE_IMID, context.track_time as u16);
 					} else {
 						let clear_data = [0x20, 0x71, 0x0].to_vec();
 						self.write_aibus_message(AIBusMessage {
@@ -547,6 +549,9 @@ impl <'a> AMirror<'a> {
 							receiver: AIBUS_DEVICE_NAV_COMPUTER,
 							data: clear_data,
 						});
+
+						self.write_time(AIBUS_DEVICE_RADIO, 0);
+						self.write_time(AIBUS_DEVICE_IMID, 0);
 					}
 				}
 			}
@@ -1359,6 +1364,18 @@ impl <'a> AMirror<'a> {
 				}
 			}
 		}*/
+	}
+
+	//Write track time.
+	fn write_time(&mut self, recipient: u8, time: u16) {
+		let time_data = [0x3B, 0x0, 0x0, (time>>8) as u8, (time&0xFF) as u8].to_vec();
+		let time_msg = AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: recipient,
+			data: time_data,
+		};
+
+		self.write_aibus_message(time_msg);
 	}
 
 	//Write metadata.

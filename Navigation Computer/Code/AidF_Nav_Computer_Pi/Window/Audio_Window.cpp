@@ -373,7 +373,7 @@ void Audio_Window::refreshAudioScreen() {
 
 void Audio_Window::interpretMenuChange(AIData* ai_b) {
 	if(ai_b->sender == ID_NAV_SCREEN) {
-		if(ai_b->data[0] == 0x32) {
+		if(ai_b->data[0] == 0x32 && ai_b->data[1] == 0x7) {
 			const bool clockwise = (ai_b->data[2]&0x10) != 0;
 			const uint8_t steps = ai_b->data[2]&0xF;
 

@@ -177,45 +177,125 @@ int16_t NavMenu::getY() {
 	return this->y;
 }
 
+//Increment the selected option.
 void NavMenu::incrementSelected() {
-	uint16_t new_selected = this->selected + 1;
-
-	if(new_selected > this->length)
-		new_selected = 1;
-	
-	bool loop = false;
-	while((items[new_selected - 1].compare("") == 0 || items[new_selected - 1].compare(" ") == 0) && new_selected <= this->length) {
-		new_selected += 1;
-		if(new_selected > this->length && !loop) {
-			new_selected = 1;
-			loop = true;
-		} else if(new_selected > this->length)
-			return;
-	}
-
-	if(new_selected > this->length)
-		new_selected = 1;
-
-	this->setSelected(new_selected);
+	this->incrementSelected(true);
 }
 
+//Decrement the selected option.
 void NavMenu::decrementSelected() {
-	uint16_t new_selected = this->selected - 1;
+	this->decrementSelected(true);
+}
 
-	if(new_selected < 1 || this->selected < 1)
-		new_selected = this->length;
-	
-	bool loop = false;
-	while((items[new_selected - 1].compare("") == 0 || items[new_selected - 1].compare(" ") == 0) && new_selected >= 1) {
-		new_selected -= 1;
-		if(new_selected < 1 && !loop) {
-			new_selected = this->length;
-			loop = true;
-		} else if(new_selected < 1)
-			return;
+//Increment the selected option.
+void NavMenu::incrementSelected(const bool two_row_support) {
+	if(this->rows == this->length || this->rows != 2 || this->loop || !two_row_support) {
+		uint16_t new_selected = this->selected + 1;
+
+		if(new_selected > this->length)
+			new_selected = 1;
+		
+		bool loop = false;
+		while((items[new_selected - 1].compare("") == 0 || items[new_selected - 1].compare(" ") == 0) && new_selected <= this->length) {
+			new_selected += 1;
+			if(new_selected > this->length && !loop) {
+				new_selected = 1;
+				loop = true;
+			} else if(new_selected > this->length)
+				return;
+		}
+
+		if(new_selected > this->length)
+			new_selected = 1;
+
+		this->setSelected(new_selected);
+	} else {
+		int new_selected = this->selected;
+		if(this->selected%2 == 1)
+			new_selected = this->selected - 2;
+		else
+			new_selected = this->selected + 2;
+
+		if(new_selected <= 0)
+			new_selected = 2;
+		else if(new_selected > this->length)
+			new_selected = this->length - 1;
+
+		bool loop = false;
+
+		while((items[new_selected - 1].compare("") == 0 || items[new_selected - 1].compare(" ") == 0) && new_selected <= this->length) {
+			if(new_selected%2 == 1)
+				new_selected -= 2;
+			else
+				new_selected += 2;
+			
+			if(new_selected <= 0) {
+				new_selected = 2;
+			} else if(new_selected > this->length) {
+				new_selected = this->length - 1;
+				loop = true;
+			}
+
+			if(loop && new_selected == selected)
+				return;
+		}
+
+		this->setSelected(uint16_t(new_selected));
 	}
+}
 
-	this->setSelected(new_selected);
+//Decrement the selected option.
+void NavMenu::decrementSelected(const bool two_row_support) {
+	if(this->rows == this->length || this->rows != 2 || this->loop || !two_row_support) {
+		uint16_t new_selected = this->selected - 1;
+
+		if(new_selected < 1 || this->selected < 1)
+			new_selected = this->length;
+		
+		bool loop = false;
+		while((items[new_selected - 1].compare("") == 0 || items[new_selected - 1].compare(" ") == 0) && new_selected >= 1) {
+			new_selected -= 1;
+			if(new_selected < 1 && !loop) {
+				new_selected = this->length;
+				loop = true;
+			} else if(new_selected < 1)
+				return;
+		}
+
+		this->setSelected(new_selected);
+	} else {
+		int new_selected = this->selected;
+		if(this->selected%2 == 1)
+			new_selected = this->selected + 2;
+		else
+			new_selected = this->selected - 2;
+
+		if(new_selected <= 0)
+			new_selected = 1;
+		else if(new_selected > this->length)
+			new_selected = this->length;
+
+		bool loop = false;
+
+		while((items[new_selected - 1].compare("") == 0 || items[new_selected - 1].compare(" ") == 0) && new_selected <= this->length) {
+			if(new_selected%2 == 1)
+				new_selected += 2;
+			else
+				new_selected -= 2;
+			
+			if(new_selected <= 0) {
+				new_selected = 1;
+				loop = true;
+			} else if(new_selected > this->length) {
+				new_selected = this->length;
+			}
+
+			if(loop && new_selected == selected)
+				return;
+		}
+
+		this->setSelected(uint16_t(new_selected));
+	}
 }
 
 void NavMenu::navigateSelected(const int8_t direction) {
@@ -239,7 +319,7 @@ void NavMenu::navigateSelected(const int8_t direction) {
 		if(((!this->loop || ((last_selected-1)/this->rows)%2 != 1) && direction == NAV_DOWN) 
 			|| ((this->loop && ((last_selected-1)/this->rows)%2 == 1) && direction == NAV_UP)){ //Increment.
 			if((last_selected - 1)%this->rows < this->rows - 1) {
-				incrementSelected();
+				incrementSelected(false);
 				return;
 			} else {
 				uint16_t new_selected = last_selected - rows + 1;
@@ -251,7 +331,7 @@ void NavMenu::navigateSelected(const int8_t direction) {
 			}
 		} else { //Decrement.
 			if((last_selected - 1)%this->rows > 0) {
-				decrementSelected();
+				decrementSelected(false);
 				return;
 			} else {
 				uint16_t new_selected = last_selected + rows - 1;
@@ -279,16 +359,34 @@ void NavMenu::navigateSelected(const int8_t direction) {
 
 		if(items[new_selected - 1].compare("") == 0 || items[new_selected - 1].compare(" ") == 0) {
 			uint16_t up_selected = new_selected, down_selected = new_selected;
-			while((items[up_selected - 1].compare("") == 0 || items[up_selected - 1].compare(" ") == 0) && (up_selected) > 0)
+			while((up_selected) > 1 && (items[up_selected - 1].compare("") == 0 || items[up_selected - 1].compare(" ") == 0)) {
 				up_selected -= 1;
+				if(up_selected == last_selected && up_selected > 1)
+					up_selected -= 1;
+			}
 
-			while((items[down_selected - 1].compare("") == 0 || items[down_selected - 1].compare(" ") == 0) && (down_selected) <= rows*((last_selected-1)/rows + 1))
+			while((down_selected) < this->length/*rows*((new_selected-1)/rows + 1)*/ && (items[down_selected - 1].compare("") == 0 || items[down_selected - 1].compare(" ") == 0)) {
 				down_selected += 1;
+				if(down_selected == last_selected && down_selected < this->length)
+					down_selected += 1;
+			}
 
-			if(abs(new_selected - up_selected) < abs(new_selected - down_selected))
+			if(items[down_selected - 1].compare("") != 0 && items[down_selected - 1].compare(" ") != 0 && items[up_selected - 1].compare("") != 0 && items[up_selected-1].compare(" ") != 0) {
+				if(abs(new_selected - up_selected) <= abs(new_selected - down_selected))
+					new_selected = up_selected;
+				else
+					new_selected = down_selected;
+			} else if(items[down_selected - 1].compare("") != 0 && items[down_selected - 1].compare(" ") != 0) { //down_selected is populated.
+				uint16_t test_selected = this->length - (rows - (last_selected-1)%rows);
+				while(test_selected > down_selected && (items[test_selected - 1].compare("") == 0 || items[test_selected - 1].compare(" ") == 0))
+					test_selected -= 1;
+				
+				new_selected = test_selected;
+			} else if(items[up_selected - 1].compare("") != 0 && items[up_selected-1].compare(" ") != 0) { //up_selected is populated.
 				new_selected = up_selected;
-			else
-				new_selected = down_selected;
+			} else { //Last selected is populated.
+				new_selected = last_selected;
+			}
 		}
 		
 		setSelected(new_selected);
@@ -307,16 +405,34 @@ void NavMenu::navigateSelected(const int8_t direction) {
 
 		if(items[new_selected - 1].compare("") == 0 || items[new_selected - 1].compare(" ") == 0) {
 			uint16_t up_selected = new_selected, down_selected = new_selected;
-			while((items[up_selected - 1].compare("") == 0 || items[up_selected - 1].compare(" ") == 0) && (up_selected) > rows*((last_selected-1)/rows))
+			while((up_selected) > 1 /*rows*((new_selected-1)/rows)*/ && (items[up_selected - 1].compare("") == 0 || items[up_selected - 1].compare(" ") == 0)) {
 				up_selected -= 1;
+				if(up_selected == last_selected && up_selected > 1)
+					up_selected -= 1;
+			}
 
-			while((items[down_selected - 1].compare("") == 0 || items[down_selected - 1].compare(" ") == 0) && (down_selected) <= this->length)
+			while((down_selected) < this->length && (items[down_selected - 1].compare("") == 0 || items[down_selected - 1].compare(" ") == 0)) {
 				down_selected += 1;
+				if(down_selected == last_selected && down_selected < this->length)
+					down_selected += 1;
+			}
 
-			if(abs(new_selected - up_selected) < abs(new_selected - down_selected))
-				new_selected = up_selected;
-			else
+			if(items[down_selected - 1].compare("") != 0 && items[down_selected - 1].compare(" ") != 0 && items[up_selected - 1].compare("") != 0 && items[up_selected-1].compare(" ") != 0) {
+				if(abs(new_selected - up_selected) < abs(new_selected - down_selected))
+					new_selected = up_selected;
+				else
+					new_selected = down_selected;
+			} else if(items[down_selected - 1].compare("") != 0 && items[down_selected - 1].compare(" ") != 0) { //down_selected is populated.
 				new_selected = down_selected;
+			} else if(items[up_selected - 1].compare("") != 0 && items[up_selected-1].compare(" ") != 0) { //up_selected is populated.
+				uint16_t test_selected = 1 + ((last_selected-1)%rows);
+				while(test_selected < up_selected && (items[test_selected - 1].compare("") == 0 || items[test_selected - 1].compare(" ") == 0))
+					test_selected += 1;
+				
+				new_selected = test_selected;
+			} else { //Last selected is populated.
+				new_selected = last_selected;
+			}
 		}
 		
 		setSelected(new_selected);

@@ -9,6 +9,7 @@
 
 #define DEFAULT_SLIDER_RANGE 32
 #define DEFAULT_TONE_RANGE 256
+#define DEFAULT_VOL_RANGE 64
 
 class VolumeHandler {
 public:
@@ -41,7 +42,7 @@ private:
 
 	ParameterList* parameters;
 
-	uint16_t vol_range = DEFAULT_TONE_RANGE;
+	uint16_t vol_range = DEFAULT_VOL_RANGE;
 	uint16_t volume = 0, treble = DEFAULT_TONE_RANGE, bass = 0;
 	int16_t balance = 0, fader = 0;
 

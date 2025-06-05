@@ -83,6 +83,9 @@ private:
 	clock_t text_change_time;
 
 	void getIndexPosition(uint16_t index, int16_t* x_pos, int16_t* y_pos);
+
+	void incrementSelected(const bool two_row_support);
+	void decrementSelected(const bool two_row_support);
 };
 
 #endif

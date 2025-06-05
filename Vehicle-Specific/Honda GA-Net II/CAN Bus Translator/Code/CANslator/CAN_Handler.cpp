@@ -53,7 +53,22 @@ void BCAN_Handler::readCANMessage() {
 				can_timer = 0;
 			}
 
-			if(can_msg.can_id == 0x92F85150 && can_msg.can_dlc == 5) { //Key position, e-brake and gear.
+			if(can_msg.can_id == 0x92F81010 && can_msg.can_dlc == 5) {
+				const uint8_t last_key = key_pos;
+
+				if((can_msg.data[0]&0x28) != 0 && (can_msg.data[2]&0x80) != 0) { //ACC 2, not cranking.
+					if(key_pos != 4)
+						key_pos = 2;
+				} else if((can_msg.data[0]&0x28) != 0 && (can_msg.data[2]&0x80) == 0) //Cranking.
+					key_pos = 3;
+				else if((can_msg.data[0]&0x20) != 0 && (can_msg.data[2])&0x80 != 0) //ACC 1.
+					key_pos = 1;
+				else //Key off.
+					key_pos = 0;
+
+				if(key_pos != last_key)
+					writeAIBusKeyMessage(0xFF, (last_key&0xF) == 0);
+			} else if(can_msg.can_id == 0x92F85150 && can_msg.can_dlc == 5) { //Engine running, e-brake and gear.
 				const uint16_t last_gear = gear;
 				const uint8_t last_key = key_pos;
 				const bool last_ebrake = e_brake;
@@ -61,21 +76,8 @@ void BCAN_Handler::readCANMessage() {
 				gear = ((can_msg.data[0]<<8) | can_msg.data[1])&0x5005;
 				e_brake = (can_msg.data[1]&0x2) != 0;
 
-				switch(can_msg.data[2]) {
-				case 0x2: //Key off or ACC 1.
-					key_pos = 1; //TODO: Distinguish this.
-					break;
-				case 0x60: //ACC 2.
-				case 0x40:
-					key_pos = 2;
-					break;
-				//case 0x40: //Cranking. //TODO: Figure out the actual cranking byte.
-				//	key_pos = 3;
-				//	break;
-				case 0x0: //Engine on.
+				if(can_msg.data[2] == 0x0) //Engine on.
 					key_pos = 4;
-					break;
-				}
 
 				if(key_pos != last_key)
 					writeAIBusKeyMessage(0xFF, (last_key&0xF) == 0);
