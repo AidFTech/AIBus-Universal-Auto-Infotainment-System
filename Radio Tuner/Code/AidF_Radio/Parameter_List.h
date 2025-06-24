@@ -26,7 +26,7 @@ struct ParameterList {
 
 	int8_t hour = -1, min = -1, offset = 0;
 	elapsedMillis minute_timer;
-	bool send_time = true;
+	bool send_time = true, send_12h = false, auto_clock = true;
 	
 	uint16_t fm1_tune, fm2_tune, am_tune;
 	bool fm_stereo = false, has_rds = false, info_mode = false;

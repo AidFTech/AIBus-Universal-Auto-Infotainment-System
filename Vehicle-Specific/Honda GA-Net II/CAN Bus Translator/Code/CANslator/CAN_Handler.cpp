@@ -310,7 +310,7 @@ void BCAN_Handler::writeAIBusTempMessage(const uint8_t receiver) {
 
 //Write the coolant temp message.
 void BCAN_Handler::writeAIBusCoolantTempMessage(const uint8_t receiver) {
-	uint8_t temp_data[] = {0xA1, 0x1F, 0x5, 0x81, 0x0};
+	uint8_t temp_data[] = {0xA1, 0x1F, 0x5, 0x1, 0x0};
 	
 	const int norm_temp = coolant_temp - 0x28;
 	

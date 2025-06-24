@@ -143,6 +143,12 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 	} else if(next_window == NEXT_WINDOW_SETTINGS_COLOR_PICKER) {
 		misc_window = new Color_Picker_Window(attribute_list);
 		this->setActiveWindow(misc_window);
+	} else if(next_window == NEXT_WINDOW_SETTINGS_CLOCK) {
+		misc_window = new Settings_Clock_Window(attribute_list);
+		this->setActiveWindow(misc_window);
+	} else if(next_window == NEXT_WINDOW_SETTINGS_EXT) {
+		misc_window = new Settings_Ext_Window(attribute_list);
+		this->setActiveWindow(misc_window);
 	} else if(next_window == NEXT_WINDOW_VEHICLE_INFO) {
 		misc_window = new VehicleInfoWindow(attribute_list, vehicle_info_paramters);
 		this->setActiveWindow(misc_window);

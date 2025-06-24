@@ -44,7 +44,16 @@
 #define INFO_HYBRID_MODE_PLUG_TO_BAT 0x80
 
 struct InfoParameters {
+	//Lights:
 	uint8_t light_state_a = 0, light_state_b = 0; 
+
+	//Temperatures:
+	int16_t outside_temp = 250, coolant_temp = 250;
+	bool outside_temp_sent = false, coolant_temp_sent = false;
+
+	bool outside_temp_fahrenheit = false, coolant_temp_fahrenheit = false;
+
+	//Hybrid:
 	bool hybrid_system_present = false; //True if a hybrid system exists.
 	
 	uint8_t hybrid_system_type = 0; //The type of hybrid system.

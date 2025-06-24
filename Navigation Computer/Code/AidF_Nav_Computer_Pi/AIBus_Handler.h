@@ -53,6 +53,9 @@ public:
 
 	bool cachePending();
 	void cacheMessage(AIData* ai_msg);
+	void cacheTxMessage(AIData* ai_msg);
+
+	bool flushCached();
 
 private:
 	#ifndef RPI_UART
@@ -71,7 +74,7 @@ private:
 	#endif
 
 	std::vector<uint8_t> cached_bytes;
-	AIData cached_msg;
+	AIData cached_msg, cached_tx;
 
 	int** socket_list;
 	int socket_l = 0;

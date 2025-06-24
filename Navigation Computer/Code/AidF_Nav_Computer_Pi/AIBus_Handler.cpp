@@ -454,6 +454,25 @@ void AIBusHandler::cacheMessage(AIData* ai_msg) {
 	}
 }
 
+//Cache a message to be sent later.
+void AIBusHandler::cacheTxMessage(AIData* ai_msg) {
+	if(this->cached_tx.l == 0)
+		this->cached_tx.refreshAIData(*ai_msg);
+}
+
+//Send a cached message. Return whether successful.
+bool AIBusHandler::flushCached() {
+	if(this->cached_tx. l <= 0)
+		return true;
+	
+	bool ack = false;
+	ack = writeAIData(&this->cached_tx);
+
+	cached_tx.refreshAIData(0,0,0);
+
+	return ack;
+}
+
 //Write a message to a socket.
 void AIBusHandler::writeToSocket(AIData* ai_d) {
 	for(int i=0;i<this->socket_l;i+=1) {

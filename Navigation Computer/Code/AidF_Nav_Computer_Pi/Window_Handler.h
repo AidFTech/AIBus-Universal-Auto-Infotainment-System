@@ -14,6 +14,8 @@
 #include "Window/Settings_Display_Window.h"
 #include "Window/Settings_Color_Window.h"
 #include "Window/Settings_Color_Picker.h"
+#include "Window/Settings_Clock_Window.h"
+#include "Window/Settings_Ext_Window.h"
 
 #include "Vehicle_Information/Vehicle_Info_Parameters.h"
 #include "Vehicle_Information/Vehicle_Info_Window.h"

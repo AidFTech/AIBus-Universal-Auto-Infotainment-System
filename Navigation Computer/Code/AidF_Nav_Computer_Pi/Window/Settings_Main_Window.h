@@ -14,6 +14,8 @@ public:
 	Settings_Main_Window(AttributeList *attribute_list);
 private:
 	void handleEnterButton();
+
+	void sendSettingsMenuRequest(const uint8_t receiver);
 };
 
 #endif

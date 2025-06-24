@@ -426,7 +426,13 @@ void TextHandler::sendTime() {
 	while(full_minute < 0)
 		full_minute += 1440;
 
-	const int8_t hour = full_minute/60, minute = full_minute%60;
+	int8_t hour = full_minute/60;
+	if(parameter_list->send_12h)
+		hour |= 0x80;
+	if(parameter_list->auto_clock)
+		hour |= 0x40;
+
+	const int8_t minute = full_minute%60;
 
 	uint8_t clock_data[] = {0xA1, 0x1F, 0x1, hour, minute, parameter_list->minute_timer/1000};
 	AIData clock_msg(sizeof(clock_data), ID_RADIO, 0xFF);

@@ -31,5 +31,23 @@ void Settings_Main_Window::handleEnterButton() {
 			break;
 		case 3:
 			attribute_list->next_window = NEXT_WINDOW_SETTINGS_FORMAT;
+			break;
+		case 4:
+			attribute_list->next_window = NEXT_WINDOW_SETTINGS_EXT;
+			sendSettingsMenuRequest(ID_CANSLATOR);
+			break;
+		case 5:
+			attribute_list->next_window = NEXT_WINDOW_SETTINGS_EXT;
+			sendSettingsMenuRequest(ID_RADIO);
+			break;
 	}
+}
+
+//Send a menu request.
+void Settings_Main_Window::sendSettingsMenuRequest(const uint8_t receiver) {
+	uint8_t request_data[] = {0x2B, 0x45};
+	AIData request_msg(sizeof(request_data), ID_NAV_COMPUTER, receiver);
+	request_msg.refreshAIData(request_data);
+
+	attribute_list->aibus_handler->cacheTxMessage(&request_msg);
 }

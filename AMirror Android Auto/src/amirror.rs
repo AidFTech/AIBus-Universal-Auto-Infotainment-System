@@ -219,6 +219,12 @@ impl <'a> AMirror<'a> {
 						receiver: AIBUS_DEVICE_NAV_COMPUTER,
 						data: [0x48, AIBUS_DEVICE_AMIRROR, 0x0].to_vec(),
 					});
+
+					self.write_aibus_message(AIBusMessage {
+						sender: AIBUS_DEVICE_AMIRROR,
+						receiver: AIBUS_DEVICE_NAV_SCREEN,
+						data: [0x77, AIBUS_DEVICE_NAV_COMPUTER, 0x10].to_vec(), //TODO: If another device has requested control, send that instead.
+					});
 				}
 			} else {
 				if context.night {
@@ -594,6 +600,14 @@ impl <'a> AMirror<'a> {
 					sender: AIBUS_DEVICE_AMIRROR,
 					receiver: AIBUS_DEVICE_IMID,
 					data: [0x4, 0xE6, 0x3B].to_vec(),
+				});
+			}
+
+			if !context.screen_connected {
+				self.write_aibus_message(AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_NAV_SCREEN,
+					data: [0x1].to_vec(),
 				});
 			}
 		}
@@ -1364,6 +1378,27 @@ impl <'a> AMirror<'a> {
 				}
 			}
 		}*/
+	}
+
+	//Write the initial pings.
+	pub fn write_init_ping(&mut self) {
+		self.write_aibus_message(AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_RADIO,
+			data: [0x1].to_vec(),
+		});
+
+		self.write_aibus_message(AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_IMID,
+			data: [0x4, 0xE6, 0x3B].to_vec(),
+		});
+
+		self.write_aibus_message(AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_NAV_SCREEN,
+			data: [0x1].to_vec(),
+		});
 	}
 
 	//Write track time.

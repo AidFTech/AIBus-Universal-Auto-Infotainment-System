@@ -29,7 +29,72 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 
 	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
-	if(ai_d->sender == ID_NAV_SCREEN) {
+	if(ai_d->l >= 2 && ai_d->data[0] == 0x2B) { //Menu message.
+		if(!allow_ext_menu)
+			return false;
+
+		if(ai_d->data[1] == 0x50 && ai_d->l >= 12) { //New menu.
+			const uint8_t rows = ai_d->data[2]&0x7F, ml = ai_d->data[3];
+			const bool loop = (ai_d->data[2]&0x80) != 0;
+			const int16_t x = (ai_d->data[4]<<8)|ai_d->data[5], y = (ai_d->data[6]<<8)|ai_d->data[7];
+			const uint16_t w = (ai_d->data[8]<<8)|ai_d->data[9], h = (ai_d->data[10]<<8)|ai_d->data[11];
+
+			std::string menu_title = "";
+			for(int i=12;i<ai_d->l;i+=1)
+				menu_title += char(ai_d->data[i]);
+
+			this->settings_menu = new NavMenu(attribute_list, x, y, w, h, ml, -1, h*6/7, rows, loop, "");
+			this->title_block->setText(menu_title);
+
+			this->ext_menu_sender = ai_d->sender;
+
+			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
+			return true;
+		} else if(ai_d->data[1] == 0x51 && ai_d->l >= 3) { //New menu item.
+			if(ai_d->sender != this->ext_menu_sender)
+				return false;
+
+			std::string menu_item = "";
+			for(int i=3;i<ai_d->l;i+=1)
+				menu_item += char(ai_d->data[i]);
+
+			const uint16_t index = ai_d->data[2];
+			this->settings_menu->setItem(menu_item, index);
+
+			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
+			return true;
+		} else if(ai_d->data[1] == 0x52 && ai_d->l >= 3) { //Select the item.
+			if(ai_d->sender != this->ext_menu_sender)
+				return false;
+
+			const uint16_t index = ai_d->data[2] + 1;
+			this->settings_menu->setSelected(index);
+			this->settings_menu->setTextItems();
+
+			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
+			return true;
+		} else if(ai_d->data[1] == 0x53) { //Set the title.
+			if(ai_d->sender != this->ext_menu_sender)
+				return false;
+
+			std::string menu_title = "";
+			for(int i=2;i<ai_d->l;i+=1)
+				menu_title += char(ai_d->data[i]);
+
+			this->title_block->setText(menu_title);
+
+			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
+			return true;
+		} else if(ai_d->data[1] == 0x40) { //Clear the menu.
+			attribute_list->next_window = NEXT_WINDOW_SETTINGS_MAIN;
+
+			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
+			return true;
+		}
+		//TODO: Sliders.
+		
+		return false;
+	} else if(ai_d->sender == ID_NAV_SCREEN) {
 		if(ai_d->l >= 3 && ai_d->data[0] == 0x32) { //Knob turn.
 			const bool clockwise = (ai_d->data[2]&0x10) != 0;
 			const uint8_t steps = ai_d->data[2]&0xF;
@@ -72,15 +137,14 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 				bool answered = false;
 				const uint8_t control = ai_d->data[1], state = ai_d->data[2]>>6;
 				if(control == 0x7 && state == 0x2) { //Enter button.
+					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 					this->handleEnterButton();
 					answered = true;
 				} else if((control == 0x27 || control == 0x51) && state == 0x2) { //Back button.
+					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 					this->handleBackButton();
 					answered = true;
 				}
-				
-				if(answered)
-					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				
 				return answered;
 			}
@@ -102,5 +166,8 @@ void Settings_Window::clearMenu() {
 	for(int i=0;i<this->settings_menu->getLength();i+=1)
 		this->settings_menu->setItem("", i);
 	
+	if(!allow_ext_menu)
+		this->settings_menu = new NavMenu(this->attribute_list, 0, MAIN_TITLE_AREA_Y + 55, attribute_list->w, 40, SETTING_COUNT, ALIGN_H_L, 36, SETTING_COUNT, false, "");
+
 	this->settings_menu->setSelected(0);
 }

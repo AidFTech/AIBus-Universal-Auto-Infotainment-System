@@ -290,6 +290,8 @@ void loop() {
 
 	const int8_t last_hour = parameters.hour, last_min = parameters.min;
 
+	const bool last_send_time = parameters.send_time, last_12h = parameters.send_12h;
+
 	const bool last_phone = parameters.phone_active;
 
 	AIData msg;
@@ -700,7 +702,7 @@ void loop() {
 
 	background_tuner.loop();
 
-	if(parameters.send_time && parameters.hour >= 0 && parameters.min >= 0 && (parameters.hour != last_hour || parameters.min != last_min))
+	if(parameters.send_time && parameters.hour >= 0 && parameters.min >= 0 && (parameters.hour != last_hour || parameters.min != last_min || !last_send_time || parameters.send_12h != last_12h))
 		text_handler.sendTime();
 
 	//Send the volume IMID message.
@@ -750,7 +752,13 @@ void handleAIBus(AIData* msg) {
 	} else if(msg->l >= 1 && msg->data[0] == 0x80) { //Acknowledgement. Ignore.
 	} else if(msg->receiver == ID_RADIO && msg->l >= 2 && msg->data[0] == 0x1D) { //Clock message.
 		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
-		parameters.send_time = msg->data[1] != 0;
+		parameters.send_time = (msg->data[1]) != 0;
+		if((msg->data[1]&0x01) != 0)
+			parameters.auto_clock = true;
+		else if((msg->data[1]&0x02) != 0)
+			parameters.auto_clock = false;
+
+		parameters.send_12h = (msg->data[1]&0x80) != 0;
 	} else if(msg->receiver == ID_RADIO && msg->sender == ID_PHONE && msg->l >= 3) { //Phone message.
 		if(msg->data[1] == 0x6) {
 			parameters.phone_active = msg->data[2] != 0x0;
@@ -781,6 +789,8 @@ void handleAIBus(AIData* msg) {
 				parameters.hour = new_minute/60;
 				parameters.min = new_minute%60;
 				parameters.minute_timer = msg->data[5]*1000;
+
+				parameters.send_12h = (msg->data[3]&0x80) != 0;
 					
 			} else if(msg->data[2] == 0x4) { //Vehicle speed.
 				double speed = getSpeed(msg);

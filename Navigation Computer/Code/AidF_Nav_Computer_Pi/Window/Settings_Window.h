@@ -30,6 +30,9 @@ protected:
 	NavMenu *settings_menu;
 	
 	int back_index = 0;
+
+	bool allow_ext_menu = false;
+	uint8_t ext_menu_sender = ID_NAV_COMPUTER;
 };
 
 #endif

@@ -1190,12 +1190,23 @@ impl<'a> AapHandler <'a> {
 				margin_w = 1280 - self.w as u32;
 			}
 		} else {
-			video_config.video_resolution = 1;
-			if self.h < 480 {
-				margin_h = 480 - self.h as u32;
-			}
-			if self.w < 800 {
-				margin_w = 800 - self.w as u32;
+			if self.w <= 800 && self.h <= 480 {
+				video_config.video_resolution = 1;
+				if self.h < 480 {
+					margin_h = 480 - self.h as u32;
+				}
+				if self.w < 800 {
+					margin_w = 800 - self.w as u32;
+				}
+			} else {
+				video_config.video_resolution = 2;
+			
+				if self.h < 720 {
+					margin_h = 720 - self.h as u32;
+				}
+				if self.w < 1280 {
+					margin_w = 1280 - self.w as u32;
+				}
 			}
 		}
 		

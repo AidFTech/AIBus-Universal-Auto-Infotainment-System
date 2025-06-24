@@ -36,6 +36,9 @@ fn main() {
 	let imid_connected = Arc::new(Mutex::new(false));
 	let imid_connected_aibus = Arc::clone(&imid_connected);
 
+	let screen_connected = Arc::new(Mutex::new(false));
+	let screen_connected_aibus = Arc::clone(&screen_connected);
+
 	let aibus_handle = thread::spawn( move || {
 		let mut amirror_stream = match init_default_socket() {
 			Some(socket) => socket,
@@ -110,6 +113,15 @@ fn main() {
 					match imid_connected_aibus.try_lock() {
 						Ok(imid_connected) => {
 							send_ack = *imid_connected;
+						}
+						Err(_) => {
+							send_ack = true;
+						}
+					}
+				} else if ai_msg.receiver == AIBUS_DEVICE_NAV_SCREEN {
+					match screen_connected_aibus.try_lock() {
+						Ok(screen_connected) => {
+							send_ack = *screen_connected;
 						}
 						Err(_) => {
 							send_ack = true;
@@ -301,6 +313,8 @@ fn main() {
 	let mutex_context = Arc::new(Mutex::new(Context::new()));
 	let mut amirror = AMirror::new(&mutex_context, aibus_handler, &mutex_mpv, &mutex_rdaudio, &mutex_navaudio, w, h);
 
+	amirror.write_init_ping();
+
 	while amirror.run {
 		amirror.process();
 
@@ -319,6 +333,15 @@ fn main() {
 				match imid_connected.lock() {
 					Ok(mut connected) => {
 						*connected = context.imid_native_mirror || (context.imid_row_count > 0 && context.imid_text_len >= 8);
+					}
+					Err(_) => {
+						continue;
+					}
+				}
+
+				match screen_connected.lock() {
+					Ok(mut connected) => {
+						*connected = context.screen_connected;
 					}
 					Err(_) => {
 						continue;

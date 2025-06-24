@@ -68,7 +68,7 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 				this->initializeSettingsMenu(msg);
 			}
 		} else if(msg->data[1] == 0x51 && this->settings_menu != NULL) { //Add a menu entry.
-			if(!getSettingsMenuValid(msg->sender))
+			if(!getSettingsMenuValid(msg->sender) || (!this->settings_menu_active && !this->settings_menu_prep))
 				return false;
 
 			const uint8_t entry = msg->data[2];
@@ -79,7 +79,7 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 			
 			this->settings_menu->setItem(entry_name, entry);
 		} else if(msg->data[1] == 0x52 && this->settings_menu != NULL) { //Display the menu.
-			if(!getSettingsMenuValid(msg->sender))
+			if(!getSettingsMenuValid(msg->sender) || (!this->settings_menu_active && !this->settings_menu_prep))
 				return false;
 				
 			if(!active) {
@@ -105,7 +105,7 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 			this->settings_menu_active = true;
 			this->settings_menu_prep = false;
 		} else if(msg->data[1] == 0x53 && this->settings_menu != NULL) { //Change the menu title.
-			if(!getSettingsMenuValid(msg->sender))
+			if(!getSettingsMenuValid(msg->sender) || (!this->settings_menu_active && !this->settings_menu_prep))
 				return false;
 
 			std::string title = "";
@@ -150,7 +150,8 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 			ack = false;
 			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 			sendMenuClose(msg->sender);
-		}
+		} else
+			return false;
 
 		if(ack)
 			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
@@ -190,11 +191,27 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 				return true;
 			} else if(button == 0x20 && state == 0x2) { //Home button.
 				this->active = false;
+
+				if(this->settings_menu_active) {
+					this->settings_menu_active = false;
+					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+					this->settings_menu_prep = false;
+					sendMenuClose();
+				}
+
 				this->attribute_list->next_window = NEXT_WINDOW_MAIN;
 				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				return true;
 			} else if(button == 0x26 && state == 0x2 && this->active) { //Audio button.
 				this->active = false;
+
+				if(this->settings_menu_active) {
+					this->settings_menu_active = false;
+					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+					this->settings_menu_prep = false;
+					sendMenuClose();
+				}
+
 				this->attribute_list->next_window = NEXT_WINDOW_LAST;
 				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				return true;

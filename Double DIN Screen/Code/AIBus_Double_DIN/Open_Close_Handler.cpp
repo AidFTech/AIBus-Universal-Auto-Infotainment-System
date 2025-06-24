@@ -15,12 +15,12 @@ void OpenCloseHandler::loop() {
 
 //Get whether the screen is open.
 bool OpenCloseHandler::getOpen() {
-	return oc_mcp->digitalReadIO(OC_MCP_OPEN_IND);
+	return !oc_mcp->digitalReadIO(OC_MCP_OPEN_IND);
 }
 
 //Get whether the screen is closed.
 bool OpenCloseHandler::getClosed() {
-	return oc_mcp->digitalReadIO(OC_MCP_CLOSE_IND);
+	return !oc_mcp->digitalReadIO(OC_MCP_CLOSE_IND);
 }
 
 //Open the screen.

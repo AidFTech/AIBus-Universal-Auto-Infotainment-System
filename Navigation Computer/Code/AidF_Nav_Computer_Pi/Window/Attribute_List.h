@@ -28,6 +28,7 @@
 #define NEXT_WINDOW_SETTINGS_COLOR_PICKER 12
 #define NEXT_WINDOW_VEHICLE_INFO 13
 #define NEXT_WINDOW_MIRROR 14
+#define NEXT_WINDOW_SETTINGS_EXT 15
 
 #define PHONE_TYPE_NONE 0
 #define PHONE_TYPE_APPLE 3
@@ -43,7 +44,7 @@ struct AttributeList {
 
 	int8_t next_window = NEXT_WINDOW_NULL;
 	uint8_t day_night_settings = DAY_NIGHT_AUTO;
-	bool canslator_connected = false, radio_connected = false, mirror_connected = false;
+	bool canslator_connected = false, radio_connected = false, mirror_connected = false, gps_antenna_connected = false;
 	
 	bool background_changed = false; //True if the background was changed by the user.
 	bool text_changed = false; //True if the text color was changed.
@@ -53,6 +54,10 @@ struct AttributeList {
 	std::string phone_name = "";
 
 	int frame = 0;
+
+	bool display_12h = false; //True if time is to be displayed in 12hr format with an AM/PM.
+	uint8_t timekeeper = ID_RADIO; //ID of timekeeper device.
+	bool auto_clock = true; //True if the timekeeper device receives its time data automatically.
 
 	AIBusHandler* aibus_handler;
 };

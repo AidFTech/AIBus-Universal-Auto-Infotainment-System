@@ -180,16 +180,17 @@ void loop() {
 						const bool light = (msg.data[3]&0x1) != 0;
 
 						digitalWrite(ILL_ON, light ? HIGH : LOW);
-						ill_mcp4251.DigitalPotSetWiperPosition(0, brightness <= 255 ? brightness : 256);
-						ill_mcp4251.DigitalPotSetWiperPosition(1, brightness <= 255 ? brightness : 256);
+						ill_mcp4251.DigitalPotSetWiperPosition(0, brightness < 255 ? brightness : 256);
+						ill_mcp4251.DigitalPotSetWiperPosition(1, brightness < 255 ? brightness : 256);
 					} else if(msg.sender == ID_CANSLATOR && msg.l >= 3 && msg.data[1] == 0x2) { //Key position.
 						const uint8_t last_key = parameters.key_position;
 						parameters.key_position = msg.data[2]&0xF;
 
 						if(parameters.key_position != last_key) {
-							if(parameters.key_position != 0)
+							if(parameters.key_position != 0) {
 								digitalWrite(FULL_POWER_ON, HIGH);
-							else {
+								digitalWrite(BL_ON, HIGH);
+							} else {
 								if((parameters.door_position&0xC) != 0)
 									digitalWrite(FULL_POWER_ON, LOW);
 								else {
@@ -212,6 +213,7 @@ void loop() {
 										digitalWrite(FULL_POWER_ON, LOW);
 								} else {
 									digitalWrite(FULL_POWER_ON, HIGH);
+									digitalWrite(BL_ON, HIGH);
 									door_timer_enabled = true;
 									door_timer = 0;
 								}
@@ -284,6 +286,9 @@ void loop() {
 					button_msg.refreshAIData(button_data);
 
 					ai_handler.writeAIData(&button_msg);
+				} else if(msg.l >= 2 && msg.data[0] == 0x34) { //AidF logo on/off.
+					const bool logo_on = msg.data[1] != 0;
+					nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, logo_on);
 				}
 
 				if(ack)

@@ -133,6 +133,9 @@ void AidF_Nav_Computer::loop() {
 				if(!*radio_connected && ai_msg.sender == ID_RADIO)
 					*radio_connected = true;
 
+				if(!attribute_list->gps_antenna_connected && ai_msg.sender == ID_GPS_ANTENNA)
+					attribute_list->gps_antenna_connected = true;
+
 				if(!*mirror_connected && ai_msg.sender == ID_ANDROID_AUTO) {
 					*mirror_connected = true;
 					this->setMirrorColors();
@@ -246,6 +249,8 @@ void AidF_Nav_Computer::loop() {
 			}
 		}
 	} while(aibus_handler->getConnected() && (clock() - aibus_read_time)/(CLOCKS_PER_SEC/1000) < AIBUS_WAIT);
+
+	aibus_handler->flushCached();
 }
 
 bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
@@ -265,20 +270,46 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 		else
 			this->running = true;
 		return true;
-	} else if((ai_d->sender == ID_GPS_ANTENNA || ai_d->sender == ID_CANSLATOR || ai_d->sender == ID_RADIO) && ai_d->data[1] == 0x1F) { //Time or day.
-		if(ai_d->data[2] == 0x1) { //Time.
-			const uint8_t hour = ai_d->data[3], minute = ai_d->data[4];
+	} else if(ai_d->l >= 6 && (ai_d->sender == ID_GPS_ANTENNA || ai_d->sender == ID_CANSLATOR || ai_d->sender == ID_RADIO) && ai_d->data[1] == 0x1F) { //Time/day, speed, temp, etc.
+		if(ai_d->data[2] == 0x1 && ai_d->l >= 6) { //Time.
+			const uint8_t hour = ai_d->data[3]&0x1F, minute = ai_d->data[4];
+			attribute_list->display_12h = (ai_d->data[3]&0x80) != 0;
+			attribute_list->auto_clock = (ai_d->data[3]&0x40) != 0;
+			attribute_list->timekeeper = ai_d->sender;
+
 			if(hour < 24 && minute < 60) {
-				//TODO: 12hr time setting.
+				std::string hour_str;
+				if(!attribute_list->display_12h) //Use 24hr time.
+					hour_str = std::to_string(int(hour));
+				else {
+					if(hour >= 0 && hour < 13)
+						hour_str = std::to_string(int(hour));
+					else if(hour == 0)
+						hour_str = "12";
+					else
+						hour_str = std::to_string(int(hour)-12);
+				}
+				
+				std::string time_text = "";
+
 				if(minute < 10)
-					this->window_handler->setText(std::to_string(int(hour))+":0"+std::to_string(int(minute)), 0);
+					time_text = hour_str+":0"+std::to_string(int(minute));
 				else
-					this->window_handler->setText(std::to_string(int(hour))+":"+std::to_string(int(minute)), 0);
+					time_text = hour_str+":"+std::to_string(int(minute));
+
+				if(attribute_list->display_12h) {
+					if(hour < 12)
+						time_text += " AM";
+					else
+						time_text += " PM";
+				}
+
+				this->window_handler->setText(time_text, 0);
 			} else {
 				this->window_handler->setText("--:--", 0);
 			}
 			return true;
-		} else if(ai_d->data[2] == 0x2) { //Date.
+		} else if(ai_d->data[2] == 0x2 && ai_d->l >= 7) { //Date.
 			const uint16_t year = ai_d->data[3] << 8 | ai_d->data[4];
 			const uint8_t month = ai_d->data[5], date = ai_d->data[6];
 			if(year != 0xFFFF && month != 0xFF && date != 0xFF) {
@@ -288,6 +319,60 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 				this->window_handler->setText(" ", 2);
 			}
 			return true;
+		} else if(ai_d->data[2] == 0x3 && ai_d->l >= 5 && ai_d->sender == ID_CANSLATOR) { //Outside temp.
+			const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
+			const bool fahrenheit = (ai_d->data[3]&0x80) != 0, neg = (ai_d->data[3]&0x8) != 0;
+
+			unsigned int read_temp = 0;
+			for(int i=4;i<ai_d->l;i+=1) {
+				read_temp <<= 8;
+				read_temp += ai_d->data[i];
+			}
+
+			if(decimal_count == 0)
+				read_temp *= 10;
+			else {
+				for(int i=1;i<decimal_count;i+=1)
+					read_temp /= 10;
+			}
+
+			int16_t norm_temp = read_temp&0xFFFF;
+			if(neg)
+				norm_temp *= -1;
+
+			InfoParameters* info_parameters = window_handler->getVehicleInfo();
+			info_parameters->outside_temp = norm_temp;
+			info_parameters->outside_temp_fahrenheit = fahrenheit;
+
+			if(!info_parameters->outside_temp_sent)
+				info_parameters->outside_temp_sent = true;
+		} else if (ai_d->data[2] == 0x5 && ai_d->l >= 5 && ai_d->sender == ID_CANSLATOR) { //Coolant temp.
+			const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
+			const bool fahrenheit = (ai_d->data[3]&0x80) != 0, neg = (ai_d->data[3]&0x8) != 0;
+
+			unsigned int read_temp = 0;
+			for(int i=4;i<ai_d->l;i+=1) {
+				read_temp <<= 8;
+				read_temp += ai_d->data[i];
+			}
+
+			if(decimal_count == 0)
+				read_temp *= 10;
+			else {
+				for(int i=1;i<decimal_count;i+=1)
+					read_temp /= 10;
+			}
+
+			int16_t norm_temp = read_temp&0xFFFF;
+			if(neg)
+				norm_temp *= -1;
+
+			InfoParameters* info_parameters = window_handler->getVehicleInfo();
+			info_parameters->coolant_temp = norm_temp;
+			info_parameters->coolant_temp_fahrenheit = fahrenheit;
+
+			if(!info_parameters->coolant_temp_sent)
+				info_parameters->coolant_temp_sent = true;
 		} else
 			return false;
 	} else if(ai_d->sender == ID_CANSLATOR && ai_d->data[1] == 0x10) { //Night mode.
@@ -329,9 +414,9 @@ void AidF_Nav_Computer::setDayNight(const bool night) {
 		setColorProfile(&active_color_profile, day_profile);
 	
 	if(active_color_profile.background == active_color_profile.background2)
-		this->br = new BR_Solid(DEFAULT_W, DEFAULT_H, active_color_profile.background);
+		this->br = new BR_Solid(this->lw, this->lh, active_color_profile.background);
 	else
-		this->br = new BR_Gradient(DEFAULT_W, DEFAULT_H, active_color_profile.background, active_color_profile.background2, active_color_profile.vertical, active_color_profile.square);
+		this->br = new BR_Gradient(this->lw, this->lh, active_color_profile.background, active_color_profile.background2, active_color_profile.vertical, active_color_profile.square);
 
 	if(this->audio_window != NULL)
 		this->audio_window->refreshWindow();
@@ -384,9 +469,9 @@ SDL_Renderer* AidF_Nav_Computer::getRenderer() {
 
 void AidF_Nav_Computer::getBackground() {
 	if(active_color_profile.background == active_color_profile.background2)
-		this->br = new BR_Solid(DEFAULT_W, DEFAULT_H, active_color_profile.background);
+		this->br = new BR_Solid(this->lw, this->lh, active_color_profile.background);
 	else
-		this->br = new BR_Gradient(DEFAULT_W, DEFAULT_H, active_color_profile.background, active_color_profile.background2, active_color_profile.vertical, active_color_profile.square);
+		this->br = new BR_Gradient(this->lw, this->lh, active_color_profile.background, active_color_profile.background2, active_color_profile.vertical, active_color_profile.square);
 }
 
 void setup(AidF_Nav_Computer* nav_computer) {
