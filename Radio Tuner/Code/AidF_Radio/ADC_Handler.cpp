@@ -45,6 +45,8 @@ void PCM9211Handler::init() {
 void PCM9211Handler::powerOff() {
 	writeRegister(REG_POWER_CONTROL, 0x33);
 	writeRegister(REG_OUTPUT_PORT, 0x33);
+	writeRegister(REG_DIT_FUNCTION0, 0x11);
+	writeRegister(REG_DIT_FUNCTION1, 0x40);
 }
 
 //Set the output to the ADC.
@@ -52,13 +54,26 @@ void PCM9211Handler::setADCOn() {
 	writeRegister(REG_OUTPUT_PORT, 0x22);
 	writeRegister(REG_RECOUT0_SOURCE, 0xF);
 	writeRegister(REG_DIR_INPUT_SOURCE, 0xCF);
+	writeRegister(REG_DIT_FUNCTION0, 0x22);
+	writeRegister(REG_DIT_FUNCTION1, 0x10);
 }
 
-//Set the output to digital input.
-void PCM9211Handler::setDigitalOut() {
-	writeRegister(REG_OUTPUT_PORT, 0x33);
+//Set the output to digital input from the Pi.
+void PCM9211Handler::setPiOut() {
+	writeRegister(REG_OUTPUT_PORT, 0x44);
 	writeRegister(REG_RECOUT0_SOURCE, 0xF);
 	writeRegister(REG_DIR_INPUT_SOURCE, 0xCF);
+	writeRegister(REG_DIT_FUNCTION0, 0x44);
+	writeRegister(REG_DIT_FUNCTION1, 0x40);
+}
+
+//Set the output to digital input from an external source.
+void PCM9211Handler::setExtOut() {
+	writeRegister(REG_OUTPUT_PORT, 0x55);
+	writeRegister(REG_RECOUT0_SOURCE, 0xF);
+	writeRegister(REG_DIR_INPUT_SOURCE, 0xCF);
+	writeRegister(REG_DIT_FUNCTION0, 0x55);
+	writeRegister(REG_DIT_FUNCTION1, 0x40);
 }
 
 //Set the MPO0 and MPO1 outputs.

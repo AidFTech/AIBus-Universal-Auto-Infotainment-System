@@ -63,6 +63,8 @@ pub struct AMirror<'a> {
 	audio_held: bool,
 
 	pub run: bool,
+	power_state: u8,
+	door_state: u8,
 }
 
 impl <'a> AMirror<'a> {
@@ -111,6 +113,8 @@ impl <'a> AMirror<'a> {
 			audio_held: false,
 
 			run: true,
+			power_state: 0x1,
+			door_state: 0x0,
 		};
 	}
 
@@ -1174,7 +1178,17 @@ impl <'a> AMirror<'a> {
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_CANSLATOR {
 			if ai_msg.receiver == 0xFF && ai_msg.l() >= 1 && ai_msg.data[0] == 0xA1 {
-				if ai_msg.l() >= 4 && ai_msg.data[1] == 0x10 { //Light status message.
+				if ai_msg.l() >= 3 && ai_msg.data[1] == 0x2 { //Key position.
+					self.power_state = ai_msg.data[2]&0xF;
+					if self.power_state == 0x0 && (self.door_state&0xC) != 0 {
+						self.run = false;
+					}
+				} else if ai_msg.l() >= 3 && ai_msg.data[1] == 0x43 { //Door position.
+					self.door_state = ai_msg.data[2];
+					if self.power_state == 0x0 && (self.door_state&0xC) != 0 {
+						self.run = false;
+					}
+				} else if ai_msg.l() >= 4 && ai_msg.data[1] == 0x10 { //Light status message.
 					let night = context.night;
 					context.night = (ai_msg.data[3]&0x80) != 0;
 

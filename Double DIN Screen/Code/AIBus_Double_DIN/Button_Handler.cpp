@@ -86,38 +86,59 @@ void ButtonHandler::checkButtonPress() {
 		}
 	}
 
+	if(debounce_timer < 50)
+			return;
+
+	debounce_timer = 0;
+
 	for(int b=0;b<TOGGLE_INDEX_SIZE;b+=1) {
 		const bool state = !toggle[b];
 
 		uint8_t button_code = 0x0;
 		switch(b) {
-		case 0:
+		case INDEX_NAV_PUSH:
 			button_code = 0x7;
 			break;
-		case 1:
+		case INDEX_NAV_UP:
 			button_code = 0x28;
 			break;
-		case 2:
+		case INDEX_NAV_DN:
 			button_code = 0x29;
 			break;
-		case 3:
+		case INDEX_NAV_LEFT:
 			button_code = 0x2A;
 			break;
-		case 4:
+		case INDEX_NAV_RIGHT:
 			button_code = 0x2B;
 			break;
-		case 5:
+		case INDEX_VOL_PUSH:
 			button_code = 0x6;
 			break;
 		}
 
 		if(state && toggle_states[b] == BUTTON_STATE_RELEASED) { //Toggle pressed.
-			toggle_timers[b] = 0;
-			toggle_states[b] = BUTTON_STATE_PRESSED;
-			sendButtonMessage(button_code, BUTTON_STATE_PRESSED, parameters->all_dest);
+			bool press = true;
+			if(b == INDEX_NAV_PUSH) {
+				if((!toggle[INDEX_NAV_UP])
+					|| (!toggle[INDEX_NAV_DN])
+					|| (!toggle[INDEX_NAV_LEFT])
+					|| (!toggle[INDEX_NAV_RIGHT]))
+					press = false;
+			} else if(b != INDEX_VOL_PUSH) {
+				if(toggle_states[INDEX_NAV_PUSH] != BUTTON_STATE_RELEASED) {
+					toggle_states[INDEX_NAV_PUSH] = BUTTON_STATE_RELEASED;
+					sendButtonMessage(0x7, BUTTON_STATE_RELEASED, parameters->all_dest);
+				}
+			}
+
+			if(press) {
+				toggle_timers[b] = 0;
+				toggle_states[b] = BUTTON_STATE_PRESSED;
+				sendButtonMessage(button_code, BUTTON_STATE_PRESSED, parameters->all_dest);
+			}
 		} else if(!state && toggle_states[b] != BUTTON_STATE_RELEASED) { //Toggle released.
 			toggle_states[b] = BUTTON_STATE_RELEASED;
-			sendButtonMessage(getButtonCode(button_index[b]), BUTTON_STATE_RELEASED, parameters->all_dest);
+			sendButtonMessage(button_code, BUTTON_STATE_RELEASED, parameters->all_dest);
 		}
 	}
 }
@@ -159,22 +180,22 @@ void ButtonHandler::checkButtonHold() {
 
 			uint8_t button_code = 0x0;
 			switch(b) {
-			case 0:
+			case INDEX_NAV_PUSH:
 				button_code = 0x7;
 				break;
-			case 1:
+			case INDEX_NAV_UP:
 				button_code = 0x28;
 				break;
-			case 2:
+			case INDEX_NAV_DN:
 				button_code = 0x29;
 				break;
-			case 3:
+			case INDEX_NAV_LEFT:
 				button_code = 0x2A;
 				break;
-			case 4:
+			case INDEX_NAV_RIGHT:
 				button_code = 0x2B;
 				break;
-			case 5:
+			case INDEX_VOL_PUSH:
 				button_code = 0x6;
 				break;
 			}

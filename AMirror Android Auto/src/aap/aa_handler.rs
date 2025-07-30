@@ -672,7 +672,8 @@ impl<'a> AapHandler <'a> {
 						context.app = playback_msg.media_app;
 						context.playing = playing;
 					} else if playing || loading {
-						self.send_button_message(InputButton::ButtonStop as u32);
+						self.send_button_message(InputButton::ButtonStop as u32, 0x0);
+						self.send_button_message(InputButton::ButtonStop as u32, 0x2);
 					}
 				}
 			} else if msg_type == MediaInfoMessage::MediaInfoMessageMeta as u16 {
@@ -741,14 +742,25 @@ impl<'a> AapHandler <'a> {
 			return;
 		}
 
+		let vertical_toggle;
+		let horizontal_toggle;
+		let nav_knob;
+
 		match self.context.try_lock() {
 			Ok(context) => {
 				if context.phone_type != 5 {
 					return;
 				}
+
+				vertical_toggle = context.aibt_vertical_toggle;
+				horizontal_toggle = context.aibt_horizontal_toggle;
+				nav_knob = context.aibt_nav_knob;
 			}
 			Err(_) => {
-				
+				println!("Handle AIBus Message: Context Locked");
+				vertical_toggle = true;
+				horizontal_toggle = true;
+				nav_knob = true;
 			}
 		}
 
@@ -757,28 +769,92 @@ impl<'a> AapHandler <'a> {
 				let button = ai_msg.data[1];
 				let state = ai_msg.data[2]>>6;
 
-				if button == 0x2A && state == 0x0 { //Toggle left.
-					self.send_scroll_message(false);
-				} else if button == 0x2B && state == 0x0 { //Toggle right.
-					self.send_scroll_message(true);
-				} else if button == 0x28 && state == 0x0 { //Toggle up.
-					self.send_button_message(InputButton::ButtonUp as u32);
-				} else if button == 0x29 && state == 0x0 { //Toggle down.
-					self.send_button_message(InputButton::ButtonDown as u32);
-				} else if button == 0x7 && state == 0x2 { //Enter.
-					if !self.enter_hold {
-						self.send_button_message(InputButton::ButtonEnter as u32);
+				if button == 0x2A || button == 0x2B || button == 0x28 || button == 0x29 || button == 0x7 { //Directional pad, handle differently depending on configuration.
+					if !nav_knob && vertical_toggle && horizontal_toggle { //No nav knob but 4-way toggle.
+						if button == 0x2A && state == 0x0 { //Toggle left.
+							self.send_scroll_message(false);
+						} else if button == 0x2B && state == 0x0 { //Toggle right.
+							self.send_scroll_message(true);
+						} else if button == 0x28 { //Toggle up.
+							self.send_button_message(InputButton::ButtonUp as u32, state);
+						} else if button == 0x29 { //Toggle down.
+							self.send_button_message(InputButton::ButtonDown as u32, state);
+						} else if button == 0x7 { //Enter.
+							self.send_button_message(InputButton::ButtonEnter as u32, state);
+						}
+					} else if nav_knob && !vertical_toggle && !horizontal_toggle { //No 4-way toggle but nav knob.
+						if button == 0x7 && state == 0x2 { //Enter.
+							if !self.enter_hold {
+								self.send_button_message(InputButton::ButtonEnter as u32, 0x0);
+								self.send_button_message(InputButton::ButtonEnter as u32, 0x2);
+							}
+							self.enter_hold = false;
+						} else if button == 0x7 && state == 0x1 {
+							self.enter_hold = true;
+						}
+					} else if !nav_knob && (vertical_toggle || horizontal_toggle) { //No nav knob, simple directional controls.
+						if (button == 0x28 || button == 0x2A) && state == 0x0 { //Toggle left or up.
+							self.send_scroll_message(false);
+						} else if (button == 0x29 || button == 0x2B) && state == 0x0 { //Toggle right or down.
+							self.send_scroll_message(true);
+						} else if button == 0x7 && state == 0x2 { //Enter.
+							if !self.enter_hold {
+								self.send_button_message(InputButton::ButtonEnter as u32, 0x0);
+								self.send_button_message(InputButton::ButtonEnter as u32, 0x2);
+							}
+							self.enter_hold = false;
+						} else if button == 0x7 && state == 0x1 {
+							self.enter_hold = true;
+						}
+					} else if nav_knob && horizontal_toggle && !vertical_toggle { //Horizontal toggle only.
+						if button == 0x2A { //Toggle left.
+							self.send_button_message(InputButton::ButtonUp as u32, state);
+						} else if button == 0x2B { //Toggle right.
+							self.send_button_message(InputButton::ButtonDown as u32, state);
+						} else if button == 0x7 && state == 0x2 { //Enter.
+							if !self.enter_hold {
+								self.send_button_message(InputButton::ButtonEnter as u32, 0x0);
+								self.send_button_message(InputButton::ButtonEnter as u32, 0x2);
+							}
+							self.enter_hold = false;
+						} else if button == 0x7 && state == 0x1 {
+							self.enter_hold = true;
+						}
+					} else if nav_knob && !horizontal_toggle && vertical_toggle { //Vertical toggle only.
+						if button == 0x28 { //Toggle up.
+							self.send_button_message(InputButton::ButtonUp as u32, state);
+						} else if button == 0x29 { //Toggle down.
+							self.send_button_message(InputButton::ButtonDown as u32, state);
+						} else if button == 0x7 && state == 0x2 { //Enter.
+							if !self.enter_hold {
+								self.send_button_message(InputButton::ButtonEnter as u32, 0x0);
+								self.send_button_message(InputButton::ButtonEnter as u32, 0x2);
+							}
+							self.enter_hold = false;
+						} else if button == 0x7 && state == 0x1 {
+							self.enter_hold = true;
+						}
+					} else {
+						if button == 0x2A { //Toggle left.
+							self.send_button_message(InputButton::ButtonLeft as u32, state);
+						} else if button == 0x2B { //Toggle right.
+							self.send_button_message(InputButton::ButtonRight as u32, state);
+						} else if button == 0x28 { //Toggle up.
+							self.send_button_message(InputButton::ButtonUp as u32, state);
+						} else if button == 0x29 { //Toggle down.
+							self.send_button_message(InputButton::ButtonDown as u32, state);
+						} else if button == 0x7 { //Enter.
+							self.send_button_message(InputButton::ButtonEnter as u32, state);
+						}
 					}
-					self.enter_hold = false;
-				} else if button == 0x7 && state == 0x1 {
-					self.enter_hold = true;
-				} else if button == 0x27 && state == 0x0 { //Back.
-					self.send_button_message(InputButton::ButtonBack as u32);
-				} else if button == 0x51 && state == 0x0 { //Menu.
-					self.send_button_message(InputButton::ButtonMenu as u32);
+				} else if button == 0x27 { //Back.
+					self.send_button_message(InputButton::ButtonBack as u32, state);
+				} else if button == 0x51 { //Menu.
+					self.send_button_message(InputButton::ButtonMenu as u32, state);
 				} else if button == 0x20 && state == 0x2 { //Home.
 					if !self.home_hold {
-						self.send_button_message(InputButton::ButtonHome as u32);
+						self.send_button_message(InputButton::ButtonHome as u32, 0x0);
+						self.send_button_message(InputButton::ButtonHome as u32, 0x2);
 					} else {
 						match self.context.try_lock() {
 							Ok(mut context) => {
@@ -800,14 +876,14 @@ impl<'a> AapHandler <'a> {
 						}
 					}
 					self.home_hold = true;
-				} else if button == 0x25 && state == 0x0 { //Next track.
-					self.send_button_message(InputButton::ButtonNext as u32);
-				} else if button == 0x24 && state == 0x0 { //Prev track.
-					self.send_button_message(InputButton::ButtonPrev as u32);
-				} else if button == 0x50 && state == 0x0 { //Phone.
-					self.send_button_message(InputButton::ButtonPhone as u32);
-				} else if button == 0x55 && state == 0x0 { //Map.
-					self.send_button_message(InputButton::ButtonNavigation as u32);
+				} else if button == 0x25 { //Next track.
+					self.send_button_message(InputButton::ButtonNext as u32, state);
+				} else if button == 0x24 { //Prev track.
+					self.send_button_message(InputButton::ButtonPrev as u32, state);
+				} else if button == 0x50 { //Phone.
+					self.send_button_message(InputButton::ButtonPhone as u32, state);
+				} else if button == 0x55 { //Map.
+					self.send_button_message(InputButton::ButtonNavigation as u32, state);
 				}
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x32 && ai_msg.data[1] == 0x7 {
 				let clockwise = (ai_msg.data[2]&0x10) != 0;
@@ -841,15 +917,18 @@ impl<'a> AapHandler <'a> {
 		}
 
 		if start {
-			self.send_button_message(InputButton::ButtonStart as u32);
+			self.send_button_message(InputButton::ButtonStart as u32, 0x0);
+			self.send_button_message(InputButton::ButtonStart as u32, 0x2);
 		} else {
-			self.send_button_message(InputButton::ButtonStop as u32);
+			self.send_button_message(InputButton::ButtonStop as u32, 0x0);
+			self.send_button_message(InputButton::ButtonStop as u32, 0x2);
 		}
 	}
 
 	//Show the audio source window.
 	pub fn show_audio_window(&mut self) {
-		self.send_button_message(InputButton::ButtonMusic as u32);
+		self.send_button_message(InputButton::ButtonMusic as u32, 0x0);
+		self.send_button_message(InputButton::ButtonMusic as u32, 0x2);
 	}
 
 	//Internal message handles:
@@ -983,21 +1062,20 @@ impl<'a> AapHandler <'a> {
 	}
 
 	//Send a button message.
-	fn send_button_message(&mut self, button: u32) {
-		let press_msg = ButtonPressMessage::get_button_press(button, true);
-		let release_msg = ButtonPressMessage::get_button_press(button, false);
+	fn send_button_message(&mut self, button: u32, state: u8) {
+		let press_msg;
+		if state != 0x1 {
+			press_msg = ButtonPressMessage::get_button_press(button, state == 0x0);
+		} else {
+			return;
+		}
 
 		let mut press_data = press_msg.write_to_bytes().unwrap();
-		let mut release_data = release_msg.write_to_bytes().unwrap();
 
 		let press_len = (press_data.len()&0xFF) as u8;
-		let release_len = (release_data.len()&0xFF) as u8;
 
 		press_data.insert(0, 0xA);
 		press_data.insert(1, press_len);
-
-		release_data.insert(0, 0xA);
-		release_data.insert(1, release_len);
 
 		let mut send_data = Vec::new();
 
@@ -1009,7 +1087,7 @@ impl<'a> AapHandler <'a> {
 
 		self.write_block(true, TouchChannel as u8, send_data, InputChannelMessageInputEvent as u16, Duration::from_millis(5000), true);
 
-		let mut send_rel_data = Vec::new();
+		/*let mut send_rel_data = Vec::new();
 
 		let mut os = CodedOutputStream::vec(&mut send_rel_data);
 		let _ = os.write_uint64(1, self.get_timestamp());
@@ -1017,7 +1095,7 @@ impl<'a> AapHandler <'a> {
 
 		std::mem::drop(os);
 
-		self.write_block(true, TouchChannel as u8, send_rel_data, InputChannelMessageInputEvent as u16, Duration::from_millis(5000), true);
+		self.write_block(true, TouchChannel as u8, send_rel_data, InputChannelMessageInputEvent as u16, Duration::from_millis(5000), true);*/
 	}
 
 	//Send a scroll wheel message- clockwise if cw is true.

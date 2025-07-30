@@ -2,6 +2,7 @@
 #include <time.h>
 
 #include "../Window/Nav_Window.h"
+#include "../Menu/Nav_Menu.h"
 
 #include "Vehicle_Info_Parameters.h"
 #include "../AidF_Color_Profile.h"
@@ -16,6 +17,10 @@
 #define COLOR_ENG1 0xFF6B54FF
 #define COLOR_ENG2 0xDC2508FF
 
+#define INFO_ACTIVE_MENU_NONE 0
+#define INFO_ACTIVE_MENU_MAIN 1
+#define INFO_ACTIVE_MENU_PARAM 2
+
 #include "DRL_Img.h"
 #include "SideMarkers_Img.h"
 #include "LowBeam_Img.h"
@@ -27,6 +32,10 @@
 #include "Hybrid_Img.h"
 #include "Power_Flow_Arrow.h"
 
+#define PARAM_H 80
+
+#define INFO_SETTING_COUNT 9
+
 class VehicleInfoWindow : public NavWindow {
 public:
 	VehicleInfoWindow(AttributeList *attribute_list, InfoParameters* info_parameters);
@@ -35,9 +44,16 @@ public:
 	void refreshWindow();
 	void drawWindow();
 
+	bool handleAIBus(AIData* ai_d);
+
 private:
 	InfoParameters* info_parameters;
 	TextBox* title_box;
+
+	//Info display:
+	TextBox* param_titles[PARAM_COUNT];
+	TextBox* param_text[PARAM_COUNT];
+	uint8_t* param_index;
 
 	SDL_Texture* drl_texture = NULL,
 				*side_texture = NULL,
@@ -50,6 +66,16 @@ private:
 				*engine_texture = NULL;
 	
 	SDL_Texture* silhouette_texture = NULL, *silhouette_outline_texture = NULL;
+
+	NavMenu* settings_menu = NULL;
+
+	uint8_t active_menu = INFO_ACTIVE_MENU_NONE, active_param = 0;
+
+	void handleEnterButton();
+	void refreshParam(TextBox* title, TextBox* text, const uint8_t param);
+	
+	void createDefaultSettingsMenu();
+	void createParamSettingsMenu(const uint8_t active_param);
 };
 
 #endif

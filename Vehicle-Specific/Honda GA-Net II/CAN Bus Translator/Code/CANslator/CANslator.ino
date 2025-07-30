@@ -6,7 +6,12 @@
 #include "CAN_Handler.h"
 #include "Parameter_List.h"
 
-#define AI_RX -1
+#ifdef MEGACOREX
+#else
+#define AI_RX 4
+
+#define BCAN_CS 10
+#endif
 
 #if !defined(HAVE_HWSERIAL1)
 #define AISerial Serial
@@ -17,7 +22,7 @@
 AIBusHandler ai_handler(&AISerial, AI_RX);
 ParameterList parameters;
 
-BCAN_Handler bcan_handler(&ai_handler, &parameters, 10); //TODO: Adjust the pin number.
+BCAN_Handler bcan_handler(&ai_handler, &parameters, BCAN_CS);
 
 void setup() {
 	AISerial.begin(AI_BAUD);
@@ -45,7 +50,11 @@ void loop() {
 			if(ai_msg.receiver == ID_CANSLATOR && !(ai_msg.l >= 1 && ai_msg.data[0] == 0x80))
 				ai_handler.sendAcknowledgement(ID_CANSLATOR, ai_msg.sender);
 
-			
+			if(ai_msg.receiver == ID_CANSLATOR) {
+				if(ai_msg.l >= 2 && ai_msg.data[0] == 0x4A && ai_msg.data[1] == 0x1F) { //Request for common states.
+					bcan_handler.sendAllParameters();
+				}
+			}
 		}
 	} while (ai_timer < 5);
 

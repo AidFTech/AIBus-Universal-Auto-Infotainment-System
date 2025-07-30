@@ -41,6 +41,11 @@
 
 #define RESOLUTION_FILE "./AidF_Nav_Resolution.ini"
 
+struct FrameParameters {
+	int* frame;
+	bool* run;
+};
+
 class AidF_Nav_Computer {
 public:
 	bool running = true;
@@ -85,6 +90,7 @@ private:
 
 	pthread_t socket_thread, frame_thread;
 	SocketHandlerParameters socket_parameters;
+	FrameParameters frame_parameters;
 
 	clock_t aibus_read_time = clock();
 	

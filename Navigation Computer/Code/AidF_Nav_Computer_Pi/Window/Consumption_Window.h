@@ -25,14 +25,22 @@ public:
 	void refreshWindow();
 	bool handleAIBus(AIData* ai_d);
 
+	void exitWindow();
+
 private:
 	void requestConsumptionInfo();
+
+	void handleEnterButton();
+	void handleBackButton();
+	void handleSettingsButton();
 
 	AIBusHandler* aibus_handler;
 
 	TextBox* title_box;
 	TextBox* split_info_box_left[TRIP_INFO_COUNT];
 	TextBox* split_info_box_right[TRIP_INFO_COUNT];
+
+	NavMenu* settings_menu = NULL;
 };
 
 #endif

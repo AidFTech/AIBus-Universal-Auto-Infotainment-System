@@ -39,7 +39,8 @@ public:
 	void powerOff();
 
 	void setADCOn();
-	void setDigitalOut();
+	void setExtOut();
+	void setPiOut();
 	
 private:
 	int pcm9211_sel = -1;

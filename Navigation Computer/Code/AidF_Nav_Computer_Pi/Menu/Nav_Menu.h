@@ -56,6 +56,8 @@ public:
 	
 	void navigateSelected(const int8_t direction);
 
+	virtual bool handleAIBus(AIData *ai_d);
+
 	uint16_t getFilledTextItems();
 	void refreshItems();
 private:

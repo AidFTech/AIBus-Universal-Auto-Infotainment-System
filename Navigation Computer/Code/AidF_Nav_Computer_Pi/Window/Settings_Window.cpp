@@ -67,7 +67,7 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 			if(ai_d->sender != this->ext_menu_sender)
 				return false;
 
-			const uint16_t index = ai_d->data[2] + 1;
+			const uint16_t index = ai_d->data[2];
 			this->settings_menu->setSelected(index);
 			this->settings_menu->setTextItems();
 
@@ -95,59 +95,25 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 		
 		return false;
 	} else if(ai_d->sender == ID_NAV_SCREEN) {
-		if(ai_d->l >= 3 && ai_d->data[0] == 0x32) { //Knob turn.
-			const bool clockwise = (ai_d->data[2]&0x10) != 0;
-			const uint8_t steps = ai_d->data[2]&0xF;
-
-			if(!clockwise) {
-				for(uint8_t i=0;i<steps;i+=1)
-					this->settings_menu->incrementSelected();
-			} else {
-				for(uint8_t i=0;i<steps;i+=1)
-					this->settings_menu->decrementSelected();
-			}
-
+		if(this->settings_menu->handleAIBus(ai_d)) {
 			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
-		} else if(ai_d->l >= 3 && ai_d->data[0] == 0x30) { //Button press.
-			if(ai_d->data[1] >= 0x28 && ai_d->data[1] <= 0x2B && (ai_d->data[2] >> 6) == 0x2) {
-				int8_t control = -1;
-				switch(ai_d->data[1]) {
-					case 0x28:
-						control = NAV_UP;
-						break;
-					case 0x29:
-						control = NAV_DOWN;
-						break;
-					case 0x2A:
-						control = NAV_LEFT;
-						break;
-					case 0x2B:
-						control = NAV_RIGHT;
-						break;
-					default:
-						return false;
-				}
+		}
 
-				this->settings_menu->navigateSelected(control);
-
+		if(ai_d->l >= 3 && ai_d->data[0] == 0x30) { //Button press.
+			bool answered = false;
+			const uint8_t control = ai_d->data[1], state = ai_d->data[2]>>6;
+			if(control == 0x7 && state == 0x2) { //Enter button.
 				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
-				return true;
-			} else {
-				bool answered = false;
-				const uint8_t control = ai_d->data[1], state = ai_d->data[2]>>6;
-				if(control == 0x7 && state == 0x2) { //Enter button.
-					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
-					this->handleEnterButton();
-					answered = true;
-				} else if((control == 0x27 || control == 0x51) && state == 0x2) { //Back button.
-					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
-					this->handleBackButton();
-					answered = true;
-				}
-				
-				return answered;
+				this->handleEnterButton();
+				answered = true;
+			} else if((control == 0x27 || control == 0x51) && state == 0x2) { //Back button.
+				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
+				this->handleBackButton();
+				answered = true;
 			}
+			
+			return answered;
 		}
 	}
 

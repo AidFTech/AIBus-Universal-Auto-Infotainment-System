@@ -239,8 +239,13 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		writeIMIDCDCTextMessage(field, text);
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-	} else if(the_message->sender == ID_RADIO && the_message->l >= 6 && the_message->data[0] == 0x67) { //Frequency change message.		
+	} else if(the_message->sender == ID_RADIO && the_message->l >= 6 && the_message->data[0] == 0x67) { //Frequency change message.	
+		const uint16_t last_frequency = this->frequency;
 		const uint16_t frequency = (the_message->data[1]<<8) | the_message->data[2];
+
+		if(last_frequency != frequency)
+			this->rds = false;
+
 		writeIMIDRadioMessage(frequency, the_message->data[3], the_message->data[4]&0xF, (the_message->data[4]&0xF0)>>4);
 	} else if(the_message->sender == ID_RADIO && the_message->data[0] == 0x63 && the_message->l >= 3) { //RDS.
 		ack = false;
@@ -250,9 +255,10 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		for(int i=2;i<the_message->l;i+=1)
 			rds_str += char(the_message->data[i]);
 		
-		if(the_message->data[1] == 0x61) // True RDS.
+		if(the_message->data[1] == 0x61) { // True RDS.
+			this->rds = true;
 			writeIMIDRDSMessage(rds_str);
-		else if(the_message->data[1] == 0x60) //Call sign.
+		} else if(the_message->data[1] == 0x60) //Call sign.
 			writeIMIDCallsignMessage(rds_str);
 	} else if(the_message->sender == ID_RADIO && the_message->l >= 3 && the_message->data[0] == 0x62) { //Volume control display.
 		const int max_vol = 40;
@@ -394,9 +400,20 @@ void HondaIMIDHandler::writeScreenLayoutMessage() {
 	ai_driver->writeAIData(&screen_oem_msg, false);
 }
 
-void HondaIMIDHandler::writeTimeAndDayMessage(const uint8_t hour, const uint8_t minute, const uint8_t month, const uint8_t day, const uint16_t year) {
+void HondaIMIDHandler::writeTimeAndDayMessage(uint8_t hour, const uint8_t minute, const uint8_t month, const uint8_t day, const uint16_t year, const bool display_24h) {
 	//TODO: Day of week.
+	if(!display_24h) {
+		if(hour > 12)
+			hour -= 12;
+		else if(hour == 0)
+			hour = 12;
+	}
+
 	uint8_t time_data[] = {0x60, 0xD, 0x11, 0x0, 0x1, 0x40, getBCDFromByte(hour), getBCDFromByte(minute), 0x0, 0x1, (getBCDFromByte(year)>>8)&0xFF, getBCDFromByte(year)&0xFF, month, day, 0xF};
+
+	if(!display_24h)
+		time_data[9] = 0x2;
+
 	IE_Message time_msg(sizeof(time_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
 	time_msg.refreshIEData(time_data);
 	ie_driver->sendMessage(&time_msg, true, true);
@@ -842,6 +859,11 @@ void HondaIMIDHandler::writeIMIDRadioMessage(const uint16_t frequency, const int
 	if(!valid)
 		return;
 
+	if(this->display_rds)
+		hd_byte = 0;
+
+	const uint8_t rds_byte = rds ? 0x8 : 0x0, display_rds = this->display_rds? 0x8 : 0x0;
+
 	uint8_t tuning_data[] = {0x60,
 							0x7,
 							0x11,
@@ -865,14 +887,16 @@ void HondaIMIDHandler::writeIMIDRadioMessage(const uint16_t frequency, const int
 							0xFF,
 							0xFF,
 							stereo_byte,
-							0x0,
-							0x0,
+							rds_byte,
+							display_rds,
 							hd_byte,
 							0x1,
 							0x0,
 							0x0,
 							0x0,
 							0x0};
+
+	tuning_data[12] = rds ? 0x87 : 0x83;
 
 	IE_Message tuning_msg(sizeof(tuning_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
 	tuning_msg.refreshIEData(tuning_data);
@@ -920,6 +944,11 @@ void HondaIMIDHandler::writeIMIDRDSMessage(String msg) {
 	if(!valid)
 		return;
 
+	if(this->display_rds)
+		hd_byte = 0;
+
+	const uint8_t rds_byte = rds ? 0x8 : 0x0, display_rds = this->display_rds? 0x8 : 0x0;
+
 	uint8_t tuning_data[] = {0x60,
 							0x7,
 							0x11,
@@ -943,7 +972,7 @@ void HondaIMIDHandler::writeIMIDRDSMessage(String msg) {
 							0xFF,
 							0xFF,
 							stereo_byte,
-							0x0,
+							rds_byte,
 							0x0,
 							hd_byte,
 							0x1,
@@ -952,7 +981,7 @@ void HondaIMIDHandler::writeIMIDRDSMessage(String msg) {
 							0x0,
 							0x0};
 
-	tuning_data[12] = 0x83;
+	tuning_data[12] = rds ? 0x87 : 0x83;
 	for(uint8_t i=0;i<8;i+=1) {
 		if(i < msg.length())
 			tuning_data[i+13] = uint8_t(msg.charAt(i));

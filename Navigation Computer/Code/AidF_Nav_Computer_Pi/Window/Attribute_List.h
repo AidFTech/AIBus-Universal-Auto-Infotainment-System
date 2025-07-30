@@ -59,6 +59,8 @@ struct AttributeList {
 	uint8_t timekeeper = ID_RADIO; //ID of timekeeper device.
 	bool auto_clock = true; //True if the timekeeper device receives its time data automatically.
 
+	uint16_t vehicle_speed = 0;
+
 	AIBusHandler* aibus_handler;
 };
 

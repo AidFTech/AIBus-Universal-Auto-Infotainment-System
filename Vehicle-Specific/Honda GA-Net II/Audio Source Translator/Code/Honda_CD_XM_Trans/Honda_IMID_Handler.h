@@ -32,7 +32,7 @@ public:
 	void writeScreenLayoutMessage();
 	void writeVolumeLimitMessage();
 
-	void writeTimeAndDayMessage(const uint8_t hour, const uint8_t minute, const uint8_t month, const uint8_t day, const uint16_t year);
+	void writeTimeAndDayMessage(uint8_t hour, const uint8_t minute, const uint8_t month, const uint8_t day, const uint16_t year, const bool display_24h);
 	
 	bool writeIMIDTextMessage(String text);
 	bool setIMIDSource(const uint8_t source, const uint8_t subsource);
@@ -60,6 +60,7 @@ private:
 	uint16_t frequency = 0;
 	int8_t decimal = 0;
 	uint8_t preset = 0, stereo_mode = 0;
+	bool rds = false, display_rds = true;
 
 	//CD parameters:
 	uint8_t track = 0, disc = 0, track_count = 0;

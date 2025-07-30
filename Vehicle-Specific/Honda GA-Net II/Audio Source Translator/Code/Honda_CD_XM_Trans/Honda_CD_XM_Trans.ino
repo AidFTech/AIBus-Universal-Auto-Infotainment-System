@@ -122,6 +122,11 @@ void setup() {
 	Serial.begin(115200);
 	Serial.println("Ready!");
 	#endif
+	
+	uint8_t init_data[] = {0x4A, 0x1F};
+	AIData init_msg(sizeof(init_data), ID_NAV_SCREEN, ID_CANSLATOR);
+	init_msg.refreshAIData(init_data);
+	ai_handler.writeAIData(&init_msg, false);
 }
 
 void loop() {
@@ -236,14 +241,15 @@ void loop() {
 			else if (ai_msg.receiver == 0xFF && ai_msg.l >= 2 && ai_msg.data[0] == 0xA1) { // Broadcast message.
 				if (ai_msg.data[1] == 0x1F) {
 					if (ai_msg.data[2] == 0x1 && ai_msg.l >= 5) { // Time.
-						parameters.hour = ai_msg.data[3];
+						parameters.hour = ai_msg.data[3]&0x1F;
 						parameters.minute = ai_msg.data[4];
-						imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year);
+						parameters.display_24h = (ai_msg.data[3]&0x80) == 0;
+						imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year, parameters.display_24h);
 					} else if (ai_msg.data[2] == 0x2 && ai_msg.l >= 7) { // Date.
 						parameters.year = (ai_msg.data[3] << 8) | ai_msg.data[4];
 						parameters.month = ai_msg.data[5];
 						parameters.date = ai_msg.data[6];
-						imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year);
+						imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year, parameters.display_24h);
 					}
 				}
 				else if (ai_msg.sender == ID_CANSLATOR && ai_msg.data[1] == 0x2) { // Key position.

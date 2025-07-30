@@ -13,6 +13,7 @@ class Settings_Ext_Window : public Settings_Window {
 public:
 	Settings_Ext_Window(AttributeList *attribute_list);
 
+	void exitWindow();
 private:
 	void handleEnterButton();
 	void handleBackButton();

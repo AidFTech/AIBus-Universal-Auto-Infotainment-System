@@ -8,6 +8,13 @@
 #ifndef button_handler_h
 #define button_handler_h
 
+#define INDEX_VOL_PUSH 0
+#define INDEX_NAV_UP 2
+#define INDEX_NAV_DN 1
+#define INDEX_NAV_LEFT 4
+#define INDEX_NAV_RIGHT 3
+#define INDEX_NAV_PUSH 5
+
 #define BUTTON_TIMER 1000
 
 #define TOGGLE_INDEX_SIZE 6
@@ -31,6 +38,8 @@ private:
 
 	uint8_t toggle_states[TOGGLE_INDEX_SIZE];
 	elapsedMillis toggle_timers[TOGGLE_INDEX_SIZE];
+
+	elapsedMillis debounce_timer;
 
 	void checkButtonPress();
 	void checkButtonHold();

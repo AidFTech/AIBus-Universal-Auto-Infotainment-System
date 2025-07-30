@@ -157,8 +157,8 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 		this->setActiveWindow(misc_window);
 	} else if(next_window == NEXT_WINDOW_LAST) {
 		misc_window = this->getLastWindow();
-		misc_window->refreshWindow();
 		this->setActiveWindow(misc_window);
+		misc_window->refreshWindow();
 	} else if(next_window != NEXT_WINDOW_NULL) {
 		attribute_list->next_window = NEXT_WINDOW_NULL;
 	}

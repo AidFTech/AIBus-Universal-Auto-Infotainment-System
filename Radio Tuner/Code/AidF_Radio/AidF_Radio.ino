@@ -19,52 +19,44 @@
 
 //#define U5_ERR //True if the design error involving U5 is present.
 
-#ifdef __AVR_ATmegax09__
+#if defined(DXCORE)
 #define AI_RX PIN_PA7
-#define FM1_EN PIN_PB0
-#define FM2_EN PIN_PB1
-#define TUNER_RESET PIN_PB2
+#define TUNER_RESET PIN_PC0
 #define IDAT PIN_PA2
 #define ICLK PIN_PA3
 
-#define AUDIO_SW0 PIN_PB3 //Audio switch.
-#define AUDIO_SW1 PIN_PB4 //Audio switch.
-#define NAV_SW PIN_PB5 //Nav audio switch. Input.
-#define AUDIO_ON_SW PIN_PC0 //Audio on/off. Audio on when low.
-#define SPDIF_SW PIN_PC1 //Switch source to S/PDIF when high.
-#define DIGITAL_MODE PIN_PC2 //Input, digital mode active when low.
-#define POWER_ON_SW PIN_PC3 //Output, vehicle power is on when high.
-#define AUX_SW PIN_PC4 //Input, aux port mechanical switch.
+#define AUDIO_SW PIN_PC1 //Audio switch.
+#define NAV_SW PIN_PC2 //Nav audio switch. Input.
+#define AUDIO_ON_SW PIN_PC3 //Audio on/off. Audio on when low.
+#define POWER_ON_SW PIN_PD0 //Output, vehicle power is on when high.
+#define AUX_SW PIN_PD1 //Input, aux port mechanical switch.
 
-#define DAC_FILTER_MODE PIN_PC5 //Output, digital filter mode.
+#define DAC_FILTER_MODE PIN_PD2 //Output, digital filter mode.
+#define DAC_MUTE PIN_PD3 //Output, analog mute.
 
-#define ADC_CS PIN_PD0
-#define VOL_CS PIN_PD1
-#define TREBLE_CS PIN_PD2
-#define BASS_CS PIN_PD3
-#define FADE_CS PIN_PD4
+#define ADC_CS PIN_PD4
+#define VOL_CS PIN_PD5
+#define TREBLE_CS PIN_PD6
+#define BASS_CS PIN_PF2
+#define FADE_CS PIN_PD7
 
-#define NAV_MUTE PIN_PD5
-#define DIGITAL_NPCM PIN_PD6
-#define DIGITAL_ERROR PIN_PD7
+#define NAV_MUTE PIN_PF3
+#define RAM_CS PIN_PF4
+#define DIGITAL_ERROR PIN_PF5
 #else
 #define AI_RX 3
-#define FM1_EN 4
-#define FM2_EN 5
 #define TUNER_RESET 6
 #define IDAT A4
 #define ICLK A5
 
-#define AUDIO_SW0 7 //Audio switch.
-#define AUDIO_SW1 8 //Audio switch.
+#define AUDIO_SW 7 //Audio switch.
 #define NAV_SW 9 //Nav audio switch. Input.
 #define AUDIO_ON_SW 10 //Audio on/off. Audio on when low.
-#define SPDIF_SW 11 //Switch source to S/PDIF when high.
-#define DIGITAL_MODE 12 //Input, digital mode active when low.
 #define POWER_ON_SW 13 //Output, vehicle power is on when high.
 #define AUX_SW 14 //Input, aux port mechanical switch.
 
 #define DAC_FILTER_MODE 15 //Output, digital filter mode.
+#define DAC_MUTE 22 //Output, analog mute.
 
 #define ADC_CS 16
 #define VOL_CS 17
@@ -73,7 +65,7 @@
 #define FADE_CS 20
 
 #define NAV_MUTE 21
-#define DIGITAL_NPCM 22
+#define RAM_CS 22
 #define DIGITAL_ERROR 23
 #endif
 
@@ -133,17 +125,15 @@ void setup() {
 	
 	pinMode(TUNER_RESET, OUTPUT);
 
-	pinMode(AUDIO_SW0, OUTPUT);
-	pinMode(AUDIO_SW1, OUTPUT);
+	pinMode(AUDIO_SW, OUTPUT);
 	pinMode(NAV_SW, INPUT);
 	pinMode(AUDIO_ON_SW, OUTPUT);
 	pinMode(POWER_ON_SW, OUTPUT);
-	pinMode(SPDIF_SW, OUTPUT);
-	pinMode(DIGITAL_MODE, INPUT);
 	pinMode(AUX_SW, INPUT_PULLUP);
 	pinMode(NAV_MUTE, INPUT_PULLUP);
 
 	pinMode(DAC_FILTER_MODE, OUTPUT);
+	pinMode(DAC_MUTE, OUTPUT);
 
 	pinMode(VOL_CS, OUTPUT);
 	pinMode(TREBLE_CS, OUTPUT);
@@ -151,38 +141,35 @@ void setup() {
 	pinMode(FADE_CS, OUTPUT);
 	pinMode(ADC_CS, OUTPUT);
 
+	pinMode(RAM_CS, OUTPUT);
+
 	pinMode(DIGITAL_ERROR, INPUT);
-	pinMode(DIGITAL_NPCM, INPUT);
 	
 	digitalWrite(TUNER_RESET, HIGH);
 
-	digitalWrite(AUDIO_SW0, LOW);
-	digitalWrite(AUDIO_SW1, LOW);
+	digitalWrite(AUDIO_SW, LOW);
 
 	digitalWrite(AUDIO_ON_SW, LOW);
 	digitalWrite(POWER_ON_SW, HIGH);
 
-	digitalWrite(SPDIF_SW, LOW);
-
 	digitalWrite(DAC_FILTER_MODE, LOW);
+	digitalWrite(DAC_MUTE, HIGH);
 	digitalWrite(ADC_CS, HIGH);
 
-	#ifdef __AVR_ATmegax09__
-	pinMode(PIN_PA5, INPUT_PULLUP);
-	#endif
+	digitalWrite(RAM_CS, HIGH);
 
 	AISerial.begin(AI_BAUD);
 	Wire.begin();
 
-	tuner.init1();
-	br_tuner.init1();
-	tuner.init2();
-	br_tuner.init2();
+	//tuner.init1();
+	//br_tuner.init1();
+	//tuner.init2();
+	//br_tuner.init2();
 
-	br_tuner.setPower(true, SUB_FM1);
+	//br_tuner.setPower(true, SUB_FM1);
 
-	parameters.fm1_tune = tuner.getFrequency();
-	parameters.fm2_tune = tuner.getFrequency();
+	//parameters.fm1_tune = tuner.getFrequency();
+	//parameters.fm2_tune = tuner.getFrequency();
 	parameters.am_tune = parameters.am_start;
 
 	getEEPROMPresets(&parameters);
@@ -362,47 +349,29 @@ void loop() {
 			}
 		
 			//Set audio switch.
-			if(current_source_id == 0) {
+			if(current_source_id == 0) { //Audio off.
 				digitalWrite(AUDIO_ON_SW, HIGH);
-				digitalWrite(AUDIO_SW0, LOW);
-
-				#ifndef U5_ERR
-				digitalWrite(AUDIO_SW1, LOW);
-				#else
-				digitalWrite(AUDIO_SW1, HIGH);
-				#endif
-
-				setDigitalActiveMode(false);
+				digitalWrite(AUDIO_SW, LOW);
+				digitalWrite(DAC_MUTE, LOW);
+				adc_handler.powerOff();
 			} else if(current_source_id == ID_RADIO) {
+				digitalWrite(DAC_MUTE, HIGH);
+				adc_handler.setADCOn();
 				digitalWrite(AUDIO_ON_SW, LOW);
 				const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
 				if(sub_id < 3) { //Tuner.
-					digitalWrite(AUDIO_SW0, LOW);
-					#ifndef U5_ERR
-					digitalWrite(AUDIO_SW1, LOW);
-					#else
-					digitalWrite(AUDIO_SW1, HIGH);
-					#endif
+					digitalWrite(AUDIO_SW, HIGH);
 				} else { //Aux.
-					digitalWrite(AUDIO_SW0, LOW);
-					#ifndef U5_ERR
-					digitalWrite(AUDIO_SW1, HIGH);
-					#else
-					digitalWrite(AUDIO_SW1, LOW);
-					#endif
+					digitalWrite(AUDIO_SW, LOW);
 				}
-				setDigitalActiveMode(false);
-			} else { //AIBus.
-				digitalWrite(AUDIO_ON_SW, LOW);
-				digitalWrite(AUDIO_SW0, HIGH);
-
-				#ifndef U5_ERR
-				digitalWrite(AUDIO_SW1, HIGH);
-				#else
-				digitalWrite(AUDIO_SW1, LOW);
-				#endif
-
-				setDigitalActiveMode();
+			} else if(current_source_id == ID_PHONE || current_source_id == ID_ANDROID_AUTO) { //Pi. TODO: Use an AIBus flag.
+				digitalWrite(DAC_MUTE, HIGH);
+				digitalWrite(AUDIO_ON_SW, HIGH);
+				adc_handler.setPiOut();
+			} else { //External audio.
+				digitalWrite(DAC_MUTE, HIGH);
+				digitalWrite(AUDIO_ON_SW, HIGH);
+				adc_handler.setExtOut();
 			}
 		} else {
 			parameters.audio_on = true;
@@ -418,18 +387,13 @@ void loop() {
 			
 			if(!last_phone)
 				text_handler.createPhoneWindow();
+
+			digitalWrite(DAC_MUTE, HIGH);
 			
-			digitalWrite(AUDIO_ON_SW, LOW);
-			digitalWrite(AUDIO_SW0, HIGH);
+			digitalWrite(AUDIO_ON_SW, HIGH);
+			digitalWrite(AUDIO_SW, HIGH);
 
-			#ifndef U5_ERR
-			digitalWrite(AUDIO_SW1, LOW);
-			#else
-			digitalWrite(AUDIO_SW1, HIGH);
-			#endif
-
-			digitalWrite(SPDIF_SW, LOW);
-			adc_handler.setADCOn();
+			adc_handler.setPiOut();
 		}
 	}
 	
@@ -475,7 +439,7 @@ void loop() {
 
 	}
 
-	do {
+	/*do {
 		if(source_handler.getCurrentSourceID() == ID_RADIO) {
 			tuner.loop();
 			
@@ -681,11 +645,9 @@ void loop() {
 			
 			break;
 		} else if(source_handler.getCurrentSourceID() != 0) {
-			const int digital_status = digitalRead(DIGITAL_MODE);
-			if((digital_status == LOW && !*digital_mode) || (digital_status == HIGH && *digital_mode))
-				setDigitalActiveMode();
+			//TODO: Anything here?
 		}
-	} while(false);
+	} while(false);*/
 
 	if(src_ping_timer >= SOURCE_PING_DELAY)
 		pingActiveSource();
@@ -700,7 +662,7 @@ void loop() {
 																|| parameters.balance_adjust
 																|| parameters.fader_adjust);
 
-	background_tuner.loop();
+	//background_tuner.loop();
 
 	if(parameters.send_time && parameters.hour >= 0 && parameters.min >= 0 && (parameters.hour != last_hour || parameters.min != last_min || !last_send_time || parameters.send_12h != last_12h))
 		text_handler.sendTime();
@@ -865,26 +827,6 @@ void setTunerFrequency(const uint8_t sub_id) {
 		tuner.setPower(false);
 	
 	parameter_timer = PARAMETER_DELAY;
-}
-
-//Set the digital mode.
-void setDigitalActiveMode() {
-	const int d_state = digitalRead(DIGITAL_MODE);
-	*digital_mode = d_state == LOW;
-
-	setDigitalActiveMode(*digital_mode);
-}
-
-//Set the digital mode.
-void setDigitalActiveMode(const bool digital) {
-	*digital_mode = digital;
-	if(digital) {
-		digitalWrite(SPDIF_SW, HIGH);
-		adc_handler.setDigitalOut();
-	} else {
-		digitalWrite(SPDIF_SW, LOW);
-		adc_handler.setADCOn();
-	}
 }
 
 //Send the heartbeat/redundant message to the active source.

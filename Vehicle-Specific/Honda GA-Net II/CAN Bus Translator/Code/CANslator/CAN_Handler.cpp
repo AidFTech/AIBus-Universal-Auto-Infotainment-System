@@ -67,7 +67,7 @@ void BCAN_Handler::readCANMessage() {
 					key_pos = 0;
 
 				if(key_pos != last_key)
-					writeAIBusKeyMessage(0xFF, (last_key&0xF) == 0);
+					writeAIBusKeyMessage(0xFF, (key_pos&0xF) == 0);
 			} else if(can_msg.can_id == 0x92F85150 && can_msg.can_dlc == 5) { //Engine running, e-brake and gear.
 				const uint16_t last_gear = gear;
 				const uint8_t last_key = key_pos;
@@ -80,7 +80,7 @@ void BCAN_Handler::readCANMessage() {
 					key_pos = 4;
 
 				if(key_pos != last_key)
-					writeAIBusKeyMessage(0xFF, (last_key&0xF) == 0);
+					writeAIBusKeyMessage(0xFF, (key_pos&0xF) == 0);
 			} else if(can_msg.can_id == 0x92F83010 && can_msg.can_dlc == 1) { //Left doors.
 				const uint8_t last_door = doors_open;
 
@@ -203,6 +203,9 @@ void BCAN_Handler::readCANMessage() {
 
 //Write all CAN-derived parameters.
 void BCAN_Handler::sendAllParameters() {
+	writeAIBusKeyMessage(0xFF, true);
+	writeAIBusDoorMessage(0xFF, true);
+	writeAIBusBrightnessMessage(0xFF, true);
 	
 }
 

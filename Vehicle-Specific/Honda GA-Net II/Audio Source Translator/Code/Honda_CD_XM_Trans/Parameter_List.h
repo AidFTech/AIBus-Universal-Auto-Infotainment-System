@@ -16,6 +16,8 @@ struct ParameterList {
 
 	uint8_t hour = 0, minute = 0, date = 0, month = 0;
 	uint16_t year = 2011;
+
+	bool display_24h = true;
 	
 	uint16_t vehicle_speed = 0;
 	bool computer_connected = false, screen_connected = false, radio_connected = false, mirror_connected = false;

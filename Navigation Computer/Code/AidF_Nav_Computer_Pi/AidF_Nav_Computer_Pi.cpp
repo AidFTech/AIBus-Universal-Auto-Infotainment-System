@@ -48,8 +48,11 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->socket_parameters.running = &this->running;
 	this->socket_parameters.ai_serial = aibus_handler->getPortPointer();
 
+	this->frame_parameters.frame = &attribute_list->frame;
+	this->frame_parameters.run = &this->running;
+
 	pthread_create(&socket_thread, NULL, socketThread, (void *)&socket_parameters);
-	pthread_create(&frame_thread, NULL, frameThread, (void*)&attribute_list->frame);
+	pthread_create(&frame_thread, NULL, frameThread, (void*)&frame_parameters);
 }
 
 AidF_Nav_Computer::~AidF_Nav_Computer() {
@@ -65,8 +68,10 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	delete misc_window;
 	delete phone_window;
 
+	std::cout<<"Waiting for threads to join...\n";
 	pthread_join(socket_thread, NULL);
 	pthread_join(frame_thread, NULL);
+	std::cout<<"Threads joined!\n";
 }
 
 void AidF_Nav_Computer::loop() {
@@ -179,10 +184,17 @@ void AidF_Nav_Computer::loop() {
 							} else if(button == 0x20 && state == 0x2) { //Home button.
 								attribute_list->next_window = NEXT_WINDOW_MAIN;
 							}
-						} else if(ai_msg.sender == ID_CANSLATOR && ai_msg.l >= 1 && ai_msg.data[0] == 0x11) { //Light info.
-							InfoParameters* info_parameters = window_handler->getVehicleInfo();
-							setLightState(&ai_msg, info_parameters);
-							answered = true;
+						} else if(ai_msg.sender == ID_CANSLATOR) { 
+							if(ai_msg.l >= 1 && ai_msg.data[0] == 0x11) { //Light info.
+								InfoParameters* info_parameters = window_handler->getVehicleInfo();
+								setLightState(&ai_msg, info_parameters);
+								answered = true;
+							} else if(ai_msg.l >= 3 && ai_msg.data[0] == 0x49) { //Supported parameters.
+								InfoParameters* info_parameters = window_handler->getVehicleInfo();
+								info_parameters->supported_a = ai_msg.data[1];
+								info_parameters->supported_b = ai_msg.data[2];
+								answered = true;
+							}
 						} else if((ai_msg.sender == ID_RADIO || ai_msg.sender == ID_ANDROID_AUTO) && ai_msg.l >= 3 && ai_msg.data[0] == 0x27 && ai_msg.data[1] == 0x30 && ai_msg.data[2] == 0x26) { //Open the audio window.
 							if(attribute_list->phone_active && attribute_list->mirror_connected && attribute_list->phone_type != 0) {
 								uint8_t mirror_off_data[] = {0x48, 0x8E, 0x0};
@@ -270,7 +282,7 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 		else
 			this->running = true;
 		return true;
-	} else if(ai_d->l >= 6 && (ai_d->sender == ID_GPS_ANTENNA || ai_d->sender == ID_CANSLATOR || ai_d->sender == ID_RADIO) && ai_d->data[1] == 0x1F) { //Time/day, speed, temp, etc.
+	} else if(ai_d->l >= 3 && (ai_d->sender == ID_GPS_ANTENNA || ai_d->sender == ID_CANSLATOR || ai_d->sender == ID_RADIO) && ai_d->data[1] == 0x1F) { //Time/day, speed, temp, etc.
 		if(ai_d->data[2] == 0x1 && ai_d->l >= 6) { //Time.
 			const uint8_t hour = ai_d->data[3]&0x1F, minute = ai_d->data[4];
 			attribute_list->display_12h = (ai_d->data[3]&0x80) != 0;
@@ -346,6 +358,41 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 
 			if(!info_parameters->outside_temp_sent)
 				info_parameters->outside_temp_sent = true;
+			
+			if(typeid(*this->window_handler->getActiveWindow()) == typeid(VehicleInfoWindow))
+				this->window_handler->refresh();
+
+			return true;
+		} else if (ai_d->data[2] == 0x4 && ai_d->l >= 5 && ai_d->sender == ID_CANSLATOR) { //Speed.
+			const uint16_t last_speed = attribute_list->vehicle_speed;
+
+			const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
+			const bool mph = (ai_d->data[3]&0x80) != 0;
+
+			unsigned int read_speed = 0;
+			for(int i=4;i<ai_d->l;i+=1) {
+				read_speed << 8;
+				read_speed += ai_d->data[i];
+			}
+
+			if(decimal_count == 0)
+				read_speed *= 10;
+			else {
+				for(int i=1;i<decimal_count;i+=1)
+					read_speed /= 10;
+			}
+
+			if(mph)
+				attribute_list->vehicle_speed = read_speed*1609/1000;
+			else
+				attribute_list->vehicle_speed = read_speed;
+
+			if(last_speed == 0 && read_speed != 0)
+				window_handler->refresh();
+			else if(last_speed != 0 && read_speed == 0)
+				window_handler->refresh();
+
+			return true;
 		} else if (ai_d->data[2] == 0x5 && ai_d->l >= 5 && ai_d->sender == ID_CANSLATOR) { //Coolant temp.
 			const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
 			const bool fahrenheit = (ai_d->data[3]&0x80) != 0, neg = (ai_d->data[3]&0x8) != 0;
@@ -373,6 +420,11 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 
 			if(!info_parameters->coolant_temp_sent)
 				info_parameters->coolant_temp_sent = true;
+			
+			if(typeid(*this->window_handler->getActiveWindow()) == typeid(VehicleInfoWindow))
+				this->window_handler->refresh();
+			
+			return true;
 		} else
 			return false;
 	} else if(ai_d->sender == ID_CANSLATOR && ai_d->data[1] == 0x10) { //Night mode.
@@ -507,15 +559,18 @@ int main(int argc, char* args[]) {
 
 //Frame thread function.
 void *frameThread(void* frame_v) {
-	int* frame = (int*)frame_v;
+	FrameParameters* frame_parameters = (FrameParameters*)frame_v;
 
-	while(*frame >= 0) {
-		if(*frame < GRAD_W*3 - 1 && *frame >= 0)
-			*frame += 1;
-		else if(*frame >= 0)
-			*frame = 0;
+	while(*frame_parameters->frame >= 0 && *frame_parameters->run) {
+		if(*frame_parameters->frame < GRAD_W*3 - 1 && *frame_parameters->frame >= 0)
+			*frame_parameters->frame += 1;
+		else if(*frame_parameters->frame >= 0)
+			*frame_parameters->frame = 0;
 		
 		usleep(1000000/75);
+
+		if(!*frame_parameters->run)
+			break;
 	}
 
 	void* result;

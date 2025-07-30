@@ -2,6 +2,14 @@
 #include <MCP23S08.h>
 #include <MCP4251.h>
 #include <SPI.h>
+#define TWI_BUFFER_SIZE 128
+#include <Wire.h>
+
+//Must be compiled with an I2C cache size of at least 128.
+
+#define XSTR(x) STR(x)
+#define STR(x) #x
+#pragma message "Size: " XSTR(TWI_BUFFER_SIZE)
 
 #include "AIBus.h"
 #include "AIBus_Handler.h"
@@ -19,11 +27,11 @@
 #define OPEN_CLOSE_CS PIN_PB3
 #define BL_ON PIN_PB4
 
-#define VOL_CLK PIN_PE2
-#define VOL_UP PIN_PE3
+#define VOL_CLK PIN_PF2
+#define VOL_UP PIN_PF3
 
-#define NAV_CLK PIN_PF2
-#define NAV_UP PIN_PF3
+#define NAV_CLK PIN_PE2
+#define NAV_UP PIN_PE3
 
 #define NAV_CS PIN_PF4
 
@@ -37,11 +45,11 @@
 #define OPEN_CLOSE_CS 9
 #define BL_ON 10
 
-#define VOL_CLK 27
-#define VOL_UP 28
+#define NAV_CLK 27
+#define NAV_UP 28
 
-#define NAV_CLK 29
-#define NAV_UP 30
+#define VOL_CLK 29
+#define VOL_UP 30
 
 #define NAV_CS 31
 
@@ -57,8 +65,23 @@
 
 #define AISerial Serial
 
-#define VOL_TIMER 20
+#define VOL_TIMER 15
 #define DOOR_TIMER 30000
+#define CONTROL_TIMER 7000
+
+const volatile uint8_t aibt_edid[] = {
+	0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x05, 0x24, 0x00, 0x01,
+	0x01, 0x00, 0x00, 0x00, 0x01, 0x11, 0x01, 0x03, 0x80, 0x0E, 0x08, 0xC8,
+	0x0E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+	0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0xB8, 0x0B, 0x20, 0x80, 0x30, 0xE0,
+	0x2D, 0x10, 0x28, 0x30, 0xD3, 0x00, 0x89, 0x4D, 0x00, 0x00, 0x00, 0x18,
+	0x00, 0x00, 0x00, 0xFC, 0x00, 0x41, 0x69, 0x64, 0x46, 0x20, 0x41, 0x49,
+	0x42, 0x54, 0x0A, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x66
+};
 
 AIBusHandler ai_handler(&AISerial, AI_RX);
 MCP4251 ill_mcp4251(ILL_CS, 100000, 0, 100000, 0);
@@ -73,15 +96,17 @@ elapsedMillis all_timer, radio_timer, source_timer;
 bool all_timer_enabled = false, radio_timer_enabled = false, source_timer_enabled = false;
 
 elapsedMillis vol_timer = 0;
-int vol_steps;
+volatile int vol_steps;
 bool vol_turned = false;
 
 elapsedMillis nav_timer = 0;
-int nav_steps;
+volatile int nav_steps;
 bool nav_turned = false;
 
 elapsedMillis door_timer;
 bool door_timer_enabled = false;
+
+bool key_on = false; //True if the key has been in the "on" position any time during this power cycle.
 
 void setup() {
 	pinMode(ILL_CS, OUTPUT);
@@ -120,7 +145,7 @@ void setup() {
 	
 	digitalWrite(ILL_CS, HIGH);
 	digitalWrite(ILL_ON, LOW);
-	digitalWrite(FULL_POWER_ON, LOW);
+	digitalWrite(FULL_POWER_ON, HIGH);
 	digitalWrite(MCP_RESET, HIGH);
 	digitalWrite(NAV_CS, HIGH);
 	digitalWrite(OPEN_CLOSE_CS, HIGH);
@@ -129,6 +154,7 @@ void setup() {
 	AISerial.begin(AI_BAUD);
 	
 	SPI.begin();
+	delay(100);
 	
 	ill_mcp4251.begin();
 	ill_mcp4251.DigitalPotSetWiperPosition(0,0);
@@ -153,11 +179,29 @@ void setup() {
 
 	open_close_mcp.digitalWriteIO(OC_MCP_OPEN_TOG, false);
 	open_close_mcp.digitalWriteIO(OC_MCP_CLOSE_TOG, false);
+
+	attachInterrupt(VOL_CLK, incVolume, FALLING);
+	attachInterrupt(NAV_CLK, incNavigation, FALLING);
+
+	uint8_t init_data[] = {0x4A, 0x1F};
+	AIData init_msg(sizeof(init_data), ID_NAV_SCREEN, ID_CANSLATOR);
+	init_msg.refreshAIData(init_data);
+	ai_handler.writeAIData(&init_msg, false);
+
+	Wire.begin(0x50);
+
+	Wire.onReceive(receiveI2C);
+	Wire.onRequest(handleEDID);
+	
+	for(int i=0;i<sizeof(aibt_edid);i+=1)
+		Wire.write(aibt_edid[i]);
+
+	digitalWrite(FULL_POWER_ON, LOW);
 }
 
 void loop() {
 	AIData msg;
-	elapsedMillis ai_timer;
+	elapsedMillis ai_timer = 0;
 	
 	do {
 		bool message_read = false;
@@ -190,6 +234,7 @@ void loop() {
 							if(parameters.key_position != 0) {
 								digitalWrite(FULL_POWER_ON, HIGH);
 								digitalWrite(BL_ON, HIGH);
+								key_on = true;
 							} else {
 								if((parameters.door_position&0xC) != 0)
 									digitalWrite(FULL_POWER_ON, LOW);
@@ -209,7 +254,7 @@ void loop() {
 
 							if(front_door_position != 0) {
 								if(power_on) {
-									if(!door_timer_enabled)
+									if(key_on)
 										digitalWrite(FULL_POWER_ON, LOW);
 								} else {
 									digitalWrite(FULL_POWER_ON, HIGH);
@@ -308,38 +353,59 @@ void loop() {
 	}
 
 	button_handler.loop();
+	open_handler.loop();
 	
-	const bool last_vol_turned = vol_turned;
+	/*const bool last_vol_turned = vol_turned;
 	vol_turned = digitalRead(VOL_CLK) != LOW;
 	if(!vol_turned && last_vol_turned) {
-		vol_timer = 0;
 		
-		const bool cw = digitalRead(VOL_UP) != LOW;
-		if(cw)
-			vol_steps += 1;
-		else
-			vol_steps -= 1;
 	}
 	
 	const bool last_nav_turned = nav_turned;
 	nav_turned = digitalRead(NAV_CLK) != LOW;
 	if(!nav_turned && last_nav_turned) {
-		nav_timer = 0;
-		const bool cw = digitalRead(NAV_UP) != LOW;
-		if(cw)
-			nav_steps += 1;
-		else
-			nav_steps -= 1;
+		
+	}*/
+	
+	if((vol_timer > VOL_TIMER || abs(vol_steps) >= 0xF) && vol_steps != 0) {
+		setVolume(parameters.audio_dest);
+		vol_timer = 0;
+		vol_steps = 0;
 	}
 	
-	if((vol_timer > VOL_TIMER || abs(vol_steps) >= 0xF) && vol_steps != 0)
-		setVolume(parameters.audio_dest);
-	
-	if((nav_timer > VOL_TIMER || abs(nav_steps) >= 0xF) && nav_steps != 0)
-		setVolume(parameters.all_dest);
+	if((nav_timer > VOL_TIMER || abs(nav_steps) >= 0xF) && nav_steps != 0) {
+		setNavigation(parameters.all_dest);
+		nav_timer = 0;
+		nav_steps = 0;
+	}
 
 	if(door_timer_enabled && door_timer > DOOR_TIMER && parameters.key_position == 0)
 		digitalWrite(FULL_POWER_ON, LOW);
+
+	if(all_timer_enabled && all_timer > CONTROL_TIMER) {
+		all_timer_enabled = false;
+		parameters.all_dest = ID_NAV_COMPUTER;
+	}
+
+	if(radio_timer_enabled && radio_timer > CONTROL_TIMER) {
+		radio_timer_enabled = false;
+		parameters.audio_dest = ID_NAV_COMPUTER;
+
+		if(all_timer_enabled)
+			parameters.audio_dest = parameters.all_dest;
+		else
+			parameters.audio_dest = ID_NAV_COMPUTER;
+	}
+
+	if(source_timer_enabled && source_timer > CONTROL_TIMER) {
+		source_timer_enabled = false;
+		if(radio_timer_enabled)
+			parameters.source_dest = parameters.audio_dest;
+		else if(all_timer_enabled)
+			parameters.source_dest = parameters.all_dest;
+		else
+			parameters.source_dest = ID_NAV_COMPUTER;
+	}
 }
 
 //Respond to a button query.
@@ -349,6 +415,30 @@ void sendButtonsPresent(const uint8_t receiver) {
 	button_msg.refreshAIData(button_data);
 
 	ai_handler.writeAIData(&button_msg);
+}
+
+//Increment the volume function.
+void incVolume() {
+	if(vol_steps == 0)
+		vol_timer = 0;
+		
+	const bool cw = digitalRead(VOL_UP) != LOW;
+	if(cw)
+		vol_steps += 1;
+	else
+		vol_steps -= 1;
+}
+
+//Increment the navigation function.
+void incNavigation() {
+	if(nav_steps == 0)
+		nav_timer = 0;
+
+	const bool cw = digitalRead(NAV_UP) == LOW;
+	if(cw)
+		nav_steps += 1;
+	else
+		nav_steps -= 1;
 }
 
 //Send a volume message.
@@ -419,4 +509,17 @@ void setNavigation(const uint8_t receiver) {
 	}
 
 	nav_steps = 0;
+}
+
+//Thanks to https://forum.arduino.cc/t/hdmi-edid-emulator/346365.
+//Called when an I2C message is received.
+void receiveI2C(int byte_count) {
+	while(Wire.available())
+		Wire.read();
+}
+
+//Send EDID data.
+void handleEDID() {
+	for(int i=0;i<sizeof(aibt_edid);i+=1)
+		Wire.write(aibt_edid[i]);
 }

@@ -439,6 +439,52 @@ void NavMenu::navigateSelected(const int8_t direction) {
 	}
 }
 
+//Handle menu navigation messages.
+bool NavMenu::handleAIBus(AIData *ai_d) {
+	if(ai_d->sender != ID_NAV_SCREEN)
+		return false;
+
+	if(ai_d->l >= 3 && ai_d->data[0] == 0x32) { //Knob turn.
+		const bool clockwise = (ai_d->data[2]&0x10) != 0;
+		const uint8_t steps = ai_d->data[2]&0xF;
+
+		if(!clockwise) {
+			for(uint8_t i=0;i<steps;i+=1)
+				this->incrementSelected();
+		} else {
+			for(uint8_t i=0;i<steps;i+=1)
+				this->decrementSelected();
+		}
+
+		return true;
+	} else if(ai_d->l >= 3 && ai_d->data[0] == 0x30) { //Button press.
+		if(ai_d->data[1] >= 0x28 && ai_d->data[1] <= 0x2B && (ai_d->data[2] >> 6) == 0x2) {
+			int8_t control = -1;
+			switch(ai_d->data[1]) {
+				case 0x28:
+					control = NAV_UP;
+					break;
+				case 0x29:
+					control = NAV_DOWN;
+					break;
+				case 0x2A:
+					control = NAV_LEFT;
+					break;
+				case 0x2B:
+					control = NAV_RIGHT;
+					break;
+				default:
+					return false;
+			}
+
+			this->navigateSelected(control);
+
+			return true;
+		}
+	}
+	return false;
+}
+
 void NavMenu::drawMenu() {
 	//First figure out if item text was changed.
 	if(item_text_changed && (clock()-text_change_time)/(CLOCKS_PER_SEC/1000000) > 1000) {

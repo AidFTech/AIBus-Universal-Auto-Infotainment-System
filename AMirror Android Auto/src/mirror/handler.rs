@@ -181,14 +181,25 @@ impl<'a> MirrorHandler<'a> {
 			return;
 		}
 
+		let vertical_toggle;
+		let horizontal_toggle;
+		let nav_knob;
+
 		match self.context.try_lock() {
 			Ok(context) => {
 				if context.phone_type != 3 {
 					return;
 				}
+
+				vertical_toggle = context.aibt_vertical_toggle;
+				horizontal_toggle = context.aibt_horizontal_toggle;
+				nav_knob = context.aibt_nav_knob;
 			}
 			Err(_) => {
-				
+				println!("Handle AIBus Message: Context Locked");
+				vertical_toggle = true;
+				horizontal_toggle = true;
+				nav_knob = false;
 			}
 		}
 
@@ -198,13 +209,21 @@ impl<'a> MirrorHandler<'a> {
 				let state = ai_msg.data[2]>>6;
 
 				if button == 0x2A && state == 0x0 { //Toggle left.
-					self.send_carplay_command(PHONE_COMMAND_LEFT);
+					if horizontal_toggle && !nav_knob {
+						self.send_carplay_command(PHONE_COMMAND_LEFT);
+					}
 				} else if button == 0x2B && state == 0x0 { //Toggle right.
-					self.send_carplay_command(PHONE_COMMAND_RIGHT);
+					if horizontal_toggle && !nav_knob {
+						self.send_carplay_command(PHONE_COMMAND_RIGHT);
+					}
 				} else if button == 0x28 && state == 0x0 { //Toggle up.
-					self.send_carplay_command(PHONE_COMMAND_ANDROID_UP);
+					if vertical_toggle {
+						self.send_carplay_command(PHONE_COMMAND_ANDROID_UP);
+					}
 				} else if button == 0x29 && state == 0x0 { //Toggle down.
-					self.send_carplay_command(PHONE_COMMAND_ANDROID_DOWN);
+					if vertical_toggle {
+						self.send_carplay_command(PHONE_COMMAND_ANDROID_DOWN);
+					}
 				} else if button == 0x7 && state == 0x2 { //Enter.
 					if !self.enter_hold {
 						self.send_carplay_command(PHONE_COMMAND_ENTER_DOWN);
