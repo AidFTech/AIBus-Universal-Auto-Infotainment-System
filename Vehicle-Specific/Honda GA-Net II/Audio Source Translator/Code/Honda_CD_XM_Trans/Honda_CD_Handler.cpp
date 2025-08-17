@@ -1184,13 +1184,15 @@ void HondaCDHandler::sendCDIMIDTextMessage(const uint8_t field, String meta_text
 		if(display_parameter == TEXT_NONE) {
 			if(meta_text.length() >= parameter_list->external_imid_char)
 				meta_text = meta_text.substring(0, parameter_list->external_imid_char);
+
+			const int effective_length = meta_text.length();
 		
 			meta_text.replace("#","##  ");
 			
 			AIData text_msg(4+meta_text.length(), ID_CDC, ID_IMID_SCR);
 			text_msg.data[0] = 0x23;
 			text_msg.data[1] = 0x60;
-			text_msg.data[2] = parameter_list->external_imid_char/2-meta_text.length()/2;
+			text_msg.data[2] = parameter_list->external_imid_char/2-effective_length/2;
 			if(text_mode == TEXT_MODE_WITH_TEXT) {
 				switch(field) {
 					case TEXT_SONG:

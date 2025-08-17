@@ -36,6 +36,8 @@ ButtonHandler::ButtonHandler(AIBusHandler* ai_handler, OpenCloseHandler* open_cl
 }
 
 void ButtonHandler::loop() {
+	ai_handler->cachePending(ID_NAV_SCREEN);
+
 	checkButtonPress();
 	checkButtonHold();
 
@@ -131,14 +133,17 @@ void ButtonHandler::checkButtonPress() {
 				}
 			}
 
+			const uint8_t dest = b != INDEX_VOL_PUSH ? parameters->all_dest : parameters->audio_dest;
+
 			if(press) {
 				toggle_timers[b] = 0;
 				toggle_states[b] = BUTTON_STATE_PRESSED;
-				sendButtonMessage(button_code, BUTTON_STATE_PRESSED, parameters->all_dest);
+				sendButtonMessage(button_code, BUTTON_STATE_PRESSED, dest);
 			}
 		} else if(!state && toggle_states[b] != BUTTON_STATE_RELEASED) { //Toggle released.
+			const uint8_t dest = b != INDEX_VOL_PUSH ? parameters->all_dest : parameters->audio_dest;
 			toggle_states[b] = BUTTON_STATE_RELEASED;
-			sendButtonMessage(button_code, BUTTON_STATE_RELEASED, parameters->all_dest);
+			sendButtonMessage(button_code, BUTTON_STATE_RELEASED, dest);
 		}
 	}
 }
@@ -200,7 +205,9 @@ void ButtonHandler::checkButtonHold() {
 				break;
 			}
 
-			sendButtonMessage(button_code, BUTTON_STATE_HELD, parameters->all_dest);
+			const uint8_t dest = b != INDEX_VOL_PUSH ? parameters->all_dest : parameters->audio_dest;
+
+			sendButtonMessage(button_code, BUTTON_STATE_HELD, dest);
 		}
 	}
 }

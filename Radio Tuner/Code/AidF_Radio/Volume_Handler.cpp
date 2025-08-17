@@ -8,7 +8,10 @@ VolumeHandler::VolumeHandler(MCP4251* vol_mcp, MCP4251* treble_mcp, MCP4251* bas
 	this->treble_mcp = treble_mcp;
 	this->bass_mcp = bass_mcp;
 	this->fader_mcp = fader_mcp;
+}
 
+//Initialize the volume manager.
+void VolumeHandler::init() {
 	this->vol_mcp->begin();
 	this->treble_mcp->begin();
 	this->bass_mcp->begin();
@@ -181,8 +184,8 @@ void VolumeHandler::setBass(const uint16_t bass) {
 	if(this->bass > DEFAULT_TONE_RANGE)
 		this->bass = DEFAULT_TONE_RANGE;
 
-	this->bass_mcp->DigitalPotSetWiperPosition(0, bass);
-	this->bass_mcp->DigitalPotSetWiperPosition(1, bass);
+	this->bass_mcp->DigitalPotSetWiperPosition(0, this->bass);
+	this->bass_mcp->DigitalPotSetWiperPosition(1, this->bass);
 }
 
 //Set the treble.
@@ -192,8 +195,8 @@ void VolumeHandler::setTreble(const uint16_t treble) {
 	if(this->treble > DEFAULT_TONE_RANGE)
 		this->treble = DEFAULT_TONE_RANGE;
 
-	this->treble_mcp->DigitalPotSetWiperPosition(0, treble);
-	this->treble_mcp->DigitalPotSetWiperPosition(1, treble);
+	this->treble_mcp->DigitalPotSetWiperPosition(0, this->treble);
+	this->treble_mcp->DigitalPotSetWiperPosition(1, this->treble);
 }
 
 //Set the balance.

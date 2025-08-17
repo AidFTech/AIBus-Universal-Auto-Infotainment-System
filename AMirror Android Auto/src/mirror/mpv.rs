@@ -14,6 +14,7 @@ use image::imageops::flip_vertical;
 use image::Rgba;
 use image::RgbaImage;
 use imageproc::drawing::draw_filled_rect;
+use imageproc::drawing::draw_hollow_rect;
 use imageproc::drawing::draw_text_mut;
 
 use imageproc::rect::Rect;
@@ -35,6 +36,8 @@ pub struct MpvVideo {
 	h: u16,
 
 	overlay_str: [String; OVERLAY_STR_COUNT],
+	overlay_vol: u8,
+	overlay_vol_limit: u8,
 
 	text_color: Rgba<u8>,
 	header_color: Rgba<u8>,
@@ -89,7 +92,10 @@ impl MpvVideo {
 			mpv_ipc: sock,
 			w: width,
 			h: height,
+
 			overlay_str: [EMPTY_STRING; OVERLAY_STR_COUNT],
+			overlay_vol: 0,
+			overlay_vol_limit: 64,
 
 			text_color: Rgba([0,0,0,255]),
 			header_color: Rgba([0xFF, 0xFF, 0x3A, 255]),
@@ -101,19 +107,19 @@ impl MpvVideo {
 		let _ = child_stdin.write(&data);
 	}
 
-	//Set the overlay text color.
+	///Set the overlay text color.
 	pub fn set_overlay_text_color(&mut self, color: Rgba<u8>) {
 		self.text_color = color;
 		self.save_overlay_image();
 	}
 
-	//Set the header text color.
+	///Set the header text color.
 	pub fn set_header_text_color(&mut self, color: Rgba<u8>) {
 		self.header_color = color;
 		self.save_overlay_image();
 	}
 
-	//Set the overlay text.
+	///Set the overlay text.
 	pub fn set_overlay_text(&mut self, text: String, index: usize) {
 		if index >= OVERLAY_STR_COUNT {
 			return;
@@ -123,7 +129,14 @@ impl MpvVideo {
 		//TODO: Symbols.
 	}
 
-	//Show the overlay.
+	///Set the volume overlay.
+	pub fn set_volume_overlay(&mut self, new_vol: u8, new_max: u8) {
+		self.overlay_vol = new_vol;
+		self.overlay_vol_limit = new_max;
+		self.save_volume_image();
+	}
+
+	///Show the overlay.
 	pub fn show_overlay(&mut self) {
 		let mut mpv_ipc = match &self.mpv_ipc {
 			Some(mpv_ipc) => mpv_ipc,
@@ -150,7 +163,32 @@ impl MpvVideo {
 		}
 	}
 
-	//Clear the overlay.
+	///Show the volume overlay.
+	pub fn show_volume_overlay(&mut self) {
+		let mut mpv_ipc = match &self.mpv_ipc {
+			Some(mpv_ipc) => mpv_ipc,
+			None => return,
+		};
+
+		let overlay_height = self.h/10;
+		let file_size = self.w*4;
+
+		let overlay_str = "overlay-add 0 0 0 \"/tmp/overlay_volume.bmp\" 122 bgra ".to_string() +
+			&self.w.to_string() + &" ".to_string() + 
+			&overlay_height.to_string() + &" ".to_string() +
+			&file_size.to_string() + &" \n".to_string();
+			
+		match mpv_ipc.write(overlay_str.as_bytes()) {
+			Ok(_) => {
+				
+			}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
+	}
+
+	///Clear the overlay.
 	pub fn clear_overlay(&mut self) {
 		let mut mpv_ipc = match &self.mpv_ipc {
 			Some(mpv_ipc) => mpv_ipc,
@@ -217,7 +255,7 @@ impl MpvVideo {
 		}
 	}
 
-	//Save an overlay image.
+	///Save an overlay image.
 	fn save_overlay_image(&self) {
 		let overlay_h = self.h/10;
 		let mut overlay_image = RgbaImage::new(self.w as u32, overlay_h as u32);
@@ -252,6 +290,47 @@ impl MpvVideo {
 		overlay_image = flip_vertical(&mut overlay_image);
 
 		match overlay_image.save("/tmp/overlay.bmp") {
+			Ok(_) => {}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
+	}
+
+	///Save the overlay image for volume.
+	fn save_volume_image(&self) {
+		let overlay_h = self.h/10;
+		let mut overlay_image = RgbaImage::new(self.w as u32, overlay_h as u32);
+
+		overlay_image = draw_filled_rect(&mut overlay_image, Rect::at(0, 0).of_size(self.w as u32, overlay_h as u32), self.header_color);
+
+		let font = match FontRef::try_from_slice(include_bytes!("AidF Font.ttf")) {
+			Ok(font) => font,
+			Err(e) => {
+				println!("Error: {}", e);
+				return;
+			}
+		};
+
+		let height = (overlay_h) as f32*3.0/5.0;
+		let scale = PxScale {
+			x: height,
+			y: height,
+		};
+
+		let vol_bar_spacing = 2;
+
+		overlay_image = draw_hollow_rect(&mut overlay_image, Rect::at((self.w/4) as i32, (overlay_h/2 - (height as u16)/2) as i32).of_size((self.w/4) as u32, height as u32), self.text_color);
+
+		if (self.w/4 - 2*vol_bar_spacing as u16)*(self.overlay_vol as u16)/(self.overlay_vol_limit as u16) > 0 {
+			overlay_image = draw_filled_rect(&mut overlay_image, Rect::at((self.w/4) as i32 + vol_bar_spacing as i32, (overlay_h/2 - (height as u16)/2) as i32 + vol_bar_spacing as i32).of_size(((self.w/4 - 2*vol_bar_spacing as u16)*(self.overlay_vol as u16)/(self.overlay_vol_limit as u16)) as u32, height as u32 - 2*vol_bar_spacing), self.text_color);
+		}
+
+		draw_text_mut(&mut overlay_image, self.text_color, 0, (overlay_h/2 - (height as u16)/2) as i32, scale, &font, &("Volume: ".to_string() + &self.overlay_vol.to_string()));
+
+		overlay_image = flip_vertical(&mut overlay_image);
+
+		match overlay_image.save("/tmp/overlay_volume.bmp") {
 			Ok(_) => {}
 			Err(e) => {
 				println!("Error: {}", e);

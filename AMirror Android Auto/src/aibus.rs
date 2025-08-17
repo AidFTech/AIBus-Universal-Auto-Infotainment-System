@@ -30,12 +30,12 @@ impl Clone for AIBusMessage {
 }
 
 impl AIBusMessage {
-	//Message length.
+	///Message length.
 	pub fn l(&self) -> usize {
 		return self.data.len();
 	}
 	
-	//Get bytes from an AIBus message.
+	///Get bytes from an AIBus message.
 	pub fn get_bytes(&self) -> Vec<u8> {
 		let mut data: Vec<u8> = vec![0; self.data.len() + 4];
 		
@@ -60,7 +60,7 @@ impl AIBusMessage {
 	}
 }
 
-//Get an AIBus message from a vector of bytes.
+///Get an AIBus message from a vector of bytes.
 pub fn get_aibus_message(data: Vec<u8>) -> AIBusMessage {
 	if data.len() < 4 {
 		return AIBusMessage {

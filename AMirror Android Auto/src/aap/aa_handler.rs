@@ -205,7 +205,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Start a connection to the phone.
+	///Start a connection to the phone.
 	fn start_connection(&mut self) {
 		self.connection_start = Instant::now();
 		match self.context.try_lock() {
@@ -221,7 +221,7 @@ impl<'a> AapHandler <'a> {
 		self.refresh_nav_audio();
 	}
 
-	//End the connection to the phone.
+	///End the connection to the phone.
 	fn stop_connection(&mut self) {
 		self.had_sdr = false;
 		self.first_video = false;
@@ -242,13 +242,13 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Clear the message currently being read.
+	///Clear the message currently being read.
 	fn clear_data(&mut self, chan: usize) {
 		self.current_data[chan] = Vec::new();
 		self.data_complete[chan] = false;
 	}
 
-	//Write a protobuf message.
+	///Write a protobuf message.
 	fn write_message(&mut self, retry: bool, channel: u8, message: impl Message, message_code: u16, timeout: Duration, encrypt: bool) -> bool {
 		let data = match message.write_to_bytes() {
 			Ok(data) => data,
@@ -276,7 +276,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Write a byte block.
+	///Write a byte block.
 	fn write_block(&mut self, retry: bool, channel: u8, data: Vec<u8>, message_code: u16, timeout: Duration, encrypt: bool) -> bool {
 		let mut buffer = Vec::new();
 
@@ -296,7 +296,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Write plain bytes to the USB device.
+	///Write plain bytes to the USB device.
 	fn write_unencoded(&mut self, retry: bool, channel: u8, data: Vec<u8>, timeout: Duration) -> bool {
 		if data.len() < 2 {
 			return false;
@@ -356,7 +356,7 @@ impl<'a> AapHandler <'a> {
 		return true;
 	}
 
-	//Write encrypted bytes to the USB device.
+	///Write encrypted bytes to the USB device.
 	fn write_encoded(&mut self, retry: bool, channel: u8, data: Vec<u8>, timeout: Duration) -> bool {
 		if data.len() < 2 {
 			return false;
@@ -446,7 +446,7 @@ impl<'a> AapHandler <'a> {
 		return true;
 	}
 
-	//Process read bytes.
+	///Process read bytes.
 	fn process_bytes(&mut self, full_data: Vec<u8>) {
 		if full_data.len() < 4 {
 			return;
@@ -508,7 +508,7 @@ impl<'a> AapHandler <'a> {
 			}
 
 			if bytes_written <= 0 {
-				println!("Error: Invalid bytes written.");
+				println!("Error: Invalid bytes written. {}", bytes_written);
 				self.clear_data(current_channel);
 				return;
 			}
@@ -529,7 +529,7 @@ impl<'a> AapHandler <'a> {
 			}
 
 			if bytes_read <= 0 || bytes_read > (decoded_len) as i32 {
-				println!("Error: Invalid bytes read.");
+				println!("Error: Invalid bytes read. {}", bytes_read);
 				self.clear_data(current_channel);
 				return;
 			}
@@ -548,7 +548,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Process a read message.
+	///Process a read message.
 	fn process_message(&mut self, chan: usize) {
 		if !self.data_complete[chan] {
 			return;
@@ -736,7 +736,7 @@ impl<'a> AapHandler <'a> {
 		self.clear_data(chan);
 	}
 
-	//Handle an AIBus message.
+	///Handle an AIBus message.
 	pub fn handle_aibus_message(&mut self, ai_msg: AIBusMessage) {
 		if ai_msg.receiver != AIBUS_DEVICE_AMIRROR {
 			return;
@@ -896,7 +896,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Set night mode.
+	///Set night mode.
 	pub fn set_night_mode(&mut self, night: bool) {
 		if !self.usb_handler.get_connected() {
 			return;
@@ -910,7 +910,7 @@ impl<'a> AapHandler <'a> {
 		self.write_message(true, SensorChannel as u8, sensor_msg, SensorChannelMessageEvent as u16, Duration::from_millis(5000), true);
 	}
 
-	//Start playing audio if start is true.
+	///Start playing audio if start is true.
 	pub fn start_stop_audio(&mut self, start: bool) {
 		if !self.usb_handler.get_connected() {
 			return;
@@ -925,14 +925,14 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Show the audio source window.
+	///Show the audio source window.
 	pub fn show_audio_window(&mut self) {
 		self.send_button_message(InputButton::ButtonMusic as u32, 0x0);
 		self.send_button_message(InputButton::ButtonMusic as u32, 0x2);
 	}
 
 	//Internal message handles:
-	//Send the initial handshake.
+	///Send the initial handshake.
 	fn begin_ssl_handshake(&mut self) {
 		openssl_sys::init();
 		
@@ -1031,7 +1031,7 @@ impl<'a> AapHandler <'a> {
 		println!("Handshake successful!");
 	}
 
-	//Handle a handshake response.
+	///Handle a handshake response.
 	fn handle_ssl_handshake(&mut self, data: Vec<u8>) {
 
 		let c_data = data.as_ptr() as *const c_void;
@@ -1061,7 +1061,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Send a button message.
+	///Send a button message.
 	fn send_button_message(&mut self, button: u32, state: u8) {
 		let press_msg;
 		if state != 0x1 {
@@ -1098,7 +1098,7 @@ impl<'a> AapHandler <'a> {
 		self.write_block(true, TouchChannel as u8, send_rel_data, InputChannelMessageInputEvent as u16, Duration::from_millis(5000), true);*/
 	}
 
-	//Send a scroll wheel message- clockwise if cw is true.
+	///Send a scroll wheel message- clockwise if cw is true.
 	fn send_scroll_message(&mut self, cw: bool) {
 		let mut scroll_data = Vec::new();
 
@@ -1129,13 +1129,13 @@ impl<'a> AapHandler <'a> {
 		self.write_block(true, TouchChannel as u8, send_data, InputChannelMessageInputEvent as u16, Duration::from_millis(5000), true);
 	}
 
-	//Get the current timestamp.
+	///Get the current timestamp.
 	fn get_timestamp(&self) -> u64 {
 		let time = (Instant::now() - self.connection_start).as_nanos();
 		return (time&0xFFFFFFFFFFFFFF) as u64;
 	}
 
-	//Handle a service discovery request.
+	///Handle a service discovery request.
 	fn handle_service_discovery_request(&mut self, chan: usize) {
 		if self.had_sdr {
 			return;
@@ -1341,7 +1341,7 @@ impl<'a> AapHandler <'a> {
 		self.had_sdr = true;
 	}
 
-	//Handle an audio focus request.
+	///Handle an audio focus request.
 	fn handle_audio_focus_request(&mut self, channel: u8, req: AudioFocusRequest) {
 		let mut response = AudioFocusResponse::new();
 
@@ -1354,7 +1354,7 @@ impl<'a> AapHandler <'a> {
 		self.write_message(true, channel, response, ProtocolMessage::ProtocolMessageAudioFocusResponse as u16, Duration::from_millis(5000), true);
 	}
 
-	//Handle a channel open request.
+	///Handle a channel open request.
 	fn handle_channel_open_request(&mut self, channel: u8, channel_to_open: u32) {
 		let mut response = ChannelOpenResponse::new();
 		response.status = 0;
@@ -1385,7 +1385,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Handle a binding request.
+	///Handle a binding request.
 	fn handle_binding_request(&mut self, channel: u8) {
 		let mut response = BindingResponse::new();
 		response.status = 0;
@@ -1393,7 +1393,7 @@ impl<'a> AapHandler <'a> {
 		self.write_message(true, channel, response, InputChannelMessageBindingResponse as u16, Duration::from_millis(5000), true);
 	}
 
-	//Handle a sensor start request.
+	///Handle a sensor start request.
 	fn handle_sensor_start_request(&mut self, channel: u8) {
 		let mut response = SensorStartResponse::new();
 		response.status = 0;
@@ -1401,7 +1401,7 @@ impl<'a> AapHandler <'a> {
 		self.write_message(true, channel, response, SensorChannelMessageStartResponse as u16, Duration::from_millis(5000), true);
 	}
 
-	//Handle a media setup request.
+	///Handle a media setup request.
 	fn handle_media_setup_request(&mut self, channel: u8) {
 		let mut response = MediaSetupResponse::new();
 		response.status = 2;
@@ -1428,7 +1428,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Send a media acknowledgement.
+	///Send a media acknowledgement.
 	fn send_media_ack(&mut self, channel: u8) {
 		let mut ack_msg = MediaAck::new();
 		ack_msg.session = self.channel_session[channel as usize];
@@ -1437,7 +1437,7 @@ impl<'a> AapHandler <'a> {
 		self.write_message(true, channel, ack_msg, MediaChannelMessage::MediaChannelMessageAck as u16, Duration::from_millis(5000), true);
 	}
 
-	//Handle a piece of video.
+	///Handle a piece of video.
 	fn handle_video_message(&mut self, video_msg: VideoMsg) {
 		let mpv_data = video_msg.get_data();
 
@@ -1452,7 +1452,7 @@ impl<'a> AapHandler <'a> {
 
 	}
 
-	//Handle a piece of audio.
+	///Handle a piece of audio.
 	fn handle_audio_message(&mut self, audio_msg: AudioMsg) {
 		let rd_data = audio_msg.get_data();
 		let channel = audio_msg.get_channel();
@@ -1489,7 +1489,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Refresh the media audio handler.
+	///Refresh the media audio handler.
 	fn refresh_media_audio(&mut self) {
 		match self.rd_audio.try_lock() {
 			Ok(mut rd_audio) => {
@@ -1501,7 +1501,7 @@ impl<'a> AapHandler <'a> {
 		}
 	}
 
-	//Refresh the nav audio handler.
+	///Refresh the nav audio handler.
 	fn refresh_nav_audio(&mut self) {
 		match self.nav_audio.try_lock() {
 			Ok(mut nav_audio) => {

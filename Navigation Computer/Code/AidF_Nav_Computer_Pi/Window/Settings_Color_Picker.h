@@ -6,6 +6,7 @@
 #include "../Menu/Nav_Slider.h"
 #include "../Text_Box.h"
 #include "../AIBus_Handler.h"
+#include "../Ini_Color_Preset.h"
 
 #ifndef settings_color_picker_h
 #define settings_color_picker_h
@@ -27,6 +28,8 @@ public:
 	void drawWindow();
 	void refreshWindow();
 	bool handleAIBus(AIData* ai_d);
+
+	void exitWindow();
 
 private:
 	int16_t getSliderY(const uint8_t s);

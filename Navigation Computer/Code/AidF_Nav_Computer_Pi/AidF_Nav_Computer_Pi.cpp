@@ -16,7 +16,10 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->night_profile.headerbar = DEFAULT_HEADERBAR_NIGHT;
 	this->night_profile.outline = DEFAULT_OUTLINE_NIGHT;
 
-	//TODO: Read in a file for the last saved color profile.
+	const bool color_set = getIniColorProfile(&this->day_profile, &this->night_profile, "Active_Color");
+	if(!color_set)
+		saveIniColorProfile(this->day_profile, this->night_profile, "Active_Color");
+
 	this->getBackground();
 
 	int* socket_list[] = {&this->socket_parameters.client_socket};
@@ -51,12 +54,21 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->frame_parameters.frame = &attribute_list->frame;
 	this->frame_parameters.run = &this->running;
 
+	this->elapsed_millis.run = &this->running;
+
 	pthread_create(&socket_thread, NULL, socketThread, (void *)&socket_parameters);
 	pthread_create(&frame_thread, NULL, frameThread, (void*)&frame_parameters);
+	pthread_create(&timer_thread, NULL, millisThread, (void*)&elapsed_millis);
 }
 
 AidF_Nav_Computer::~AidF_Nav_Computer() {
 	attribute_list->frame = -1;
+
+	std::cout<<"Waiting for threads to join...\n";
+	pthread_join(socket_thread, NULL);
+	pthread_join(frame_thread, NULL);
+	pthread_join(timer_thread, NULL);
+	std::cout<<"Threads joined!\n";
 
 	SDL_DestroyRenderer(this->renderer);
 	delete this->br;
@@ -67,11 +79,6 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	delete main_window;
 	delete misc_window;
 	delete phone_window;
-
-	std::cout<<"Waiting for threads to join...\n";
-	pthread_join(socket_thread, NULL);
-	pthread_join(frame_thread, NULL);
-	std::cout<<"Threads joined!\n";
 }
 
 void AidF_Nav_Computer::loop() {
@@ -116,7 +123,7 @@ void AidF_Nav_Computer::loop() {
 		this->window_handler->refresh();
 	}
 	
-	if(this->vol_timer_enabled && (clock() - vol_timer)/(CLOCKS_PER_SEC/1000) >= 700) {
+	if(this->vol_timer_enabled && (elapsed_millis.time - vol_timer) >= 700) {
 		this->vol_timer_enabled = false;
 		//TODO: Other data here?
 		this->window_handler->setText("", 1);
@@ -130,7 +137,7 @@ void AidF_Nav_Computer::loop() {
 	do {
 		if(!this->aibus_handler->getConnected() || this->aibus_handler->getAvailableBytes() > 0) {
 			if(this->aibus_handler->readAIData(&ai_msg)) {
-				aibus_read_time = clock();
+				aibus_read_time = elapsed_millis.time;
 
 				if(!*canslator_connected && ai_msg.sender == ID_CANSLATOR)
 					*canslator_connected = true;
@@ -172,7 +179,7 @@ void AidF_Nav_Computer::loop() {
 							this->window_handler->setText(vol_text, 1);
 							
 							this->vol_timer_enabled = true;
-							this->vol_timer = clock();
+							this->vol_timer = elapsed_millis.time;
 							
 							answered = true;
 						} else if(ai_msg.sender == ID_NAV_SCREEN && ai_msg.l >= 3 && ai_msg.data[0] == 0x30) { //Button press.
@@ -260,7 +267,7 @@ void AidF_Nav_Computer::loop() {
 				}
 			}
 		}
-	} while(aibus_handler->getConnected() && (clock() - aibus_read_time)/(CLOCKS_PER_SEC/1000) < AIBUS_WAIT);
+	} while(running && aibus_handler->getConnected() && (elapsed_millis.time - aibus_read_time) < AIBUS_WAIT);
 
 	aibus_handler->flushCached();
 }
@@ -540,7 +547,6 @@ int main(int argc, char* args[]) {
 	getResolution(&screen_w, &screen_h);
 
 	#ifdef RPI_UART
-	//TODO: Load resolution from a file.
 	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_FULLSCREEN);
 	#else
 	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_SHOWN);
@@ -570,6 +576,23 @@ void *frameThread(void* frame_v) {
 		usleep(1000000/75);
 
 		if(!*frame_parameters->run)
+			break;
+	}
+
+	void* result;
+	return result;
+}
+
+//Timer thread function.
+void *millisThread(void* millis_v) {
+	ElapsedMillis* elapsed_millis = (ElapsedMillis*)millis_v;
+
+	while(*elapsed_millis->run) {
+		usleep(1000);
+
+		elapsed_millis->time += 1;
+
+		if(!*elapsed_millis->run)
 			break;
 	}
 

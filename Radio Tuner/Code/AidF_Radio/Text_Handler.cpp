@@ -33,7 +33,7 @@ void TextHandler::setBlankHeader(String header) {
 	header_change.data[1] = 0x70;
 	header_change.data[2] = 0x0;
 
-	for(uint8_t i=0;i<header.length();i+=1)
+	for(int i=0;i<header.length();i+=1)
 		header_change.data[i+3] = uint8_t(header.charAt(i));
 
 	ai_handler->writeAIData(&header_change, parameter_list->computer_connected);
@@ -284,6 +284,8 @@ void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8
 
 		if(freq_text.length() + 4 < parameter_list->imid_char && parameter_list->fm_stereo)
 			freq_text += " St.";
+		else
+			freq_text += "    ";
 		
 		int16_t imid_char = parameter_list->imid_char/2 - freq_text.length()/2;
 		if(imid_char < 0)
@@ -294,7 +296,7 @@ void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8
 		freq_msg.data[1] = 0x60;
 		freq_msg.data[2] = imid_char&0xFF;
 		freq_msg.data[3] = line;
-		for(unsigned int i=0;i<freq_text.length();i+=1)
+		for(int i=0;i<freq_text.length();i+=1)
 			freq_msg.data[i+4] = uint8_t(freq_text.charAt(i));
 		
 		ai_handler->writeAIData(&freq_msg);
@@ -317,7 +319,7 @@ void TextHandler::sendIMIDRDSMessage(const uint16_t frequency, String text) {
 		rds_msg.data[0] = 0x63;
 		rds_msg.data[1] = 0x61;
 
-		for(unsigned int i=0;i<text.length();i+=1)
+		for(int i=0;i<text.length();i+=1)
 			rds_msg.data[i+2] = uint8_t(text.charAt(i));
 
 		ai_handler->writeAIData(&rds_msg);
@@ -333,7 +335,7 @@ void TextHandler::sendIMIDRDSMessage(const uint16_t frequency, String text) {
 		rds_msg.data[1] = 0x60;
 		rds_msg.data[2] = imid_char&0xFF;
 		rds_msg.data[3] = line;
-		for(unsigned int i=0;i<text.length();i+=1)
+		for(int i=0;i<text.length();i+=1)
 			rds_msg.data[i+4] = uint8_t(text.charAt(i));
 
 		ai_handler->writeAIData(&rds_msg);
@@ -359,7 +361,7 @@ void TextHandler::sendIMIDInfoMessage(String text) {
 	else
 		info_msg.data[2] = 0;
 	info_msg.data[3] = line;
-	for(unsigned int i=0;i<text.length();i+=1)
+	for(int i=0;i<text.length();i+=1)
 		info_msg.data[i+4] = uint8_t(text.charAt(i));
 
 	ai_handler->writeAIData(&info_msg);
@@ -376,7 +378,7 @@ void TextHandler::sendIMIDCallsignMessage(String text) {
 		cs_msg.data[0] = 0x63;
 		cs_msg.data[1] = 0x60;
 
-		for(unsigned int i=0;i<text.length();i+=1)
+		for(int i=0;i<text.length();i+=1)
 			cs_msg.data[i+2] = uint8_t(text.charAt(i));
 
 		ai_handler->writeAIData(&cs_msg);
@@ -450,7 +452,7 @@ AIData getTextMessage(String text, const uint8_t group, const uint8_t area) {
 	text_data[1] = 0x60 | (group&0xF);
 	text_data[2] = area;
 	
-	for(uint16_t i=0;i<text.length();i+=1)
+	for(int i=0;i<text.length();i+=1)
 		text_data[i+3] = uint8_t(text.charAt(i));
 	
 	AIData text_message(sizeof(text_data), ID_RADIO, ID_NAV_COMPUTER);

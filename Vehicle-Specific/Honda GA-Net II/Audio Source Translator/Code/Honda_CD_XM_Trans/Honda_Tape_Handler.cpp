@@ -445,6 +445,15 @@ void HondaTapeHandler::sendTapeTextMessage() {
 				ai_driver->writeAIData(&imid_tape_msg);
 			}
 
+			int effective_length = imid_mode_msg.length();
+			{
+				String effective_string = imid_mode_msg;
+				effective_string.replace("#UP ", "#");
+				effective_string.replace("#DN ", "#");
+
+				effective_length = effective_string.length();
+			}
+
 			AIData imid_text_msg(4 + imid_mode_msg.length(), ID_TAPE, ID_IMID_SCR);
 			imid_text_msg.data[0] = 0x23;
 			imid_text_msg.data[1] = 0x60;

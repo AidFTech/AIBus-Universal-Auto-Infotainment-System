@@ -18,6 +18,7 @@ public:
 	void init2();
 	void loop();
 
+	void queueFrequency(const uint16_t des_freq);
 	uint16_t setFrequency(const uint16_t des_freq);
 	uint16_t getFrequency();
 
@@ -49,6 +50,9 @@ private:
 
 	elapsedMillis last_frequency_change = 0;
 	bool seeking = false;
+
+	uint16_t queued_frequency = 0;
+	bool queued_frequency_set = false;
 
 	bool getRdsInfo(String* rds, const bool init);
 };

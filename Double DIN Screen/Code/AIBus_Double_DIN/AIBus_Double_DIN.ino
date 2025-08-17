@@ -71,16 +71,16 @@
 
 const volatile uint8_t aibt_edid[] = {
 	0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x05, 0x24, 0x00, 0x01,
-	0x01, 0x00, 0x00, 0x00, 0x01, 0x11, 0x01, 0x03, 0x80, 0x0E, 0x08, 0xC8,
-	0x0E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x01, 0x00, 0x00, 0x00, 0x01, 0x11, 0x01, 0x03, 0x80, 0x0E, 0x08, 0x00,
+	0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
 	0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0xB8, 0x0B, 0x20, 0x80, 0x30, 0xE0,
-	0x2D, 0x10, 0x28, 0x30, 0xD3, 0x00, 0x89, 0x4D, 0x00, 0x00, 0x00, 0x18,
+	0x2D, 0x10, 0x28, 0x30, 0xD3, 0x00, 0x89, 0x4D, 0x00, 0x00, 0x00, 0x1E,
 	0x00, 0x00, 0x00, 0xFC, 0x00, 0x41, 0x69, 0x64, 0x46, 0x20, 0x41, 0x49,
 	0x42, 0x54, 0x0A, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x66
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2C
 };
 
 AIBusHandler ai_handler(&AISerial, AI_RX);
@@ -107,6 +107,7 @@ elapsedMillis door_timer;
 bool door_timer_enabled = false;
 
 bool key_on = false; //True if the key has been in the "on" position any time during this power cycle.
+bool audio_on = false; //True if the audio light is on.
 
 void setup() {
 	pinMode(ILL_CS, OUTPUT);
@@ -202,10 +203,11 @@ void setup() {
 void loop() {
 	AIData msg;
 	elapsedMillis ai_timer = 0;
+	bool first_msg = false;
 	
 	do {
 		bool message_read = false;
-		if(AISerial.available() > 0) {
+		if(ai_handler.dataAvailable() > 0) {
 			if(msg.sender == ID_RADIO && !parameters.radio_connected)
 				parameters.radio_connected = true;
 			
@@ -234,11 +236,13 @@ void loop() {
 							if(parameters.key_position != 0) {
 								digitalWrite(FULL_POWER_ON, HIGH);
 								digitalWrite(BL_ON, HIGH);
+								nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, audio_on);
 								key_on = true;
 							} else {
-								if((parameters.door_position&0xC) != 0)
+								if((parameters.door_position&0xC) != 0) {
+									nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, false);
 									digitalWrite(FULL_POWER_ON, LOW);
-								else {
+								} else {
 									door_timer_enabled = true;
 									door_timer = 0;
 								}
@@ -254,11 +258,14 @@ void loop() {
 
 							if(front_door_position != 0) {
 								if(power_on) {
-									if(key_on)
+									if(key_on) {
+										nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, false);
 										digitalWrite(FULL_POWER_ON, LOW);
+									}
 								} else {
 									digitalWrite(FULL_POWER_ON, HIGH);
 									digitalWrite(BL_ON, HIGH);
+									nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, audio_on);
 									door_timer_enabled = true;
 									door_timer = 0;
 								}
@@ -334,13 +341,17 @@ void loop() {
 				} else if(msg.l >= 2 && msg.data[0] == 0x34) { //AidF logo on/off.
 					const bool logo_on = msg.data[1] != 0;
 					nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, logo_on);
+					audio_on = logo_on;
 				}
 
 				if(ack)
 					ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
 			}
 
-			ai_timer = 0;
+			if(!first_msg) {
+				ai_timer = 0;
+				first_msg = true;
+			}
 		}
 	} while(ai_timer < 50);
 
@@ -355,18 +366,6 @@ void loop() {
 	button_handler.loop();
 	open_handler.loop();
 	
-	/*const bool last_vol_turned = vol_turned;
-	vol_turned = digitalRead(VOL_CLK) != LOW;
-	if(!vol_turned && last_vol_turned) {
-		
-	}
-	
-	const bool last_nav_turned = nav_turned;
-	nav_turned = digitalRead(NAV_CLK) != LOW;
-	if(!nav_turned && last_nav_turned) {
-		
-	}*/
-	
 	if((vol_timer > VOL_TIMER || abs(vol_steps) >= 0xF) && vol_steps != 0) {
 		setVolume(parameters.audio_dest);
 		vol_timer = 0;
@@ -379,8 +378,10 @@ void loop() {
 		nav_steps = 0;
 	}
 
-	if(door_timer_enabled && door_timer > DOOR_TIMER && parameters.key_position == 0)
+	if(door_timer_enabled && door_timer > DOOR_TIMER && parameters.key_position == 0) {
+		nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, false);
 		digitalWrite(FULL_POWER_ON, LOW);
+	}
 
 	if(all_timer_enabled && all_timer > CONTROL_TIMER) {
 		all_timer_enabled = false;

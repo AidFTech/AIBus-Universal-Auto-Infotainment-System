@@ -15,6 +15,8 @@ class VolumeHandler {
 public:
 	VolumeHandler(MCP4251* vol_mcp, MCP4251* treble_mcp, MCP4251* bass_mcp, MCP4251* fader_mcp, ParameterList* parameters, AIBusHandler* ai_handler);
 
+	void init();
+
 	bool handleAIBus(AIData *msg);
 	void setAIBusParameter(AIData *msg);
 

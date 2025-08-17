@@ -1,7 +1,6 @@
 #include "ADC_Handler.h"
 
 PCM9211Handler::PCM9211Handler(const int pcm9211_sel) {
-	SPI.begin();
 	this->pcm9211_sel = pcm9211_sel;
 }
 

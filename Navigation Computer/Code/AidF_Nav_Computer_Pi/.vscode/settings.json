@@ -79,6 +79,9 @@
 		"unordered_set": "cpp",
 		"iomanip": "cpp",
 		"span": "cpp",
-		"expected": "cpp"
+		"expected": "cpp",
+		"__locale": "cpp",
+		"queue": "cpp",
+		"stack": "cpp"
 	}
 }

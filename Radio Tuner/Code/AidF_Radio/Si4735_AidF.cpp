@@ -34,6 +34,17 @@ void Si4735Controller::init2() {
 void Si4735Controller::loop() {
 	if(parameters->tune_changed)
 		last_frequency_change = 0;
+
+	if(queued_frequency_set) {
+		setFrequency(queued_frequency);
+		queued_frequency_set = false;
+	}
+}
+
+//Set the desired frequency on the next loop.
+void Si4735Controller::queueFrequency(const uint16_t des_freq) {
+	queued_frequency = des_freq;
+	queued_frequency_set = true;
 }
 
 //Set the desired frequency, within the tuning range.
@@ -74,7 +85,7 @@ void Si4735Controller::setPower(const bool power, const uint8_t function) {
 
 //Increment the tuned frequency.
 uint16_t Si4735Controller::incrementFrequency(const uint8_t count) {
-	for(uint8_t i=0;i<count;i+=1)
+	for(int i=0;i<count;i+=1)
 		tuner->setFrequencyUp();
 
 	return tuner->getFrequency();
@@ -83,7 +94,7 @@ uint16_t Si4735Controller::incrementFrequency(const uint8_t count) {
 
 //Decrement the tuned frequency.
 uint16_t Si4735Controller::decrementFrequency(const uint8_t count) {
-	for(uint8_t i=0;i<count;i+=1)
+	for(int i=0;i<count;i+=1)
 		tuner->setFrequencyDown();
 
 	return tuner->getFrequency();
@@ -188,7 +199,7 @@ bool Si4735Controller::getCallsign(String* rds) {
 	if(rds_a < 4096)
 		return false;
 	
-	if(rds_a >= 21672) {
+	/*if(rds_a >= 21672) {
 		rds_a -= 21672;
 		*rds = "W";
 	} else {
@@ -197,7 +208,8 @@ bool Si4735Controller::getCallsign(String* rds) {
 	}
 
 	const char callsign_letters[] = {rds_a/(26*26) + 'A', (rds_a/26)%26 + 'A', rds_a%26 + 'A', '\0'};
-	*rds += callsign_letters;
+	*rds += callsign_letters;*/
+	*rds = String(rds_a, HEX);
 
 	return true;
 }
@@ -246,7 +258,7 @@ ParameterList* Si4735Controller::getParameterList() {
 
 /*String getRDSString(uint16_t* registers) {
 	String message = "";
-	for(uint8_t i=0;i<4;i+=1) {
+	for(int i=0;i<4;i+=1) {
 		char letter_a = (registers[i]&0xFF00)>>8, letter_b = (registers[i]&0xFF);
 
 		if(letter_a < 0)

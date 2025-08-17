@@ -215,7 +215,7 @@ impl DongleUSBConnection {
 		None
 	}
 
-	// Write a message to the socket.
+	/// Write a message to the socket.
 	pub fn write_dongle_message(&mut self, message: MirrorMessage) {
 		if !self.connected {
 			return;

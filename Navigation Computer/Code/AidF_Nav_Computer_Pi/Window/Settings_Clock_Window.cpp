@@ -205,6 +205,9 @@ void Settings_Clock_Window::handleEnterButton() {
 			else
 				start_data[1] |= 0x2;
 
+			if(attribute_list->display_12h)
+				start_data[1] |= 0x80;
+
 			AIData start_msg(sizeof(start_data), ID_NAV_COMPUTER, new_timekeeper);
 			start_msg.refreshAIData(start_data);
 
@@ -221,6 +224,9 @@ void Settings_Clock_Window::handleEnterButton() {
 				start_data[1] |= 0x1;
 			else
 				start_data[1] |= 0x2;
+
+			if(attribute_list->display_12h)
+				start_data[1] |= 0x80;
 
 			AIData start_msg(sizeof(start_data), ID_NAV_COMPUTER, new_timekeeper);
 			start_msg.refreshAIData(start_data);

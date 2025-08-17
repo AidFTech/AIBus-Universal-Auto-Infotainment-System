@@ -16,7 +16,7 @@ pub struct SocketMessage {
 	pub data: Vec<u8>,
 }
 
-//Get the default UnixStream object.
+///Get the default UnixStream object.
 pub fn init_default_socket() -> Option<UnixStream> {
 	return init_socket(SOCKET_PATH.to_string());
 }
@@ -36,7 +36,7 @@ pub fn init_socket(socket_path: String) -> Option<UnixStream> {
 	return Some(stream);
 }
 
-//Read bytes from a socket.
+///Read bytes from a socket.
 fn read_socket_bytes(stream: &mut UnixStream, data: &mut [u8]) -> usize {
 	let l = stream.read(data);
 	match l {
@@ -49,7 +49,7 @@ fn read_socket_bytes(stream: &mut UnixStream, data: &mut [u8]) -> usize {
 	}
 }
 
-//Write bytes to a socket.
+///Write bytes to a socket.
 fn write_socket_bytes(stream: &mut UnixStream, data: &mut Vec<u8>) -> usize {
 
 	let bytes_written = stream.write(data);
@@ -63,7 +63,7 @@ fn write_socket_bytes(stream: &mut UnixStream, data: &mut Vec<u8>) -> usize {
 	}
 }
 
-//Read a full message from the socket.
+///Read a full message from the socket.
 pub fn read_socket_message(stream: &mut UnixStream, message_list: &mut Vec<SocketMessage>) -> usize {
 	let mut data : [u8; 1024] = [0; 1024];
 	let full_l = read_socket_bytes(stream, &mut data);
@@ -122,7 +122,7 @@ pub fn read_socket_message(stream: &mut UnixStream, message_list: &mut Vec<Socke
 	return full_l as usize;
 }
 
-//Write a full message to the socket.
+///Write a full message to the socket.
 pub fn write_socket_message(stream: &mut UnixStream, message: SocketMessage) {
 	let socket_start_msg = SOCKET_START.as_bytes();
 	let mut data: Vec<u8> = vec![0; message.data.len() + socket_start_msg.len() + 3];

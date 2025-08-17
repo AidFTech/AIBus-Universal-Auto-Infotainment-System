@@ -4,7 +4,7 @@ SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_m
 	this->source_count = source_count;
 	this->source_list = new AudioSource[source_count];
 
-	for(uint16_t i=0;i<source_count;i+=1) {
+	for(int i=0;i<source_count;i+=1) {
 		source_list[i].sub_id = 0;
 		source_list[i].source_id = 0;
 		source_list[i].source_name = "";
@@ -170,7 +170,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 
 			if(ai_d->l >= 4) {
 				const uint8_t sub_count = ai_d->data[3];
-				for(uint8_t i=1;i<sub_count;i+=1)
+				for(int i=1;i<sub_count;i+=1)
 					createSubsource(new_id);
 			}
 
@@ -726,11 +726,30 @@ void SourceHandler::manualTuneIncrement(const bool up, const uint8_t steps) {
 		current_frequency = &this->parameter_list->am_tune;
 	else
 		return;
+
+	uint8_t increment = parameter_list->fm_inc;
+	uint16_t lower_limit = parameter_list->fm_lower_limit, upper_limit = parameter_list->fm_upper_limit;
+	if(source_list[current_source].sub_id == SUB_AM) {
+		increment = parameter_list->am_inc;
+		lower_limit = parameter_list->am_lower_limit;
+		upper_limit = parameter_list->am_upper_limit;
+	}
 	
-	if(up)
-		*current_frequency = this->tuner_main->incrementFrequency(steps);
-	else
-		*current_frequency = this->tuner_main->decrementFrequency(steps);
+	if(up) {
+		for(int i=0;i<steps;i+=1) {
+			*current_frequency += increment;
+			if(*current_frequency < lower_limit || *current_frequency > upper_limit)
+				*current_frequency = lower_limit;
+		}
+		this->tuner_main->queueFrequency(*current_frequency);
+	} else {
+		for(int i=0;i<steps;i+=1) {
+			*current_frequency -= increment;
+			if(*current_frequency < lower_limit || *current_frequency > upper_limit)
+				*current_frequency = upper_limit;
+		}
+		this->tuner_main->queueFrequency(*current_frequency);
+	}
 }
 
 //Increment source up.
@@ -782,7 +801,7 @@ void SourceHandler::incrementSource(const bool direction) {
 //Return the number of available sources.
 uint16_t SourceHandler::getFilledSourceCount() {
 	uint16_t filled_source_count = 0;
-	for(uint16_t i=0;i<this->source_count;i+=1) {
+	for(int i=0;i<this->source_count;i+=1) {
 		if(this->source_list[i].source_id != 0)
 			filled_source_count += 1;
 	}
@@ -793,7 +812,7 @@ uint16_t SourceHandler::getFilledSourceCount() {
 //Return a list of available sources.
 uint16_t SourceHandler::getFilledSources(AudioSource* source_list) {
 	uint16_t filled_source_count = 0;
-	for(uint16_t i=0;i<this->source_count;i+=1) {
+	for(int i=0;i<this->source_count;i+=1) {
 		if(this->source_list[i].source_id != 0) {
 			source_list[filled_source_count] = this->source_list[i];
 			filled_source_count += 1;
@@ -806,7 +825,7 @@ uint16_t SourceHandler::getFilledSources(AudioSource* source_list) {
 //Return the names of available sources.
 uint16_t SourceHandler::getSourceNames(String* source_list) {
 	uint16_t filled_source_count = 0;
-	for(uint16_t i=0;i<this->source_count;i+=1) {
+	for(int i=0;i<this->source_count;i+=1) {
 		if(this->source_list[i].source_id != 0) {
 			source_list[filled_source_count] = this->source_list[i].source_name;
 			filled_source_count += 1;
@@ -819,7 +838,7 @@ uint16_t SourceHandler::getSourceNames(String* source_list) {
 //Return the IDs of available sources.
 uint16_t SourceHandler::getSourceIDs(uint8_t* source_list) {
 	uint16_t filled_source_count = 0;
-	for(uint16_t i=0;i<this->source_count;i+=1) {
+	for(int i=0;i<this->source_count;i+=1) {
 		if(this->source_list[i].source_id != 0 && this->source_list[i].sub_id == 0) {
 			source_list[filled_source_count] = this->source_list[i].source_id;
 			filled_source_count += 1;
@@ -836,7 +855,7 @@ int SourceHandler::getFirstOccurenceOf(const uint8_t source) {
 
 //Get the first occurrence of a source ID after index s.
 int SourceHandler::getFirstOccurenceOf(const uint8_t source, const uint16_t s) {
-	for(uint16_t i=s;i<this->source_count;i+=1) {
+	for(int i=s;i<this->source_count;i+=1) {
 		if(this->source_list[i].source_id == source)
 			return i;
 	}
@@ -851,7 +870,7 @@ int SourceHandler::getFirstAvailable() {
 
 //Get the first available source index after index s.
 int SourceHandler::getFirstAvailable(const uint16_t s) {
-	for(uint16_t i=s;i<this->source_count;i+=1) {
+	for(int i=s;i<this->source_count;i+=1) {
 		if(this->source_list[i].source_id == 0)
 			return i;
 	}
@@ -885,7 +904,7 @@ bool SourceHandler::sendSourceQuery(const uint8_t source) {
 				} else if(ai_d.receiver == 0xFF)
 					ai_handler->cacheMessage(&ai_d);
 
-				source_timer = 0;
+				//source_timer = 0;
 			}
 		}
 	}
@@ -946,7 +965,7 @@ bool SourceHandler::createMenu(const String title, const int items) {
 	menu_header_data[9] = width&0xFF;
 	menu_header_data[10] = (parameter_list->option_height&0xFF00)>>8;
 	menu_header_data[11] = parameter_list->option_height&0xFF;
-	for(uint8_t i=0;i<title.length();i+=1)
+	for(int i=0;i<title.length();i+=1)
 		menu_header_data[i+12] = uint8_t(title.charAt(i));
 
 	AIData menu_header(sizeof(menu_header_data), ID_RADIO, ID_NAV_COMPUTER);
@@ -984,12 +1003,12 @@ void SourceHandler::createSourceMenu() {
 	if(!createMenu("Source", active_count))
 		return;
 	
-	for(uint16_t i=0;i<active_count;i+=1) {
+	for(int i=0;i<active_count;i+=1) {
 		uint8_t option_data[3 + active_list[i].source_name.length()];
 		option_data[0] = 0x2B;
 		option_data[1] = 0x51;
 		option_data[2] = i&0xFF;
-		for(uint8_t j=0;j<active_list[i].source_name.length();j+=1)
+		for(int j=0;j<active_list[i].source_name.length();j+=1)
 			option_data[j+3] = uint8_t(active_list[i].source_name.charAt(j));
 
 		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
@@ -1037,7 +1056,7 @@ void SourceHandler::createPresetMenu(const uint8_t group) {
 		option_data[0] = 0x2B;
 		option_data[1] = 0x51;
 		option_data[2] = i&0xFF;
-		for(uint8_t j=0;j<preset.length();j+=1)
+		for(int j=0;j<preset.length();j+=1)
 			option_data[j+3] = uint8_t(preset.charAt(j));
 
 		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
@@ -1073,7 +1092,7 @@ void SourceHandler::createStationListMenu() {
 		option_data[0] = 0x2B;
 		option_data[1] = 0x51;
 		option_data[2] = i&0xFF;
-		for(uint8_t j=0;j<station_name.length();j+=1)
+		for(int j=0;j<station_name.length();j+=1)
 			option_data[j+3] = uint8_t(station_name.charAt(j));
 
 		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
@@ -1230,7 +1249,7 @@ void SourceHandler::setCurrentSource(const uint8_t id, const uint8_t sub_id) {
 		audio_on = true;
 
 	int index = -1;
-	for(uint16_t i=0;i<source_count;i+=1) {
+	for(int i=0;i<source_count;i+=1) {
 		if(source_list[i].source_id == id && source_list[i].sub_id == sub_id) {
 			index = i;
 			break;

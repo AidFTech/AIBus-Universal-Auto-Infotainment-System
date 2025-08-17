@@ -17,8 +17,6 @@
 
 #include "Radio_EEPROM.h"
 
-//#define U5_ERR //True if the design error involving U5 is present.
-
 #if defined(DXCORE)
 #define AI_RX PIN_PA7
 #define TUNER_RESET PIN_PC0
@@ -43,6 +41,7 @@
 #define NAV_MUTE PIN_PF3
 #define RAM_CS PIN_PF4
 #define DIGITAL_ERROR PIN_PF5
+
 #else
 #define AI_RX 3
 #define TUNER_RESET 6
@@ -78,6 +77,8 @@
 #define DISPLAY_INFO_TIMER 750
 #define IMID_TIMER 300
 
+#define DOOR_TIMER 30000
+
 #define RDS_SEGMENT_COUNT 12
 #define RDS_IMID_TIMER 3000
 
@@ -89,7 +90,7 @@ AIBusHandler aibus_handler(&AISerial, AI_RX);
 TextHandler text_handler(&aibus_handler, &parameters);
 
 MCP4251 vol_controller(VOL_CS, 10000, 0, 10000, 0);
-MCP4251 treble_controller(TREBLE_CS, 10000, 0, 10000, 0);
+MCP4251 treble_controller(TREBLE_CS, 50000, 0, 50000, 0);
 MCP4251 bass_controller(BASS_CS, 10000, 0, 10000, 0);
 MCP4251 fade_controller(FADE_CS, 10000, 0, 10000, 0);
 
@@ -115,9 +116,16 @@ elapsedMillis imid_timer;
 elapsedMillis rds_imid_timer;
 int rds_imid_index = 0;
 
-bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
+elapsedMillis background_tune_timer = 0;
 
 String rds_program_split[12];
+
+bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
+
+elapsedMillis door_timer;
+bool door_timer_enabled = false;
+
+volatile bool tuner_reset=false;
 
 //Arduino setup function.
 void setup() {
@@ -158,18 +166,27 @@ void setup() {
 
 	digitalWrite(RAM_CS, HIGH);
 
+	#if defined(DXCORE)
+	SPI.swap(SPI0_SWAP_DEFAULT);
+	Wire.swap(0);
+	Wire.usePullups();
+	#endif
+
 	AISerial.begin(AI_BAUD);
 	Wire.begin();
+	Wire.setClock(7500);
+	SPI.begin();
 
-	//tuner.init1();
-	//br_tuner.init1();
-	//tuner.init2();
-	//br_tuner.init2();
+	checkI2C();
+	tuner.init1();
+	br_tuner.init1();
+	tuner.init2();
+	br_tuner.init2();
 
-	//br_tuner.setPower(true, SUB_FM1);
+	br_tuner.setPower(true, SUB_FM1);
 
-	//parameters.fm1_tune = tuner.getFrequency();
-	//parameters.fm2_tune = tuner.getFrequency();
+	parameters.fm1_tune = tuner.getFrequency();
+	parameters.fm2_tune = tuner.getFrequency();
 	parameters.am_tune = parameters.am_start;
 
 	getEEPROMPresets(&parameters);
@@ -213,9 +230,17 @@ void setup() {
 
 	source_handler.source_list[SOURCE_COUNT - 3] = src_aux;
 
+	volume_handler.init();
 	adc_handler.init();
 
-	source_handler.sendRadioHandshake();
+	//source_handler.sendRadioHandshake();
+
+	uint8_t init_data[] = {0x4A, 0x1F};
+	AIData init_msg(sizeof(init_data), ID_RADIO, ID_CANSLATOR);
+	init_msg.refreshAIData(init_data);
+	aibus_handler.writeAIData(&init_msg, false);
+
+	powerOff();
 }
 
 //Arduino loop function.
@@ -238,7 +263,7 @@ void loop() {
 		}
 	}
 	
-	if(!*power_on) {
+	/*if(!*power_on) {
 		AIData msg;
 		if(aibus_handler.readAIData(&msg)) {
 			if(msg.l == 1 && msg.data[0] == 0x1 && msg.receiver == ID_RADIO) //Ping.
@@ -246,7 +271,7 @@ void loop() {
 			else if(msg.l >= 1 && msg.data[0] == 0x80) { //Acknowledgement. Ignore.
 			} else if(msg.receiver == 0xFF && msg.data[0] == 0xA1) {
 				if(msg.data[1] == 0x2) { //Key position.
-					const uint8_t pos = msg.data[2];
+					const uint8_t pos = msg.data[2]&0xF;
 					if(pos != 0) {
 						*power_on = true;
 						power_switched = true;
@@ -259,7 +284,10 @@ void loop() {
 
 		if(!power_switched)
 			return;
-	}
+	}*/
+
+	if(door_timer_enabled && door_timer > DOOR_TIMER && parameters.key_position == 0)
+		powerOff();
 
 	if(power_switched) {
 		digitalWrite(POWER_ON_SW, HIGH);
@@ -277,7 +305,7 @@ void loop() {
 
 	const int8_t last_hour = parameters.hour, last_min = parameters.min;
 
-	const bool last_send_time = parameters.send_time, last_12h = parameters.send_12h;
+	const bool last_send_time = parameters.send_time, last_12h = parameters.send_12h, last_auto_clock = parameters.auto_clock;
 
 	const bool last_phone = parameters.phone_active;
 
@@ -300,6 +328,10 @@ void loop() {
 			}
 		}
 	} while(aibus_timer < 50);
+
+	checkI2C();
+	if(!*power_on && !power_switched)
+		return;
 
 	AudioSource source_list[SOURCE_COUNT];
 	const uint16_t source_count = source_handler.getFilledSources(source_list), current_source = source_handler.getCurrentSource();
@@ -360,9 +392,9 @@ void loop() {
 				digitalWrite(AUDIO_ON_SW, LOW);
 				const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
 				if(sub_id < 3) { //Tuner.
-					digitalWrite(AUDIO_SW, HIGH);
-				} else { //Aux.
 					digitalWrite(AUDIO_SW, LOW);
+				} else { //Aux.
+					digitalWrite(AUDIO_SW, HIGH);
 				}
 			} else if(current_source_id == ID_PHONE || current_source_id == ID_ANDROID_AUTO) { //Pi. TODO: Use an AIBus flag.
 				digitalWrite(DAC_MUTE, HIGH);
@@ -395,7 +427,11 @@ void loop() {
 
 			adc_handler.setPiOut();
 		}
+
+		sendAudioLightMessage(current_source_id != 0);
 	}
+
+	checkI2C();
 	
 	if(source_text_timer_enabled && source_text_timer > 50 && !parameters.phone_active) {
 		source_text_timer_enabled = false;
@@ -439,8 +475,10 @@ void loop() {
 
 	}
 
-	/*do {
+	checkI2C();
+	do {
 		if(source_handler.getCurrentSourceID() == ID_RADIO) {
+			checkI2C();
 			tuner.loop();
 			
 			const bool last_stereo = parameters.fm_stereo;
@@ -534,13 +572,17 @@ void loop() {
 			}
 			
 			if(sub_id == SUB_FM1 || sub_id == SUB_FM2) {
+				checkI2C();
 				const bool seeking = tuner.getSeeking(current_frequency);
 				if(!seeking && (parameter_timer >= PARAMETER_DELAY)) {
 					parameter_timer = 0;
 
 					const String last_rds = parameters.rds_program_name, last_station_name = parameters.rds_station_name;
+					checkI2C();
 					tuner.getParameters(&parameters, sub_id);
+					checkI2C();
 					if(*current_frequency != tuner.getFrequency()) {
+						checkI2C();
 						*current_frequency = tuner.getFrequency();
 						parameters.tune_changed = true;
 					}
@@ -552,6 +594,7 @@ void loop() {
 
 					String current_rds = parameters.rds_program_name;
 					if(parameters.has_rds && current_rds.compareTo(last_rds) != 0) {
+						checkI2C();
 						if(current_rds.substring(0,8).indexOf(last_rds.substring(0,8)) < 0)
 							tuner.clearRds();
 
@@ -647,7 +690,14 @@ void loop() {
 		} else if(source_handler.getCurrentSourceID() != 0) {
 			//TODO: Anything here?
 		}
-	} while(false);*/
+	} while(false);
+
+	if(tuner_reset) {
+		tuner_reset = false;
+		setTunerFrequency(SUB_FM1);
+		setTunerFrequency(SUB_FM2);
+		setTunerFrequency(SUB_AM);
+	}
 
 	if(src_ping_timer >= SOURCE_PING_DELAY)
 		pingActiveSource();
@@ -662,14 +712,28 @@ void loop() {
 																|| parameters.balance_adjust
 																|| parameters.fader_adjust);
 
-	//background_tuner.loop();
+	if(background_tune_timer >= 100) {
+		checkI2C();
+		background_tuner.loop();
+		background_tune_timer = 0;
+	}
 
-	if(parameters.send_time && parameters.hour >= 0 && parameters.min >= 0 && (parameters.hour != last_hour || parameters.min != last_min || !last_send_time || parameters.send_12h != last_12h))
+	if(parameters.send_time && parameters.hour >= 0 && parameters.min >= 0 &&
+			(parameters.hour != last_hour ||
+			parameters.min != last_min ||
+			last_send_time != parameters.send_time ||
+			parameters.send_12h != last_12h ||
+			parameters.auto_clock != last_auto_clock))
 		text_handler.sendTime();
 
 	//Send the volume IMID message.
 	if(volume_handler.getVolumeChanged()) {
 		const uint16_t volume = volume_handler.getVolume(), range = volume_handler.getVolRange();
+
+		if(volume != 0)
+			digitalWrite(DAC_MUTE, HIGH);
+		else
+			digitalWrite(DAC_MUTE, LOW);
 		
 		uint8_t max_vol = 255;
 		if(range < 255)
@@ -730,15 +794,63 @@ void handleAIBus(AIData* msg) {
 		answered = volume_handler.handleAIBus(msg);
 		if(!answered)
 			answered = source_handler.handleAIBus(msg);
-	} else if(msg->receiver == 0xFF && msg->data[0] == 0xA1 && msg->sender != ID_RADIO) {
-		if(msg->data[1] == 0x2) { //Key position.
-			const uint8_t pos = msg->data[2];
-			if(pos == 0) {
-				parameters.power_on = false;
-				powerOff();
-			} else
-				parameters.power_on = true;
+
+		if(parameters.tune_changed && source_handler.getCurrentSourceID() == ID_RADIO) {
+			uint16_t current_frequency = parameters.fm1_tune;
+			const uint8_t sub_id = source_handler.source_list[source_handler.getCurrentSource()].sub_id;
+
+			if(sub_id <= SUB_AM) {
+				switch(sub_id) {
+				case SUB_FM2:
+					current_frequency = parameters.fm2_tune;
+					break;
+				case SUB_AM:
+					current_frequency = parameters.am_tune;
+				}
+
+				text_handler.sendTunedFrequencyMessage(current_frequency, sub_id != SUB_AM, true);
+			}
+		}
+	} else if(msg->receiver == 0xFF && msg->l >= 1 && msg->data[0] == 0xA1 && msg->sender != ID_RADIO) {
+		if(msg->l >= 3 && msg->data[1] == 0x2) { //Key position.
+			const uint8_t pos = msg->data[2]&0xF;
+
+			if(pos != parameters.key_position) {
+				if(pos == 0) {
+					if(parameters.power_on) {
+						if((parameters.door_position&0xC) != 0)
+							powerOff();
+						else {
+							door_timer = 0;
+							door_timer_enabled = true;
+						}
+					}
+				} else {
+					digitalWrite(POWER_ON_SW, HIGH);
+					parameters.power_on = true;
+					source_handler.sendRadioHandshake();
+					sendIMIDPing();
+				}
+			}
 			
+			parameters.key_position = pos;
+			
+		} else if(msg->data[1] == 0x43 && msg->l >= 3) { //Door position.
+			const uint8_t pos = msg->data[2]&0xF;
+			
+			if(parameters.key_position == 0 && pos != parameters.door_position) {
+				if((pos&0xC) != 0) {
+					if(parameters.power_on)
+						powerOff();
+					else {
+						door_timer = 0;
+						door_timer_enabled = true;
+						digitalWrite(POWER_ON_SW, HIGH);
+					}
+				}
+			}
+			
+			parameters.door_position = pos;
 		} else if(msg->data[1] == 0x1F && msg->l >= 3) {
 			if(msg->data[2] == 0x1 && msg->l >= 6) { //Time.
 				int16_t new_minute = 60*msg->data[3] + msg->data[4] - parameters.offset*30;
@@ -769,7 +881,7 @@ void handleAIBus(AIData* msg) {
 		} else if(msg->data[1] == 0x57 && msg->l >= 3) {
 			parameters.imid_radio = false;
 
-			for(uint8_t i=2;i<msg->l;i+=1) {
+			for(int i=2;i<msg->l;i+=1) {
 				if(msg->data[i] == ID_RADIO)
 					parameters.imid_radio = true;
 				if(parameters.imid_radio)
@@ -800,6 +912,11 @@ void handleAIBus(AIData* msg) {
 		if(parameters.min >= 0 && parameters.hour >= 0)
 			text_handler.sendTime();
 	}
+
+	if(!parameters.screen_connected && msg->sender == ID_NAV_SCREEN) {
+		parameters.screen_connected = true;
+		sendAudioLightMessage(source_handler.getCurrentSourceID() != 0);
+	}
 }
 
 //Send the frequency message to the screen.
@@ -814,6 +931,7 @@ void sendTunedFrequencyMessage(const uint8_t sub_id) {
 
 //Set the tuner frequency to a pre-set value based on the active sub-id.
 void setTunerFrequency(const uint8_t sub_id) {
+	checkI2C();
 	if(sub_id == 0) {
 		tuner.setPower(true, SUB_FM1);
 		parameters.fm1_tune = tuner.setFrequency(parameters.fm1_tune);
@@ -919,13 +1037,13 @@ void setSourceName() {
 double getSpeed(AIData* msg) {
 	const uint8_t byte_count = msg->data[3]&0xF, dec = (msg->data[3]&0x70)>>4;
 	unsigned long speed_int = 0;
-	for(uint8_t i=0;i<byte_count;i+=1) {
+	for(int i=0;i<byte_count;i+=1) {
 		speed_int <<= 8;
 		speed_int |= msg->data[4+i];
 	}
 
 	double speed = double(speed_int);
-	for(uint8_t i=0;i<dec;i+=1) {
+	for(int i=0;i<dec;i+=1) {
 		speed = speed/10.0;
 	}
 	return speed;
@@ -975,6 +1093,15 @@ void getScreenControlRequest(const bool all) {
 	aibus_handler.writeAIData(&screen_msg, parameters.screen_connected);
 }
 
+//Send a ping to the IMID.
+void sendIMIDPing() {
+	uint8_t imid_request_data[] = {0x4, 0xE6, 0x3B};
+	AIData imid_request_msg(sizeof(imid_request_data), ID_RADIO, ID_IMID_SCR);
+	imid_request_msg.refreshAIData(imid_request_data);
+
+	aibus_handler.writeAIData(&imid_request_msg, false);
+}
+
 //Send a request to the IMID for its full specs.
 void sendIMIDRequest() {
 	uint8_t imid_request_data[] = {0x4, 0xE6, 0x3B};
@@ -994,7 +1121,7 @@ void sendIMIDRequest() {
 				if(reply.receiver != ID_RADIO && reply.receiver != 0xFF)
 					continue;
 
-				response_timer = 0;
+				//response_timer = 0;
 				if(reply.sender == ID_IMID_SCR && reply.receiver == ID_RADIO) {
 					aibus_handler.sendAcknowledgement(ID_RADIO, reply.sender);
 					if(reply.data[1] == 0x23 && reply.l >= 4) {
@@ -1002,7 +1129,7 @@ void sendIMIDRequest() {
 						parameters.imid_lines = reply.data[3];
 					} else if(reply.data[1] == 0x57 && reply.l >= 3) {
 						parameters.imid_radio = false;
-						for(uint8_t i=2;i<reply.l;i+=1) {
+						for(int i=2;i<reply.l;i+=1) {
 							if(reply.data[i] == ID_RADIO)
 								parameters.imid_radio = true;
 							if(parameters.imid_radio)
@@ -1026,8 +1153,98 @@ void sendIMIDRequest() {
 		text_handler.sendTime();
 }
 
+//Send the message to turn the screen light on.
+void sendAudioLightMessage(const bool audio_on) {
+	uint8_t light_data[] = {0x34, audio_on ? 0x1 : 0x0};
+	AIData light_msg(sizeof(light_data), ID_RADIO, ID_NAV_SCREEN);
+	light_msg.refreshAIData(light_data);
+	aibus_handler.writeAIData(&light_msg, parameters.screen_connected);
+}
+
+//Check the I2C levels.
+inline void checkI2C() {
+	#if defined(DXCORE)
+	const uint8_t levels = Wire.checkPinLevels();
+
+	if(levels == 0x3) //Ready.
+		return;
+
+	uint8_t error_data[] = {0xA1, 0xFF}; //TODO: Adjust.
+	AIData error_msg(sizeof(error_data), ID_RADIO, 0xFF);
+	error_msg.refreshAIData(error_data);
+
+	aibus_handler.writeAIData(&error_msg, false);
+
+	/*Wire.end();
+	pinMode(ICLK, OUTPUT);
+	pinMode(IDAT, INPUT_PULLUP);
+
+	int iterations = 0;
+	do {
+		bool high_read = false;
+		for(int i=0;i<8;i+=1) {
+			digitalWrite(ICLK, LOW);
+			delayMicroseconds(67);
+			digitalWrite(ICLK, HIGH);
+
+			if(iterations > 0) {
+				if(digitalRead(IDAT) == HIGH)
+					high_read = true;
+			}
+			//if(high_read)
+			//	break;
+
+			delayMicroseconds(67);
+		}
+		if(high_read)
+			break;
+
+		digitalWrite(ICLK, LOW);
+		delay(1);
+		digitalWrite(ICLK, HIGH);
+
+		iterations += 1;
+	} while(digitalRead(IDAT) != HIGH && iterations < 7);
+
+	aibus_handler.cachePending(ID_RADIO);
+
+	iterations = 0;
+	while(digitalRead(IDAT) != HIGH && iterations < 7) {
+		pinMode(IDAT, OUTPUT);
+		digitalWrite(IDAT, HIGH);
+		delay(2);
+		digitalWrite(IDAT, LOW);
+		delay(500);
+		digitalWrite(IDAT, HIGH);
+		pinMode(IDAT, INPUT_PULLUP);
+
+		iterations += 1;
+	}
+
+	aibus_handler.cachePending(ID_RADIO);
+
+	while(digitalRead(IDAT) != HIGH) {
+		pinMode(IDAT, OUTPUT);
+		tuner_reset = true;
+		digitalWrite(TUNER_RESET, LOW);
+		delay(100);
+		digitalWrite(TUNER_RESET, HIGH);
+		delay(50);
+		digitalWrite(IDAT, LOW);
+		delay(100);
+		pinMode(IDAT, INPUT_PULLUP);
+	}
+	aibus_handler.cachePending(ID_RADIO);
+
+	Wire.begin();
+	Wire.setClock(7500);*/
+	#endif
+}
+
 //Power off procedure.
 void powerOff() {
+	*power_on = false;
+
 	parameters.computer_connected = false;
 	parameters.amp_connected = false;
 	parameters.mirror_connected = false;

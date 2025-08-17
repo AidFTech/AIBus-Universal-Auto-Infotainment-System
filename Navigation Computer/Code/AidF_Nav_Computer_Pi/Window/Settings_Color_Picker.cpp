@@ -87,6 +87,10 @@ void Color_Picker_Window::refreshWindow() {
 	}
 }
 
+void Color_Picker_Window::exitWindow() {
+	saveIniColorProfile(*attribute_list->day_profile, *attribute_list->night_profile, "Active_Color");
+}
+
 bool Color_Picker_Window::handleAIBus(AIData* ai_d) {
 	if(!this->active)
 		return false;

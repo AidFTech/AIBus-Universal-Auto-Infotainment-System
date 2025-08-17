@@ -8,6 +8,7 @@
 #include "Honda_Tape_Handler.h"
 #include "Honda_XM_Handler.h"
 #include "Honda_IMID_Handler.h"
+#include "Brightness_Handler.h"
 
 #include "Parameter_List.h"
 
@@ -35,7 +36,7 @@
 
 #define AIBUS_BLOCK 8
 
-#define ILL_CATHODE 9
+#define ILL_CS 9
 // #define MEMORY_CHECK
 
 #define MAIN_POWER 14
@@ -71,6 +72,8 @@ HondaTapeHandler tape_handler(&ie_handler, &ai_handler, &parameters, &imid_handl
 HondaXMHandler xm_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
 HondaCDHandler cd_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
 
+BrightnessHandler brightness_handler(ILL_CS, ILL_ANODE);
+
 elapsedMillis function_timer, ai_timer, screen_request_timer, ping_timer;
 
 void setup() {
@@ -91,7 +94,7 @@ void setup() {
 	pinMode(ILL_ANODE, OUTPUT);
 	//pinMode(IEBUS_TX, OUTPUT);
 	//pinMode(IEBUS_RX, INPUT);
-	pinMode(ILL_CATHODE, OUTPUT);
+	pinMode(ILL_CS, OUTPUT);
 	pinMode(MAIN_POWER, OUTPUT);
 	pinMode(REC_SET, INPUT);
 	pinMode(REC_CLEAR, OUTPUT);
@@ -105,7 +108,7 @@ void setup() {
 
 	digitalWrite(ILL_ANODE, LOW);
 	//digitalWrite(IEBUS_TX, LOW);
-	digitalWrite(ILL_CATHODE, LOW);
+	digitalWrite(ILL_CS, HIGH);
 	digitalWrite(MAIN_POWER, HIGH); //Leave high for testing.
 	digitalWrite(REC_CLEAR, HIGH);
 	digitalWrite(AUDIO_ON, LOW);
@@ -122,9 +125,11 @@ void setup() {
 	Serial.begin(115200);
 	Serial.println("Ready!");
 	#endif
+
+	brightness_handler.init();
 	
 	uint8_t init_data[] = {0x4A, 0x1F};
-	AIData init_msg(sizeof(init_data), ID_NAV_SCREEN, ID_CANSLATOR);
+	AIData init_msg(sizeof(init_data), ID_CDC, ID_CANSLATOR);
 	init_msg.refreshAIData(init_data);
 	ai_handler.writeAIData(&init_msg, false);
 }
@@ -296,13 +301,7 @@ void loop() {
 					const bool illum = (ai_msg.data[2] & 0x1) != 0;
 					const uint8_t brightness = ai_msg.data[3];
 
-					if (illum) {
-						digitalWrite(ILL_ANODE, HIGH);
-						analogWrite(ILL_CATHODE, brightness);
-					} else {
-						digitalWrite(ILL_ANODE, LOW);
-						analogWrite(ILL_CATHODE, 0);
-					}
+					brightness_handler.setBrightness(brightness, illum);
 				}
 			} else if (ai_msg.receiver == 0xFF && ai_msg.sender == ID_RADIO) {
 				if (ai_msg.l >= 3 && ai_msg.data[0] == 0x4 && ai_msg.data[1] == 0xE6 && ai_msg.data[2] == 0x10) {

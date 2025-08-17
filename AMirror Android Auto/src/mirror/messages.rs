@@ -48,7 +48,7 @@ impl Clone for MirrorMessage {
 }
 
 impl MirrorMessage {
-	//Get a blank mirror message.
+	///Get a blank mirror message.
 	pub fn new(message_type: u32) -> MirrorMessage {
 		return MirrorMessage{
 			message_type,
@@ -56,7 +56,7 @@ impl MirrorMessage {
 		};
 	}
 
-	//Read message header data and return whether successful.
+	///Read message header data and return whether successful.
 	pub fn deserialize(&mut self, data: Vec<u8>) -> bool{
 		if data.len() != HEADERSIZE {
 			return false;
@@ -103,7 +103,7 @@ impl MirrorMessage {
 		return true;
 	}
 
-	//Return all USB bytes from the message.
+	///Return all USB bytes from the message.
 	pub fn serialize(self) -> Vec<u8> {
 		let mut msg_data = Vec::<u8>::new();
 
@@ -134,13 +134,13 @@ impl MirrorMessage {
 		return msg_data;
 	}
 
-	//Return all encoded integers from the message.
+	///Return all encoded integers from the message.
 	pub fn decode(self) -> Vec<u32> {
 		let limit = self.data.len();
 		return self.decode_partial(limit);
 	}
 
-	//Return a range of encoded integers from the message.
+	///Return a range of encoded integers from the message.
 	pub fn decode_partial(self, limit: usize) -> Vec<u32> {
 		let mut decoded_int: Vec<u32> = Vec::new();
 
@@ -170,7 +170,7 @@ impl MirrorMessage {
 	}
 }
 
-// Get a mirror message from a USB header.
+/// Get a mirror message from a USB header.
 pub fn mirror_message_from_header(data: Vec<u8>) -> MirrorMessage {
 	let mut mirror = MirrorMessage::new(0);
 	mirror.deserialize(data);
@@ -178,7 +178,7 @@ pub fn mirror_message_from_header(data: Vec<u8>) -> MirrorMessage {
 
 }
 
-//Get a heartbeat mirror message.
+///Get a heartbeat mirror message.
 pub fn get_heartbeat_message() -> MirrorMessage {
 	return MirrorMessage {
 		message_type: 170,
@@ -186,7 +186,7 @@ pub fn get_heartbeat_message() -> MirrorMessage {
 	};
 }
 
-//Get an Open message with parameters defined.
+///Get an Open message with parameters defined.
 pub fn get_open_message(width: u32, height: u32, video_frame_rate: u32, format: u32, packet_max: u32, ibox_version: u32, phone_work_mode: u32) -> MirrorMessage {
 	let mut open_message = MirrorMessage {
 		message_type: 1,
@@ -231,7 +231,7 @@ pub fn get_open_message(width: u32, height: u32, video_frame_rate: u32, format: 
 	return open_message;
 }
 
-//Get a Carplay/Android Auto command message.
+///Get a Carplay/Android Auto command message.
 pub fn get_carplay_command_message(command: u32) ->MirrorMessage {
 	let mut command_message = MirrorMessage {
 		message_type: 8,
@@ -246,7 +246,7 @@ pub fn get_carplay_command_message(command: u32) ->MirrorMessage {
 	return command_message;
 }
 
-//Get a manufacturer info message.
+///Get a manufacturer info message.
 pub fn get_manufacturer_info(mn_a: u32, mn_b: u32) -> MirrorMessage {
 	let mut manufacturer_message = MirrorMessage {
 		message_type: 20,
@@ -273,7 +273,7 @@ pub struct SendFileMessage {
 }
 
 impl SendFileMessage {
-	//Get the MirrorMessage version of the file message.
+	///Get the MirrorMessage version of the file message.
 	pub fn get_mirror_message(&mut self) -> MirrorMessage {
 		let mut send_file_message = MirrorMessage {
 			message_type: 153,
@@ -307,17 +307,17 @@ impl SendFileMessage {
 	}
 }
 
-//Get a Send File message with binary content.
+///Get a Send File message with binary content.
 pub fn get_sendfile_message(filename: String, filedata: Vec<u8>) -> SendFileMessage {
 	return SendFileMessage { file_name: filename, file_data: filedata };
 }
 
-//Get a Send File message with string content.
+///Get a Send File message with string content.
 pub fn get_sendstring_message(filename: String, filedata: String) -> SendFileMessage {
 	return SendFileMessage { file_name: filename, file_data: filedata.as_bytes().to_vec() };
 }
 
-//Get a Send File message with integer content.
+///Get a Send File message with integer content.
 pub fn get_sendint_message(filename: String, filedata: u32) -> SendFileMessage {
 	let mut new_int_message = SendFileMessage {
 		file_name: filename,

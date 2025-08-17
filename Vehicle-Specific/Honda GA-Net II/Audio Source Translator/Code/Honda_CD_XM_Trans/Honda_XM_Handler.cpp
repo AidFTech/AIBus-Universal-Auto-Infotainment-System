@@ -216,7 +216,7 @@ void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 					new_msg += char(the_message->data[i+11]);
 			}
 
-			new_msg.replace("#", "##  ");
+			//new_msg.replace("#", "##  ");
 
 			if(text_n < 6) {
 				switch(text_n) {
@@ -285,9 +285,8 @@ void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 					clearAIXMText(true, true, true, true);
 				
 				setNumberDisplay();
+				clearXMIMIDText();
 			}
-
-			clearXMIMIDText();
 
 			request_timer = 0;
 		}
@@ -421,24 +420,80 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				channel_msg.refreshIEData(channel_data);
 				ie_driver->sendMessage(&channel_msg, true, true);
 				getIEAckMessage(device_ie_id);
+
+				*this->channel += 1;
+
+				sendAINumberMessage(ID_RADIO);
+				clearXMText(true, true, true, true);
+				
+				if(text_control) {
+					clearAIXMText(true, true, true, true);
+					
+					setNumberDisplay();
+					clearXMIMIDText();
+				}
+
+				request_timer = 0;
 			} else if(button == 0x24 && state == 0x2) { //Decrement channel.
 				uint8_t channel_data[] = {0x30, 0x0, 0x19, 0x2, 0x19, 0xF2, 0xFF};
 				IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 				channel_msg.refreshIEData(channel_data);
 				ie_driver->sendMessage(&channel_msg, true, true);
 				getIEAckMessage(device_ie_id);
+
+				*this->channel -= 1;
+
+				sendAINumberMessage(ID_RADIO);
+				clearXMText(true, true, true, true);
+				
+				if(text_control) {
+					clearAIXMText(true, true, true, true);
+					
+					setNumberDisplay();
+					clearXMIMIDText();
+				}
+
+				request_timer = 0;
 			} else if(button == 0x2A && state == 0x2 && manual_tune) {
 				uint8_t channel_data[] = {0x30, 0x0, 0x19, 0x2, 0x19, 0xF2, 0xFF};
 				IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 				channel_msg.refreshIEData(channel_data);
 				ie_driver->sendMessage(&channel_msg, true, true);
 				getIEAckMessage(device_ie_id);
+
+				*this->channel -= 1;
+				
+				sendAINumberMessage(ID_RADIO);
+				clearXMText(true, true, true, true);
+				
+				if(text_control) {
+					clearAIXMText(true, true, true, true);
+					
+					setNumberDisplay();
+					clearXMIMIDText();
+				}
+
+				request_timer = 0;
 			} else if(button == 0x2B && state == 0x2 && manual_tune) {
 				uint8_t channel_data[] = {0x30, 0x0, 0x19, 0x2, 0x19, 0xF2, 0x1};
 				IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 				channel_msg.refreshIEData(channel_data);
 				ie_driver->sendMessage(&channel_msg, true, true);
 				getIEAckMessage(device_ie_id);
+
+				*this->channel += 1;
+
+				sendAINumberMessage(ID_RADIO);
+				clearXMText(true, true, true, true);
+				
+				if(text_control) {
+					clearAIXMText(true, true, true, true);
+					
+					setNumberDisplay();
+					clearXMIMIDText();
+				}
+
+				request_timer = 0;
 			}
 		} else if(the_message->l >= 3 && the_message->data[0] == 0x32 && the_message->data[1] == 0x7 && manual_tune && source_sel) {
 			int8_t sign = 1;
@@ -833,6 +888,7 @@ void HondaXMHandler::setTextDisplay(const uint8_t field) {
 	}
 
 	selected = selected.substring(0, pop_limit + 1);
+	selected.replace("#", "##  ");
 
 	if(*active_menu != MENU_DIRECT_TUNE || nav_group != 1) {
 		AIData text_msg = getTextMessage(ID_XM, selected, nav_group, nav_area, true);
@@ -932,10 +988,14 @@ void HondaXMHandler::setIMIDTextDisplay(const uint8_t field, String selected) {
 			if(selected.length() >= parameter_list->external_imid_char)
 				selected = selected.substring(0, parameter_list->external_imid_char);
 
+			const int effective_length = selected.length();
+
+			selected.replace("#", "##  ");
+
 			AIData text_msg(4+selected.length(), ID_XM, ID_IMID_SCR);
 			text_msg.data[0] = 0x23;
 			text_msg.data[1] = 0x60;
-			text_msg.data[2] = parameter_list->external_imid_char/2-selected.length()/2;
+			text_msg.data[2] = parameter_list->external_imid_char/2-effective_length/2;
 			text_msg.data[3] = line;
 
 			for(int i=0;i<selected.length();i+=1)
@@ -977,6 +1037,20 @@ void HondaXMHandler::setChannel(uint16_t channel) {
 	channel_msg.refreshIEData(channel_data);
 	ie_driver->sendMessage(&channel_msg, true, true);	
 	getIEAckMessage(device_ie_id);
+
+	*this->channel = channel;
+
+	sendAINumberMessage(ID_RADIO);
+	clearXMText(true, true, true, true);
+	
+	if(text_control) {
+		clearAIXMText(true, true, true, true);
+		
+		setNumberDisplay();
+		clearXMIMIDText();
+	}
+
+	request_timer = 0;
 }
 
 //Set the radio to a preset.
@@ -1053,30 +1127,30 @@ void HondaXMHandler::sendAINumberMessage(const uint8_t receiver) {
 }
 
 void HondaXMHandler::sendAITextMessage(const uint8_t receiver, const uint8_t field) {
-	String* selected;
+	String selected;
 	if(field < 1 || field > 4)
 		return;
 
 	switch(field) {
 		case 1:
-			selected = &song;
+			selected = song;
 			break;
 		case 2:
-			selected = &artist;
+			selected = artist;
 			break;
 		case 3:
-			selected = &channel_name;
+			selected = channel_name;
 			break;
 		case 4:
-			selected = &genre;
+			selected = genre;
 			break;
 		default:
 			return;
 	}
 
-	unsigned int pop_limit = selected->length();
+	unsigned int pop_limit = selected.length();
 	for(unsigned int i=pop_limit - 1;i>=0;i-=1) {
-		if(selected->charAt(i) != ' ' && selected->charAt(i) != 0) {
+		if(selected.charAt(i) != ' ' && selected.charAt(i) != 0) {
 			pop_limit = i;
 			break;
 		}
@@ -1085,14 +1159,15 @@ void HondaXMHandler::sendAITextMessage(const uint8_t receiver, const uint8_t fie
 			break;
 	}
 
-	*selected = selected->substring(0, pop_limit + 1);
+	selected = selected.substring(0, pop_limit + 1);
+	selected.replace("#", "##  ");
 
-	uint8_t text_data[3+selected->length()];
+	uint8_t text_data[3+selected.length()];
 	text_data[0] = 0x23;
 	text_data[1] = 0x60|field;
 	text_data[2] = 0x1;
-	for(int i=0;i<selected->length();i+=1)
-		text_data[i+3] = uint8_t(selected->charAt(i));
+	for(int i=0;i<selected.length();i+=1)
+		text_data[i+3] = uint8_t(selected.charAt(i));
 
 	AIData text_msg(sizeof(text_data), ID_XM, receiver);
 	text_msg.refreshAIData(text_data);

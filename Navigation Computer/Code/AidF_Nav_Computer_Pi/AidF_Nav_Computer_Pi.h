@@ -4,13 +4,13 @@
 #include <string>
 #include <fstream>
 #include <vector>
-#include <time.h>
 #include <pthread.h>
 
 #include "AidF_Color_Profile.h"
 #include "Window_Handler.h"
 #include "AIBus_Handler.h"
 #include "Ini_Context.h"
+#include "Ini_Color_Preset.h"
 
 #include "Background/Nav_Background.h"
 #include "Background/Nav_Solid_Background.h"
@@ -43,6 +43,11 @@
 
 struct FrameParameters {
 	int* frame;
+	bool* run;
+};
+
+struct ElapsedMillis {
+	unsigned long time = 0;
 	bool* run;
 };
 
@@ -88,14 +93,16 @@ private:
 	Main_Menu_Window* main_window;
 	NavWindow* misc_window;
 
-	pthread_t socket_thread, frame_thread;
+	pthread_t socket_thread, frame_thread, timer_thread;
+
 	SocketHandlerParameters socket_parameters;
 	FrameParameters frame_parameters;
+	ElapsedMillis elapsed_millis;
 
-	clock_t aibus_read_time = clock();
+	unsigned long aibus_read_time = 0;
 	
 	bool vol_timer_enabled = false;
-	clock_t vol_timer = clock();
+	unsigned long vol_timer = 0;
 };
 
 void setup(AidF_Nav_Computer* nav_computer);
@@ -107,5 +114,6 @@ void getResolution(int* w, int* h);
 void saveResolution(const int w, const int h);
 
 void *frameThread(void* frame_v);
+void *millisThread(void* millis_v);
 
 #endif

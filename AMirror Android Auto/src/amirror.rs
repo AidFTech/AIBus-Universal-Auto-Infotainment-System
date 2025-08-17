@@ -62,6 +62,8 @@ pub struct AMirror<'a> {
 
 	audio_held: bool,
 
+	screen_acknowledged: bool,
+
 	pub run: bool,
 	power_state: u8,
 	door_state: u8,
@@ -111,6 +113,8 @@ impl <'a> AMirror<'a> {
 			overlay_on: false,
 
 			audio_held: false,
+
+			screen_acknowledged: false,
 
 			run: true,
 			power_state: 0x1,
@@ -614,6 +618,14 @@ impl <'a> AMirror<'a> {
 					data: [0x1].to_vec(),
 				});
 			}
+
+			if context.screen_connected && !self.screen_acknowledged {
+				self.write_aibus_message(AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_NAV_SCREEN,
+					data: [0x31, 0x30].to_vec(),
+				});
+			}
 		}
 
 		let mut scroll_limit = 300;
@@ -667,13 +679,46 @@ impl <'a> AMirror<'a> {
 					self.imid_scroll_pos = 0;
 				}
 
+				let scroll_param_name;
+				if self.imid_scroll == 0 {
+					scroll_param_name = "PHONE";
+				} else if self.imid_scroll == 1 {
+					scroll_param_name = "TRACK";
+				} else if self.imid_scroll == 2 {
+					scroll_param_name = "ARTIST";
+				} else if self.imid_scroll == 3 {
+					scroll_param_name = "ALBUM";
+				} else if self.imid_scroll == 4 {
+					scroll_param_name = "APP";
+				} else {
+					scroll_param_name = "";
+				}
+
 				if self.imid_refresh {
 					self.imid_refresh = false;
 				}
 
 				let mut imid_y = 1;
 				if context.imid_row_count >= 2 {
-					imid_y = context.imid_row_count/2;
+					imid_y = context.imid_row_count/2 + 1;
+				}
+
+				if update && context.imid_row_count >= 2 {
+					let mut imid_x = 0;
+					if context.imid_text_len >= 10 {
+						imid_x = (context.imid_text_len/2) as isize - (scroll_param_name.len()/2) as isize;
+						if imid_x < 0 || imid_x > context.imid_text_len as isize {
+							imid_x = 0;
+						}
+					}
+
+					self.write_imid_text(scroll_param_name.to_string(), imid_x as u8, context.imid_row_count/2);
+
+					for i in 1..=context.imid_row_count {
+						if i != context.imid_row_count/2 && i != context.imid_row_count/2 + 1 {
+							self.write_imid_text("".to_string(), 0, i);
+						}
+					}
 				}
 
 				if self.imid_split {
@@ -688,7 +733,7 @@ impl <'a> AMirror<'a> {
 
 					let mut imid_x = 0;
 					if context.imid_text_len >= 10 {
-						imid_x = (context.imid_text_len/2) as isize - (context.phone_name.len()/2) as isize;
+						imid_x = (context.imid_text_len/2) as isize - (scroll_split[self.imid_scroll_pos].len()/2) as isize;
 						if imid_x < 0 || imid_x > context.imid_text_len as isize {
 							imid_x = 0;
 						}
@@ -975,6 +1020,22 @@ impl <'a> AMirror<'a> {
 						return;
 					}
 				};
+			} else if ai_msg.l() >= 2 && ai_msg.data[0] == 0x26 { //Volume control.
+				let new_vol = ai_msg.data[1];
+				let new_max = ai_msg.data[2];
+
+				match self.mpv_video.try_lock() {
+					Ok(mut mpv) => {		
+						mpv.set_volume_overlay(new_vol, new_max);
+
+						self.overlay_on = true;
+						self.overlay_timer = Instant::now();
+						mpv.show_volume_overlay();
+					}
+					Err(_) => {
+						println!("Overlay: MPV handler locked.");
+					}
+				}
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x48 && ai_msg.data[1] == 0x8E { //Turn on/off the interface.
@@ -1286,6 +1347,8 @@ impl <'a> AMirror<'a> {
 						context.aibt_map = true;
 					}
 				}
+
+				self.screen_acknowledged = true;
 			}
 		}
 
@@ -1394,7 +1457,7 @@ impl <'a> AMirror<'a> {
 		}*/
 	}
 
-	//Write the initial pings.
+	///Write the initial pings.
 	pub fn write_init_ping(&mut self) {
 		self.write_aibus_message(AIBusMessage {
 			sender: AIBUS_DEVICE_AMIRROR,
@@ -1413,9 +1476,15 @@ impl <'a> AMirror<'a> {
 			receiver: AIBUS_DEVICE_NAV_SCREEN,
 			data: [0x1].to_vec(),
 		});
+
+		self.write_aibus_message(AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_CANSLATOR,
+			data: [0x4A, 0x1F].to_vec()
+		});
 	}
 
-	//Write track time.
+	///Write track time.
 	fn write_time(&mut self, recipient: u8, time: u16) {
 		let time_data = [0x3B, 0x0, 0x0, (time>>8) as u8, (time&0xFF) as u8].to_vec();
 		let time_msg = AIBusMessage {
@@ -1427,7 +1496,7 @@ impl <'a> AMirror<'a> {
 		self.write_aibus_message(time_msg);
 	}
 
-	//Write metadata.
+	///Write metadata.
 	fn write_metadata(&mut self, recipient: u8, text: String, position: u8) {
 		if position > 3 {
 			return;
@@ -1449,12 +1518,12 @@ impl <'a> AMirror<'a> {
 		self.write_aibus_message(meta_msg);
 	}
 
-	//Write metadata to the radio.
+	///Write metadata to the radio.
 	fn write_radio_metadata(&mut self, text: String, position: u8) {
 		self.write_metadata(AIBUS_DEVICE_RADIO, text, position);
 	}
 
-	//Write the radio handshake.
+	///Write the radio handshake.
 	fn write_radio_handshake(&mut self) {
 		let handshake_data = [0x1, 0x1, AIBUS_DEVICE_AMIRROR].to_vec();
 		let handshake_msg = AIBusMessage {
@@ -1467,7 +1536,7 @@ impl <'a> AMirror<'a> {
 		self.write_radio_name();
 	}
 
-	//Write the device name.
+	///Write the device name.
 	fn write_radio_name(&mut self) {
 		let mut name_data = [0x1, 0x23, 0x0].to_vec();
 
@@ -1501,7 +1570,7 @@ impl <'a> AMirror<'a> {
 		self.write_aibus_message(name_msg);
 	}
 
-	//Write metadata to the nav computer.
+	///Write metadata to the nav computer.
 	fn write_nav_text(&mut self, text: String, position: u8, subtitle: u8, refresh: bool) {
 		let mut meta_data = [0x23, 0x60|(subtitle&0xF), position].to_vec();
 		
@@ -1524,7 +1593,7 @@ impl <'a> AMirror<'a> {
 		self.write_aibus_message(meta_msg);
 	}
 
-	//Write text to the IMID.
+	///Write text to the IMID.
 	fn write_imid_text(&mut self, text: String, xpos: u8, ypos: u8) {
 		let mut meta_data = [0x23, 0x60, xpos, ypos].to_vec();
 
@@ -1543,7 +1612,7 @@ impl <'a> AMirror<'a> {
 		self.write_aibus_message(meta_msg);
 	}
 
-	//Write all metadata to the radio after being selected.
+	///Write all metadata to the radio after being selected.
 	fn write_all_metadata(&mut self) {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
@@ -1559,7 +1628,7 @@ impl <'a> AMirror<'a> {
 		self.write_radio_metadata(context.app.clone(), APP_NAME);
 	}
 
-	//Write all relevant text to the nav screen.
+	///Write all relevant text to the nav screen.
 	fn write_all_text(&mut self) {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
@@ -1593,7 +1662,7 @@ impl <'a> AMirror<'a> {
 		self.write_all_imid_text();
 	}
 
-	//Write all relevant text to the IMID.
+	///Write all relevant text to the IMID.
 	fn write_all_imid_text(&mut self) {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
@@ -1763,7 +1832,7 @@ impl <'a> AMirror<'a> {
 		}
 	}
 
-	//Reset the info display if the info state changed.
+	///Reset the info display if the info state changed.
 	fn reset_imid_info_display(&mut self) {
 		self.display_album = false;
 		self.display_app = false;
@@ -1784,7 +1853,7 @@ impl <'a> AMirror<'a> {
 		}
 	}
 
-	//Send the menu creation message and wait for denial. Return true if successful (i.e. not denied).
+	///Send the menu creation message and wait for denial. Return true if successful (i.e. not denied).
 	fn create_menu(&mut self, title: String, size: u8) -> bool {
 		let y_pos: u16 = 140;
 		let menu_h: u16 = 35;
@@ -1847,7 +1916,7 @@ impl <'a> AMirror<'a> {
 		return true;
 	}
 
-	//Clear the active menu.
+	///Clear the active menu.
 	fn clear_menu(&mut self) -> bool {
 		self.write_aibus_message(AIBusMessage {
 			sender: AIBUS_DEVICE_AMIRROR,
@@ -1897,7 +1966,7 @@ impl <'a> AMirror<'a> {
 		return false;
 	}
 
-	//Write the settings menu.
+	///Write the settings menu.
 	fn write_settings_menu(&mut self) {
 		let settings_count = 2;
 		
@@ -1931,7 +2000,7 @@ impl <'a> AMirror<'a> {
 		self.menu_open = MENU_SETTINGS;
 	}
 
-	//Write a settings menu option.
+	///Write a settings menu option.
 	fn write_settings_menu_option(&mut self, option: u8) {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
@@ -1980,7 +2049,7 @@ impl <'a> AMirror<'a> {
 		}
 	}
 
-	//Write the display menu.
+	///Write the display menu.
 	fn write_display_menu(&mut self) {
 		println!("Display menu function called!");
 		if !self.clear_menu() {
@@ -2008,7 +2077,7 @@ impl <'a> AMirror<'a> {
 		self.menu_open = MENU_DISPLAY;
 	}
 
-	//Write a display menu option.
+	///Write a display menu option.
 	fn write_display_menu_option(&mut self, option: u8) {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
