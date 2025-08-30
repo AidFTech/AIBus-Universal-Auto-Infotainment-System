@@ -1,7 +1,7 @@
 #include "AIBus_Handler.h"
 
 #ifdef RPI_UART
-AIBusHandler::AIBusHandler(std::string port, int** socket_list, const int socket_l) {
+AIBusHandler::AIBusHandler(std::string port, int** socket_list, const int socket_l, unsigned long* timer) {
 	this->cached_bytes = std::vector<uint8_t>(0);
 	gpioCfgSetInternals(1<<10);
 	gpioInitialise();
@@ -29,7 +29,7 @@ AIBusHandler::AIBusHandler(std::string port, int** socket_list, const int socket
 	this->socket_l = socket_l;
 }
 #else
-AIBusHandler::AIBusHandler(int** socket_list, const int socket_l) {
+AIBusHandler::AIBusHandler(int** socket_list, const int socket_l, unsigned long* timer) {
 	this->cached_bytes = std::vector<uint8_t>(0);
 	std::cout<<"Ready!\nEnter the sender, receiver, and data. Separate all characters with a space. Do not include the checksum.\n";
 
@@ -38,6 +38,7 @@ AIBusHandler::AIBusHandler(int** socket_list, const int socket_l) {
 		this->socket_list[i] = socket_list[i];
 
 	this->socket_l = socket_l;
+	this->timer = timer;
 }
 #endif
 
@@ -117,24 +118,24 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 				return false;
 			}
 			
-			clock_t start = clock();
+			unsigned long start = *this->timer;
 			while(aiserialBytesAvailable(this->ai_port) < l) {
 				#ifdef RPI_UART
 				if(gpioRead(AI_RX) == 0)
-					start = clock();
+					start = *this->timer;
 				#endif
 				
-				if((clock() - start)/(CLOCKS_PER_SEC/1000) > 5) {
-					clock_t clear_time = clock();
+				if((*this->timer - start) > 5) {
+					unsigned long clear_time = *this->timer;
 					
-					while((clock() - clear_time)/(CLOCKS_PER_SEC/1000000) < 20) {
+					while((*this->timer - clear_time) < 20) {
 						#ifdef RPI_UART
 						if(gpioRead(AI_RX) == 0)
-							clear_time = clock();
+							clear_time = *this->timer;
 						#endif
 						if(aiserialBytesAvailable(this->ai_port) > 0) {
 							aiserialReadByte(this->ai_port);
-							clear_time = clock();
+							clear_time = *this->timer;
 						}
 					}
 					return false;
@@ -256,7 +257,7 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 	bool sent = true;
 
 	if(port_connected) {
-		uint8_t* data = new uint8_t[ai_d->l + 4];
+		uint8_t data[ai_d->l + 4];
 		ai_d->getBytes(data);
 
 		while(aiserialBytesAvailable(this->ai_port) >= 2) {
@@ -278,23 +279,23 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			}
 		}
 
-		clock_t start = clock();
+		unsigned long start = *this->timer;
 		#ifndef RPI_UART
 		int current_cached_bytes = aiserialBytesAvailable(this->ai_port);
 		#endif
-		while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 30) {
+		while((*this->timer - start) < 1) {
 			#ifdef RPI_UART
 			if(gpioRead(AI_RX) == 0)
-				start = clock();
+				start = *this->timer;
 			#else
 			if(current_cached_bytes != aiserialBytesAvailable(this->ai_port)) {
 				current_cached_bytes = aiserialBytesAvailable(this->ai_port);
-				start = clock();
+				start = *this->timer;
 			}
 			#endif
 		}
-		start = clock();
-		while((clock() - start)/(CLOCKS_PER_SEC/1000000) < 30);
+		start = *this->timer;
+		while((*this->timer - start) < 1);
 
 		for(uint8_t i=0;i<ai_d->l+4;i+=1)
 			aiserialWriteByte(this->ai_port, data[i]);
@@ -338,7 +339,7 @@ void AIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t recei
 
 //Wait for the acknowledgement message.
 bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
-	clock_t repeat_time = clock();
+	unsigned long repeat_time = *this->timer;
 	bool acknowledge = false;
 	uint8_t tries = 0;
 
@@ -365,13 +366,13 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 							cached_bytes.push_back(data[i]);
 					}
 				}
-				repeat_time = clock();
+				repeat_time = *this->timer;
 			}
 		}
 
-		if((clock()-repeat_time)/(CLOCKS_PER_SEC/1000) > REPEAT_DELAY && !acknowledge) {
+		if((*this->timer-repeat_time) > REPEAT_DELAY && !acknowledge) {
 			writeAIData(ai_d, false);
-			repeat_time = clock();
+			repeat_time = *this->timer;
 			tries += 1;
 		}
 	}
@@ -557,12 +558,11 @@ uint16_t stringToNumber(std::string str) {
 
 void printBytes(AIData* ai_d) {
 	const uint8_t l = ai_d->l + 4;
-	uint8_t* data = new uint8_t[l];
+	uint8_t data[l];
 	ai_d->getBytes(data);
 	#ifndef RPI_UART
 	for(uint8_t i=0;i<l;i+=1)
 		std::cout<<std::hex<<int(data[i])<<" "<<std::dec;
 	std::cout<<'\n';
 	#endif
-	delete[] data;
 }

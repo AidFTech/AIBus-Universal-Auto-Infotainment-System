@@ -28,7 +28,6 @@ public:
 	
 	virtual void setActive(bool active);
 	virtual bool getActive();
-
 protected:
 	AttributeList* attribute_list;
 	SDL_Renderer* renderer;

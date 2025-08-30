@@ -155,6 +155,12 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 
 		ai_driver->writeAIData(&screen_field_msg);
 		ai_driver->writeAIData(&screen_oem_msg);
+		
+		uint8_t vol_limit_data[] = {0x33, 0x6, VOL_LIMIT>>8, VOL_LIMIT&0xFF};
+		AIData vol_limit_msg(sizeof(vol_limit_data), ID_IMID_SCR, the_message->sender);
+
+		vol_limit_msg.refreshAIData(vol_limit_data);
+		ai_driver->writeAIData(&vol_limit_msg);
 	} else if(the_message->data[0] == 0x23 && the_message->data[1] == 0x60) { //Write a custom message.
 		if(the_message->data[3] > 1)
 			return;
@@ -247,7 +253,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 			this->rds = false;
 
 		writeIMIDRadioMessage(frequency, the_message->data[3], the_message->data[4]&0xF, (the_message->data[4]&0xF0)>>4);
-	} else if(the_message->sender == ID_RADIO && the_message->data[0] == 0x63 && the_message->l >= 3) { //RDS.
+	} else if(the_message->sender == ID_RADIO && the_message->data[0] == 0x63 && the_message->l >= 2) { //RDS.
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
 		
@@ -256,7 +262,9 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 			rds_str += char(the_message->data[i]);
 		
 		if(the_message->data[1] == 0x61) { // True RDS.
-			this->rds = true;
+			if(rds_str.length() > 0)
+				this->rds = true;
+			
 			writeIMIDRDSMessage(rds_str);
 		} else if(the_message->data[1] == 0x60) //Call sign.
 			writeIMIDCallsignMessage(rds_str);
@@ -786,7 +794,7 @@ void HondaIMIDHandler::setBTModeNotConnected() {
 //Set a BTA timer.
 void HondaIMIDHandler::setBTTimer(const long time) {
 	if((this->imid_mode&0xFF) != ID_PHONE)
-		this->setBTMode();
+		return; //this->setBTMode();
 
 	uint8_t timer_data[] = {0x60, 0x23, 0x11, 0x0, 0x1, 0x0, 0xFF, 0xFF, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0, 0xFF, 0xF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -973,7 +981,7 @@ void HondaIMIDHandler::writeIMIDRDSMessage(String msg) {
 							0xFF,
 							stereo_byte,
 							rds_byte,
-							0x0,
+							display_rds,
 							hd_byte,
 							0x1,
 							0x0,
@@ -981,12 +989,12 @@ void HondaIMIDHandler::writeIMIDRDSMessage(String msg) {
 							0x0,
 							0x0};
 
-	tuning_data[12] = rds ? 0x87 : 0x83;
+	tuning_data[13] = rds ? 0x87 : 0x83;
 	for(uint8_t i=0;i<8;i+=1) {
 		if(i < msg.length())
-			tuning_data[i+13] = uint8_t(msg.charAt(i));
+			tuning_data[i+14] = uint8_t(msg.charAt(i));
 		else
-			tuning_data[i+13] = 0x20;
+			tuning_data[i+14] = 0x20;
 	}
 
 	IE_Message tuning_msg(sizeof(tuning_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);

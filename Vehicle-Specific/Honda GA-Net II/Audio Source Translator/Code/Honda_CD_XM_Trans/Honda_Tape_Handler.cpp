@@ -328,7 +328,10 @@ void HondaTapeHandler::sendSourceNameMessage(const uint8_t id) {
 	AIData ai_name_msg(sizeof(ai_name_data), ID_TAPE, id);
 
 	ai_name_msg.refreshAIData(ai_name_data);
-	
+	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
+
+	ai_name_data[1] = 0x22;
+	ai_name_msg.refreshAIData(ai_name_data);
 	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
 }
 
@@ -389,24 +392,31 @@ void HondaTapeHandler::sendTapeTextMessage() {
 		String imid_mode_msg = F("Tape ");
 		if(((parameter_list->external_imid_char < 11 && tape_mode != TAPE_MODE_IDLE) || parameter_list->external_imid_lines > 1) && !imid_handler->getEstablished())
 			imid_mode_msg = F("");
+
+		String header_mode_msg = F("Tape");
 		
 		switch(tape_mode) {
 			case TAPE_MODE_PLAY:
 				imid_mode_msg += "Play";
+				header_mode_msg = "Play";
 				break;
 			case TAPE_MODE_REVSKIP:
 			case TAPE_MODE_REW:
 				imid_mode_msg += "Rew";
+				header_mode_msg = "Rew";
 				break;
 			case TAPE_MODE_FWDSKIP:
 			case TAPE_MODE_FF:
 				imid_mode_msg += "FF";
+				header_mode_msg = "FF";
 				break;
 			case TAPE_MODE_LOAD:
 				imid_mode_msg += "Load";
+				header_mode_msg = "Load";
 				break;
 			case TAPE_MODE_EJECT:
 				imid_mode_msg += "Eject";
+				header_mode_msg = "Eject";
 				break;
 		}
 
@@ -457,7 +467,7 @@ void HondaTapeHandler::sendTapeTextMessage() {
 			AIData imid_text_msg(4 + imid_mode_msg.length(), ID_TAPE, ID_IMID_SCR);
 			imid_text_msg.data[0] = 0x23;
 			imid_text_msg.data[1] = 0x60;
-			imid_text_msg.data[2] = parameter_list->external_imid_char/2-imid_mode_msg.length()/2;
+			imid_text_msg.data[2] = parameter_list->external_imid_char/2-effective_length/2;
 			
 			if(parameter_list->external_imid_lines == 1)
 				imid_text_msg.data[3] = 1;
@@ -469,10 +479,24 @@ void HondaTapeHandler::sendTapeTextMessage() {
 
 			ai_driver->writeAIData(&imid_text_msg);
 		}
+
+		if(tape_mode == TAPE_MODE_REVSKIP || tape_mode == TAPE_MODE_FWDSKIP)
+			header_mode_msg += " " + String(track_count);
+
+		if(getDisplaySymbol()) {
+			if(fwd)
+				header_mode_msg += " #UP ";
+			else
+				header_mode_msg += " #DN ";
+		}
+
+		setNavHeader(header_mode_msg);
 	} else {
 		String nr_mode_txt = "NR On";
 		if(!nr_on)
 			nr_mode_txt = "NR Off";
+
+		setNavHeader(nr_mode_txt);
 
 		if(parameter_list->imid_connected)
 			imid_handler->writeIMIDTextMessage(nr_mode_txt);

@@ -26,6 +26,8 @@ void VolumeHandler::init() {
 	this->treble_mcp->DigitalPotSetWiperPosition(1, treble);
 	this->bass_mcp->DigitalPotSetWiperPosition(0, bass);
 	this->bass_mcp->DigitalPotSetWiperPosition(1, bass);
+	
+	volume_changed = true;
 }
 
 //Handle an AIBus message.
@@ -39,10 +41,20 @@ bool VolumeHandler::handleAIBus(AIData *msg) {
 					return true;
 				
 				uint16_t new_volume = volume;
-				if((msg->data[2]&0x10) != 0)
-					new_volume += msg->data[2]&0xF;
-				else
-					new_volume -= msg->data[2]&0xF;
+				
+				const uint8_t inc = msg->data[2]&0xF;
+				if((msg->data[2]&0x10) != 0) {
+					if(new_volume + inc <= vol_range)
+						new_volume += inc;
+					else
+						new_volume = vol_range;
+				} else {
+					if(inc <= volume)
+						new_volume -= msg->data[2]&0xF;
+					else
+						new_volume = 0;
+				}
+				
 				setVolume(new_volume);
 				return true;
 			}
@@ -175,28 +187,63 @@ void VolumeHandler::setVolume(const uint16_t volume) {
 
 		ai_handler->writeAIData(&volume_msg, parameters->amp_connected);
 	}
+
+	if(volume_changed) 
+		setVolumeDisplay();
 }
 
 //Set the bass.
-void VolumeHandler::setBass(const uint16_t bass) {
+void VolumeHandler::setBass(int bass) {
+	if(bass > DEFAULT_TONE_RANGE)
+		bass = DEFAULT_TONE_RANGE;
+	if(bass < 0)
+		bass = 0;
+
 	this->bass = DEFAULT_TONE_RANGE - bass;
 
-	if(this->bass > DEFAULT_TONE_RANGE)
-		this->bass = DEFAULT_TONE_RANGE;
+	uint16_t desired_bass = this->bass;
+	
+	const float desired_attenuation = this->bass*MAX_ATTENUATION/DEFAULT_TONE_RANGE;
+	
+	for(int i=0;i<=DEFAULT_TONE_RANGE;i+=1) {
+		const float br = (DEFAULT_TONE_RANGE - i)*10000.0/DEFAULT_TONE_RANGE;
+		const float ratio = (br + BASS_R)/(br + BASS_R + BASS_X);
 
-	this->bass_mcp->DigitalPotSetWiperPosition(0, this->bass);
-	this->bass_mcp->DigitalPotSetWiperPosition(1, this->bass);
+		if(20*log10(1.0/ratio) > desired_attenuation) {
+			desired_bass = i;
+			break;
+		}
+	}
+
+	this->bass_mcp->DigitalPotSetWiperPosition(0, desired_bass);
+	this->bass_mcp->DigitalPotSetWiperPosition(1, desired_bass);
 }
 
 //Set the treble.
-void VolumeHandler::setTreble(const uint16_t treble) {
+void VolumeHandler::setTreble(int treble) {
+	if(treble > DEFAULT_TONE_RANGE)
+		treble = DEFAULT_TONE_RANGE;
+	if(treble < 0)
+		treble = 0;
+	
 	this->treble = treble;
+	
+	uint16_t desired_treble = this->treble;
+	
+	const float desired_attenuation = (DEFAULT_TONE_RANGE-this->treble)*MAX_ATTENUATION/DEFAULT_TONE_RANGE;
 
-	if(this->treble > DEFAULT_TONE_RANGE)
-		this->treble = DEFAULT_TONE_RANGE;
+	for(int i=0;i<=DEFAULT_TONE_RANGE;i+=1) {
+		const float tr = i*50000.0/DEFAULT_TONE_RANGE;
+		const float ratio = TREBLE_X/(tr + TREBLE_R + TREBLE_X);
 
-	this->treble_mcp->DigitalPotSetWiperPosition(0, this->treble);
-	this->treble_mcp->DigitalPotSetWiperPosition(1, this->treble);
+		if(20*log10(1.0/ratio) > desired_attenuation) {
+			desired_treble = DEFAULT_TONE_RANGE - i;
+			break;
+		}
+	}
+
+	this->treble_mcp->DigitalPotSetWiperPosition(0, desired_treble);
+	this->treble_mcp->DigitalPotSetWiperPosition(1, desired_treble);
 }
 
 //Set the balance.
@@ -230,7 +277,7 @@ uint16_t VolumeHandler::getVolume() {
 
 //Get the set bass.
 uint16_t VolumeHandler::getBass() {
-	return DEFAULT_TONE_RANGE - this->bass;
+	return this->bass <= DEFAULT_TONE_RANGE ? DEFAULT_TONE_RANGE - this->bass : 0;
 }
 
 //Get the set treble.
@@ -254,4 +301,30 @@ bool VolumeHandler::getVolumeChanged() {
 	this->volume_changed = false;
 
 	return return_changed;
+}
+
+//Display the volume.
+void VolumeHandler::setVolumeDisplay() {
+	uint8_t max_vol = 255;
+	if(this->vol_range < 255)
+		max_vol = this->vol_range&0xFF;
+
+	uint8_t set_vol = 255;
+	if(this->volume < 255)
+		set_vol = this->volume&0xFF;
+
+	uint8_t vol_data[] = {0x26, set_vol, max_vol};
+	AIData vol_msg(sizeof(vol_data), ID_RADIO, ID_NAV_COMPUTER);
+	vol_msg.refreshAIData(vol_data);
+
+	ai_handler->writeAIData(&vol_msg, parameters->computer_connected);
+
+	vol_msg.receiver = ID_ANDROID_AUTO;
+	ai_handler->writeAIData(&vol_msg, parameters->mirror_connected);
+
+	vol_data[0] = 0x62;
+	vol_msg.data[0] = 0x62;
+	vol_msg.receiver = ID_IMID_SCR;
+
+	ai_handler->writeAIData(&vol_msg, parameters->imid_connected);
 }

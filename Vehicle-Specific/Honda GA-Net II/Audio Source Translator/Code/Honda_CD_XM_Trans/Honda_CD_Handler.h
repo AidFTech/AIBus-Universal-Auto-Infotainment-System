@@ -94,6 +94,7 @@ private:
 	char folder[32];
 
 	uint8_t song_title_stage = 0, artist_stage = 0, album_stage = 0, folder_stage = 0, filename_stage = 0;
+	bool song_title_change = false, artist_change = false, album_change = false, folder_change = false, filename_change = false;
 
 	bool autostart = false;
 	bool setting_changed = false;

@@ -41,7 +41,6 @@ public:
 	void setADCOn();
 	void setExtOut();
 	void setPiOut();
-	
 private:
 	int pcm9211_sel = -1;
 	

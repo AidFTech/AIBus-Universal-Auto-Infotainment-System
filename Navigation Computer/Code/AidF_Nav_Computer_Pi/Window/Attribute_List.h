@@ -44,6 +44,7 @@ struct AttributeList {
 
 	int8_t next_window = NEXT_WINDOW_NULL;
 	uint8_t day_night_settings = DAY_NIGHT_AUTO;
+	bool night = false;
 	bool canslator_connected = false, radio_connected = false, mirror_connected = false, gps_antenna_connected = false;
 	
 	bool background_changed = false; //True if the background was changed by the user.
@@ -58,6 +59,7 @@ struct AttributeList {
 	bool display_12h = false; //True if time is to be displayed in 12hr format with an AM/PM.
 	uint8_t timekeeper = ID_RADIO; //ID of timekeeper device.
 	bool auto_clock = true; //True if the timekeeper device receives its time data automatically.
+	bool timekeeper_detected = false; //True if a message from the timekeeper device has been received.
 
 	uint16_t vehicle_speed = 0;
 

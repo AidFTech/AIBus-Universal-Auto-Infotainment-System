@@ -15,8 +15,8 @@ Window_Handler::Window_Handler(SDL_Renderer* renderer, Background* br, const uin
 	this->attribute_list->h = this->h;
 	this->attribute_list->renderer = this->renderer;
 
-	this->active_window = NULL;
-	this->last_window = NULL;
+	this->active_window = nullptr;
+	this->last_window = nullptr;
 
 	this->aibus_handler = aibus_handler;
 	this->attribute_list->aibus_handler = aibus_handler;
@@ -35,11 +35,24 @@ Window_Handler::~Window_Handler() {
 	delete this->header_box[0];
 	delete this->header_box[1];
 	delete this->header_box[2];
+
+	if(delete_last && last_window != NULL) {
+		delete last_window;
+		last_window = nullptr;
+	}
+
+	//TODO: Do we need to delete this if it is the miscwindow?
+	if(delete_active && active_window != NULL) {
+		delete active_window;
+		active_window = nullptr;
+	}
 }
 
 void Window_Handler::drawWindow() {
 	this->active_window->drawWindow();
-	this->drawClockHeader();
+
+	if(typeid(*this->active_window) != typeid(IntroWindow))
+		this->drawClockHeader();
 }
 
 void Window_Handler::refresh() {
@@ -96,19 +109,28 @@ NavWindow* Window_Handler::getLastWindow() {
 	return this->last_window;
 }
 
+//Get the active window.
 NavWindow* Window_Handler::getActiveWindow() {
 	return this->active_window;
 }
 
-void Window_Handler::setActiveWindow(NavWindow* new_window) {
+//Set the active window.
+void Window_Handler::setActiveWindow(NavWindow* new_window, const bool delete_last) {
+	if(delete_last &&
+			this->last_window != new_window &&
+			this->last_window != active_window &&
+			this->last_window != NULL) {
+		delete this->last_window;
+	}
+
 	this->last_window = this->active_window;
 
-	if(this->active_window != NULL)
+	if(this->active_window != NULL && this->active_window != nullptr)
 		this->active_window->setActive(false);
 
 	this->active_window = new_window;
 
-	if(this->active_window != NULL)
+	if(this->active_window != NULL && this->active_window != nullptr)
 		this->active_window->setActive(true);
 }
 
@@ -118,50 +140,55 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 	if(next_window != NEXT_WINDOW_NULL)
 		this->active_window->exitWindow();
 
+	const bool delete_last = this->last_window != audio_window && this->last_window != phone_window && this->last_window != main_window;
+	this->delete_last = delete_last;
+
 	if(next_window == NEXT_WINDOW_AUDIO) {
 		audio_window->setActive(true);
-		this->setActiveWindow(audio_window);
+		this->setActiveWindow(audio_window, delete_last);
 		attribute_list->next_window = NEXT_WINDOW_NULL;
 	} else if(next_window == NEXT_WINDOW_MAIN) {
-		this->setActiveWindow(main_window);
+		this->setActiveWindow(main_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_PHONE) {
 		phone_window->setActive(true);
-		this->setActiveWindow(phone_window);
+		this->setActiveWindow(phone_window, delete_last);
 		attribute_list->next_window = NEXT_WINDOW_NULL;
 	} else if(next_window == NEXT_WINDOW_CONSUMPTION) {
 		misc_window = new Consumption_Window(attribute_list);
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_SETTINGS_MAIN) {
 		misc_window = new Settings_Main_Window(attribute_list);
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_SETTINGS_DISPLAY) {
 		misc_window = new Settings_Display_Window(attribute_list);
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_SETTINGS_COLOR) {
 		misc_window = new Settings_Color_Window(attribute_list);
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_SETTINGS_COLOR_PICKER) {
 		misc_window = new Color_Picker_Window(attribute_list);
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_SETTINGS_CLOCK) {
 		misc_window = new Settings_Clock_Window(attribute_list);
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_SETTINGS_EXT) {
 		misc_window = new Settings_Ext_Window(attribute_list);
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_VEHICLE_INFO) {
 		misc_window = new VehicleInfoWindow(attribute_list, vehicle_info_paramters);
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_MIRROR) {
 		misc_window = new MirrorWindow(attribute_list);
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_LAST) {
 		misc_window = this->getLastWindow();
-		this->setActiveWindow(misc_window);
+		this->setActiveWindow(misc_window, delete_last);
 		misc_window->refreshWindow();
 	} else if(next_window != NEXT_WINDOW_NULL) {
 		attribute_list->next_window = NEXT_WINDOW_NULL;
 	}
+
+	this->delete_active = this->active_window != misc_window && this->active_window != audio_window && this->active_window != phone_window && this->active_window != main_window;
 
 	if(next_window != NEXT_WINDOW_NULL) {
 		attribute_list->next_window = NEXT_WINDOW_NULL;

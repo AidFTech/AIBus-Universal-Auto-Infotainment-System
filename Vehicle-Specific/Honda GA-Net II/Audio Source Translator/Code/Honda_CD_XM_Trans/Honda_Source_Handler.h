@@ -57,6 +57,8 @@ protected:
 	void displayAudioMenu(const uint8_t selected);
 	void setMenuTitle(String title);
 
+	void setNavHeader(String header);
+
 	virtual void requestControl(const uint8_t id);
 };
 

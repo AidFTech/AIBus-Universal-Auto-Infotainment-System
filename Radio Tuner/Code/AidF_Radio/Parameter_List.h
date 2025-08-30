@@ -32,7 +32,7 @@ struct ParameterList {
 	uint16_t fm1_tune, fm2_tune, am_tune;
 	bool fm_stereo = false, has_rds = false, info_mode = false;
 
-	uint16_t fm_lower_limit = 8400, fm_upper_limit = 10800, am_lower_limit = 550, am_upper_limit = 1600;
+	uint16_t fm_lower_limit = 8400, fm_upper_limit = 10800, am_lower_limit = 530, am_upper_limit = 1710;
 	uint16_t fm_start = 8750, am_start = 600;
 	uint8_t fm_inc = 10, am_inc = 10;
 	

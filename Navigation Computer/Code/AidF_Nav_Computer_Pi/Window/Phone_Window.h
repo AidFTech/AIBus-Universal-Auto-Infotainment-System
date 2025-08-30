@@ -2,12 +2,11 @@
 #include "../Menu/Nav_Menu.h"
 #include "../AIBus_Handler.h"
 
-#include "Phone_Img.h"
-
 #ifndef phone_window_h
 #define phone_window_h
 
 #include "Audio_Window.h"
+#include "Phone_Img.h"
 
 class PhoneWindow : public NavWindow {
 public:
@@ -28,7 +27,7 @@ private:
 	TextBox* subtitle_area_box[3];
 	bool subtitle_area_change[3];
 
-	NavMenu* side_menu, *settings_menu = NULL;
+	NavMenu* side_menu, *settings_menu = nullptr;
 	uint8_t settings_menu_sender = ID_RADIO;
 	bool settings_menu_active = false, settings_menu_prep = false;
 

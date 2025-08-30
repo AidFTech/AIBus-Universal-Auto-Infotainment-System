@@ -62,21 +62,28 @@ void saveIniColorProfile(AidFColorProfile day_profile, AidFColorProfile night_pr
 	color_profile.num_vars[17] = "NightVertical";
 	color_profile.num_values[17] = night_profile.vertical ? 1 : 0;
 
-	bool ini_found = false;
+	std::vector<IniList> new_color_file(0);
+
+	int ini_index = -1;
 	for(int i=0;i<color_file.size();i+=1) {
 		if(color_file.at(i).title.compare(name) == 0) {
-			ini_found = true;
-			color_file.erase(color_file.begin() + i);
-			color_file.insert(color_file.begin() + i, color_profile);
+			ini_index = i;
 		}
-		if(ini_found)
+		if(ini_index >= 0)
 			break;
 	}
 
-	if(!ini_found)
-		color_file.push_back(color_profile);
+	for(int i=0;i<color_file.size();i+=1) {
+		if(ini_index < 0 || i != ini_index)
+			new_color_file.push_back(color_file.at(i));
+		else if(ini_index >= 0 && i == ini_index)
+			new_color_file.push_back(color_profile);
+	}
 
-	saveIniFile(COLOR_FILE, color_file);
+	if(ini_index < 0)
+		new_color_file.push_back(color_profile);
+
+	saveIniFile(COLOR_FILE, new_color_file);
 }
 
 //Load a color profile from a file. Return whether successful.
@@ -138,6 +145,21 @@ bool getIniColorProfile(AidFColorProfile* day_profile, AidFColorProfile* night_p
 	return profile_found;
 }
 
+//Get a list of color sets available.
+std::vector<std::string> getIniProfileList() {
+	std::vector<std::string> profile_list(0);
+
+	std::vector<IniList> profile_ini_list = loadIniFile(COLOR_FILE);
+
+	for(int i=0;i<profile_ini_list.size();i+=1) {
+		if(profile_ini_list.at(i).title.compare(ACTIVE_COLOR) != 0)
+			profile_list.push_back(profile_ini_list.at(i).title);
+	}
+
+	return profile_list;
+}
+
+//Get the RGBA value of an RGB color.
 uint32_t getRGBA(const int rgb_in) {
 	uint32_t rgba = rgb_in << 8;
 	rgba |= 0xFF;

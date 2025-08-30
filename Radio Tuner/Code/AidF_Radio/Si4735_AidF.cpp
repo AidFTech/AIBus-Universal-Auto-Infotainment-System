@@ -199,7 +199,7 @@ bool Si4735Controller::getCallsign(String* rds) {
 	if(rds_a < 4096)
 		return false;
 	
-	/*if(rds_a >= 21672) {
+	if(rds_a >= 21672) {
 		rds_a -= 21672;
 		*rds = "W";
 	} else {
@@ -208,9 +208,8 @@ bool Si4735Controller::getCallsign(String* rds) {
 	}
 
 	const char callsign_letters[] = {rds_a/(26*26) + 'A', (rds_a/26)%26 + 'A', rds_a%26 + 'A', '\0'};
-	*rds += callsign_letters;*/
-	*rds = String(rds_a, HEX);
-
+	*rds += callsign_letters;
+	
 	return true;
 }
 

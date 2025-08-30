@@ -204,7 +204,7 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 	while((*rx_portregister&rx_bitmask) != 0) {
 		if(TIMER > 200) {
 			interrupts();
-			return -1;
+			return -2;
 		}
 	}
 
@@ -217,18 +217,23 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 	TIMER = 0;
 
 	//Read the "direct" bit.
-	const uint8_t direct_int = readBits(1, false, false, ack_response);
+	const int8_t direct_int = readBits(1, false, false, ack_response);
 	
 	bool direct = false;
 	if(direct_int == 1)
 		direct = true;
+	else if(direct_int < 0) {
+		interrupts();
+		return -2;
+	}
 
 	//Ensure sender bits are sent.
 	TIMER = 0;
-	while((*rx_portregister&rx_bitmask) == 0 && TIMER < START_COMP_LENGTH);
-	if(TIMER >= START_COMP_LENGTH) {
-		interrupts();
-		return 1;
+	while((*rx_portregister&rx_bitmask) == 0) {
+		if(TIMER >= IE_FAILSAFE_LENGTH) {
+			interrupts();
+			return 1;
+		}
 	}
 
 	//Read sender bits.
@@ -241,10 +246,11 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 
 	//Ensure receiver bits are sent.
 	TIMER = 0;
-	while((*rx_portregister&rx_bitmask) == 0 && TIMER < START_COMP_LENGTH);
-	if(TIMER >= START_COMP_LENGTH) {
-		interrupts();
-		return 2;
+	while((*rx_portregister&rx_bitmask) == 0) {
+		if(TIMER >= IE_FAILSAFE_LENGTH) {
+			interrupts();
+			return 2;
+		}
 	}
 
 	//Read receiver bits.
@@ -266,10 +272,11 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 
 	//Ensure control bits are sent.
 	TIMER = 0;
-	while((*rx_portregister&rx_bitmask) == 0 && TIMER < START_COMP_LENGTH);
-	if(TIMER >= START_COMP_LENGTH) {
-		interrupts();
-		return 3;
+	while((*rx_portregister&rx_bitmask) == 0) {
+		if(TIMER >= IE_FAILSAFE_LENGTH) {
+			interrupts();
+			return 3;
+		}
 	}
 
 	//Read control bits.
@@ -282,10 +289,11 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 
 	//Ensure length bits are sent.
 	TIMER = 0;
-	while((*rx_portregister&rx_bitmask) == 0 && TIMER < START_COMP_LENGTH);
-	if(TIMER >= START_COMP_LENGTH) {
-		interrupts();
-		return 4;
+	while((*rx_portregister&rx_bitmask) == 0) {
+		if(TIMER >= IE_FAILSAFE_LENGTH) {
+			interrupts();
+			return 4;
+		}
 	}
 
 	//Read length bits.
@@ -301,10 +309,11 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 	for(unsigned int i=0;i<l;i+=1) {
 		//Ensure data bits are sent.
 		TIMER = 0;
-		while((*rx_portregister&rx_bitmask) == 0 && TIMER < START_COMP_LENGTH);
-		if(TIMER >= START_COMP_LENGTH) {
-			interrupts();
-			return 5+i;
+		while((*rx_portregister&rx_bitmask) == 0) {
+			if(TIMER >= IE_FAILSAFE_LENGTH) {
+				interrupts();
+				return 5+i;
+			}
 		}
 
 		//Read data bits.

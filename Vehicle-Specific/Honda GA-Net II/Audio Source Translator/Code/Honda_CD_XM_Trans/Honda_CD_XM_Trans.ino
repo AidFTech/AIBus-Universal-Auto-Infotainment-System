@@ -47,16 +47,21 @@
 
 #define TRUNK_OPEN 20
 
-#define GAH_READ_H PINA
-#define GAH_READ_L PINC
+#define GAH_READ_H &PINA
+#define GAH_READ_L &PINC
 
 #define GAH_COUNT_0 10
 #define GAH_COUNT_1 11
 #define GAH_COUNT_2 12
 #define GAH_COUNT_3 13
 
+#define GAH_COUNT_ENABLE 41
+#define GAH_COUNT_CLEAR 40
+
 #define FUNCTION_DELAY 5000
 #define SOURCE_DELAY 5000
+
+#define DOOR_TIMER 30000
 
 #define CACHE_SIZE 32
 
@@ -65,7 +70,7 @@
 ParameterList parameters;
 
 EnAIBusHandler ai_handler(&AISerial, AI_RX, 8);
-EnIEBusHandler ie_handler(IEBUS_RX, IEBUS_TX, &ai_handler, AIBUS_BLOCK);
+EnIEBusHandler ie_handler(IEBUS_RX, IEBUS_TX);
 
 HondaIMIDHandler imid_handler(&ie_handler, &ai_handler, &parameters);
 HondaTapeHandler tape_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
@@ -75,6 +80,9 @@ HondaCDHandler cd_handler(&ie_handler, &ai_handler, &parameters, &imid_handler);
 BrightnessHandler brightness_handler(ILL_CS, ILL_ANODE);
 
 elapsedMillis function_timer, ai_timer, screen_request_timer, ping_timer;
+
+elapsedMillis door_timer;
+bool door_timer_enabled = false;
 
 void setup() {
 	AISerial.begin(AI_BAUD);
@@ -106,19 +114,45 @@ void setup() {
 	pinMode(GAH_COUNT_2, INPUT);
 	pinMode(GAH_COUNT_3, INPUT);
 
+	pinMode(GAH_COUNT_ENABLE, OUTPUT);
+	pinMode(GAH_COUNT_CLEAR, OUTPUT);
+
 	digitalWrite(ILL_ANODE, LOW);
 	//digitalWrite(IEBUS_TX, LOW);
 	digitalWrite(ILL_CS, HIGH);
-	digitalWrite(MAIN_POWER, HIGH); //Leave high for testing.
+	digitalWrite(MAIN_POWER, LOW);
 	digitalWrite(REC_CLEAR, HIGH);
 	digitalWrite(AUDIO_ON, LOW);
 	digitalWrite(TRUNK_OPEN, LOW);
 
-	sendWideHandshake(&ie_handler);
-	sendPingHandshake(&ie_handler, IE_ID_IMID);
-	sendPingHandshake(&ie_handler, IE_ID_CDC);
-	sendPingHandshake(&ie_handler, IE_ID_TAPE);
-	sendPingHandshake(&ie_handler, IE_ID_SIRIUS);
+	digitalWrite(GAH_COUNT_CLEAR, HIGH);
+	digitalWrite(GAH_COUNT_CLEAR, LOW);
+
+	digitalWrite(GAH_COUNT_ENABLE, LOW);
+
+	EnIEBusParams ie_params;
+	ie_params.count_enable = GAH_COUNT_ENABLE;
+	ie_params.count_reset = GAH_COUNT_CLEAR;
+	ie_params.rec_set = REC_SET;
+	ie_params.rec_clear = REC_CLEAR;
+	ie_params.ai_handler = &ai_handler;
+	#ifdef PINA
+	ie_params.high_byte_register = GAH_READ_H;
+	ie_params.low_byte_register = GAH_READ_L;
+	#endif
+
+	ie_params.count[0] = GAH_COUNT_0;
+	ie_params.count[1] = GAH_COUNT_1;
+	ie_params.count[2] = GAH_COUNT_2;
+	ie_params.count[3] = GAH_COUNT_3;
+
+	ie_handler.init(&ie_params);
+
+	//sendWideHandshake(&ie_handler);
+	//sendPingHandshake(&ie_handler, IE_ID_IMID);
+	//sendPingHandshake(&ie_handler, IE_ID_CDC);
+	//sendPingHandshake(&ie_handler, IE_ID_TAPE);
+	//sendPingHandshake(&ie_handler, IE_ID_SIRIUS);
 	parameters.screen_request_timer = &screen_request_timer;
 
 	#ifdef MEMORY_CHECK
@@ -131,7 +165,10 @@ void setup() {
 	uint8_t init_data[] = {0x4A, 0x1F};
 	AIData init_msg(sizeof(init_data), ID_CDC, ID_CANSLATOR);
 	init_msg.refreshAIData(init_data);
+
+	digitalWrite(MAIN_POWER, HIGH);
 	ai_handler.writeAIData(&init_msg, false);
+	digitalWrite(MAIN_POWER, LOW);
 }
 
 void loop() {
@@ -149,14 +186,15 @@ void loop() {
 		bool first_ie = false;
 
 		while (ie_timer < 50) {
-			//ai_handler.cacheAllPending();
+			const bool was_first_ie = first_ie;
 			if (ie_handler.getInputOn()) {
 				if (!first_ie) {
 					first_ie = true;
-					ie_timer = 0;
+					//ie_timer = 0;
 				}
 
-				if (ie_handler.readMessage(&ie_msg, true, IE_ID_RADIO) == 0) {
+				const int message_value = ie_handler.readMessage(&ie_msg, true, IE_ID_RADIO);
+				if (message_value == 0) {
 					IE_Message check_msg(ie_msg.l - 1, ie_msg.sender, ie_msg.receiver, ie_msg.control, ie_msg.direct);
 					for (int i = 0; i < ie_msg.l - 1; i += 1)
 						check_msg.data[i] = ie_msg.data[i];
@@ -168,7 +206,10 @@ void loop() {
 							interpretIEData(ie_msg);
 						}
 					}
-				}
+				} else if(message_value > 0 || message_value < -1)
+					ie_timer = 0;
+				if(!first_ie || (first_ie && !was_first_ie))
+					ai_handler.cacheAllPending();
 			}
 		}
 	}
@@ -266,6 +307,7 @@ void loop() {
 							digitalWrite(GA_ON, HIGH);
 							digitalWrite(MAIN_POWER, HIGH);
 							parameters.power_on = true;
+							door_timer_enabled = false;
 
 							sendWideHandshake(&ie_handler);
 							sendPingHandshake(&ie_handler, IE_ID_IMID);
@@ -277,6 +319,10 @@ void loop() {
 
 							if ((parameters.door_position & 0xF) != 0)
 								powerOff();
+							else {
+								door_timer_enabled = true;
+								door_timer = 0;
+							}
 						}
 					}
 				} else if (ai_msg.sender == ID_CANSLATOR && ai_msg.data[1] == 0x43 && ai_msg.l >= 3) { // Doors.
@@ -298,8 +344,8 @@ void loop() {
 							digitalWrite(MAIN_POWER, LOW);
 					}
 				} else if (ai_msg.sender == ID_CANSLATOR && ai_msg.l >= 4 && ai_msg.data[1] == 0x10) { // Lights.
-					const bool illum = (ai_msg.data[2] & 0x1) != 0;
-					const uint8_t brightness = ai_msg.data[3];
+					const bool illum = (ai_msg.data[3] & 0x1) != 0;
+					const uint8_t brightness = ai_msg.data[2];
 
 					brightness_handler.setBrightness(brightness, illum);
 				}
@@ -391,8 +437,20 @@ void loop() {
 					ai_handler.writeAIData(&ping_msg, false);
 				}
 			}
+			if(!parameters.computer_connected) {
+				if (sender_id != 0) {
+					uint8_t ping_data[] = {0x1};
+					AIData ping_msg(sizeof(ping_data), sender_id, ID_NAV_COMPUTER);
+
+					ping_msg.refreshAIData(ping_data);
+					ai_handler.writeAIData(&ping_msg, false);
+				}
+			}
 		}
 	}
+	
+	if(parameters.key_position == 0 && door_timer_enabled && door_timer > DOOR_TIMER)
+		powerOff();
 }
 
 void interpretIEData(IE_Message ie_msg) {
@@ -491,6 +549,9 @@ void powerOff() {
 	parameters.radio_connected = false;
 	parameters.computer_connected = false;
 	parameters.screen_connected = false;
+	parameters.mirror_connected = false;
+	
+	door_timer_enabled = false;
 }
 
 #ifdef MEMORY_CHECK

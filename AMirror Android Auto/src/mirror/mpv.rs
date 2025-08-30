@@ -206,12 +206,21 @@ impl MpvVideo {
 		}
 	}
 	
+	///Start video playback.
 	pub fn start(&mut self) {
 		//Start video playback.
 	}
 	
+	///Stop video playback.
 	pub fn stop(&mut self) {
-		//Stop video playback.
+		match self.process.kill() {
+			Ok(_) => {
+
+			}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
 	}
 	
 	pub fn set_minimize(&mut self, minimize: bool) {

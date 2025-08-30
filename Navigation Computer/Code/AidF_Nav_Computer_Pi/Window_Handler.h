@@ -16,6 +16,7 @@
 #include "Window/Settings_Color_Picker.h"
 #include "Window/Settings_Clock_Window.h"
 #include "Window/Settings_Ext_Window.h"
+#include "Window/Intro_Window.h"
 
 #include "Vehicle_Information/Vehicle_Info_Parameters.h"
 #include "Vehicle_Information/Vehicle_Info_Window.h"
@@ -54,11 +55,14 @@ public:
 	
 	NavWindow* getLastWindow();
 	NavWindow* getActiveWindow();
-	void setActiveWindow(NavWindow* new_window);
+
+	void setActiveWindow(NavWindow* new_window, const bool delete_last);
 
 	void checkNextWindow(NavWindow* misc_window, NavWindow* audio_window, NavWindow* phone_window, NavWindow* main_window);
 private:
 	void drawClockHeader();
+
+	bool delete_last = true, delete_active = true;
 
 	SDL_Renderer* renderer;
 	Background* br;

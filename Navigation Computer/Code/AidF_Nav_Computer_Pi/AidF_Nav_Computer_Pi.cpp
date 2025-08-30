@@ -16,18 +16,20 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->night_profile.headerbar = DEFAULT_HEADERBAR_NIGHT;
 	this->night_profile.outline = DEFAULT_OUTLINE_NIGHT;
 
-	const bool color_set = getIniColorProfile(&this->day_profile, &this->night_profile, "Active_Color");
+	const bool color_set = getIniColorProfile(&this->day_profile, &this->night_profile, ACTIVE_COLOR);
 	if(!color_set)
-		saveIniColorProfile(this->day_profile, this->night_profile, "Active_Color");
+		saveIniColorProfile(this->day_profile, this->night_profile, ACTIVE_COLOR);
+
+	setColorProfile(&this->active_color_profile, this->day_profile);
 
 	this->getBackground();
 
 	int* socket_list[] = {&this->socket_parameters.client_socket};
 
 	#ifdef RPI_UART
-	this->aibus_handler = new AIBusHandler("/dev/ttyS0", socket_list, 1);
+	this->aibus_handler = new AIBusHandler("/dev/ttyS0", socket_list, 1, &elapsed_millis.time);
 	#else
-	this->aibus_handler = new AIBusHandler(socket_list, 1);
+	this->aibus_handler = new AIBusHandler(socket_list, 1, &elapsed_millis.time);
 	#endif
 
 	this->window_handler = new Window_Handler(this->renderer, this->br, this->lw, this->lh, &this->active_color_profile, this->aibus_handler);
@@ -35,14 +37,17 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 
 	this->attribute_list->day_profile = &this->day_profile;
 	this->attribute_list->night_profile = &this->night_profile;
+	this->night = &this->attribute_list->night;
 
 	audio_window = new Audio_Window(attribute_list);
 	phone_window = new PhoneWindow(attribute_list);
 	main_window = new Main_Menu_Window(attribute_list);
 	misc_window = new NavWindow(attribute_list);
 
-	this->window_handler->setActiveWindow(main_window);
+	this->window_handler->setActiveWindow(new IntroWindow(attribute_list), false);
 	this->window_handler->setText("--:--", 0);
+
+	getTimekeepingParams(&attribute_list->display_12h, &attribute_list->auto_clock, &attribute_list->timekeeper);
 
 	this->canslator_connected = &attribute_list->canslator_connected;
 	this->radio_connected = &attribute_list->radio_connected;
@@ -64,11 +69,14 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 AidF_Nav_Computer::~AidF_Nav_Computer() {
 	attribute_list->frame = -1;
 
-	std::cout<<"Waiting for threads to join...\n";
-	pthread_join(socket_thread, NULL);
-	pthread_join(frame_thread, NULL);
-	pthread_join(timer_thread, NULL);
-	std::cout<<"Threads joined!\n";
+	std::cout<<"Waiting for threads to exit...\n";
+	pthread_cancel(socket_thread);
+	pthread_cancel(frame_thread);
+	pthread_cancel(timer_thread);
+	std::cout<<"Threads exited!\n";
+	
+	if(this->socket_parameters.amirror_socket != nullptr)
+		delete this->socket_parameters.amirror_socket;
 
 	SDL_DestroyRenderer(this->renderer);
 	delete this->br;
@@ -123,9 +131,8 @@ void AidF_Nav_Computer::loop() {
 		this->window_handler->refresh();
 	}
 	
-	if(this->vol_timer_enabled && (elapsed_millis.time - vol_timer) >= 700) {
-		this->vol_timer_enabled = false;
-		//TODO: Other data here?
+	if(this->header_timer_enabled && (elapsed_millis.time - header_timer) >= header_limit) {
+		this->header_timer_enabled = false;
 		this->window_handler->setText("", 1);
 	}
 
@@ -153,6 +160,24 @@ void AidF_Nav_Computer::loop() {
 					this->setMirrorColors();
 				}
 
+				//Send clock settings.
+				if(!attribute_list->timekeeper_detected && ai_msg.sender == attribute_list->timekeeper && this->key_position != 0) {
+					attribute_list->timekeeper_detected = true;
+
+					uint8_t clock_data[] = {0x1D, 0x0};
+					if(attribute_list->auto_clock)
+						clock_data[1] |= 0x1;
+					else
+						clock_data[1] |= 0x2;
+
+					if(attribute_list->display_12h)
+						clock_data[1] |= 0x80;
+
+					AIData clock_msg(sizeof(clock_data), ID_NAV_COMPUTER, attribute_list->timekeeper);
+					clock_msg.refreshAIData(clock_data);
+					aibus_handler->writeAIData(&clock_msg);
+				}
+
 				if(ai_msg.sender == ID_NAV_COMPUTER)
 					continue;
 
@@ -160,7 +185,7 @@ void AidF_Nav_Computer::loop() {
 					bool answered = false;
 
 					if(ai_msg.receiver == 0xFF && ai_msg.data[0] == 0xA1)
-						answered = handleBroadcastMessage(&ai_msg);
+						answered = handleBroadcastMessage(&ai_msg) && typeid(*this->window_handler->getActiveWindow()) != typeid(IntroWindow);
 
 					if(!answered)
 						answered = audio_window->handleAIBus(&ai_msg);
@@ -172,14 +197,28 @@ void AidF_Nav_Computer::loop() {
 						if(ai_msg.receiver == ID_NAV_COMPUTER)
 							this->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_msg.sender);
 
-						if(ai_msg.sender == ID_RADIO && ai_msg.l >= 3 && ai_msg.data[0] == 0x26) { //Volume bar.
+						if(ai_msg.l >= 2 && ai_msg.data[0] == 0x22 && ai_msg.data[1] == 0x61) { //Headerbar.
+							if(!audio_window->getActive()) {
+								std::string header_text = "";
+
+								for(int i=2;i<ai_msg.l;i+=1)
+									header_text += char(ai_msg.data[i]);
+
+								this->window_handler->setText(header_text, 1);
+
+								this->header_timer_enabled = true;
+								this->header_timer = elapsed_millis.time;
+								this->header_limit = HEADER_LIMIT_OTHER;
+							}
+						} else if(ai_msg.sender == ID_RADIO && ai_msg.l >= 3 && ai_msg.data[0] == 0x26) { //Volume bar.
 							const uint8_t vol = ai_msg.data[1];
 							std::string vol_text = "Vol: " + std::to_string(vol);
 							
 							this->window_handler->setText(vol_text, 1);
 							
-							this->vol_timer_enabled = true;
-							this->vol_timer = elapsed_millis.time;
+							this->header_timer_enabled = true;
+							this->header_timer = elapsed_millis.time;
+							this->header_limit = HEADER_LIMIT_VOLUME;
 							
 							answered = true;
 						} else if(ai_msg.sender == ID_NAV_SCREEN && ai_msg.l >= 3 && ai_msg.data[0] == 0x30) { //Button press.
@@ -251,6 +290,8 @@ void AidF_Nav_Computer::loop() {
 								res_resp_msg.refreshAIData(res_resp_data);
 
 								aibus_handler->writeAIData(&res_resp_msg);
+							} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x60 && ai_msg.data[1] == 0x20) { //Color request.
+								this->setMirrorColors();
 							}
 						}
 					}
@@ -292,6 +333,10 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 	} else if(ai_d->l >= 3 && (ai_d->sender == ID_GPS_ANTENNA || ai_d->sender == ID_CANSLATOR || ai_d->sender == ID_RADIO) && ai_d->data[1] == 0x1F) { //Time/day, speed, temp, etc.
 		if(ai_d->data[2] == 0x1 && ai_d->l >= 6) { //Time.
 			const uint8_t hour = ai_d->data[3]&0x1F, minute = ai_d->data[4];
+
+			const bool last_display_12h = attribute_list->display_12h, last_auto_clock = attribute_list->auto_clock;
+			const uint8_t last_timekeeper = attribute_list->timekeeper;
+
 			attribute_list->display_12h = (ai_d->data[3]&0x80) != 0;
 			attribute_list->auto_clock = (ai_d->data[3]&0x40) != 0;
 			attribute_list->timekeeper = ai_d->sender;
@@ -327,6 +372,10 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 			} else {
 				this->window_handler->setText("--:--", 0);
 			}
+
+			if(last_auto_clock != attribute_list->auto_clock || last_display_12h != attribute_list->display_12h || last_timekeeper != attribute_list->timekeeper)
+				saveTimekeepingParams(attribute_list->display_12h, attribute_list->auto_clock, attribute_list->timekeeper);
+
 			return true;
 		} else if(ai_d->data[2] == 0x2 && ai_d->l >= 7) { //Date.
 			const uint16_t year = ai_d->data[3] << 8 | ai_d->data[4];
@@ -462,10 +511,10 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 }
 
 void AidF_Nav_Computer::setDayNight(const bool night) {
-	if(this->night == night)
+	if(*this->night == night)
 		return;
 	
-	this->night = night;
+	*this->night = night;
 
 	if(night)
 		setColorProfile(&active_color_profile, night_profile);
@@ -598,51 +647,4 @@ void *millisThread(void* millis_v) {
 
 	void* result;
 	return result;
-}
-
-//Get a resolution from a saved file.
-void getResolution(int* w, int* h) {
-	std::vector<IniList> dimension_file = loadIniFile(RESOLUTION_FILE);
-
-	bool dimension_loaded = false;
-
-	for(int i=0;i<dimension_file.size();i+=1) {
-		if(dimension_file[i].title.compare("AidF_Navigation_Screen_Dimensions") == 0) {
-			int new_w = *w, new_h = *h;
-
-			for(int n=0;n<dimension_file[i].l_n;n+=1) {
-				if(dimension_file[i].num_vars[n].compare("w") == 0)
-					new_w = dimension_file[i].num_values[n];
-				else if(dimension_file[i].num_vars[n].compare("h") == 0)
-					new_h = dimension_file[i].num_values[n];
-			}
-
-			*w = new_w;
-			*h = new_h;
-			dimension_loaded = true;
-			break;
-		}
-	}
-
-	if(!dimension_loaded) //Dimension file not found.
-		saveResolution(*w, *h);
-}
-
-//Save a resolution to a file.
-void saveResolution(const int w, const int h) {
-	IniList dimension_file(2,0);
-	
-	dimension_file.title = "AidF_Navigation_Screen_Dimensions";
-	dimension_file.num_vars[0] = "w";
-	dimension_file.num_vars[1] = "h";
-
-	dimension_file.num_values[0] = w;
-	dimension_file.num_values[1] = h;
-
-	std::cout<<dimension_file.title<<'\n';
-
-	std::vector<IniList> file_list(0);
-	file_list.push_back(dimension_file);
-
-	saveIniFile(RESOLUTION_FILE, file_list);
 }

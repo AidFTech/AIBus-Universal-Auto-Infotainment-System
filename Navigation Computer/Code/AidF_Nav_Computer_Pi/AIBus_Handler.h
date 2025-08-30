@@ -13,7 +13,6 @@
 
 #include <string>
 #include <stdint.h>
-#include <time.h>
 #include <vector>
 
 #define AIBUS_PRINT
@@ -30,9 +29,9 @@
 class AIBusHandler {
 public:
 	#ifdef RPI_UART
-	AIBusHandler(std::string port, int** socket_list, const int socket_l);
+	AIBusHandler(std::string port, int** socket_list, const int socket_l, unsigned long* timer);
 	#else
-	AIBusHandler(int** socket_list, const int socket_l);
+	AIBusHandler(int** socket_list, const int socket_l, unsigned long* timer);
 	#endif
 	~AIBusHandler();
 
@@ -78,6 +77,8 @@ private:
 
 	int** socket_list;
 	int socket_l = 0;
+
+	unsigned long *timer;
 };
 
 #ifndef RPI_UART

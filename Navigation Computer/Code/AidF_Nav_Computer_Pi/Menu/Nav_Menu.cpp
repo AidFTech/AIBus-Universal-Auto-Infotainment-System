@@ -137,12 +137,22 @@ TextBox* NavMenu::getSliderTextBox(const uint16_t index) {
 		return NULL;
 }
 
+//Set the selected index.
 void NavMenu::setSelected(const uint16_t selected) {
 	this->selected = selected;
 }
 
+//Get the selected index.
 uint16_t NavMenu::getSelected() {
 	return this->selected;
+}
+
+//Get the selected item string.
+std::string NavMenu::getSelectedString() {
+	if(selected > 0 && selected <= this->length)
+		return this->items[selected - 1];
+	else
+		return "";
 }
 
 uint16_t NavMenu::getLength() {

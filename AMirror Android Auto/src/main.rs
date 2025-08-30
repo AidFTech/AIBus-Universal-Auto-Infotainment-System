@@ -315,6 +315,21 @@ fn main() {
 
 	amirror.write_init_ping();
 
+	{
+		let mut run_set = false;
+		while !run_set {
+			match mutex_run.try_lock() {
+				Ok(mut run) => {
+					*run = amirror.run;
+					run_set = true;
+				}
+				Err(_) => {
+					continue;
+				}
+			}
+		}
+	}
+
 	while amirror.run {
 		amirror.process();
 
@@ -350,6 +365,19 @@ fn main() {
 			}
 			Err(_) => {
 				continue;
+			}
+		}
+
+		let mut run_set = false;
+		while !run_set {
+			match mutex_run.try_lock() {
+				Ok(mut run) => {
+					*run = amirror.run;
+					run_set = true;
+				}
+				Err(_) => {
+					continue;
+				}
 			}
 		}
 	}

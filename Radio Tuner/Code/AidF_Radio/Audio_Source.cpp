@@ -152,33 +152,37 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			
 			const uint8_t new_id = ai_d->sender;
 			if(getFirstOccurenceOf(new_id) >= 0) {
-				ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+				//ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
 				//TODO: Clear subsources?
-				return true;
+				//return true;
+			} else {
+				parameter_list->handshake_timer = 0;
+				parameter_list->handshake_timer_active = true;
+				parameter_list->handshake_sources.push_back(new_id);
+
+				AudioSource new_source;
+				new_source.source_id = new_id;
+				new_source.source_name = "";
+				new_source.source_short = "";
+				new_source.sub_id = 0;
+
+				this->source_list[new_index] = new_source;
+
+				if(ai_d->l >= 4) {
+					const uint8_t sub_count = ai_d->data[3];
+					for(int i=1;i<sub_count;i+=1)
+						createSubsource(new_id);
+				}
 			}
+			
+			ack = false;
+			ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
 
-			parameter_list->handshake_timer = 0;
-			parameter_list->handshake_timer_active = true;
-			parameter_list->handshake_sources.push_back(new_id);
-
-			AudioSource new_source;
-			new_source.source_id = new_id;
-			new_source.source_name = "";
-			new_source.sub_id = 0;
-
-			this->source_list[new_index] = new_source;
-
-			if(ai_d->l >= 4) {
-				const uint8_t sub_count = ai_d->data[3];
-				for(int i=1;i<sub_count;i+=1)
-					createSubsource(new_id);
-			}
-
-			//const uint8_t current_source_id = this->source_list[current_source].source_id, sub_id = this->source_list[current_source].sub_id;
-			//uint8_t function_data[] = {0x40, 0x10, current_source_id, sub_id};
-			//AIData function_msg(sizeof(function_data), ID_RADIO, new_id);
-			//function_msg.refreshAIData(function_data);
-			//ai_handler->writeAIData(&function_msg);
+			const uint8_t current_source_id = parameter_list->audio_on ? this->source_list[current_source].source_id : 0, sub_id = parameter_list->audio_on ? this->source_list[current_source].sub_id : 0;
+			uint8_t function_data[] = {0x40, 0x10, current_source_id, sub_id};
+			AIData function_msg(sizeof(function_data), ID_RADIO, new_id);
+			function_msg.refreshAIData(function_data);
+			ai_handler->writeAIData(&function_msg);
 		} else if(ai_d->data[1] == 0x2) { //Sub-source.
 			const uint8_t id = ai_d->sender;
 
@@ -198,7 +202,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			AIData handshake_msg(sizeof(handshake_data), ID_RADIO, ai_d->sender);
 			handshake_msg.refreshAIData(handshake_data);
 			ai_handler->writeAIData(&handshake_msg);
-		} else if(ai_d->data[1] == 0x23) { //Source name.
+		} else if(ai_d->data[1] == 0x23 || ai_d->data[1] == 0x22) { //Source name or short name.
 			const uint8_t sub = ai_d->data[2];
 			int index = getFirstOccurenceOf(ai_d->sender);
 			
@@ -220,10 +224,18 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			for(int i=3;i<ai_d->l;i+=1)
 				name += char(ai_d->data[i]);
 
-			this->source_list[index].source_name = name;
+			if(ai_d->data[1] == 0x23) {
+				this->source_list[index].source_name = name;
+				if(this->source_list[index].source_short.equals(""))
+					this->source_list[index].source_short = name;
+			} else 
+				this->source_list[index].source_short = name;
 		}
-		ack = false;
-		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+		//ack = false;
+		
+		if(ack)
+			ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+		
 		return true;
 		
 	} else if(ai_d->l >= 3 && ai_d->data[0] == 0x10 && ai_d->data[1] == 0x10) { //Source request control.
@@ -695,6 +707,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 		if(ai_d->l >= 3 && ai_d->data[0] == 0x30) {
 			this->handleSteeringControl(ai_d->data[1], ai_d->data[2]);
 		}
+		return true;
 	}
 
 	if(ack)
@@ -1158,18 +1171,12 @@ void SourceHandler::createToneMenuItem(const int item) {
 
 	if(item == TONE_OPTION_BASS || item == TONE_OPTION_TREBLE) {
 		slider_pos = slider_parameter*slider_max/DEFAULT_TONE_RANGE;
+		const long slider_parameter_long = slider_parameter;
 
-		if(item == TONE_OPTION_TREBLE) {	
-			if((DEFAULT_TONE_RANGE - slider_parameter)*90/DEFAULT_TONE_RANGE > 0)
-				slider_text += "-";
-			slider_text += String((DEFAULT_TONE_RANGE - slider_parameter)*90/DEFAULT_TONE_RANGE/10) + ".";
-			slider_text += (DEFAULT_TONE_RANGE - slider_parameter)*90/DEFAULT_TONE_RANGE%10;
-		} else {
-			if((DEFAULT_TONE_RANGE - slider_parameter)*11/DEFAULT_TONE_RANGE > 0)
-				slider_text += "-";
-			slider_text += (DEFAULT_TONE_RANGE - slider_parameter)*11/DEFAULT_TONE_RANGE;
-			//TODO: This is not linear.
-		}
+		if((DEFAULT_TONE_RANGE - slider_parameter_long)*MAX_ATTENUATION*10/DEFAULT_TONE_RANGE > 0)
+			slider_text += "-";
+		slider_text += String((DEFAULT_TONE_RANGE - slider_parameter_long)*MAX_ATTENUATION/DEFAULT_TONE_RANGE) + ".";
+		slider_text += ((DEFAULT_TONE_RANGE - slider_parameter_long)*10*MAX_ATTENUATION/DEFAULT_TONE_RANGE%10);
 
 		slider_text += "dB";
 	} else if(item == TONE_OPTION_BALANCE || item == TONE_OPTION_FADER) {
@@ -1264,12 +1271,13 @@ void SourceHandler::setCurrentSource(const uint8_t id, const uint8_t sub_id) {
 void SourceHandler::handleSteeringControl(const uint8_t command, const uint8_t state) {
 	const uint8_t button_state = state>>6, knob_state = state&0x3F;
 
-	if(command == 0x6) { //Volume.
-		if(knob_state == 0x1) { //Volume up.
-			//TODO: Send volume up command to amp.
-		} else if(knob_state == 0x2) { //Volume down.
-			//TODO: Send volume down command to amp.
-		}
+	if(command == 0x6 && button_state == 0 && parameter_list->audio_on) { //Volume.
+		//TODO: Send the command to the amp if relevant.
+		const uint16_t volume = volume_handler->getVolume();
+		if(knob_state == 0x1 && volume < volume_handler->getVolRange())
+			volume_handler->setVolume(volume + 1);
+		else if(knob_state == 0x2 && volume > 0)
+			volume_handler->setVolume(volume - 1);
 	} else if(command == 0x23 && button_state == 0x0) { //Source button.
 		incrementSource();
 	} else if((command == 0x25 || command == 0x24) && button_state == 0x0) { //Increment/decrement.

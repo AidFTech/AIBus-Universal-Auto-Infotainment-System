@@ -73,11 +73,15 @@ bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 	elapsedMillis delay_timer = 0;
 	while(!ack && delay_timer < 20) {
 		IE_Message ie_d;
-		if(ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO) == 0) {
+		const int message_result = ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO);
+		if(message_result == 0) {
 			if(ie_d.l >= 1 && ie_d.data[0] == 0x80) {
 				ack = true;
 				break;
 			}
+		} else if(message_result < -1 || message_result > 0) {
+			delay_timer = 0;
+			ie_driver->cacheAIBus();
 		}
 	}
 
@@ -92,11 +96,15 @@ bool HondaSourceHandler::getIEAckMessageStrict(const uint16_t sender) {
 	elapsedMillis delay_timer = 0;
 	while(!ack && delay_timer < 20) {
 		IE_Message ie_d;
-		if(ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO) == 0) {
+		const int message_result = ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO);
+		if(message_result == 0) {
 			if(ie_d.l >= 1 && ie_d.data[0] == 0x80) {
 				ack = true;
 				break;
 			}
+		} else if(message_result < -1 || message_result > 0) {
+			delay_timer = 0;
+			ie_driver->cacheAIBus();
 		}
 	}
 
@@ -256,6 +264,21 @@ void HondaSourceHandler::sendMirrorMessage(String text, const uint8_t index, con
 	mirror_msg.refreshAIData(mirror_data);
 
 	parameter_list->mirror_connected = ai_driver->writeAIData(&mirror_msg, parameter_list->mirror_connected);
+}
+
+//Set the header on the nav computer.
+void HondaSourceHandler::setNavHeader(String text) {
+	if(!text_control)
+		return;
+
+	AIData header_msg(2 + text.length(), this->device_ai_id, ID_NAV_COMPUTER);
+	header_msg.data[0] = 0x22;
+	header_msg.data[1] = 0x61;
+
+	for(int i=0;i<text.length();i+=1)
+		header_msg.data[i+2] = uint8_t(text.charAt(i));
+	
+	ai_driver->writeAIData(&header_msg, parameter_list->computer_connected);
 }
 
 //Get a text message from a string.

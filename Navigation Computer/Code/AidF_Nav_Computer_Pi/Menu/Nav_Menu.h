@@ -44,6 +44,7 @@ public:
 
 	void setSelected(const uint16_t selected);
 	uint16_t getSelected();
+	std::string getSelectedString();
 
 	void setTitle(std::string title);
 

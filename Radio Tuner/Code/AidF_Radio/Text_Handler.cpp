@@ -48,6 +48,18 @@ void TextHandler::sendSourceTextControl(const uint8_t recipient, const uint8_t s
 	ai_handler->writeAIData(&text_control_msg);
 }
 
+//Write text to the overlay header in the nav window.
+void TextHandler::setOverlayHeader(String text) {
+	AIData header_msg(2 + text.length(), ID_RADIO, ID_NAV_COMPUTER);
+	header_msg.data[0] = 0x22;
+	header_msg.data[1] = 0x61;
+
+	for(int i=0;i<text.length();i+=1)
+		header_msg.data[i+2] = uint8_t(text.charAt(i));
+
+	ai_handler->writeAIData(&header_msg, parameter_list->computer_connected);
+}
+
 //Write a radio frequency to the screen.
 void TextHandler::sendTunedFrequencyMessage(const uint16_t frequency, const bool mhz, const bool sub) {
 	sendTunedFrequencyMessage(0, frequency, mhz, sub);

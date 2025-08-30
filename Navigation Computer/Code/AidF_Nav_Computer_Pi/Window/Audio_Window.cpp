@@ -480,6 +480,9 @@ void Audio_Window::initializeSettingsMenu(AIData* ai_b) {
 	//if(this->settings_menu != NULL)
 	//	delete this->settings_menu;
 
+	if(this->settings_menu != NULL)
+		delete this->settings_menu;
+
 	this->settings_menu = new NavMenu(attribute_list, x, y, w, h, count, -1, h*6/7, rows, loop, title);
 	settings_menu_prep = true;
 }

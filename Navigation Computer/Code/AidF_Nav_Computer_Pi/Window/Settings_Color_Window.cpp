@@ -14,20 +14,41 @@ void Settings_Color_Window::handleEnterButton() {
 	if(this->color_menu == SETTINGS_COLOR_MENU_MAIN) {
 		if(selected == l-2)
 			this->attribute_list->next_window = NEXT_WINDOW_SETTINGS_COLOR_PICKER;
+		else if(selected == l - 1) {
+			//TODO: Save a new preset.
+		} else {
+			std::string selected_profile = this->settings_menu->getSelectedString();
+			getIniColorProfile(attribute_list->day_profile, attribute_list->night_profile, selected_profile);
+			saveIniColorProfile(*attribute_list->day_profile, *attribute_list->night_profile, ACTIVE_COLOR);
+
+			if(attribute_list->night)
+				setColorProfile(attribute_list->color_profile, *attribute_list->night_profile);
+			else
+				setColorProfile(attribute_list->color_profile, *attribute_list->day_profile);
+			
+			attribute_list->background_changed = true;
+			attribute_list->text_changed = true;
+		}
 	}
 }
 
+//Create the main color menu.
 void Settings_Color_Window::initColorMainMenu() {
 	this->color_menu = SETTINGS_COLOR_MENU_MAIN;
 	this->clearMenu();
 
 	this->title_block->setText("Colors");
 
-	//TODO: Load in preset colors from a configuration file.
+	std::vector<std::string> presets = getIniProfileList();
+	const uint16_t l = presets.size() + 2;
+	
+	this->resizeMenu(l);
 
-	const uint16_t l = this->settings_menu->getLength();
+	for(int i=0;i<l-2;i+=1)
+		this->settings_menu->setItem(presets.at(i), i);
+
 	this->settings_menu->setItem("Custom", l-2);
 	this->settings_menu->setItem("Save Preset", l-1);
 	
-	this->settings_menu->setSelected(l-2);
+	this->settings_menu->setSelected(1);
 }

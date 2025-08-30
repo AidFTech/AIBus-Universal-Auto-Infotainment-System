@@ -353,7 +353,7 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				if(*active_menu == MENU_XM)
 					createXMMainMenuOption(1);
 
-				uint8_t req_data[] = {0x77, 0x1, 0x10}; //TODO: Update if AA is requesting control.
+				uint8_t req_data[] = {0x77, 0x1, 0x10};
 				AIData req_msg(sizeof(req_data), ID_XM, ID_NAV_SCREEN);
 
 				req_msg.refreshAIData(req_data);
@@ -804,9 +804,18 @@ void HondaXMHandler::sendSourceNameMessage(const uint8_t id) {
 
 	ai_name_msg.refreshAIData(ai_name_data);
 	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
+
+	ai_name_data[1] = 0x22;
+	ai_name_msg.refreshAIData(ai_name_data);
+	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
 	
+	ai_name_data[1] = 0x23;
 	ai_name_data[2] = 0x1;
 	ai_name_data[5] = uint8_t('2');
+	ai_name_msg.refreshAIData(ai_name_data);
+	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
+
+	ai_name_data[1] = 0x22;
 	ai_name_msg.refreshAIData(ai_name_data);
 	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
 }
@@ -842,6 +851,14 @@ void HondaXMHandler::setNumberDisplay() {
 	if(display_parameter == N_TEXT_NONE)
 		sendIMIDNumberMessage();
 
+	String nav_header = F("XM");
+	if(xm2)
+		nav_header += "2";
+	else
+		nav_header += "1";
+
+	nav_header += " CH " + String(int(*channel));
+	setNavHeader(nav_header);
 }
 
 void HondaXMHandler::setTextDisplay(const uint8_t field) {
@@ -1055,6 +1072,8 @@ void HondaXMHandler::setChannel(uint16_t channel) {
 
 //Set the radio to a preset.
 void HondaXMHandler::changeToPreset(uint8_t preset) {
+	const uint16_t new_channel = xm2 ? xm2_preset[preset - 1] : xm1_preset[preset - 1];
+
 	if(full_xm && xm2 && preset <= 6)
 		preset = preset + 6;
 
@@ -1076,6 +1095,22 @@ void HondaXMHandler::changeToPreset(uint8_t preset) {
 	preset_set.refreshIEData(preset_set_data);
 	ie_driver->sendMessage(&preset_set, true, true);
 	getIEAckMessage(device_ie_id);
+
+	if(new_channel != *this->channel) {
+		*this->channel = new_channel;
+
+		sendAINumberMessage(ID_RADIO);
+		clearXMText(true, true, true, true);
+		
+		if(text_control) {
+			clearAIXMText(true, true, true, true);
+			
+			setNumberDisplay();
+			clearXMIMIDText();
+		}
+
+		request_timer = 0;
+	}
 }
 
 //Save a preset.

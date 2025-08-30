@@ -11,13 +11,16 @@
 #include "AIBus_Handler.h"
 #include "Ini_Context.h"
 #include "Ini_Color_Preset.h"
+#include "Saved_Settings.h"
 
 #include "Background/Nav_Background.h"
 #include "Background/Nav_Solid_Background.h"
 #include "Background/Nav_Gradient_Background.h"
 
+#include "Window/Nav_Window.h"
 #include "Window/Audio_Window.h"
 #include "Window/Phone_Window.h"
+#include "Window/Intro_Window.h"
 
 #include "Window/Main_Menu_Window.h"
 #include "Window/Consumption_Window.h"
@@ -35,11 +38,12 @@
 #define DEFAULT_W 800
 #define DEFAULT_H 480
 
+#define HEADER_LIMIT_VOLUME 700
+#define HEADER_LIMIT_OTHER 1300
+
 #define AIBUS_WAIT 5
 
 #define SOCKET_AIBUS_TEST
-
-#define RESOLUTION_FILE "./AidF_Nav_Resolution.ini"
 
 struct FrameParameters {
 	int* frame;
@@ -71,10 +75,10 @@ private:
 
 	void getBackground();
 
-	uint8_t key_position = 1, door_position = 0;
+	uint8_t key_position = 0, door_position = 0;
 
 	uint16_t lw, lh;
-	bool night = false;
+	bool* night;
 
 	bool* canslator_connected, *radio_connected, *mirror_connected;
 
@@ -101,17 +105,14 @@ private:
 
 	unsigned long aibus_read_time = 0;
 	
-	bool vol_timer_enabled = false;
-	unsigned long vol_timer = 0;
+	bool header_timer_enabled = false;
+	unsigned long header_timer = 0, header_limit = HEADER_LIMIT_VOLUME;
 };
 
 void setup(AidF_Nav_Computer* nav_computer);
 void loop(AidF_Nav_Computer* nav_computer);
 
 int main(int argc, char* args[]);
-
-void getResolution(int* w, int* h);
-void saveResolution(const int w, const int h);
 
 void *frameThread(void* frame_v);
 void *millisThread(void* millis_v);

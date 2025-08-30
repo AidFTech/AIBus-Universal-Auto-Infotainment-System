@@ -26,6 +26,8 @@ protected:
 	
 	virtual void clearMenu();
 
+	virtual void resizeMenu(const uint16_t new_count);
+
 	TextBox *title_block;
 	NavMenu *settings_menu;
 	

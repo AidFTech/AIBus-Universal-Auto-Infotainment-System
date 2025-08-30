@@ -101,6 +101,9 @@ bool Consumption_Window::handleAIBus(AIData* ai_d) {
 			for(int i=12;i<ai_d->l;i+=1)
 				menu_title += char(ai_d->data[i]);
 
+			if(settings_menu != NULL)
+				delete this->settings_menu;
+
 			this->settings_menu = new NavMenu(attribute_list, x, y, w, h, ml, -1, h*6/7, rows, loop, menu_title);
 
 			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);

@@ -4,7 +4,7 @@ Settings_Window::Settings_Window(AttributeList *attribute_list, const uint16_t s
 	this->title_block = new TextBox(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 55, &this->color_profile->text);
 	title_block->setText(header);
 
-	this->settings_menu = new NavMenu(this->attribute_list, 0, MAIN_TITLE_AREA_Y + 55, attribute_list->w, 40, SETTING_COUNT, ALIGN_H_L, 36, SETTING_COUNT, false, "");
+	this->settings_menu = new NavMenu(this->attribute_list, 0, MAIN_TITLE_AREA_Y + 55, attribute_list->w, 40, setting_count, ALIGN_H_L, 36, setting_count, false, "");
 	this->back_index = back_index;
 }
 
@@ -42,6 +42,9 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 			std::string menu_title = "";
 			for(int i=12;i<ai_d->l;i+=1)
 				menu_title += char(ai_d->data[i]);
+
+			if(settings_menu != NULL)
+				delete this->settings_menu;
 
 			this->settings_menu = new NavMenu(attribute_list, x, y, w, h, ml, -1, h*6/7, rows, loop, "");
 			this->title_block->setText(menu_title);
@@ -132,8 +135,19 @@ void Settings_Window::clearMenu() {
 	for(int i=0;i<this->settings_menu->getLength();i+=1)
 		this->settings_menu->setItem("", i);
 	
-	if(!allow_ext_menu)
+	if(!allow_ext_menu) {
+		if(settings_menu != NULL)
+			delete this->settings_menu;
+
 		this->settings_menu = new NavMenu(this->attribute_list, 0, MAIN_TITLE_AREA_Y + 55, attribute_list->w, 40, SETTING_COUNT, ALIGN_H_L, 36, SETTING_COUNT, false, "");
+	}
 
 	this->settings_menu->setSelected(0);
+}
+
+void Settings_Window::resizeMenu(const uint16_t new_count) {
+	if(settings_menu != NULL)
+		delete this->settings_menu;
+
+	this->settings_menu = new NavMenu(this->attribute_list, 0, MAIN_TITLE_AREA_Y + 55, attribute_list->w, 40, new_count, ALIGN_H_L, 36, new_count, false, "");
 }

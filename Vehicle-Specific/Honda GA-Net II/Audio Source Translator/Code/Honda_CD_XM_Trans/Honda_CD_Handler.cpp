@@ -295,6 +295,7 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 		} else if((str == 0x80 || str == 0x81 || str == 0x82 || (str >= 0x70 && str < 0x80)) && (message_type == 3 || message_type == 2)) {
 			char* affected;
 			uint8_t* stage;
+			bool* change;
 			unsigned int len = 0;
 
 			if(text_mode == TEXT_MODE_WITH_TEXT) {
@@ -302,16 +303,19 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 					case 0x80:
 						affected = this->album;
 						stage = &this->album_stage;
+						change = &this->album_change;
 						len = sizeof(this->album)/sizeof(char);
 						break;
 					case 0x81:
 						affected = this->song_title;
 						stage = &this->song_title_stage;
+						change = &this->song_title_change;
 						len = sizeof(this->song_title)/sizeof(char);
 						break;
 					case 0x82:
 						affected = this->artist;
 						stage = &this->artist_stage;
+						change = &this->artist_change;
 						len = sizeof(this->artist)/sizeof(char);
 						break;
 					default:
@@ -322,26 +326,31 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 					case 0x70:
 						affected = this->folder;
 						stage = &this->folder_stage;
+						change = &this->folder_change;
 						len = sizeof(this->folder)/sizeof(char);
 						break;
 					case 0x71:
 						affected = this->filename;
 						stage = &this->filename_stage;
+						change = &this->filename_change;
 						len = sizeof(this->filename)/sizeof(char);
 						break;
 					case 0x72:
 						affected = this->song_title;
 						stage = &this->song_title_stage;
+						change = &this->song_title_change;
 						len = sizeof(this->song_title)/sizeof(char);
 						break;
 					case 0x73:
 						affected = this->album;
 						stage = &this->album_stage;
+						change = &this->album_change;
 						len = sizeof(this->album)/sizeof(char);
 						break;
 					case 0x74:
 						affected = this->artist;
 						stage = &this->artist_stage;
+						change = &this->artist_change;
 						len = sizeof(this->artist)/sizeof(char);
 						break; 
 				}
@@ -362,9 +371,12 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 				if(d > the_message->l - 1)
 					break;
 
-				if(the_message->data[d] != 0xFF)
+				if(the_message->data[d] != 0xFF) {
+					if(the_message->data[d] != affected[i])
+						*change = true;
+					
 					affected[i] = the_message->data[d];
-				else
+				} else
 					affected[i] = 0;
 			}
 
@@ -373,8 +385,9 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 			else
 				*stage = 2;
 			
-			if(*stage >= 2) {
+			if(*stage >= 2 && *change) {
 				*stage = 0;
+				*change = false;
 				sendAICDTextMessage(ID_RADIO, str&0xF);
 				if(text_control) {
 					startTextTimer(str&0xF);
@@ -685,9 +698,12 @@ void HondaCDHandler::sendSourceNameMessage(const uint8_t id) {
 
 	uint8_t ai_name_data[] = {0x1, 0x23, 0x0, 'C', 'D', 'C'};
 	AIData ai_name_msg(sizeof(ai_name_data), ID_CDC, id);
-
 	ai_name_msg.refreshAIData(ai_name_data);
 	
+	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
+
+	ai_name_data[1] = 0x22;
+	ai_name_msg.refreshAIData(ai_name_data);
 	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
 }
 
@@ -721,6 +737,8 @@ void HondaCDHandler::sendAICDTextMessage(const uint8_t recipient, const uint8_t 
 	uint8_t ai_field = 1;
 	char* affected;
 	unsigned int len = 0;
+
+	bool delete_affected = false;
 
 	if(text_mode == TEXT_MODE_WITH_TEXT) {
 		switch(field) {
@@ -769,6 +787,26 @@ void HondaCDHandler::sendAICDTextMessage(const uint8_t recipient, const uint8_t 
 				len = sizeof(artist)/sizeof(char);
 				ai_field = 2;
 				break;
+			default:
+				return;
+		}
+	} else {
+		affected = new char[32];
+		delete_affected = true;
+		len = 0;
+		switch(field) {
+			case TEXT_SONG:
+				ai_field = 1;
+				break;
+			case TEXT_ARTIST:
+				ai_field = 2;
+				break;
+			case TEXT_ALBUM:
+				ai_field = 3;
+				break;
+			default:
+				ai_field = 0;
+				break;
 		}
 	}
 
@@ -796,6 +834,9 @@ void HondaCDHandler::sendAICDTextMessage(const uint8_t recipient, const uint8_t 
 		ack = false;
 
 	ai_driver->writeAIData(&text_msg, ack);
+
+	if(delete_affected)
+		delete[] affected;
 }
 
 void HondaCDHandler::sendButtonByte(const uint8_t byte_msg) {
@@ -870,6 +911,7 @@ void HondaCDHandler::sendCDTrackMessage(const bool track) {
 	}
 
 	this->sendMirrorMessage(track_text, 0, true);
+	setNavHeader("CD" + String(int(disc)) + '-' + String(int(track)));
 }
 
 //Send the time to the nav screen.
@@ -1399,11 +1441,12 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 					AIData function_msg(4+function_text.length(), ID_CDC, ID_IMID_SCR);
 					function_msg.data[0] = 0x23;
 					function_msg.data[1] = 0x60;
+					
+					int imid_x = parameter_list->external_imid_char/2-function_text.length()/2;
+					if(imid_x < 0 || imid_x + function_text.length() > parameter_list->external_imid_char || parameter_list->external_imid_char <= 10)
+						imid_x = 0;
 
-					if(parameter_list->external_imid_char > 10)
-						function_msg.data[2] = parameter_list->external_imid_char/2-function_text.length()/2;
-					else
-						function_msg.data[2] = 0;
+					function_msg.data[2] = uint8_t(imid_x);
 
 					function_msg.data[3] = 1;
 					for(int i=0;i<function_text.length();i+=1)
@@ -1608,27 +1651,27 @@ void HondaCDHandler::sendIMIDInfoHeader(String text) {
 void HondaCDHandler::clearCDText(const bool song_title, const bool artist, const bool album, const bool folder, const bool file) {
 	if(song_title) {
 		for(int i=0;i<sizeof(this->song_title)/sizeof(char);i+=1)
-			this->song_title[i] = 0;
+			this->song_title[i] = '\0';
 	}
 
 	if(album) {
 		for(int i=0;i<sizeof(this->album)/sizeof(char);i+=1)
-			this->album[i] = 0;
+			this->album[i] = '\0';
 	}
 
 	if(artist) {
 		for(int i=0;i<sizeof(this->artist)/sizeof(char);i+=1)
-			this->artist[i] = 0;
+			this->artist[i] = '\0';
 	}
 
 	if(file) {
 		for(int i=0;i<sizeof(this->filename)/sizeof(char);i+=1)
-			this->filename[i] = 0;
+			this->filename[i] = '\0';
 	}
 	
 	if(folder) {
 		for(int i=0;i<sizeof(this->folder)/sizeof(char);i+=1)
-			this->folder[i] = 0;
+			this->folder[i] = '\0';
 	}
 }
 

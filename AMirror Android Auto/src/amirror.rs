@@ -40,6 +40,8 @@ pub struct AMirror<'a> {
 	imid_scroll: i8,
 	imid_split: bool,
 	imid_scroll_pos: usize,
+	imid_scroll_wrap: bool, //True if the scrolling is to be wrapped.
+	imid_scroll_header: bool, //True if we scroll/show the header.
 	imid_refresh: bool,
 
 	auto_music_start: bool,
@@ -59,10 +61,12 @@ pub struct AMirror<'a> {
 
 	overlay_timer: Instant,
 	overlay_on: bool,
+	vol_overlay: bool,
 
 	audio_held: bool,
 
-	screen_acknowledged: bool,
+	screen_acknowledged: bool, //True if the screen buttons have been acknowledged.
+	color_acknowledged: bool, //True if the nav computer has sent overlay color information.
 
 	pub run: bool,
 	power_state: u8,
@@ -95,6 +99,9 @@ impl <'a> AMirror<'a> {
 			imid_scroll: -1,
 			imid_split: true,
 			imid_scroll_pos: 0,
+			imid_scroll_wrap: false,
+			imid_scroll_header: false,
+			
 			imid_refresh: false,
 
 			local_radio_connected: false,
@@ -111,13 +118,15 @@ impl <'a> AMirror<'a> {
 
 			overlay_timer: Instant::now(),
 			overlay_on: false,
+			vol_overlay: false,
 
 			audio_held: false,
 
 			screen_acknowledged: false,
+			color_acknowledged: false,
 
 			run: true,
-			power_state: 0x1,
+			power_state: 0x0,
 			door_state: 0x0,
 		};
 	}
@@ -576,6 +585,7 @@ impl <'a> AMirror<'a> {
 		self.local_imid_rows = context.imid_row_count;
 		self.local_imid_text_len = context.imid_text_len;
 
+		//Request control.
 		if Instant::now() - self.source_request_timer > Duration::from_millis(5000) {
 			self.source_request_timer = Instant::now();
 
@@ -628,18 +638,21 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
-		let mut scroll_limit = 300;
-		if self.imid_split {
+		let mut scroll_limit = 300; //The scroll timer limit.
+		if self.imid_scroll_wrap || self.imid_scroll_header {
+			scroll_limit = 1000;
+		} else if self.imid_split {
 			scroll_limit = 3000;
 		} else if self.imid_scroll_pos == 0 { 
 			scroll_limit = 750;
 		}
 
+		//Scroll the IMID.
 		if self.imid_scroll >= 0 && context.phone_type != 0 && (Instant::now() - self.scroll_timer > Duration::from_millis(scroll_limit) || change_imid || self.imid_refresh) {
 			if context.audio_text && context.imid_row_count > 0 && context.imid_text_len > 0 {
 				let mut scroll_param = "".to_string();
 
-				if self.imid_scroll == 0 {
+				if self.imid_scroll == 0 { 
 					scroll_param = context.phone_name.clone();
 				} else if self.imid_scroll == 1 {
 					scroll_param = context.song_title.clone();
@@ -670,14 +683,7 @@ impl <'a> AMirror<'a> {
 				}
 
 				let last_scroll_pos = self.imid_scroll_pos;
-				let update = change_imid || self.imid_refresh;
-
-				if Instant::now() - self.scroll_timer > Duration::from_millis(scroll_limit) {
-					self.imid_scroll_pos += 1;
-					self.scroll_timer = Instant::now();
-				} else if change_imid || self.imid_refresh {
-					self.imid_scroll_pos = 0;
-				}
+				let mut update = change_imid || self.imid_refresh;
 
 				let scroll_param_name;
 				if self.imid_scroll == 0 {
@@ -692,6 +698,25 @@ impl <'a> AMirror<'a> {
 					scroll_param_name = "APP";
 				} else {
 					scroll_param_name = "";
+				}
+
+				if self.imid_scroll_header && self.imid_refresh {
+					scroll_param = scroll_param_name.to_string();
+				}
+
+				let last_header = self.imid_scroll_header;
+				if self.imid_scroll_header && !self.imid_refresh {
+					self.imid_scroll_header = false;
+					update = true;
+				}
+
+				if Instant::now() - self.scroll_timer > Duration::from_millis(scroll_limit) {
+					if !last_header {
+						self.imid_scroll_pos += 1;
+					}
+					self.scroll_timer = Instant::now();
+				} else if update {
+					self.imid_scroll_pos = 0;
 				}
 
 				if self.imid_refresh {
@@ -743,22 +768,37 @@ impl <'a> AMirror<'a> {
 						self.write_imid_text(scroll_split[self.imid_scroll_pos].clone(), imid_x as u8, imid_y);
 					}
 				} else {
-					if (scroll_param.len() as isize - self.imid_scroll_pos as isize) < (context.imid_text_len as isize) {
+					if self.imid_scroll_wrap {
 						self.imid_scroll_pos = 0;
+						self.imid_scroll_wrap = false;
+					} else if (scroll_param.len() as isize - self.imid_scroll_pos as isize) < (context.imid_text_len as isize) {
+						self.imid_scroll_wrap = true;
+						if scroll_param.len() >= context.imid_text_len as usize {
+							self.imid_scroll_pos = scroll_param.len() - context.imid_text_len as usize;
+						}
+					}
+					
+					let mut imid_x = 0;
+					if self.imid_scroll_header {
+						imid_x = (context.imid_text_len/2) as isize - (scroll_param.len()/2) as isize;
+						if imid_x < 0 || imid_x > context.imid_text_len as isize {
+							imid_x = 0;
+						}
 					}
 
 					if self.imid_scroll_pos != last_scroll_pos || update {
 						if scroll_param.len() > context.imid_text_len as usize {
 							let scroll_string = scroll_param[self.imid_scroll_pos..self.imid_scroll_pos + context.imid_text_len as usize].to_string();
-							self.write_imid_text(scroll_string, 0, imid_y);
+							self.write_imid_text(scroll_string, imid_x as u8, imid_y);
 						} else {
-							self.write_imid_text(scroll_param, 0, imid_y);
+							self.write_imid_text(scroll_param, imid_x as u8, imid_y);
 						}
 					}
 				}
 			}
 		}
 
+		//Write the IMID text.
 		if self.imid_refresh && self.imid_scroll < 0 {
 			self.imid_refresh = false;
 			if context.audio_text {
@@ -775,8 +815,16 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
-		if Instant::now() - self.overlay_timer > Duration::from_millis(3500) && self.overlay_on {
+		let overlay_limit;
+		if self.vol_overlay {
+			overlay_limit = 700;
+		} else {
+			overlay_limit = 3500;
+		}
+
+		if Instant::now() - self.overlay_timer > Duration::from_millis(overlay_limit) && self.overlay_on {
 			self.overlay_on = false;
+			self.vol_overlay = false;
 			match self.mpv_video.try_lock() {
 				Ok(mut mpv_video) => {
 					mpv_video.clear_overlay();
@@ -882,11 +930,11 @@ impl <'a> AMirror<'a> {
 				Ok(mut mpv) => {		
 					mpv.set_overlay_text(text.to_string(), index);
 
-					if set_overlay {
+					if set_overlay && !self.vol_overlay {
 						self.overlay_on = true;
 						self.overlay_timer = Instant::now();
 						mpv.show_overlay();
-					} else if self.overlay_on {
+					} else if self.overlay_on && !self.vol_overlay {
 						mpv.show_overlay();
 					}
 				}
@@ -895,6 +943,7 @@ impl <'a> AMirror<'a> {
 				}
 			}
 		} else if ai_msg.l() >= 5 && ai_msg.data[0] == 0x60 { //Color change.
+			self.color_acknowledged = true;
 			let color = Rgba([ai_msg.data[2], ai_msg.data[3], ai_msg.data[4], 0xFF]);
 			let mut mpv = match self.mpv_video.try_lock() {
 				Ok(mpv) => mpv,
@@ -1029,6 +1078,7 @@ impl <'a> AMirror<'a> {
 						mpv.set_volume_overlay(new_vol, new_max);
 
 						self.overlay_on = true;
+						self.vol_overlay = true;
 						self.overlay_timer = Instant::now();
 						mpv.show_volume_overlay();
 					}
@@ -1080,7 +1130,13 @@ impl <'a> AMirror<'a> {
 
 						let option = ai_msg.data[2];
 						if option == 1 && rows > 0 && char_count > 0 { //Open display menu.
-							if !native_mirror {
+							if native_mirror {
+								self.imid_split = !self.imid_split;
+								self.write_settings_menu_option(0);
+								self.imid_refresh = true;
+								self.imid_scroll_wrap = false;
+								self.imid_scroll_pos = 0;
+							} else {
 								self.write_display_menu();
 							}
 						} else if option == 2 {
@@ -1118,6 +1174,7 @@ impl <'a> AMirror<'a> {
 							self.imid_split = !self.imid_split;
 							self.write_display_menu_option(option - 1);
 							self.imid_refresh = true;
+							self.imid_scroll_wrap = false;
 							self.imid_scroll_pos = 0;
 						}
 
@@ -1243,11 +1300,29 @@ impl <'a> AMirror<'a> {
 					self.power_state = ai_msg.data[2]&0xF;
 					if self.power_state == 0x0 && (self.door_state&0xC) != 0 {
 						self.run = false;
+
+						match self.mpv_video.try_lock() {
+							Ok(mut mpv) => {
+								mpv.stop();
+							}
+							Err(_) => {
+								println!("Power Off: MPV locked.");
+							}
+						}
 					}
 				} else if ai_msg.l() >= 3 && ai_msg.data[1] == 0x43 { //Door position.
 					self.door_state = ai_msg.data[2];
 					if self.power_state == 0x0 && (self.door_state&0xC) != 0 {
 						self.run = false;
+
+						match self.mpv_video.try_lock() {
+							Ok(mut mpv) => {
+								mpv.stop();
+							}
+							Err(_) => {
+								println!("Power Off: MPV locked.");
+							}
+						}
 					}
 				} else if ai_msg.l() >= 4 && ai_msg.data[1] == 0x10 { //Light status message.
 					let night = context.night;
@@ -1281,6 +1356,10 @@ impl <'a> AMirror<'a> {
 					
 					if context.imid_row_count == 1 {
 						self.reset_imid_info_display();
+
+						if self.imid_scroll >= 0 {
+							self.imid_scroll_header = true;
+						}
 					}
 
 					self.imid_refresh = true;
@@ -1293,6 +1372,7 @@ impl <'a> AMirror<'a> {
 								match self.mpv_video.try_lock() {
 									Ok(mut mpv) => {
 										self.overlay_on = true;
+										self.vol_overlay = false;
 										self.overlay_timer = Instant::now();
 										mpv.show_overlay();
 									}
@@ -1350,6 +1430,14 @@ impl <'a> AMirror<'a> {
 
 				self.screen_acknowledged = true;
 			}
+		}
+
+		if !self.color_acknowledged && ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER {
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_NAV_COMPUTER,
+				data: [0x60, 0x20].to_vec()
+			});
 		}
 
 		std::mem::drop(context);

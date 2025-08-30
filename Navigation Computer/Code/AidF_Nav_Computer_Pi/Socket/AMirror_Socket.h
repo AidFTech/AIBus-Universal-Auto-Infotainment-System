@@ -38,6 +38,7 @@ struct SocketMessage {
 class AMirrorSocket {
 public:
 	AMirrorSocket();
+	~AMirrorSocket();
 
 	void writeSocketMessage(SocketMessage* msg);
 	int readSocketMessage(SocketMessage* msg);
@@ -50,6 +51,8 @@ private:
 struct SocketHandlerParameters {
 	int* ai_serial;
 	int client_socket = -1;
+	
+	AMirrorSocket* amirror_socket = nullptr;
 
 	bool* running;
 };

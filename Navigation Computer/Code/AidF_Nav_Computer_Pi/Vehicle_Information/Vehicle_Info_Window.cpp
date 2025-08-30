@@ -422,6 +422,9 @@ bool VehicleInfoWindow::handleAIBus(AIData* ai_d) {
 
 //Handle the Enter button.
 void VehicleInfoWindow::handleEnterButton() {
+	if(this->settings_menu == NULL)
+		return;
+
 	const int selected = this->settings_menu->getSelected() - 1;
 
 	if(selected < 0)
@@ -496,6 +499,10 @@ void VehicleInfoWindow::refreshParam(TextBox* title, TextBox* text, const uint8_
 //Create the default settings menu.
 void VehicleInfoWindow::createDefaultSettingsMenu() {
 	this->active_menu = INFO_ACTIVE_MENU_MAIN;
+
+	if(settings_menu != NULL)
+		delete settings_menu;
+
 	this->settings_menu = new NavMenu(attribute_list, 0, 40, this->w, 35, INFO_SETTING_COUNT, ALIGN_H_L, 30, INFO_SETTING_COUNT, false, "Vehicle Information Settings");
 
 	this->settings_menu->setItem("Lower Display 1", 0);
@@ -518,6 +525,10 @@ void VehicleInfoWindow::createParamSettingsMenu(const uint8_t active_param) {
 
 	this->active_menu = INFO_ACTIVE_MENU_PARAM;
 	this->active_param = active_param;
+
+	if(settings_menu != NULL)
+		delete settings_menu;
+
 	this->settings_menu = new NavMenu(attribute_list, 0, 40, this->w, 35, param_count, ALIGN_H_L, 30, param_count, false, "Lower Display " + std::to_string(active_param + 1));
 
 	std::string params[param_count];

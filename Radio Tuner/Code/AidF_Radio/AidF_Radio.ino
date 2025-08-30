@@ -78,6 +78,7 @@
 #define IMID_TIMER 300
 
 #define DOOR_TIMER 30000
+#define CONTROL_TIMER 7000
 
 #define RDS_SEGMENT_COUNT 12
 #define RDS_IMID_TIMER 3000
@@ -125,7 +126,9 @@ bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
 elapsedMillis door_timer;
 bool door_timer_enabled = false;
 
-volatile bool tuner_reset=false;
+elapsedMillis control_timer;
+
+volatile bool tuner_reset = false;
 
 //Arduino setup function.
 void setup() {
@@ -174,10 +177,8 @@ void setup() {
 
 	AISerial.begin(AI_BAUD);
 	Wire.begin();
-	Wire.setClock(7500);
 	SPI.begin();
 
-	checkI2C();
 	tuner.init1();
 	br_tuner.init1();
 	tuner.init2();
@@ -329,7 +330,6 @@ void loop() {
 		}
 	} while(aibus_timer < 50);
 
-	checkI2C();
 	if(!*power_on && !power_switched)
 		return;
 
@@ -387,7 +387,8 @@ void loop() {
 				digitalWrite(DAC_MUTE, LOW);
 				adc_handler.powerOff();
 			} else if(current_source_id == ID_RADIO) {
-				digitalWrite(DAC_MUTE, HIGH);
+				if(volume_handler.getVolume() > 0)
+					digitalWrite(DAC_MUTE, HIGH);
 				adc_handler.setADCOn();
 				digitalWrite(AUDIO_ON_SW, LOW);
 				const uint8_t sub_id = source_handler.source_list[current_source].sub_id;
@@ -397,11 +398,13 @@ void loop() {
 					digitalWrite(AUDIO_SW, HIGH);
 				}
 			} else if(current_source_id == ID_PHONE || current_source_id == ID_ANDROID_AUTO) { //Pi. TODO: Use an AIBus flag.
-				digitalWrite(DAC_MUTE, HIGH);
+				if(volume_handler.getVolume() > 0)
+					digitalWrite(DAC_MUTE, HIGH);
 				digitalWrite(AUDIO_ON_SW, HIGH);
 				adc_handler.setPiOut();
 			} else { //External audio.
-				digitalWrite(DAC_MUTE, HIGH);
+				if(volume_handler.getVolume() > 0)
+					digitalWrite(DAC_MUTE, HIGH);
 				digitalWrite(AUDIO_ON_SW, HIGH);
 				adc_handler.setExtOut();
 			}
@@ -430,8 +433,6 @@ void loop() {
 
 		sendAudioLightMessage(current_source_id != 0);
 	}
-
-	checkI2C();
 	
 	if(source_text_timer_enabled && source_text_timer > 50 && !parameters.phone_active) {
 		source_text_timer_enabled = false;
@@ -475,10 +476,8 @@ void loop() {
 
 	}
 
-	checkI2C();
 	do {
 		if(source_handler.getCurrentSourceID() == ID_RADIO) {
-			checkI2C();
 			tuner.loop();
 			
 			const bool last_stereo = parameters.fm_stereo;
@@ -572,17 +571,13 @@ void loop() {
 			}
 			
 			if(sub_id == SUB_FM1 || sub_id == SUB_FM2) {
-				checkI2C();
 				const bool seeking = tuner.getSeeking(current_frequency);
 				if(!seeking && (parameter_timer >= PARAMETER_DELAY)) {
 					parameter_timer = 0;
 
 					const String last_rds = parameters.rds_program_name, last_station_name = parameters.rds_station_name;
-					checkI2C();
 					tuner.getParameters(&parameters, sub_id);
-					checkI2C();
 					if(*current_frequency != tuner.getFrequency()) {
-						checkI2C();
 						*current_frequency = tuner.getFrequency();
 						parameters.tune_changed = true;
 					}
@@ -594,7 +589,6 @@ void loop() {
 
 					String current_rds = parameters.rds_program_name;
 					if(parameters.has_rds && current_rds.compareTo(last_rds) != 0) {
-						checkI2C();
 						if(current_rds.substring(0,8).indexOf(last_rds.substring(0,8)) < 0)
 							tuner.clearRds();
 
@@ -713,10 +707,13 @@ void loop() {
 																|| parameters.fader_adjust);
 
 	if(background_tune_timer >= 100) {
-		checkI2C();
 		background_tuner.loop();
 		background_tune_timer = 0;
 	}
+
+	//Check the control timer.
+	if(parameters.last_control != ID_NAV_COMPUTER && control_timer > CONTROL_TIMER)
+		parameters.last_control = ID_NAV_COMPUTER;
 
 	if(parameters.send_time && parameters.hour >= 0 && parameters.min >= 0 &&
 			(parameters.hour != last_hour ||
@@ -734,37 +731,16 @@ void loop() {
 			digitalWrite(DAC_MUTE, HIGH);
 		else
 			digitalWrite(DAC_MUTE, LOW);
-		
-		uint8_t max_vol = 255;
-		if(range < 255)
-			max_vol = range&0xFF;
-
-		uint8_t set_vol = 255;
-		if(volume < 255)
-			set_vol = volume&0xFF;
-
-		uint8_t vol_data[] = {0x26, set_vol, max_vol};
-		AIData vol_msg(sizeof(vol_data), ID_RADIO, ID_NAV_COMPUTER);
-		vol_msg.refreshAIData(vol_data);
-
-		aibus_handler.writeAIData(&vol_msg, parameters.computer_connected);
-
-		vol_msg.receiver = ID_ANDROID_AUTO;
-		aibus_handler.writeAIData(&vol_msg, parameters.mirror_connected);
-
-		vol_data[0] = 0x62;
-		vol_msg.data[0] = 0x62;
-		vol_msg.receiver = ID_IMID_SCR;
-
-		aibus_handler.writeAIData(&vol_msg, parameters.imid_connected);
 	}
 }
 
 //Interpret a received AIBus message.
 void handleAIBus(AIData* msg) {
 	if(msg->receiver == ID_NAV_SCREEN && msg->l >= 3 && msg->data[0] == 0x77) {
-		if((msg->data[2]&0x10) != 0)
+		if((msg->data[2]&0x10) != 0) {
 			parameters.last_control = msg->data[1];
+			control_timer = 0;
+		}
 	}
 
 	if(!parameters.mirror_connected && msg->sender == ID_ANDROID_AUTO)
@@ -842,11 +818,11 @@ void handleAIBus(AIData* msg) {
 				if((pos&0xC) != 0) {
 					if(parameters.power_on)
 						powerOff();
-					else {
+					/*else {
 						door_timer = 0;
 						door_timer_enabled = true;
 						digitalWrite(POWER_ON_SW, HIGH);
-					}
+					}*/
 				}
 			}
 			
@@ -915,7 +891,7 @@ void handleAIBus(AIData* msg) {
 
 	if(!parameters.screen_connected && msg->sender == ID_NAV_SCREEN) {
 		parameters.screen_connected = true;
-		sendAudioLightMessage(source_handler.getCurrentSourceID() != 0);
+		sendAudioLightMessage(parameters.audio_on);
 	}
 }
 
@@ -931,7 +907,6 @@ void sendTunedFrequencyMessage(const uint8_t sub_id) {
 
 //Set the tuner frequency to a pre-set value based on the active sub-id.
 void setTunerFrequency(const uint8_t sub_id) {
-	checkI2C();
 	if(sub_id == 0) {
 		tuner.setPower(true, SUB_FM1);
 		parameters.fm1_tune = tuner.setFrequency(parameters.fm1_tune);
@@ -987,9 +962,11 @@ void screenInit() {
 void setSourceName() {
 	String audio_off_msg = F("Audio Off");
 	text_handler.clearAllText();
+	const uint8_t source = source_handler.getCurrentSourceID();
 
-	if(source_handler.getCurrentSourceID() == 0) {
+	if(source == 0) {
 		text_handler.setBlankHeader(audio_off_msg);
+		text_handler.setOverlayHeader(audio_off_msg);
 		text_handler.sendIMIDSourceMessage(0,0);
 		text_handler.sendMirrorMessage(audio_off_msg, 0, true);
 		return;
@@ -998,8 +975,8 @@ void setSourceName() {
 	if(source_handler.source_list[source_handler.getCurrentSource()].source_name.compareTo("") != 0) {
 		text_handler.setBlankHeader(source_handler.source_list[source_handler.getCurrentSource()].source_name);
 		text_handler.sendMirrorMessage(source_handler.source_list[source_handler.getCurrentSource()].source_name, 0, true);
+		text_handler.setOverlayHeader(source_handler.source_list[source_handler.getCurrentSource()].source_short);
 	} else {
-		const uint8_t source = source_handler.getCurrentSourceID();
 		String source_name = "";
 		switch(source) {
 		case 0:
@@ -1028,7 +1005,10 @@ void setSourceName() {
 
 		text_handler.setBlankHeader(source_name);
 		text_handler.sendMirrorMessage(source_name, 0, true);
+		text_handler.setOverlayHeader(source_name);
 	}
+
+
 
 	text_handler.sendIMIDSourceMessage(source_handler.getCurrentSourceID(), source_handler.source_list[source_handler.getCurrentSource()].sub_id);
 }
@@ -1162,7 +1142,7 @@ void sendAudioLightMessage(const bool audio_on) {
 }
 
 //Check the I2C levels.
-inline void checkI2C() {
+/*inline void checkI2C() {
 	#if defined(DXCORE)
 	const uint8_t levels = Wire.checkPinLevels();
 
@@ -1237,9 +1217,9 @@ inline void checkI2C() {
 	aibus_handler.cachePending(ID_RADIO);
 
 	Wire.begin();
-	Wire.setClock(7500);*/
+	Wire.setClock(7500);
 	#endif
-}
+}*/
 
 //Power off procedure.
 void powerOff() {

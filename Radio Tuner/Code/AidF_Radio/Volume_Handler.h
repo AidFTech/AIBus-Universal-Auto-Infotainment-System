@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <MCP4251.h>
+#include <Arduino.h>
 
 #include "AIBus_Handler.h"
 #include "Parameter_List.h"
@@ -10,6 +11,13 @@
 #define DEFAULT_SLIDER_RANGE 32
 #define DEFAULT_TONE_RANGE 256
 #define DEFAULT_VOL_RANGE 64
+
+#define MAX_ATTENUATION 20
+#define MAX_ATTENUATION_RATIO 0.1
+#define BASS_X 2411.438532
+#define BASS_R 220.0
+#define TREBLE_X 3900.85644
+#define TREBLE_R 220.0
 
 class VolumeHandler {
 public:
@@ -24,8 +32,8 @@ public:
 	uint16_t getVolRange();
 
 	void setVolume(const uint16_t volume);
-	void setBass(const uint16_t bass);
-	void setTreble(const uint16_t treble);
+	void setBass(int bass);
+	void setTreble(int treble);
 
 	void setBalance(const int16_t balance);
 	void setFader(const int16_t fader);
@@ -51,6 +59,7 @@ private:
 	bool volume_changed = false;
 
 	void setVolume();
+	void setVolumeDisplay();
 };
 
 #endif

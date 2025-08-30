@@ -26,6 +26,8 @@ public:
 	
 	void setBlankHeader(String header);
 	void sendSourceTextControl(const uint8_t recipient, const uint8_t source);
+
+	void setOverlayHeader(String text);
 	
 	void sendTunedFrequencyMessage(const uint16_t frequency, const bool mhz, const bool sub);
 	void sendTunedFrequencyMessage(const uint8_t preset, const uint16_t frequency, const bool mhz, const bool sub);

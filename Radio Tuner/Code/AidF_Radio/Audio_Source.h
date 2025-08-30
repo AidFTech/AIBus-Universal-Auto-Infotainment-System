@@ -29,7 +29,7 @@
 
 struct AudioSource {
 	uint8_t source_id, sub_id;
-	String source_name;
+	String source_name = "", source_short = "";
 };
 
 class SourceHandler {
