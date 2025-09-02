@@ -291,6 +291,12 @@ impl <'a> AMirror<'a> {
 					self.write_nav_text("Android".to_string(), 0, 0, true);
 				}
 
+				if context.phone_type == 3 {
+					self.write_nav_overlay("Carplay".to_string());
+				} else if context.phone_type == 5 {
+					self.write_nav_overlay("Android Auto".to_string());
+				}
+
 				std::mem::drop(context);
 
 				self.write_all_imid_text();
@@ -410,6 +416,7 @@ impl <'a> AMirror<'a> {
 				self.write_radio_metadata(context.song_title.clone(), SONG_NAME);
 				if context.audio_text {
 					self.write_nav_text(context.song_title.clone(), 1, 0, true);
+					self.write_nav_overlay(context.song_title.clone());
 
 					if context.imid_native_mirror && self.imid_scroll < 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.song_title.clone(), SONG_NAME);
@@ -1005,7 +1012,7 @@ impl <'a> AMirror<'a> {
 					};
 
 					let mut control_req = 0x80;
-					if context.phone_active {
+					if context.phone_active && context.phone_type != 0 {
 						control_req |= 0x10;
 					}
 
@@ -1656,6 +1663,43 @@ impl <'a> AMirror<'a> {
 		};
 
 		self.write_aibus_message(name_msg);
+
+		std::mem::drop(context);
+		self.write_radio_short_name();
+	}
+
+	///Write the short device name.
+	fn write_radio_short_name(&mut self) {
+		let mut name_data = [0x1, 0x22, 0x0].to_vec();
+
+		let context = match self.context.try_lock() {
+			Ok(context) => context,
+			Err(_) => {
+				println!("AMirror Write Radio Short Name: Context Locked.");
+				return;
+			}
+		};
+
+		let mut name_str = "Mirror".to_string();
+
+		if context.phone_type == 3 {
+			name_str = "Carplay".to_string();
+		} else if context.phone_type == 5 {
+			name_str = "Android".to_string();
+		}
+
+		let name_bytes = name_str.as_bytes();
+		for i in 0..name_bytes.len() {
+			name_data.push(name_bytes[i]);
+		}
+
+		let name_msg = AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_RADIO,
+			data: name_data,
+		};
+
+		self.write_aibus_message(name_msg);
 	}
 
 	///Write metadata to the nav computer.
@@ -1679,6 +1723,22 @@ impl <'a> AMirror<'a> {
 		};
 
 		self.write_aibus_message(meta_msg);
+	}
+
+	///Write text to the nav screen overlay.
+	fn write_nav_overlay(&mut self, text: String) {
+		let mut text_data = [0x22, 0x61].to_vec();
+		let text_bytes = text.as_bytes();
+
+		for i in 0..text_bytes.len() {
+			text_data.push(text_bytes[i]);
+		}
+
+		self.write_aibus_message(AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_NAV_COMPUTER,
+			data: text_data,
+		});
 	}
 
 	///Write text to the IMID.

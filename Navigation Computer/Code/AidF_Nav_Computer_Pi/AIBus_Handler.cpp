@@ -128,7 +128,7 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 				if((*this->timer - start) > 5) {
 					unsigned long clear_time = *this->timer;
 					
-					while((*this->timer - clear_time) < 20) {
+					while((*this->timer - clear_time) < 1) {
 						#ifdef RPI_UART
 						if(gpioRead(AI_RX) == 0)
 							clear_time = *this->timer;

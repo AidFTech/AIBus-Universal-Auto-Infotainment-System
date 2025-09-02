@@ -911,7 +911,19 @@ void HondaCDHandler::sendCDTrackMessage(const bool track) {
 	}
 
 	this->sendMirrorMessage(track_text, 0, true);
-	setNavHeader("CD" + String(int(disc)) + '-' + String(int(track)));
+
+	String nav_header = "CD" + String(int(disc));
+	if(this->track > 0)
+		nav_header += '-' + String(int(this->track));
+
+	String meta_text = String(this->song_title);
+	if(meta_text.length() > 20)
+		meta_text = meta_text.substring(0,20);
+
+	meta_text.replace("#", "##  ");
+
+	nav_header += "  " + meta_text;
+	setNavHeader(nav_header);
 }
 
 //Send the time to the nav screen.
@@ -1004,8 +1016,19 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 	sendCDIMIDTextMessage(field, meta_text);
 
 	if((text_mode == TEXT_MODE_WITH_TEXT && field == TEXT_SONG) ||
-		(text_mode == TEXT_MODE_MP3 && field == 2))
+		(text_mode == TEXT_MODE_MP3 && field == 2)) {
 		this->sendMirrorMessage(meta_text, 2, false);
+
+		String nav_header = "CD" + String(int(disc));
+		if(this->track > 0)
+			nav_header += '-' + String(int(this->track));
+
+		if(meta_text.length() > 20)
+			meta_text = meta_text.substring(0,20);
+
+		nav_header += "  " + meta_text;
+		setNavHeader(nav_header);
+	}
 }
 
 void HondaCDHandler::sendCDLoadWaitMessage(const uint8_t message_type) {

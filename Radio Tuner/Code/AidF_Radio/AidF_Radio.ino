@@ -80,6 +80,8 @@
 #define DOOR_TIMER 30000
 #define CONTROL_TIMER 7000
 
+#define SOURCE_CHANGE_TIMER 1000
+
 #define RDS_SEGMENT_COUNT 12
 #define RDS_IMID_TIMER 3000
 
@@ -122,6 +124,9 @@ elapsedMillis background_tune_timer = 0;
 String rds_program_split[12];
 
 bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
+
+bool source_change_timer_enable = false;
+elapsedMillis source_change_timer;
 
 elapsedMillis door_timer;
 bool door_timer_enabled = false;
@@ -211,17 +216,21 @@ void setup() {
 
 	AudioSource src_fm1, src_fm2, src_am;
 	src_fm1.source_name = "FM1";
+	src_fm1.source_short = "FM1";
 	src_fm1.source_id = ID_RADIO;
 	src_fm1.sub_id = 0;
 	src_fm2.source_name = "FM2";
+	src_fm2.source_short = "FM2";
 	src_fm2.source_id = ID_RADIO;
 	src_fm2.sub_id = 1;
 	src_am.source_name = "AM";
+	src_am.source_short = "AM";
 	src_am.source_id = ID_RADIO;
 	src_am.sub_id = 2;
 
 	AudioSource src_aux;
 	src_aux.source_name = "Aux";
+	src_aux.source_short = "Aux";
 	src_aux.source_id = ID_RADIO;
 	src_aux.sub_id = 3;
 
@@ -336,15 +345,33 @@ void loop() {
 	AudioSource source_list[SOURCE_COUNT];
 	const uint16_t source_count = source_handler.getFilledSources(source_list), current_source = source_handler.getCurrentSource();
 	
+	const bool force_source_changed = source_handler.getForceSourceChanged() || (last_active_source_id == 0 && source_handler.getCurrentSourceID() != 0);
+
 	//Source changed.
-	if(power_switched || source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source || parameters.phone_active != last_phone) {
+	if(power_switched ||
+			source_handler.getCurrentSourceID() != last_active_source_id ||
+			source_handler.getCurrentSource() != last_active_source ||
+			force_source_changed ||
+			(source_change_timer_enable && source_change_timer > SOURCE_CHANGE_TIMER) ||
+			parameters.phone_active != last_phone) {
 		src_ping_timer = 0;
 		parameters.info_mode = false;
 		parameters.current_preset = 0;
 		parameters.preferred_preset = 0;
-		
+
 		const uint8_t current_source_id = source_handler.getCurrentSourceID();
 		const uint16_t current_source = source_handler.getCurrentSource();
+
+		bool source_changed = false;
+		if(force_source_changed)
+			source_changed = true;
+		else if(source_change_timer_enable && source_change_timer > SOURCE_CHANGE_TIMER) {
+			source_change_timer_enable = false;
+			source_changed = true;
+		} else if(current_source_id != ID_RADIO && current_source_id != 0x0) {
+			source_change_timer_enable = true;
+			source_change_timer = 0;
+		}
 		
 		if(!parameters.phone_active) {
 			uint8_t sub_id = source_handler.source_list[current_source].sub_id;
@@ -362,11 +389,16 @@ void loop() {
 			else if(function_msg.receiver == ID_RADIO && current_source_id != ID_RADIO)
 				tuner.setPower(false);
 			
-			setSourceName();
+			if(force_source_changed || !source_changed)
+				setSourceName();
+			if(current_source_id != ID_RADIO) {
+				for(int i=1;i<5;i+=1)
+					text_handler.sendMirrorMessage("", i, false);
+			}
 
 			parameters.audio_on = current_source_id != 0;
 			
-			if(current_source_id != 0 && current_source_id != ID_RADIO) {
+			if(current_source_id != 0 && current_source_id != ID_RADIO && source_changed) {
 				function_msg.receiver = current_source_id;
 				aibus_handler.writeAIData(&function_msg, function_msg.receiver != 0 && function_msg.receiver != ID_RADIO);
 
@@ -378,6 +410,8 @@ void loop() {
 				sendTunedFrequencyMessage(sub_id);
 				clearFMData();
 				text_handler.createRadioMenu(sub_id);
+				if(sub_id <= SUB_AM)
+					parameters.tune_changed = true;
 			}
 		
 			//Set audio switch.
@@ -437,8 +471,12 @@ void loop() {
 	if(source_text_timer_enabled && source_text_timer > 50 && !parameters.phone_active) {
 		source_text_timer_enabled = false;
 		const uint8_t current_source_id = source_handler.getCurrentSourceID();
-		if(current_source_id != ID_RADIO && current_source_id != 0)
+		if(current_source_id != ID_RADIO && current_source_id != 0) {
+			if(current_source_id != ID_ANDROID_AUTO)
+				text_handler.clearAllText();
+			
 			text_handler.sendSourceTextControl(current_source_id, current_source_id);
+		}
 	}
 
 	if(imid_timer_enabled && imid_timer > IMID_TIMER) {
@@ -650,6 +688,27 @@ void loop() {
 						text_handler.sendIMIDSourceMessage(ID_RADIO, sub_id);
 				}
 				text_handler.sendTunedFrequencyMessage(*current_frequency, sub_id != SUB_AM, true);
+
+				if(sub_id == SUB_FM1 || sub_id == SUB_FM2 || sub_id == SUB_AM) {
+					String overlay_msg = "";
+					if(sub_id == SUB_FM1)
+						overlay_msg = "FM1";
+					else if(sub_id == SUB_FM2)
+						overlay_msg = "FM2";
+					else if(sub_id == SUB_AM)
+						overlay_msg = "AM";
+
+					//if(parameters.current_preset > 0 && parameters.current_preset <= 6)
+					//	overlay_msg += "-" + String(int(current_preset));
+					
+					if(sub_id == SUB_FM1 || sub_id == SUB_FM2)
+						overlay_msg += ' ' + String(int(*current_frequency/100)) + '.' + String(int(*current_frequency%100)) + "MHz";
+					else
+						overlay_msg += ' ' + String(int(*current_frequency)) + "kHz";
+
+					text_handler.setOverlayHeader(overlay_msg);
+				}
+
 				clearFMData();
 				parameter_timer = 0;
 			}
@@ -850,7 +909,7 @@ void handleAIBus(AIData* msg) {
 					parameters.vehicle_speed = uint16_t(speed);
 			}
 		}
-	} else if(msg->receiver == 0xFF && msg->sender == ID_IMID_SCR && msg->data[0] == 0x3B) {
+	} else if(msg->receiver == 0xFF && msg->sender == ID_IMID_SCR && msg->l >= 2 && msg->data[0] == 0x3B) {
 		if(msg->data[1] == 0x23 && msg-> l >= 4) {
 			parameters.imid_char = msg->data[2];
 			parameters.imid_lines = msg->data[3];
@@ -863,6 +922,12 @@ void handleAIBus(AIData* msg) {
 				if(parameters.imid_radio)
 					break;
 			}
+
+			uint8_t source_data[msg->l - 2];
+			for(int i=0;i<sizeof(source_data);i+=1)
+				source_data[i] = msg->data[i+2];
+
+			source_handler.setImidSupportedSources(sizeof(source_data), source_data);
 		}
 		
 		imid_timer = 0;
@@ -1008,9 +1073,25 @@ void setSourceName() {
 		text_handler.setOverlayHeader(source_name);
 	}
 
-
-
 	text_handler.sendIMIDSourceMessage(source_handler.getCurrentSourceID(), source_handler.source_list[source_handler.getCurrentSource()].sub_id);
+
+	if(!source_handler.getIMIDSourceSupported(source) && parameters.imid_char > 0 && parameters.imid_lines > 0) {
+		const String source_name = source_handler.source_list[source_handler.getCurrentSource()].source_short;
+
+		uint8_t imid_x = parameters.imid_char/2 - source_name.length()/2;
+		if(imid_x + source_name.length() > parameters.imid_char)
+			imid_x = 0;
+
+		AIData name_msg(source_name.length() + 4, ID_RADIO, ID_IMID_SCR);
+		name_msg.data[0] = 0x23;
+		name_msg.data[1] = 0x60;
+		name_msg.data[2] = imid_x;
+		name_msg.data[3] = parameters.imid_lines >= 2 ? parameters.imid_lines/2 : 1;
+		for(int i=0;i<source_name.length();i+=1)
+			name_msg.data[i+4] = uint8_t(source_name.charAt(i));
+
+		aibus_handler.writeAIData(&name_msg);
+	}
 }
 
 //Get the current vehicle speed.
@@ -1115,6 +1196,12 @@ void sendIMIDRequest() {
 							if(parameters.imid_radio)
 								break;
 						}
+
+						uint8_t source_data[reply.l - 2];
+						for(int i=0;i<sizeof(source_data);i+=1)
+							source_data[i] = reply.data[i+2];
+
+						source_handler.setImidSupportedSources(sizeof(source_data), source_data);
 					} else
 						aibus_handler.cacheMessage(&reply);
 

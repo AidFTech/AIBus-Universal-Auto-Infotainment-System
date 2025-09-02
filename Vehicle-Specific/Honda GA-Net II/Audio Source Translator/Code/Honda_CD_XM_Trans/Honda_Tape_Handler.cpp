@@ -420,11 +420,18 @@ void HondaTapeHandler::sendTapeTextMessage() {
 				break;
 		}
 
-		if(parameter_list->external_imid_char >= 15 && tape_mode == TAPE_MODE_PLAY && repeat_on) {
-			if(parameter_list->external_imid_char >= 18)
-				imid_mode_msg += " Repeat";
-			else
-				imid_mode_msg += " RPT";
+		if(parameter_list->external_imid_char >= 15 && tape_mode == TAPE_MODE_PLAY) {
+			if(parameter_list->external_imid_char >= 18) {
+				if(repeat_on)
+					imid_mode_msg += " Repeat";
+				else
+					imid_mode_msg += "       ";
+			} else {
+				if(repeat_on)
+					imid_mode_msg += " RPT";
+				else
+					imid_mode_msg += "    ";
+			}
 		} else if((parameter_list->external_imid_char >= 12) && (tape_mode == TAPE_MODE_REVSKIP || tape_mode == TAPE_MODE_FWDSKIP)) {
 			imid_mode_msg += " " + String(track_count);
 		}

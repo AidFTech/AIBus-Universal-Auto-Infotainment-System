@@ -39,7 +39,7 @@
 #define DEFAULT_H 480
 
 #define HEADER_LIMIT_VOLUME 700
-#define HEADER_LIMIT_OTHER 1300
+#define HEADER_LIMIT_OTHER 2000
 
 #define AIBUS_WAIT 5
 
@@ -106,7 +106,10 @@ private:
 	unsigned long aibus_read_time = 0;
 	
 	bool header_timer_enabled = false;
-	unsigned long header_timer = 0, header_limit = HEADER_LIMIT_VOLUME;
+	unsigned long header_timer = 0;
+
+	bool vol_timer_enabled = false;
+	unsigned long vol_timer = 0;
 };
 
 void setup(AidF_Nav_Computer* nav_computer);

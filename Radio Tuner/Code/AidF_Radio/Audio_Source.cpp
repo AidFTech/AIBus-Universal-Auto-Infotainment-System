@@ -19,6 +19,7 @@ SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_m
 
 SourceHandler::~SourceHandler() {
 	delete[] source_list;
+	delete[] imid_supported_sources;
 }
 
 //Get the ID of the currently-selected source.
@@ -113,6 +114,35 @@ void SourceHandler::checkSources() {
 		parameter_list->handshake_timer_active = true;
 		parameter_list->handshake_timer = 0;
 	}
+}
+
+//Set the list of sources natively supported on the IMID.
+void SourceHandler::setImidSupportedSources(const int l, uint8_t* source_list) {
+	this->imid_supported_source_count = 0;
+	delete[] this->imid_supported_sources;
+
+	this->imid_supported_sources = new uint8_t[l];
+	this->imid_supported_source_count = l;
+
+	for(int i=0;i<l;i+=1)
+		this->imid_supported_sources[i] = source_list[i];
+}
+
+//Get whether the source is natively supported on the connected IMID.
+bool SourceHandler::getIMIDSourceSupported(const uint8_t source_id) {
+	for(int i=0;i<this->imid_supported_source_count;i+=1) {
+		if(imid_supported_sources[i] == source_id)
+			return true;
+	}
+
+	return false;
+}
+
+//Get whether the source should be enabled with no delay.
+bool SourceHandler::getForceSourceChanged() {
+	const bool source_changed = this->force_source_changed;
+	this->force_source_changed = false;
+	return source_changed;
 }
 
 //Call if the car is turned on or off.
@@ -248,6 +278,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 		if(ai_d->l >= 4)
 			new_sub = ai_d->data[3];
 		
+		force_source_changed = true;
 		setCurrentSource(new_src, new_sub);
 	} else if(ai_d->sender == ID_NAV_SCREEN) { //Screen message.
 		ack = false;
@@ -603,6 +634,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					const uint8_t new_id = source_list[selection].source_id, new_sub = source_list[selection].sub_id;
 					clearMenu();
 					setCurrentSource(new_id, new_sub);
+					force_source_changed = true;
 				} else if(menu_open == PRESET_MENU) {
 					if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
 						const uint8_t group = source_list[current_source].sub_id;

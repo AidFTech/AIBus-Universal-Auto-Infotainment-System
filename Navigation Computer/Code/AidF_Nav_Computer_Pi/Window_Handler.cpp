@@ -26,6 +26,8 @@ Window_Handler::Window_Handler(SDL_Renderer* renderer, Background* br, const uin
 	this->header_box[0] = new TextBox(renderer, CLOCK_SPACING, 0, this->w/3 - CLOCK_SPACING, CLOCK_HEIGHT, ALIGN_H_L, ALIGN_V_M, CLOCK_HEIGHT*6/7, &this->color_profile->text);
 	this->header_box[1] = new TextBox(renderer, this->w/3, 0, this->w/3, CLOCK_HEIGHT, ALIGN_H_C, ALIGN_V_M, CLOCK_HEIGHT*6/7, &this->color_profile->text);
 	this->header_box[2] = new TextBox(renderer, 2*this->w/3, 0, this->w/3 - CLOCK_SPACING, CLOCK_HEIGHT, ALIGN_H_R, ALIGN_V_M, CLOCK_HEIGHT*6/7, &this->color_profile->text);
+
+	this->audio_header = new TextBox(renderer, 0, CLOCK_HEIGHT, this->w, CLOCK_HEIGHT, ALIGN_H_C, ALIGN_V_M, CLOCK_HEIGHT*6/7, &this->color_profile->text);
 }
 
 Window_Handler::~Window_Handler() {
@@ -36,12 +38,13 @@ Window_Handler::~Window_Handler() {
 	delete this->header_box[1];
 	delete this->header_box[2];
 
+	delete this->audio_header;
+
 	if(delete_last && last_window != NULL) {
 		delete last_window;
 		last_window = nullptr;
 	}
 
-	//TODO: Do we need to delete this if it is the miscwindow?
 	if(delete_active && active_window != NULL) {
 		delete active_window;
 		active_window = nullptr;
@@ -60,6 +63,8 @@ void Window_Handler::refresh() {
 	
 	for(uint8_t i=0;i<3;i+=1)
 		this->header_box[i]->renderText();
+		
+	this->audio_header->renderText();
 }
 
 void Window_Handler::clearWindow() {
@@ -71,6 +76,12 @@ void Window_Handler::setText(std::string text, const uint8_t pos) {
 		return;
 	
 	this->header_box[pos]->setText(text);
+}
+
+//Set the audio header text.
+void Window_Handler::setAudioText(std::string text) {
+	this->audio_text = text;
+	this->audio_header->setText(text);
 }
 
 AttributeList* Window_Handler::getAttributeList() {
@@ -134,6 +145,7 @@ void Window_Handler::setActiveWindow(NavWindow* new_window, const bool delete_la
 		this->active_window->setActive(true);
 }
 
+//Check the next window.
 void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_window, NavWindow* phone_window, NavWindow* main_window) {
 	const int next_window = attribute_list->next_window;
 	
@@ -195,20 +207,26 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 	}
 }
 
+//Draw the clock header.
 void Window_Handler::drawClockHeader() {
 	uint8_t last_r, last_g, last_b, last_a;
 	SDL_GetRenderDrawColor(renderer, &last_r, &last_g, &last_b, &last_a);
 
 	const uint32_t headerbar_color = this->color_profile->headerbar, outline_color = this->color_profile->outline;
 	
-	SDL_Rect header_rect = {0,0,this->w,CLOCK_HEIGHT};
+	const int header_height = this->audio_text.length() > 0 ? CLOCK_HEIGHT*2 : CLOCK_HEIGHT;
+
+	SDL_Rect header_rect = {0,0,this->w,header_height};
 	SDL_SetRenderDrawColor(renderer, getRedComponent(headerbar_color), getGreenComponent(headerbar_color), getBlueComponent(headerbar_color), getAlphaComponent(headerbar_color));
 	SDL_RenderFillRect(renderer, &header_rect);
 	SDL_SetRenderDrawColor(renderer, getRedComponent(outline_color), getGreenComponent(outline_color), getBlueComponent(outline_color), getAlphaComponent(outline_color));
-	SDL_RenderDrawLine(renderer, 0, CLOCK_HEIGHT, this->w, CLOCK_HEIGHT);
+	SDL_RenderDrawLine(renderer, 0, header_height, this->w, header_height);
 
 	SDL_SetRenderDrawColor(renderer, last_r, last_g, last_b, last_a);
 
 	for(uint8_t i=0;i<3;i+=1)
 		this->header_box[i]->drawText();
+
+	if(this->audio_text.length() > 0)
+		this->audio_header->drawText();
 }

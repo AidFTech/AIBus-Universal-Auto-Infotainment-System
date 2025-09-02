@@ -33,77 +33,87 @@ struct AudioSource {
 };
 
 class SourceHandler {
-	public:
-		AudioSource* source_list;
-		uint16_t source_count;
+public:
+	AudioSource* source_list;
+	uint16_t source_count;
+
+	SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, VolumeHandler* volume_handler, uint16_t source_count);
+	~SourceHandler();
+
+	void sendRadioHandshake();
+	bool handleAIBus(AIData* ai_d);
+
+	uint8_t getCurrentSourceID();
+	uint16_t getCurrentSource();
+	void setSource(const uint16_t source);
+	bool setSourceID(const uint8_t source);
+
+	void setImidSupportedSources(const int l, uint8_t* source_list);
+	bool getIMIDSourceSupported(const uint8_t source_id);
+
+	bool getForceSourceChanged();
+
+	void checkSources();
 	
-		SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, VolumeHandler* volume_handler, uint16_t source_count);
-		~SourceHandler();
+	void setPower(const bool power);
 
-		void sendRadioHandshake();
-		bool handleAIBus(AIData* ai_d);
+	uint16_t getFilledSourceCount();
+	uint16_t getFilledSources(AudioSource* source_list);
+	uint16_t getSourceNames(String* source_list);
+	uint16_t getSourceIDs(uint8_t* source_list);
+
+	void incrementSource();
+	void incrementSource(const bool direction);
+
+private:
+	bool audio_on = false;
+	uint8_t menu_open = NO_MENU;
+
+	bool force_source_changed = false;
+
+	uint8_t* imid_supported_sources = nullptr;
+	int imid_supported_source_count;
+
+	uint16_t current_source = 0;
+	AIBusHandler* ai_handler;
+	Si4735Controller* tuner_main;
+	BackgroundTuneHandler *tuner_background;
+
+	ParameterList* parameter_list;
+
+	VolumeHandler* volume_handler;
+
+	bool query = false; //True if the query function is active to prevent recursive loops.
 	
-		uint8_t getCurrentSourceID();
-		uint16_t getCurrentSource();
-		void setSource(const uint16_t source);
-		bool setSourceID(const uint8_t source);
+	int getFirstOccurenceOf(const uint8_t source);
+	int getFirstOccurenceOf(const uint8_t source, const uint16_t s);
+	int getFirstAvailable();
+	int getFirstAvailable(const uint16_t s);
 
-		void checkSources();
-		
-		void setPower(const bool power);
+	void createSubsource(const uint8_t id);
+	void clearSubsources(const uint8_t id);
 
-		uint16_t getFilledSourceCount();
-		uint16_t getFilledSources(AudioSource* source_list);
-		uint16_t getSourceNames(String* source_list);
-		uint16_t getSourceIDs(uint8_t* source_list);
+	bool sendSourceQuery(const uint8_t source);
 
-		void incrementSource();
-		void incrementSource(const bool direction);
+	void clearMenu();
+	bool createMenu(const String title, const int items);
 
-	private:
-		bool audio_on = false;
-		uint8_t menu_open = NO_MENU;
+	void createSourceMenu();
+	void createPresetMenu(const uint8_t group);
+	void createStationListMenu();
 
-		uint16_t current_source = 0;
-		AIBusHandler* ai_handler;
-		Si4735Controller* tuner_main;
-		BackgroundTuneHandler *tuner_background;
+	void createToneMenu();
+	void createToneMenuItem(const int item);
 
-		ParameterList* parameter_list;
+	void sendManualTuneMessage();
+	
+	void manualTuneIncrement(const bool up, const uint8_t steps);
 
-		VolumeHandler* volume_handler;
+	void setCurrentSource(const uint8_t id, const uint8_t sub_id);
 
-		bool query = false; //True if the query function is active to prevent recursive loops.
-		
-		int getFirstOccurenceOf(const uint8_t source);
-		int getFirstOccurenceOf(const uint8_t source, const uint16_t s);
-		int getFirstAvailable();
-		int getFirstAvailable(const uint16_t s);
+	void handleSteeringControl(const uint8_t command, const uint8_t state);
 
-		void createSubsource(const uint8_t id);
-		void clearSubsources(const uint8_t id);
-
-		bool sendSourceQuery(const uint8_t source);
-
-		void clearMenu();
-		bool createMenu(const String title, const int items);
-
-		void createSourceMenu();
-		void createPresetMenu(const uint8_t group);
-		void createStationListMenu();
-
-		void createToneMenu();
-		void createToneMenuItem(const int item);
-
-		void sendManualTuneMessage();
-		
-		void manualTuneIncrement(const bool up, const uint8_t steps);
-
-		void setCurrentSource(const uint8_t id, const uint8_t sub_id);
-
-		void handleSteeringControl(const uint8_t command, const uint8_t state);
-
-		void savePreset(const uint16_t freq, const uint8_t preset, const uint8_t group);
+	void savePreset(const uint16_t freq, const uint8_t preset, const uint8_t group);
 };
 
 #endif

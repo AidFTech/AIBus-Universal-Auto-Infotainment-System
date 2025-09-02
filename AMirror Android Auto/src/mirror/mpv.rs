@@ -8,15 +8,19 @@ use std::process::Child;
 use std::time::Duration;
 use std::time::Instant;
 
+use ab_glyph::Font;
 use ab_glyph::FontRef;
 use ab_glyph::PxScale;
+use ab_glyph::ScaleFont;
 use image::imageops::flip_vertical;
 use image::Rgba;
 use image::RgbaImage;
 use imageproc::drawing::draw_filled_rect;
 use imageproc::drawing::draw_hollow_rect;
+use imageproc::drawing::draw_polygon_mut;
 use imageproc::drawing::draw_text_mut;
 
+use imageproc::point::Point;
 use imageproc::rect::Rect;
 use rodio::Decoder as AudioDecoder;
 use rodio::OutputStream;
@@ -126,7 +130,6 @@ impl MpvVideo {
 		}
 
 		self.overlay_str[index] = text;
-		//TODO: Symbols.
 	}
 
 	///Set the volume overlay.
@@ -223,6 +226,7 @@ impl MpvVideo {
 		}
 	}
 	
+	///Minimize or maximize the video window.
 	pub fn set_minimize(&mut self, minimize: bool) {
 		let pid = self.process.id();
 		let wid_cmd = Command::new("xdotool").arg("search").arg("--pid").arg(format!("{}", pid)).output();
@@ -292,8 +296,29 @@ impl MpvVideo {
 				y: height,
 			};
 
-			let overlay_text = Self::get_symbol(self.overlay_str[i].clone());
-			draw_text_mut(&mut overlay_image, self.text_color, (i*(self.w as usize/OVERLAY_STR_COUNT)) as i32, (overlay_h/2 - (height as u16)/2) as i32, scale, &font, &overlay_text);
+			let overlay_text: Vec<char> = Self::get_symbol(self.overlay_str[i].clone()).chars().collect();
+
+			let mut displayed_text = "".to_string();
+			let mut str_x = (i*(self.w as usize/OVERLAY_STR_COUNT)) as i32;
+
+			for j in 0..overlay_text.len() {
+				let c = overlay_text[j];
+				if c != '\u{25B2}' && c != '\u{25BC}' && c != '\u{25BA}' && c != '\u{25C4}' {
+					displayed_text += &c.to_string();
+				} else {
+					draw_text_mut(&mut overlay_image, self.text_color, str_x, (overlay_h/2 - (height as u16)/2) as i32, scale, &font, &displayed_text);
+					str_x += Self::get_text_width(displayed_text.clone(), font.clone(), height) as i32;
+					displayed_text = "".to_string();
+					
+					let triangle_height = height*0.8;
+
+					Self::draw_triangle(&mut overlay_image, c, &mut str_x, (overlay_h/2 - (triangle_height as u16)/2) as i32, triangle_height as i32, self.text_color);
+				}
+
+				if j >= overlay_text.len() - 1 {
+					draw_text_mut(&mut overlay_image, self.text_color, str_x, (overlay_h/2 - (height as u16)/2) as i32, scale, &font, &displayed_text);
+				}
+			}
 		}
 
 		overlay_image = flip_vertical(&mut overlay_image);
@@ -304,6 +329,64 @@ impl MpvVideo {
 				println!("Error: {}", e);
 			}
 		}
+	}
+
+	///Draw a triangle.
+	fn draw_triangle(image: &mut RgbaImage, c: char, x_pos: &mut i32, y_pos: i32, height: i32, color: Rgba<u8>) {
+		let mut triangle = [Point::new(0,0);3];
+		let mut draw_triangle = false;
+
+		if c == '\u{25B2}' { //Up.
+			triangle[0].x = *x_pos;
+			triangle[0].y = y_pos + height;
+			triangle[1].x = *x_pos + height/2;
+			triangle[1].y = y_pos;
+			triangle[2].x = *x_pos + height;
+			triangle[2].y = y_pos + height;
+			draw_triangle = true;
+		} else if c == '\u{25BC}' { //Down.
+			triangle[0].x = *x_pos;
+			triangle[0].y = y_pos;
+			triangle[1].x = *x_pos + height/2;
+			triangle[1].y = y_pos + height;
+			triangle[2].x = *x_pos + height;
+			triangle[2].y = y_pos;
+			draw_triangle = true;
+		} else if c == '\u{25BA}' { //Right.
+			triangle[0].x = *x_pos;
+			triangle[0].y = y_pos;
+			triangle[1].x = *x_pos;
+			triangle[1].y = y_pos + height;
+			triangle[2].x = *x_pos + height;
+			triangle[2].y = y_pos + height/2;
+			draw_triangle = true;
+		} else if c == '\u{25C4}' { //Left.
+			triangle[0].x = *x_pos + height;
+			triangle[0].y = y_pos;
+			triangle[1].x = *x_pos + height;
+			triangle[1].y = y_pos + height;
+			triangle[2].x = *x_pos;
+			triangle[2].y = y_pos + height/2;
+			draw_triangle = true;
+		}
+
+		if draw_triangle {
+			draw_polygon_mut(image, &triangle, color);
+			*x_pos += height;
+		}
+	}
+
+	///Calculate the text width.
+	fn get_text_width(text: String, font: FontRef, size: f32) -> f32 {
+		let text_chars: Vec<char> = text.chars().collect();
+		let mut total_w = 0.0;
+
+		for c in text_chars {
+			let w = font.as_scaled(size).h_advance(font.glyph_id(c));
+			total_w += w;
+		}
+
+		return total_w;
 	}
 
 	///Save the overlay image for volume.

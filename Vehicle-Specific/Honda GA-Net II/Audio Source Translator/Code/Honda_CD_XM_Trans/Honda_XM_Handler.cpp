@@ -912,8 +912,18 @@ void HondaXMHandler::setTextDisplay(const uint8_t field) {
 		ai_driver->writeAIData(&text_msg, parameter_list->computer_connected);
 	}
 
-	if(field == N_CHANNEL_NAME)
+	if(field == N_CHANNEL_NAME) {
 		this->sendMirrorMessage(selected, 3, true);
+
+		String nav_header = F("XM");
+		if(xm2)
+			nav_header += "2";
+		else
+			nav_header += "1";
+
+		nav_header += " CH " + String(int(*channel)) + "  " + selected;
+		setNavHeader(nav_header);
+	}
 
 	setIMIDTextDisplay(field, selected);
 }

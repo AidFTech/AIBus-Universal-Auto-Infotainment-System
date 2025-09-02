@@ -2,7 +2,10 @@
 
 IntroWindow::IntroWindow(AttributeList *attribute_list) : NavWindow(attribute_list) {
 	uint32_t default_background = DEFAULT_BACKGROUND;
-	this->logo_box = new TextBox(this->renderer, 0, 0, this->w, this->h, ALIGN_H_C, ALIGN_V_M, int(this->h)*1/3 < 255 ? uint8_t(int(this->h)*1/3) : 255, &default_background);
+	
+	const uint16_t font_size = uint16_t(int(this->h)*6/15);
+
+	this->logo_box = new TextBox(this->renderer, 0, 0, this->w, this->h, ALIGN_H_C, ALIGN_V_M, font_size < 255 ? uint8_t(font_size) : 255, &default_background);
 	this->logo_box->setText("AidF");
 }
 
@@ -12,6 +15,7 @@ IntroWindow::~IntroWindow() {
 
 void IntroWindow::drawWindow() {
 	SDL_Rect background_rect = {0,0,this->w,this->h};
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0xFF);
 	SDL_RenderFillRect(renderer, &background_rect);
 
 	this->logo_box->drawText();

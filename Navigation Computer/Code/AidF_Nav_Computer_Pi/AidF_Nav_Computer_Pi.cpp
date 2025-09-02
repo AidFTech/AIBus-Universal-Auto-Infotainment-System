@@ -130,10 +130,15 @@ void AidF_Nav_Computer::loop() {
 			this->main_window->refreshWindow();
 		this->window_handler->refresh();
 	}
-	
-	if(this->header_timer_enabled && (elapsed_millis.time - header_timer) >= header_limit) {
-		this->header_timer_enabled = false;
+
+	if(this->vol_timer_enabled && (elapsed_millis.time - vol_timer) >= HEADER_LIMIT_VOLUME) {
+		this->vol_timer_enabled = false;
 		this->window_handler->setText("", 1);
+	}
+	
+	if(this->header_timer_enabled && (elapsed_millis.time - header_timer) >= HEADER_LIMIT_OTHER) {
+		this->header_timer_enabled = false;
+		this->window_handler->setAudioText("");
 	}
 
 	this->br->drawBackground(renderer, 0, 0, lw, lh);
@@ -204,11 +209,10 @@ void AidF_Nav_Computer::loop() {
 								for(int i=2;i<ai_msg.l;i+=1)
 									header_text += char(ai_msg.data[i]);
 
-								this->window_handler->setText(header_text, 1);
+								this->window_handler->setAudioText(header_text);
 
 								this->header_timer_enabled = true;
 								this->header_timer = elapsed_millis.time;
-								this->header_limit = HEADER_LIMIT_OTHER;
 							}
 						} else if(ai_msg.sender == ID_RADIO && ai_msg.l >= 3 && ai_msg.data[0] == 0x26) { //Volume bar.
 							const uint8_t vol = ai_msg.data[1];
@@ -216,9 +220,8 @@ void AidF_Nav_Computer::loop() {
 							
 							this->window_handler->setText(vol_text, 1);
 							
-							this->header_timer_enabled = true;
-							this->header_timer = elapsed_millis.time;
-							this->header_limit = HEADER_LIMIT_VOLUME;
+							this->vol_timer_enabled = true;
+							this->vol_timer = elapsed_millis.time;
 							
 							answered = true;
 						} else if(ai_msg.sender == ID_NAV_SCREEN && ai_msg.l >= 3 && ai_msg.data[0] == 0x30) { //Button press.

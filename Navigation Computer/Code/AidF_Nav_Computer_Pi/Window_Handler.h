@@ -42,6 +42,7 @@ public:
 	uint16_t getHeight();
 
 	void setText(std::string text, const uint8_t pos);
+	void setAudioText(std::string text);
 
 	void refresh();
 
@@ -71,6 +72,9 @@ private:
 	uint16_t w, h;
 
 	TextBox* header_box[3];
+	TextBox* audio_header;
+
+	std::string audio_text = "";
 	
 	NavWindow* active_window, *last_window;
 	AttributeList *attribute_list;
