@@ -11,6 +11,11 @@ AIData::AIData(uint16_t newl, const uint8_t sender, const uint8_t receiver) {
 	this->receiver = receiver;
 }
 
+AIData::AIData(uint16_t newl, const uint8_t sender, const uint8_t receiver, uint8_t* data) : AIData(newl, sender, receiver) {
+	for(int i=0;i<newl;i+=1)
+		this->data[i] = data[i];
+}
+
 AIData::AIData(const AIData &copy) {
 	this->l = copy.l;
 	this->data = new uint8_t[this->l];
@@ -25,6 +30,10 @@ AIData::~AIData() {
 	delete[] this->data;
 }
 
+uint8_t& AIData::operator[](int i) {
+	return this->data[i];
+}
+
 void AIData::refreshAIData(uint16_t newl, const uint8_t sender, const uint8_t receiver) {
 	this->l = newl;
 	delete[] this->data;
@@ -37,12 +46,12 @@ void AIData::refreshAIData(uint16_t newl, const uint8_t sender, const uint8_t re
 void AIData::refreshAIData(AIData newd) {
 	this->refreshAIData(newd.l, newd.sender, newd.receiver);
 	
-	for(uint16_t i=0;i<newd.l;i+=1)
+	for(int i=0;i<newd.l;i+=1)
 		this->data[i] = newd.data[i];
 }
 
 void AIData::refreshAIData(uint8_t* data) {
-	for(uint8_t i=0;i<this->l;i+=1)
+	for(int i=0;i<this->l;i+=1)
 		this->data[i] = data[i];
 }
 
@@ -52,7 +61,7 @@ uint8_t AIData::getChecksum() {
 	checksum ^= this->l+2;
 	checksum ^= this->receiver;
 
-	for(uint8_t i=0;i<this->l;i+=1)
+	for(int i=0;i<this->l;i+=1)
 		checksum ^= this->data[i];
 	
 	return checksum;
@@ -62,7 +71,7 @@ void AIData::getBytes(uint8_t* b) {
 	b[0] = this->sender;
 	b[1] = this->l + 2;
 	b[2] = this->receiver;
-	for(uint8_t i=0;i<this->l;i+=1)
+	for(int i=0;i<this->l;i+=1)
 		b[i+3] = this->data[i];
 	b[this->l+3] = this->getChecksum();
 }
@@ -105,6 +114,6 @@ void bytesToAIData(AIData* ai_b, uint8_t* b) {
 	ai_b->sender = b[0];
 	ai_b->receiver = b[2];
 	
-	for(uint16_t i=0;i<ai_b->l;i+=1)
+	for(int i=0;i<ai_b->l;i+=1)
 		ai_b->data[i] = b[i+2];
 }

@@ -16,7 +16,7 @@
 #define LINES 1
 #define VOL_LIMIT 40
 
-#define TEXT_MODE_BLANK 0 //Any CD text absent.
+#define TEXT_MODE_BLANK 0 //No CD text.
 #define TEXT_MODE_WITH_TEXT 1 //CD text present.
 #define TEXT_MODE_MP3 2 //MP3 ID3 text present.
 

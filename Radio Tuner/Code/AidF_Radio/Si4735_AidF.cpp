@@ -167,11 +167,17 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 
 		uint16_t year, month, day, hour = parameters->hour, minute = parameters->min;
 		const int16_t last_hour = parameters->hour, last_min = parameters->min;
+		
+		const int minute_limit = 5;
 
 		if(parameters->auto_clock && tuner->getRdsDateTime(&year, &month, &day, &hour, &minute) && parameters->fm_stereo) {
-			parameters->hour = hour;
-			parameters->min = minute;
-			parameters->minute_timer = 0;
+			const bool set_clock = getTimePlausible(hour, minute, last_hour, last_min, minute_limit);
+			
+			if(set_clock) {
+				parameters->hour = hour;
+				parameters->min = minute;
+				parameters->minute_timer = 0;
+			}
 		}
 	}
 }

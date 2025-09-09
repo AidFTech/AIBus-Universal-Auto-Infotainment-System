@@ -259,7 +259,7 @@ void loop() {
 			#endif
 
 			if (ai_msg.sender == ID_IMID_SCR && !imid_handler.getEstablished()) { //An external IMID is available.
-				if (ai_msg.data[0] == 0x3B) { // External IMID is announcing itself.
+				if (ai_msg.l >= 2 && ai_msg.data[0] == 0x3B) { // External IMID is announcing itself.
 					if (ai_msg.data[1] == 0x23 && ai_msg.l >= 4) { // Custom text field.
 						parameters.external_imid_char = ai_msg.data[2];
 						parameters.external_imid_lines = ai_msg.data[3];
@@ -285,7 +285,7 @@ void loop() {
 			else if (ai_msg.receiver == ID_XM && xm_handler.getEstablished())
 				xm_handler.readAIBusMessage(&ai_msg);
 			else if (ai_msg.receiver == 0xFF && ai_msg.l >= 2 && ai_msg.data[0] == 0xA1) { // Broadcast message.
-				if (ai_msg.data[1] == 0x1F) {
+				if (ai_msg.l >= 3 && ai_msg.data[1] == 0x1F) {
 					if (ai_msg.data[2] == 0x1 && ai_msg.l >= 5) { // Time.
 						parameters.hour = ai_msg.data[3]&0x1F;
 						parameters.minute = ai_msg.data[4];
@@ -298,7 +298,7 @@ void loop() {
 						imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year, parameters.display_24h);
 					}
 				}
-				else if (ai_msg.sender == ID_CANSLATOR && ai_msg.data[1] == 0x2) { // Key position.
+				else if (ai_msg.sender == ID_CANSLATOR && ai_msg.l >= 3 && ai_msg.data[1] == 0x2) { // Key position.
 					const uint8_t last_key = parameters.key_position, key = ai_msg.data[2] & 0xF;
 
 					parameters.key_position = key;
@@ -325,7 +325,7 @@ void loop() {
 							}
 						}
 					}
-				} else if (ai_msg.sender == ID_CANSLATOR && ai_msg.data[1] == 0x43 && ai_msg.l >= 3) { // Doors.
+				} else if (ai_msg.sender == ID_CANSLATOR && ai_msg.l >= 3 && ai_msg.data[1] == 0x43) { // Doors.
 					const uint8_t last_door_state = parameters.door_position;
 					parameters.door_position = ai_msg.data[2] & 0xF;
 

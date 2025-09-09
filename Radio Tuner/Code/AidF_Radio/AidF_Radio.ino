@@ -1,3 +1,5 @@
+#include <Arduino.h>
+
 #include <elapsedMillis.h>
 #include <MCP4251.h>
 
@@ -85,9 +87,10 @@
 #define RDS_SEGMENT_COUNT 12
 #define RDS_IMID_TIMER 3000
 
+#define AISerial Serial
+
 ParameterList parameters;
 
-#define AISerial Serial
 AIBusHandler aibus_handler(&AISerial, AI_RX);
 
 TextHandler text_handler(&aibus_handler, &parameters);
@@ -246,8 +249,7 @@ void setup() {
 	//source_handler.sendRadioHandshake();
 
 	uint8_t init_data[] = {0x4A, 0x1F};
-	AIData init_msg(sizeof(init_data), ID_RADIO, ID_CANSLATOR);
-	init_msg.refreshAIData(init_data);
+	AIData init_msg(sizeof(init_data), ID_RADIO, ID_CANSLATOR, init_data);
 	aibus_handler.writeAIData(&init_msg, false);
 
 	powerOff();
@@ -381,8 +383,7 @@ void loop() {
 			parameters.last_sub = sub_id;
 			
 			uint8_t function_data[] = {0x40, 0x10, current_source_id, sub_id};
-			AIData function_msg(sizeof(function_data), ID_RADIO, last_active_source_id);
-			function_msg.refreshAIData(function_data);
+			AIData function_msg(sizeof(function_data), ID_RADIO, last_active_source_id, function_data);
 			
 			if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
 				aibus_handler.writeAIData(&function_msg);
@@ -446,8 +447,7 @@ void loop() {
 			parameters.audio_on = true;
 
 			uint8_t function_data[] = {0x40, 0x10, 0x0};
-			AIData function_msg(sizeof(function_data), ID_RADIO, last_active_source_id);
-			function_msg.refreshAIData(function_data);
+			AIData function_msg(sizeof(function_data), ID_RADIO, last_active_source_id, function_data);
 			
 			if(function_msg.receiver != 0 && function_msg.receiver != ID_RADIO)
 				aibus_handler.writeAIData(&function_msg);
@@ -473,7 +473,7 @@ void loop() {
 		const uint8_t current_source_id = source_handler.getCurrentSourceID();
 		if(current_source_id != ID_RADIO && current_source_id != 0) {
 			if(current_source_id != ID_ANDROID_AUTO)
-				text_handler.clearAllText();
+				text_handler.clearAllSubtext();
 			
 			text_handler.sendSourceTextControl(current_source_id, current_source_id);
 		}
@@ -870,7 +870,7 @@ void handleAIBus(AIData* msg) {
 			
 			parameters.key_position = pos;
 			
-		} else if(msg->data[1] == 0x43 && msg->l >= 3) { //Door position.
+		} else if(msg->l >= 3 && msg->data[1] == 0x43) { //Door position.
 			const uint8_t pos = msg->data[2]&0xF;
 			
 			if(parameters.key_position == 0 && pos != parameters.door_position) {
@@ -886,7 +886,7 @@ void handleAIBus(AIData* msg) {
 			}
 			
 			parameters.door_position = pos;
-		} else if(msg->data[1] == 0x1F && msg->l >= 3) {
+		} else if(msg->l >= 3 && msg->data[1] == 0x1F) {
 			if(msg->data[2] == 0x1 && msg->l >= 6) { //Time.
 				int16_t new_minute = 60*msg->data[3] + msg->data[4] - parameters.offset*30;
 				
@@ -901,7 +901,7 @@ void handleAIBus(AIData* msg) {
 
 				parameters.send_12h = (msg->data[3]&0x80) != 0;
 					
-			} else if(msg->data[2] == 0x4) { //Vehicle speed.
+			} else if(msg->data[2] == 0x4 && msg->l >= 4) { //Vehicle speed.
 				double speed = getSpeed(msg);
 				if(msg->data[3]&0x80 != 0) //Speed in mph.
 					parameters.vehicle_speed = uint16_t(speed*1.6);
@@ -941,8 +941,7 @@ void handleAIBus(AIData* msg) {
 		{
 			uint8_t data[] = {0x77, parameters.last_control, 0x10};
 
-			AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
-			screen_msg.refreshAIData(data);
+			AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
 			aibus_handler.writeAIData(&screen_msg, parameters.screen_connected);
 		}
 	}
@@ -994,9 +993,8 @@ void pingActiveSource() {
 	if(current_source == ID_RADIO || current_source == 0)
 		return;
 
-	AIData ping_msg(3, ID_RADIO, current_source);
 	uint8_t ping_data[] = {0x70, 0x10, current_source};
-	ping_msg.refreshAIData(ping_data);
+	AIData ping_msg(3, ID_RADIO, current_source, ping_data);
 
 	aibus_handler.writeAIData(&ping_msg);
 }
@@ -1006,8 +1004,7 @@ void pingComputer() {
 	computer_ping_timer = 0;
 	
 	uint8_t ping_data[] = {1};
-	AIData ping_msg(sizeof(ping_data), ID_RADIO, ID_NAV_COMPUTER);
-	ping_msg.refreshAIData(ping_data);
+	AIData ping_msg(sizeof(ping_data), ID_RADIO, ID_NAV_COMPUTER, ping_data);
 
 	if(aibus_handler.writeAIData(&ping_msg, false));
 }
@@ -1132,8 +1129,7 @@ void clearFMData() {
 	parameters.rds_station_name = "";
 	if(parameters.rds_station_name.compareTo(last_station_name) != 0) {
 		uint8_t clear_data[] = {0x20, 0x71, 0x1};
-		AIData clear_msg(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER);
-		clear_msg.refreshAIData(clear_data);
+		AIData clear_msg(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER, clear_data);
 
 		aibus_handler.writeAIData(&clear_msg, parameters.computer_connected);
 
@@ -1149,16 +1145,14 @@ void getScreenControlRequest(const bool all) {
 	if(all)
 		data[2] |= 0x10;
 
-	AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
-	screen_msg.refreshAIData(data);
+	AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
 	aibus_handler.writeAIData(&screen_msg, parameters.screen_connected);
 }
 
 //Send a ping to the IMID.
 void sendIMIDPing() {
 	uint8_t imid_request_data[] = {0x4, 0xE6, 0x3B};
-	AIData imid_request_msg(sizeof(imid_request_data), ID_RADIO, ID_IMID_SCR);
-	imid_request_msg.refreshAIData(imid_request_data);
+	AIData imid_request_msg(sizeof(imid_request_data), ID_RADIO, ID_IMID_SCR, imid_request_data);
 
 	aibus_handler.writeAIData(&imid_request_msg, false);
 }
@@ -1166,8 +1160,7 @@ void sendIMIDPing() {
 //Send a request to the IMID for its full specs.
 void sendIMIDRequest() {
 	uint8_t imid_request_data[] = {0x4, 0xE6, 0x3B};
-	AIData imid_request_msg(sizeof(imid_request_data), ID_RADIO, ID_IMID_SCR);
-	imid_request_msg.refreshAIData(imid_request_data);
+	AIData imid_request_msg(sizeof(imid_request_data), ID_RADIO, ID_IMID_SCR, imid_request_data);
 
 	aibus_handler.writeAIData(&imid_request_msg);
 
@@ -1223,8 +1216,7 @@ void sendIMIDRequest() {
 //Send the message to turn the screen light on.
 void sendAudioLightMessage(const bool audio_on) {
 	uint8_t light_data[] = {0x34, audio_on ? 0x1 : 0x0};
-	AIData light_msg(sizeof(light_data), ID_RADIO, ID_NAV_SCREEN);
-	light_msg.refreshAIData(light_data);
+	AIData light_msg(sizeof(light_data), ID_RADIO, ID_NAV_SCREEN, light_data);
 	aibus_handler.writeAIData(&light_msg, parameters.screen_connected);
 }
 

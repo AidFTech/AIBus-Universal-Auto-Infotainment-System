@@ -22,6 +22,8 @@ public:
 	TextHandler(AIBusHandler* ai_handler, ParameterList* parameter_list);
 
 	void clearAllText();
+	void clearAllSubtext();
+	void clearAllSubtext(const bool refresh);
 	void clearAllText(const bool refresh);
 	
 	void setBlankHeader(String header);

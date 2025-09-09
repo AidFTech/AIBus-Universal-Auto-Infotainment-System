@@ -96,6 +96,9 @@ int EnIEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint1
 	
 	ai_handler->cacheAllPending();
 	const int result = IEBusHandler::readMessage(ie_d, ack_response, id);
+	
+	*rec_clear_register &= ~rec_clear_bitmask;
+	*rec_clear_register |= rec_clear_bitmask;
 	/*ai_handler->waitForAIBus();
 	ai_handler->cacheAllPending();*/
 

@@ -20,6 +20,7 @@
 #define ID_STEERING_CTRL 0x6F
 #define ID_ANDROID_AUTO 0x8E
 #define ID_PHONE 0xC8
+#define ID_USB_MEDIA 0xC9
 
 #define WAIT_TIME 500
 
@@ -30,8 +31,11 @@ struct AIData {
 	
 	AIData();
 	AIData(uint16_t newl, const uint8_t sender, const uint8_t receiver);
+	AIData(uint16_t newl, const uint8_t sender, const uint8_t receiver, uint8_t* data);
 	AIData(const AIData &copy);
 	~AIData();
+	
+	uint8_t& operator[](int i);
 	
 	void refreshAIData(uint16_t newl, const uint8_t sender, const uint8_t receiver);
 	void refreshAIData(AIData newd);

@@ -71,6 +71,8 @@ pub struct AMirror<'a> {
 	pub run: bool,
 	power_state: u8,
 	door_state: u8,
+
+	powered_on: bool, //True if a power-on has been confirmed.
 }
 
 impl <'a> AMirror<'a> {
@@ -128,10 +130,36 @@ impl <'a> AMirror<'a> {
 			run: true,
 			power_state: 0x0,
 			door_state: 0x0,
+
+			powered_on: false,
 		};
 	}
 
 	pub fn process(&mut self) {
+		if !self.powered_on {
+			let mut ai_rx_list = Vec::new();
+
+			match self.aibus_handler.try_lock() {
+				Ok(mut aibus_handler) => {
+					let ai_rx = aibus_handler.get_ai_rx();
+					for ai_data in &mut *ai_rx {
+						ai_rx_list.push(ai_data.clone());
+					}
+
+					ai_rx.clear();
+				}
+				Err(_) => {
+					
+				}
+			}
+
+			for ai_data in ai_rx_list {
+				self.handle_aibus_message(ai_data);
+			}
+
+			return;
+		}
+
 		let mut context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
@@ -272,7 +300,7 @@ impl <'a> AMirror<'a> {
 
 			self.write_aibus_message(phone_type_msg);
 			
-			if context.audio_text && context.imid_native_mirror {
+			if context.audio_selected && context.audio_text && context.imid_native_mirror {
 				let phone_type_msg = AIBusMessage {
 					sender: AIBUS_DEVICE_AMIRROR,
 					receiver: AIBUS_DEVICE_IMID,
@@ -418,7 +446,7 @@ impl <'a> AMirror<'a> {
 					self.write_nav_text(context.song_title.clone(), 1, 0, true);
 					self.write_nav_overlay(context.song_title.clone());
 
-					if context.imid_native_mirror && self.imid_scroll < 0 {
+					if context.imid_native_mirror && self.imid_scroll < 0 && context.phone_type != 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.song_title.clone(), SONG_NAME);
 					} else if context.imid_row_count > 0 && context.imid_text_len > 0 && context.phone_type != 0 {
 						if self.display_title && self.imid_scroll < 0 {
@@ -449,7 +477,7 @@ impl <'a> AMirror<'a> {
 				if context.audio_text {
 					self.write_nav_text(context.artist.clone(), 2, 0, true);
 
-					if context.imid_native_mirror && self.imid_scroll < 0 {
+					if context.imid_native_mirror && self.imid_scroll < 0 && context.phone_type != 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.artist.clone(), ARTIST_NAME);
 					} else if context.imid_row_count > 0 && context.imid_text_len > 0 && context.phone_type != 0 {
 						if self.display_artist && self.imid_scroll < 0 {
@@ -483,7 +511,7 @@ impl <'a> AMirror<'a> {
 				if context.audio_text {
 					self.write_nav_text(context.album.clone(), 3, 0, true);
 
-					if context.imid_native_mirror && self.imid_scroll < 0 {
+					if context.imid_native_mirror && self.imid_scroll < 0 && context.phone_type != 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.album.clone(), ALBUM_NAME);
 					} else if context.imid_row_count > 0 && context.imid_text_len > 0 && context.phone_type != 0 {
 						if self.display_album && self.imid_scroll < 0 {
@@ -520,7 +548,7 @@ impl <'a> AMirror<'a> {
 				if context.audio_text {
 					self.write_nav_text(context.app.clone(), 4, 0, true);
 
-					if context.imid_native_mirror && self.imid_scroll < 0 {
+					if context.imid_native_mirror && self.imid_scroll < 0 && context.phone_type != 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.app.clone(), APP_NAME);
 					} else if context.imid_row_count > 0 && context.imid_text_len > 0 && context.phone_type != 0 {
 						if self.display_app && self.imid_scroll < 0 {
@@ -571,7 +599,9 @@ impl <'a> AMirror<'a> {
 
 						self.write_nav_text(time_text, 0, 1, true);
 						self.write_time(AIBUS_DEVICE_RADIO, context.track_time as u16);
-						self.write_time(AIBUS_DEVICE_IMID, context.track_time as u16);
+						if context.phone_type != 0 {
+							self.write_time(AIBUS_DEVICE_IMID, context.track_time as u16);
+						}
 					} else {
 						let clear_data = [0x20, 0x71, 0x0].to_vec();
 						self.write_aibus_message(AIBusMessage {
@@ -581,7 +611,9 @@ impl <'a> AMirror<'a> {
 						});
 
 						self.write_time(AIBUS_DEVICE_RADIO, 0);
-						self.write_time(AIBUS_DEVICE_IMID, 0);
+						if context.phone_type != 0 {
+							self.write_time(AIBUS_DEVICE_IMID, 0);
+						}
 					}
 				}
 			}
@@ -829,6 +861,7 @@ impl <'a> AMirror<'a> {
 			overlay_limit = 3500;
 		}
 
+		//Overlay timeout.
 		if Instant::now() - self.overlay_timer > Duration::from_millis(overlay_limit) && self.overlay_on {
 			self.overlay_on = false;
 			self.vol_overlay = false;
@@ -874,7 +907,7 @@ impl <'a> AMirror<'a> {
 			}
 		};
 
-		if ai_msg.sender == AIBUS_DEVICE_RADIO && !context.radio_connected {
+		if ai_msg.sender == AIBUS_DEVICE_RADIO && !context.radio_connected && self.powered_on {
 			context.radio_connected = true;
 
 			std::mem::drop(context);
@@ -890,7 +923,7 @@ impl <'a> AMirror<'a> {
 			};
 		}
 
-		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN && !context.screen_connected {
+		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN && !context.screen_connected && self.powered_on {
 			context.screen_connected = true;
 
 			self.write_aibus_message(AIBusMessage {
@@ -1305,7 +1338,7 @@ impl <'a> AMirror<'a> {
 			if ai_msg.receiver == 0xFF && ai_msg.l() >= 1 && ai_msg.data[0] == 0xA1 {
 				if ai_msg.l() >= 3 && ai_msg.data[1] == 0x2 { //Key position.
 					self.power_state = ai_msg.data[2]&0xF;
-					if self.power_state == 0x0 && (self.door_state&0xC) != 0 {
+					if self.power_state == 0x0 && (self.door_state&0xC) != 0 && self.powered_on {
 						self.run = false;
 
 						match self.mpv_video.try_lock() {
@@ -1316,6 +1349,8 @@ impl <'a> AMirror<'a> {
 								println!("Power Off: MPV locked.");
 							}
 						}
+					} else if self.power_state != 0x0 {
+						self.powered_on = true;
 					}
 				} else if ai_msg.l() >= 3 && ai_msg.data[1] == 0x43 { //Door position.
 					self.door_state = ai_msg.data[2];
@@ -1827,25 +1862,27 @@ impl <'a> AMirror<'a> {
 				data: [0x30, context.phone_type].to_vec(),
 			});
 
-			let mut phone_name_data = [0x23, 0x30].to_vec();
-			let phone_name_bytes = context.phone_name.as_bytes();
+			if context.phone_type != 0 {
+				let mut phone_name_data = [0x23, 0x30].to_vec();
+				let phone_name_bytes = context.phone_name.as_bytes();
 
-			for i in 0..phone_name_bytes.len() {
-				phone_name_data.push(phone_name_bytes[i]);
+				for i in 0..phone_name_bytes.len() {
+					phone_name_data.push(phone_name_bytes[i]);
+				}
+
+				let phone_name_msg = AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_IMID,
+					data: phone_name_data.clone(),
+				};
+
+				self.write_aibus_message(phone_name_msg);
+
+				self.write_metadata(AIBUS_DEVICE_IMID, context.song_title.clone(), SONG_NAME);
+				self.write_metadata(AIBUS_DEVICE_IMID, context.artist.clone(), ARTIST_NAME);
+				self.write_metadata(AIBUS_DEVICE_IMID, context.album.clone(), ALBUM_NAME);
+				self.write_metadata(AIBUS_DEVICE_IMID, context.app.clone(), APP_NAME);
 			}
-
-			let phone_name_msg = AIBusMessage {
-				sender: AIBUS_DEVICE_AMIRROR,
-				receiver: AIBUS_DEVICE_IMID,
-				data: phone_name_data.clone(),
-			};
-
-			self.write_aibus_message(phone_name_msg);
-
-			self.write_metadata(AIBUS_DEVICE_IMID, context.song_title.clone(), SONG_NAME);
-			self.write_metadata(AIBUS_DEVICE_IMID, context.artist.clone(), ARTIST_NAME);
-			self.write_metadata(AIBUS_DEVICE_IMID, context.album.clone(), ALBUM_NAME);
-			self.write_metadata(AIBUS_DEVICE_IMID, context.app.clone(), APP_NAME);
 		} else if context.imid_row_count > 0 && context.imid_text_len > 0 {
 			if self.imid_scroll < 0 && context.phone_name.len() > 0 && context.phone_type != 0 {
 

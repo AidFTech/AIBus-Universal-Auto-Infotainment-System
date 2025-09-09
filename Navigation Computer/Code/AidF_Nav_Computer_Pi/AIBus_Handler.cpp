@@ -279,23 +279,25 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			}
 		}
 
-		unsigned long start = *this->timer;
-		#ifndef RPI_UART
-		int current_cached_bytes = aiserialBytesAvailable(this->ai_port);
-		#endif
-		while((*this->timer - start) < 1) {
-			#ifdef RPI_UART
-			if(gpioRead(AI_RX) == 0)
-				start = *this->timer;
-			#else
-			if(current_cached_bytes != aiserialBytesAvailable(this->ai_port)) {
-				current_cached_bytes = aiserialBytesAvailable(this->ai_port);
-				start = *this->timer;
-			}
+		if(ai_d->l >= 1 && ai_d->data[0] != 0x80) {
+			unsigned long start = *this->timer;
+			#ifndef RPI_UART
+			int current_cached_bytes = aiserialBytesAvailable(this->ai_port);
 			#endif
+			while((*this->timer - start) < 1) {
+				#ifdef RPI_UART
+				if(gpioRead(AI_RX) == 0)
+					start = *this->timer;
+				#else
+				if(current_cached_bytes != aiserialBytesAvailable(this->ai_port)) {
+					current_cached_bytes = aiserialBytesAvailable(this->ai_port);
+					start = *this->timer;
+				}
+				#endif
+			}
+			start = *this->timer;
+			while((*this->timer - start) < 1);
 		}
-		start = *this->timer;
-		while((*this->timer - start) < 1);
 
 		for(uint8_t i=0;i<ai_d->l+4;i+=1)
 			aiserialWriteByte(this->ai_port, data[i]);

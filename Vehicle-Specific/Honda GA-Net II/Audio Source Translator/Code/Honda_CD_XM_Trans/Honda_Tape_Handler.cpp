@@ -200,7 +200,7 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 				this->sendButtonMessage(HONDA_BUTTON_SKIPREV, track_count);
 				break;
 		}
-	} else if(the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO && the_message->l >= 3) { //Function change.
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function change.
 		const uint8_t active_source = the_message->data[2];
 
 		ack = false;
@@ -239,7 +239,7 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			if(parameter_list->audio_pin >= 0)
 				digitalWrite(parameter_list->audio_pin, LOW);
 		}
-	} else if(the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO && the_message->l >= 3) {
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO) {
 		ack = false;
 		sendAIAckMessage(sender);
 		

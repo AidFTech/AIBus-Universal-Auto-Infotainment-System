@@ -156,9 +156,8 @@ void SourceHandler::setPower(const bool power) {
 
 //Send the initial radio handshake message.
 void SourceHandler::sendRadioHandshake() {
-	AIData handshake_msg(3, ID_RADIO, 0xFF);
 	uint8_t data[] = {0x4, 0xE6, 0x10};
-	handshake_msg.refreshAIData(data);
+	AIData handshake_msg(3, ID_RADIO, 0xFF, data);
 
 	ai_handler->writeAIData(&handshake_msg);
 }
@@ -167,7 +166,7 @@ void SourceHandler::sendRadioHandshake() {
 bool SourceHandler::handleAIBus(AIData* ai_d) {
 	bool ack = true;
 
-	if(ai_d->data[0] == 0x1 && ai_d->l >= 2) { //Handshake message.
+	if(ai_d->l >= 3 && ai_d->data[0] == 0x1) { //Handshake message.
 		if(ai_d->data[1] == 0x1) { //First message from this source.
 			if(ai_d->sender != ai_d->data[2]) {
 				ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
@@ -210,8 +209,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 
 			const uint8_t current_source_id = parameter_list->audio_on ? this->source_list[current_source].source_id : 0, sub_id = parameter_list->audio_on ? this->source_list[current_source].sub_id : 0;
 			uint8_t function_data[] = {0x40, 0x10, current_source_id, sub_id};
-			AIData function_msg(sizeof(function_data), ID_RADIO, new_id);
-			function_msg.refreshAIData(function_data);
+			AIData function_msg(sizeof(function_data), ID_RADIO, new_id, function_data);
 			ai_handler->writeAIData(&function_msg);
 		} else if(ai_d->data[1] == 0x2) { //Sub-source.
 			const uint8_t id = ai_d->sender;
@@ -229,8 +227,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			createSubsource(id);
 
 			uint8_t handshake_data[] = {0x5, id, 0x2};
-			AIData handshake_msg(sizeof(handshake_data), ID_RADIO, ai_d->sender);
-			handshake_msg.refreshAIData(handshake_data);
+			AIData handshake_msg(sizeof(handshake_data), ID_RADIO, ai_d->sender, handshake_data);
 			ai_handler->writeAIData(&handshake_msg);
 		} else if(ai_d->data[1] == 0x23 || ai_d->data[1] == 0x22) { //Source name or short name.
 			const uint8_t sub = ai_d->data[2];
@@ -283,7 +280,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 	} else if(ai_d->sender == ID_NAV_SCREEN) { //Screen message.
 		ack = false;
 		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
-		if(ai_d->data[0] == 0x30) { //Button press.
+		if(ai_d->l >= 3 && ai_d->data[0] == 0x30) { //Button press.
 			const uint8_t button = ai_d->data[1], state = ai_d->data[2]>>6;
 
 			if(parameter_list->manual_tune_mode && (button != 0x7 && button != 0x2A && button != 0x2B)) {
@@ -293,8 +290,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				{
 					uint8_t data[] = {0x77, parameter_list->last_control, 0x10};
 
-					AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
-					screen_msg.refreshAIData(data);
+					AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
 					ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
 				}
 			}
@@ -328,8 +324,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					{
 						uint8_t data[] = {0x77, parameter_list->last_control, 0x10};
 
-						AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
-						screen_msg.refreshAIData(data);
+						AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
 						ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
 					}
 				} else if(state == 2) {
@@ -378,8 +373,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					else
 						data[1] = parameter_list->last_control;
 
-					AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
-					screen_msg.refreshAIData(data);
+					AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
 					ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
 				}
 			} else if(button == 0x53 && state == 2) { //Info button.
@@ -555,7 +549,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				}
 			}
 			
-		} else if(ai_d->data[0] == 0x32) { //Knob turn.
+		} else if(ai_d->l >= 3 && ai_d->data[0] == 0x32) { //Knob turn.
 			ack = false;
 			ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
 
@@ -585,12 +579,12 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 	} else if(ai_d->sender == ID_NAV_COMPUTER) { //Message from computer.
 		ack = false;
 		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
-		if(ai_d->data[0] == 0x2B && ai_d->l >= 2) { //Menu related message.
+		if(ai_d->l >= 2 && ai_d->data[0] == 0x2B) { //Menu related message.
 			if(ai_d->data[1] == 0x40) { //A menu was cleared.
 				menu_open = NO_MENU;
 				tuner_background->setSeekMode(true);
 				return true;
-			} if(ai_d->data[1] == 0x6A && ai_d->l >= 3) { //Audio menu item selected.
+			} if(ai_d->l >= 3 && ai_d->data[1] == 0x6A) { //Audio menu item selected.
 				const uint8_t item = ai_d->data[2], source_id = this->getCurrentSourceID();
 				if(source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
 					switch(item) {
@@ -604,8 +598,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 							else
 								data[1] = parameter_list->last_control;
 
-							AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
-							screen_msg.refreshAIData(data);
+							AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
 							ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
 						}
 
@@ -621,12 +614,11 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						break;
 					}
 				} else if(source_id != 0 && source_id != ID_RADIO) {
-					AIData forward_msg(ai_d->l, ID_RADIO, source_id);
-					forward_msg.refreshAIData(ai_d->data);
+					AIData forward_msg(ai_d->l, ID_RADIO, source_id, ai_d->data);
 					ai_handler->writeAIData(&forward_msg);
 				}
 				return true;
-			} else if(ai_d->data[1] == 0x60 && ai_d->l >= 3) { //True menu item selected.
+			} else if(ai_d->l >= 3 && ai_d->data[1] == 0x60) { //True menu item selected.
 				const uint8_t selection = ai_d->data[2]-1;
 				if(menu_open == SOURCE_MENU) {
 					AudioSource source_list[source_count];
@@ -708,14 +700,13 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 							else
 								data[1] = parameter_list->last_control;
 
-							AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN);
-							screen_msg.refreshAIData(data);
+							AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
 							ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
 						}
 					}
 				}
 				return true;
-			} else if(ai_d->data[1] == 0x4A) {
+			} else if(ai_d->l >= 2 && ai_d->data[1] == 0x4A) {
 				if(source_list[current_source].source_id == 0)
 					return true;
 				
@@ -725,8 +716,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				
 				if(src != ID_RADIO) {
 					uint8_t request_data[] = {0x2B, 0x4A};
-					AIData request_msg(sizeof(request_data), ID_RADIO, src);
-					request_msg.refreshAIData(request_data);
+					AIData request_msg(sizeof(request_data), ID_RADIO, src, request_data);
 					
 					ai_handler->writeAIData(&request_msg);
 				}
@@ -930,8 +920,7 @@ bool SourceHandler::sendSourceQuery(const uint8_t source) {
 	query = true;
 
 	uint8_t query_data[] = {0x4, 0xE6, 0x10};
-	AIData query_msg(sizeof(query_data), ID_RADIO, source);
-	query_msg.refreshAIData(query_data);
+	AIData query_msg(sizeof(query_data), ID_RADIO, source, query_data);
 
 	ai_handler->writeAIData(&query_msg, false);
 
@@ -961,8 +950,7 @@ bool SourceHandler::sendSourceQuery(const uint8_t source) {
 //Clear any open audio menu.
 void SourceHandler::clearMenu() {
 	uint8_t data[] = {0x2B, 0x4A};
-	AIData clear_msg(sizeof(data), ID_RADIO, ID_NAV_COMPUTER);
-	clear_msg.refreshAIData(data);
+	AIData clear_msg(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
 
 	const bool ack = ai_handler->writeAIData(&clear_msg);
 	if(!ack)
@@ -986,14 +974,6 @@ void SourceHandler::clearMenu() {
 
 //Send the initial request to create a menu. Return whether creation is allowed.
 bool SourceHandler::createMenu(const String title, const int items) {
-	//uint8_t audio_window_data[] = {0x27, 0x30, 0x26};
-	//IData audio_window_msg(sizeof(audio_window_data), ID_RADIO, ID_NAV_COMPUTER);
-	//audio_window_msg.refreshAIData(audio_window_data);
-	//bool ack = ai_handler->writeAIData(&audio_window_msg);
-
-	//if(!ack)
-	//	return false;
-
 	uint8_t menu_header_data[12 + title.length()];
 
 	const uint16_t width = parameter_list->screen_w;
@@ -1013,8 +993,7 @@ bool SourceHandler::createMenu(const String title, const int items) {
 	for(int i=0;i<title.length();i+=1)
 		menu_header_data[i+12] = uint8_t(title.charAt(i));
 
-	AIData menu_header(sizeof(menu_header_data), ID_RADIO, ID_NAV_COMPUTER);
-	menu_header.refreshAIData(menu_header_data);
+	AIData menu_header(sizeof(menu_header_data), ID_RADIO, ID_NAV_COMPUTER, menu_header_data);
 	bool ack = ai_handler->writeAIData(&menu_header);
 
 	if(!ack)
@@ -1056,16 +1035,14 @@ void SourceHandler::createSourceMenu() {
 		for(int j=0;j<active_list[i].source_name.length();j+=1)
 			option_data[j+3] = uint8_t(active_list[i].source_name.charAt(j));
 
-		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
-		option_msg.refreshAIData(option_data);
+		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER, option_data);
 		bool ack = ai_handler->writeAIData(&option_msg);
 		//if(!ack)
 		//	return;
 	}
 
 	uint8_t display_data[] = {0x2B, 0x52, 0x1};
-	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
-	display_msg.refreshAIData(display_data);
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER, display_data);
 	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = SOURCE_MENU;
@@ -1104,14 +1081,12 @@ void SourceHandler::createPresetMenu(const uint8_t group) {
 		for(int j=0;j<preset.length();j+=1)
 			option_data[j+3] = uint8_t(preset.charAt(j));
 
-		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
-		option_msg.refreshAIData(option_data);
+		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER, option_data);
 		ai_handler->writeAIData(&option_msg);
 	}
 
 	uint8_t display_data[] = {0x2B, 0x52, 0x1};
-	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
-	display_msg.refreshAIData(display_data);
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER, display_data);
 	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = PRESET_MENU;
@@ -1140,14 +1115,12 @@ void SourceHandler::createStationListMenu() {
 		for(int j=0;j<station_name.length();j+=1)
 			option_data[j+3] = uint8_t(station_name.charAt(j));
 
-		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
-		option_msg.refreshAIData(option_data);
+		AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER, option_data);
 		ai_handler->writeAIData(&option_msg);
 	}
 
 	uint8_t display_data[] = {0x2B, 0x52, 0x1};
-	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
-	display_msg.refreshAIData(display_data);
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER, display_data);
 	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = STATION_MENU;
@@ -1162,8 +1135,7 @@ void SourceHandler::createToneMenu() {
 		createToneMenuItem(i);
 
 	uint8_t display_data[] = {0x2B, 0x52, 0x1};
-	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER);
-	display_msg.refreshAIData(display_data);
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER, display_data);
 	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = TONE_MENU;
@@ -1239,9 +1211,7 @@ void SourceHandler::createToneMenuItem(const int item) {
 	for(int i=0;i<option_text.length();i+=1)
 		option_data[i+3] = uint8_t(option_text.charAt(i));
 
-	AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER);
-	option_msg.refreshAIData(option_data);
-
+	AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER, option_data);
 	ai_handler->writeAIData(&option_msg, parameter_list->computer_connected);
 	
 	if(item < TONE_OPTION_SVC) {
@@ -1275,8 +1245,7 @@ void SourceHandler::createToneMenuItem(const int item) {
 		for(int i=0;i<slider_text.length();i+=1)
 			slider_data[i+6] = uint8_t(slider_text.charAt(i));
 
-		AIData slider_msg(sizeof(slider_data), ID_RADIO, ID_NAV_COMPUTER);
-		slider_msg.refreshAIData(slider_data);
+		AIData slider_msg(sizeof(slider_data), ID_RADIO, ID_NAV_COMPUTER, slider_data);
 
 		ai_handler->writeAIData(&slider_msg, parameter_list->computer_connected);
 	}
@@ -1347,8 +1316,7 @@ void SourceHandler::handleSteeringControl(const uint8_t command, const uint8_t s
 			if(command == 0x24)
 				command_data[2] = 0x1;
 
-			AIData command_msg(sizeof(command_data), ID_RADIO, ID_TAPE);
-			command_msg.refreshAIData(command_data);
+			AIData command_msg(sizeof(command_data), ID_RADIO, ID_TAPE, command_data);
 			ai_handler->writeAIData(&command_msg);
 		} else if(source != 0) {
 			uint8_t command_data[] = {0x38, 0xA, 0x0};
@@ -1359,8 +1327,7 @@ void SourceHandler::handleSteeringControl(const uint8_t command, const uint8_t s
 			if(command == 0x24)
 				command_data[2] = 0x1;
 			
-			AIData command_msg(sizeof(command_data), ID_RADIO, source);
-			command_msg.refreshAIData(command_data);
+			AIData command_msg(sizeof(command_data), ID_RADIO, source, command_data);
 			ai_handler->writeAIData(&command_msg);
 		}
 	}

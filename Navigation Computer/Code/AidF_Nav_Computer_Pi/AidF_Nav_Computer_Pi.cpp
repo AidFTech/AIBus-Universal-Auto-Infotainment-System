@@ -189,8 +189,9 @@ void AidF_Nav_Computer::loop() {
 				if(ai_msg.sender != ID_NAV_COMPUTER && (ai_msg.receiver == ID_NAV_COMPUTER || ai_msg.receiver == 0xFF) && ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
 					bool answered = false;
 
+					NavWindow* active_window = this->window_handler->getActiveWindow();
 					if(ai_msg.receiver == 0xFF && ai_msg.data[0] == 0xA1)
-						answered = handleBroadcastMessage(&ai_msg) && typeid(*this->window_handler->getActiveWindow()) != typeid(IntroWindow);
+						answered = handleBroadcastMessage(&ai_msg) && typeid(*active_window) != typeid(IntroWindow);
 
 					if(!answered)
 						answered = audio_window->handleAIBus(&ai_msg);
@@ -418,7 +419,8 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 			if(!info_parameters->outside_temp_sent)
 				info_parameters->outside_temp_sent = true;
 			
-			if(typeid(*this->window_handler->getActiveWindow()) == typeid(VehicleInfoWindow))
+			NavWindow* active_window = this->window_handler->getActiveWindow();
+			if(typeid(*active_window) == typeid(VehicleInfoWindow))
 				this->window_handler->refresh();
 
 			return true;
@@ -430,7 +432,7 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 
 			unsigned int read_speed = 0;
 			for(int i=4;i<ai_d->l;i+=1) {
-				read_speed << 8;
+				read_speed <<= 8;
 				read_speed += ai_d->data[i];
 			}
 
@@ -480,7 +482,8 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 			if(!info_parameters->coolant_temp_sent)
 				info_parameters->coolant_temp_sent = true;
 			
-			if(typeid(*this->window_handler->getActiveWindow()) == typeid(VehicleInfoWindow))
+			NavWindow* active_window = this->window_handler->getActiveWindow();
+			if(typeid(*active_window) == typeid(VehicleInfoWindow))
 				this->window_handler->refresh();
 			
 			return true;

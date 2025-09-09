@@ -510,14 +510,14 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 			}
 
 		}
-	} else if(the_message->data[0] == 0x30 && the_message->data[1] == 0x0 && source_sel) {
+	} else if(the_message->l >= 2 && the_message->data[0] == 0x30 && the_message->data[1] == 0x0 && source_sel) {
 		ack = false;
 		sendAIAckMessage(sender);
 		sendAINumberMessage(sender);
 
 		for(uint8_t i=1;i<=4;i+=1)
 			sendAITextMessage(sender, i);
-	} else if(the_message->data[0] == 0x38 && the_message->data[1] == 0x04 && the_message->l >= 3 && source_sel) { //Channel increment/decrement.
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x38 && the_message->data[1] == 0x04 && source_sel) { //Channel increment/decrement.
 		ack = false;
 		sendAIAckMessage(sender);
 
@@ -531,7 +531,7 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		channel_msg.refreshIEData(channel_data);
 		ie_driver->sendMessage(&channel_msg, true, true);
 		getIEAckMessage(device_ie_id);
-	} else if(the_message->data[0] == 0x38 && the_message->data[1] == 0xA && the_message->l >= 3 && source_sel) { //Category increment/decrement.
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x38 && the_message->data[1] == 0xA && source_sel) { //Category increment/decrement.
 		ack = false;
 		sendAIAckMessage(sender);
 
@@ -545,7 +545,7 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		channel_msg.refreshIEData(channel_data);
 		ie_driver->sendMessage(&channel_msg, true, true);
 		getIEAckMessage(device_ie_id);
-	} else if(the_message->data[0] == 0x38 && the_message->data[1] == 0x5 && the_message->l >= 4 && source_sel) { //Goto channel.
+	} else if(the_message->l >= 4 && the_message->data[0] == 0x38 && the_message->data[1] == 0x5 && source_sel) { //Goto channel.
 		if(the_message->data[2] > 0)
 			return;
 
@@ -554,11 +554,11 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		channel_msg.refreshIEData(channel_data);
 		ie_driver->sendMessage(&channel_msg, true, true);
 		getIEAckMessage(device_ie_id);
-	} else if(the_message->data[0] == 0x38 && the_message->data[1] == 0x6 && the_message->l >= 3 && source_sel) { //Preset change.
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x38 && the_message->data[1] == 0x6 && source_sel) { //Preset change.
 		ack = false;
 		sendAIAckMessage(sender);
 		changeToPreset(the_message->data[2]);
-	} else if(the_message->data[0] == 0x38 && the_message->data[1] == 0x7 && the_message->l >= 3 && source_sel) { //Preset increment.
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x38 && the_message->data[1] == 0x7 && source_sel) { //Preset increment.
 		ack = false;
 		sendAIAckMessage(sender);
 		
@@ -579,11 +579,11 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		} else return;
 
 		changeToPreset(new_preset);
-	} else if(the_message->data[0] == 0x38 && the_message->data[1] == 0x16 && the_message->l >= 3 && source_sel) { //Preset save.
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x38 && the_message->data[1] == 0x16 && source_sel) { //Preset save.
 		ack = false;
 		sendAIAckMessage(sender);
 		savePreset(the_message->data[2]);
-	} else if(the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function change.
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function change.
 		ack = false;
 		sendAIAckMessage(sender);
 		
@@ -690,7 +690,7 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 			this->text_control = false;
 			this->manual_tune = false;
 		}
-	} else if(the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO) {
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO) {
 		ack = false;
 		sendAIAckMessage(sender);
 

@@ -16,12 +16,30 @@ void TextHandler::clearAllText(const bool refresh) {
 	if(refresh)
 		data[1] |= 0x10;
 
-	AIData clear_msg(sizeof(data), ID_RADIO, ID_NAV_COMPUTER);
-	clear_msg.refreshAIData(data);
+	AIData clear_msg(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
 
 	ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
 	
 	for(int i=0;i<5;i+=1)
+		this->sendMirrorMessage("", i, false);
+}
+
+//Clear all text in the audio winodw but the title.
+void TextHandler::clearAllSubtext() {
+	clearAllSubtext(false);
+}
+
+//Clear all text in the audio winodw but the title. If refresh is true, send the signal to refresh the screen.
+void TextHandler::clearAllSubtext(const bool refresh) {
+	uint8_t data[] = {0x20, 0x6E};
+	if(refresh)
+		data[1] |= 0x10;
+
+	AIData clear_msg(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
+
+	ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
+	
+	for(int i=1;i<5;i+=1)
 		this->sendMirrorMessage("", i, false);
 }
 
@@ -42,8 +60,7 @@ void TextHandler::setBlankHeader(String header) {
 //Send a text control message to recipient, indicating source is in control.
 void TextHandler::sendSourceTextControl(const uint8_t recipient, const uint8_t source) {
 	uint8_t data[] = {0x40, 0x01, source};
-	AIData text_control_msg(sizeof(data), ID_RADIO, recipient);
-	text_control_msg.refreshAIData(data);
+	AIData text_control_msg(sizeof(data), ID_RADIO, recipient, data);
 
 	ai_handler->writeAIData(&text_control_msg);
 }
@@ -100,8 +117,7 @@ void TextHandler::sendStereoMessage(const bool stereo) {
 		this->sendMirrorMessage("St", 4, false);
 	} else {
 		uint8_t data[] = {0x20, 0x71, 0x0};
-		AIData stereo_message(sizeof(data), ID_RADIO, ID_NAV_COMPUTER);
-		stereo_message.refreshAIData(data);
+		AIData stereo_message(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
 		
 		ai_handler->writeAIData(&stereo_message, parameter_list->computer_connected);
 
@@ -123,8 +139,7 @@ void TextHandler::sendShortRDSMessage(String text) {
 		ai_handler->writeAIData(&rds_message, parameter_list->computer_connected);
 	} else {
 		uint8_t data[] = {0x20, 0x70, 0x1};
-		AIData clear_message(sizeof(data), ID_RADIO, ID_NAV_COMPUTER);
-		clear_message.refreshAIData(data);
+		AIData clear_message(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
 
 		ai_handler->writeAIData(&clear_message, parameter_list->computer_connected);
 	}
@@ -163,8 +178,7 @@ void TextHandler::sendLongRDSMessage(String text) {
 			if(i >= 4)
 				clear_data[1] |= 0x10;
 
-			AIData clear_msg(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER);
-			clear_msg.refreshAIData(clear_data);
+			AIData clear_msg(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER, clear_data);
 
 			ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
 		}
@@ -224,8 +238,7 @@ void TextHandler::sendIMIDSourceMessage(const uint8_t source, const uint8_t subs
 		return;
 	
 	uint8_t function_data[] = {0x40, 0x10, source, subsource};
-	AIData function_msg(sizeof(function_data), ID_RADIO, ID_IMID_SCR);
-	function_msg.refreshAIData(function_data);
+	AIData function_msg(sizeof(function_data), ID_RADIO, ID_IMID_SCR, function_data);
 
 	ai_handler->writeAIData(&function_msg);
 }
@@ -249,8 +262,7 @@ void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8
 		if(preset > 0)
 			freq_data[4] |= (preset&0xF);
 
-		AIData freq_msg(sizeof(freq_data), ID_RADIO, ID_IMID_SCR);
-		freq_msg.refreshAIData(freq_data);
+		AIData freq_msg(sizeof(freq_data), ID_RADIO, ID_IMID_SCR, freq_data);
 
 		ai_handler->writeAIData(&freq_msg);
 	} else if(parameter_list->imid_lines > 0 && parameter_list->imid_char > 0) {
@@ -412,8 +424,7 @@ void TextHandler::sendMirrorMessage(String text, const uint8_t index, const bool
 	for(int i=0;i<text.length();i+=1)
 		mirror_data[i+2] = uint8_t(text.charAt(i));
 
-	AIData mirror_msg(sizeof(mirror_data), ID_RADIO, ID_ANDROID_AUTO);
-	mirror_msg.refreshAIData(mirror_data);
+	AIData mirror_msg(sizeof(mirror_data), ID_RADIO, ID_ANDROID_AUTO, mirror_data);
 
 	parameter_list->mirror_connected = ai_handler->writeAIData(&mirror_msg, parameter_list->mirror_connected);
 }
@@ -449,8 +460,7 @@ void TextHandler::sendTime() {
 	const int8_t minute = full_minute%60;
 
 	uint8_t clock_data[] = {0xA1, 0x1F, 0x1, hour, minute, parameter_list->minute_timer/1000};
-	AIData clock_msg(sizeof(clock_data), ID_RADIO, 0xFF);
-	clock_msg.refreshAIData(clock_data);
+	AIData clock_msg(sizeof(clock_data), ID_RADIO, 0xFF, clock_data);
 	
 	ai_handler->writeAIData(&clock_msg, false);
 }
@@ -467,8 +477,7 @@ AIData getTextMessage(String text, const uint8_t group, const uint8_t area) {
 	for(int i=0;i<text.length();i+=1)
 		text_data[i+3] = uint8_t(text.charAt(i));
 	
-	AIData text_message(sizeof(text_data), ID_RADIO, ID_NAV_COMPUTER);
-	text_message.refreshAIData(text_data);
+	AIData text_message(sizeof(text_data), ID_RADIO, ID_NAV_COMPUTER, text_data);
 	
 	return text_message;
 	

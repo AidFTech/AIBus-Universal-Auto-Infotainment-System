@@ -161,7 +161,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 
 		vol_limit_msg.refreshAIData(vol_limit_data);
 		ai_driver->writeAIData(&vol_limit_msg);
-	} else if(the_message->data[0] == 0x23 && the_message->data[1] == 0x60) { //Write a custom message.
+	} else if(the_message->l >= 4 && the_message->data[0] == 0x23 && the_message->data[1] == 0x60) { //Write a custom message.
 		if(the_message->data[3] > 1)
 			return;
 		
@@ -176,7 +176,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 			new_text += char(the_message->data[i]);
 
 		writeIMIDTextMessage(new_text);
-	} else if(the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && the_message->sender == ID_RADIO) {
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && the_message->sender == ID_RADIO) {
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
 		
@@ -193,7 +193,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 
 		ai_driver->writeAIData(&data_request, parameter_list->radio_connected);*/
 	} else if((the_message->data[0] == 0x39 || the_message->data[0] == 0x3B) && the_message->sender == ID_CDC) {
-		if(the_message->data[0] == 0x39 && the_message->l >= 8) { //Track and disc.
+		if(the_message->l >= 8 && the_message->data[0] == 0x39) { //Track and disc.
 			if(the_message->data[6] != disc)
 				setIMIDSource(ID_CDC, 0);
 			
@@ -212,7 +212,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 				if(last_disc != disc)
 					writeIMIDCDCTextMessage(0, "");
 			}
-		} else if(the_message->data[0] == 0x3B && the_message->l >= 0x5) {
+		} else if(the_message->l >= 5 && the_message->data[0] == 0x3B) {
 			timer = (the_message->data[3]<<8)|the_message->data[4];
 
 			writeIMIDCDCTrackMessage(disc, track, track_count, timer, getIECDStatus(ai_cd_mode), getIECDRepeat(ai_cd_mode));
@@ -220,7 +220,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-	} else if((the_message->sender == ID_CDC || the_message->sender == ID_CD) && the_message->data[0] == 0x23) { //CD text message.
+	} else if((the_message->sender == ID_CDC || the_message->sender == ID_CD) && the_message->l >= 2 && the_message->data[0] == 0x23) { //CD text message.
 		uint8_t field = 0;
 
 		switch(the_message->data[1]&0xF) {
@@ -253,7 +253,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 			this->rds = false;
 
 		writeIMIDRadioMessage(frequency, the_message->data[3], the_message->data[4]&0xF, (the_message->data[4]&0xF0)>>4);
-	} else if(the_message->sender == ID_RADIO && the_message->data[0] == 0x63 && the_message->l >= 2) { //RDS.
+	} else if(the_message->sender == ID_RADIO && the_message->l >= 2 && the_message->data[0] == 0x63) { //RDS.
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
 		
@@ -273,7 +273,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		const uint8_t new_vol = the_message->data[1]*max_vol/the_message->data[2];
 
 		writeIMIDVolumeMessage(new_vol);
-	} else if(the_message->sender == ID_XM && the_message->data[0] == 0x39) { //XM channel change message.
+	} else if(the_message->sender == ID_XM && the_message->l >= 5 && the_message->data[0] == 0x39) { //XM channel change message.
 		const uint16_t channel = (the_message->data[2]<<8) | the_message->data[3];
 		const uint8_t preset = the_message->data[4]&0x3F;
 
@@ -284,7 +284,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
 
-	} else if(the_message->sender == ID_XM && the_message->data[0] == 0x23) { //Sirius text message.
+	} else if(the_message->sender == ID_XM && the_message->l >= 2 && the_message->data[0] == 0x23) { //Sirius text message.
 		uint8_t field = 0;
 		switch(the_message->data[1]&0xF) {
 			case 1:
@@ -341,6 +341,8 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 			sent_text += char(the_message->data[i]);
 
 		this->setBTText(leader, sent_text);
+	} else if(the_message->sender == ID_ANDROID_AUTO && the_message->l >= 2 && the_message->data[0] == 0x30 && the_message->data[1] == 0x0) { //Phone disconnected.
+		this->setBTModeNotConnected();
 	} else if(the_message->sender == ID_ANDROID_AUTO && the_message-> l >= 2 && the_message->data[0] == 0x23 && (the_message->data[1]&0xF0) == 0x60) { //Mirror text message.
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
@@ -607,14 +609,15 @@ bool HondaIMIDHandler::setIMIDSource(const uint8_t source, const uint8_t subsour
 		getIEAckMessage(device_ie_id);
 		return true;
 	} else if(source == ID_ANDROID_AUTO) {
-		uint8_t source_data[] = {0x23, 0x0, 0x0};
+		/*uint8_t source_data[] = {0x23, 0x0, 0x0};
 		sendFunctionMessage(ie_driver, new_source, IE_ID_IMID, source_data, sizeof(source_data));
 		getIEAckMessage(device_ie_id);
 
 		if(new_source)
 			setBTMode();
 
-		return true;
+		return true;*/
+		writeIMIDTextMessage("Mirror");
 	} else if (source == ID_PHONE) {
 		uint8_t source_data[] = {0x23, 0x0, 0x0};
 		sendFunctionMessage(ie_driver, new_source, IE_ID_IMID, source_data, sizeof(source_data));
@@ -814,7 +817,7 @@ void HondaIMIDHandler::setBTTimer(const long time) {
 
 //Set a BTA text field.
 void HondaIMIDHandler::setBTText(const uint8_t field, String text) {
-	if((this->imid_mode&0xFF) != ID_PHONE)
+	if(this->imid_mode != ID_PHONE)
 		this->setBTMode();
 
 	uint8_t text_data[] = {0x60, 0x23, 0x11, 0x0, 0x1, field, 0x6, 0x1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};

@@ -182,8 +182,7 @@ void VolumeHandler::setVolume(const uint16_t volume) {
 		this->fader_mcp->DigitalPotSetWiperPosition(1, lr_vol);
 	} else { //Digital mode.
 		uint8_t volume_data[] = {0x32, 0x6, (this->volume&0xFF00)>>8, this->volume&0xFF};
-		AIData volume_msg(sizeof(volume_data), ID_RADIO, ID_AMPLIFIER);
-		volume_msg.refreshAIData(volume_data);
+		AIData volume_msg(sizeof(volume_data), ID_RADIO, ID_AMPLIFIER, volume_data);
 
 		ai_handler->writeAIData(&volume_msg, parameters->amp_connected);
 	}
@@ -314,8 +313,7 @@ void VolumeHandler::setVolumeDisplay() {
 		set_vol = this->volume&0xFF;
 
 	uint8_t vol_data[] = {0x26, set_vol, max_vol};
-	AIData vol_msg(sizeof(vol_data), ID_RADIO, ID_NAV_COMPUTER);
-	vol_msg.refreshAIData(vol_data);
+	AIData vol_msg(sizeof(vol_data), ID_RADIO, ID_NAV_COMPUTER, vol_data);
 
 	ai_handler->writeAIData(&vol_msg, parameters->computer_connected);
 

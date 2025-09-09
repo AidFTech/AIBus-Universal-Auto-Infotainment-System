@@ -289,37 +289,39 @@ void Audio_Window::interpretAudioScreenChange(AIData* ai_b) {
 	const uint8_t group = ai_b->data[1]&0xF;
 	const bool refresh = (ai_b->data[1]&0x10) != 0;
 
-	if(ai_b->data[0] == 0x20 && group == 0xF) { //Clear all fields.
-		for(uint8_t i=0;i<6;i+=1)
+	if(ai_b->data[0] == 0x20 && (group&0xE) == 0xE) { //Clear all fields. If group == 0xE, leave the title.
+		const int main_start = (group&0x1) != 0 ? 0 : 1;
+
+		for(int i=main_start;i<6;i+=1)
 			setText(MAIN_AREA_GROUP, i, "");
-		for(uint8_t i=0;i<3;i+=1)
+		for(int i=0;i<3;i+=1)
 			setText(SUB_AREA_GROUP, i, "");
-		for(uint8_t i=0;i<6;i+=1)
+		for(int i=0;i<6;i+=1)
 			setText(FUNCTION_AREA_GROUP, i, "");
-		for(uint8_t i=0;i<5;i+=1)
+		for(int i=0;i<5;i+=1)
 			setText(BUTTON_AREA_GROUP, i, "");
 
 		if(refresh)
 			refreshAudioScreen();
 		
 		if(audio_menu->getFilledTextItems() > 0) {
-			for(uint8_t i=1;i<6;i+=1)
+			for(int i=1;i<6;i+=1)
 				main_area_box[i]->setWidth(half_area_w);
 		} else {
-			for(uint8_t i=1;i<6;i+=1)
+			for(int i=1;i<6;i+=1)
 				main_area_box[i]->setWidth(full_area_w);
 		}
 		
 		return;
 	} else if(ai_b->data[0] == 0x23 && group == 0xF) {
 		if(audio_menu->getFilledTextItems() > 0) {
-			for(uint8_t i=1;i<6;i+=1)
+			for(int i=1;i<6;i+=1)
 				main_area_box[i]->setWidth(half_area_w);
 				
 			if(audio_menu->getSelected() == 0)
 				audio_menu->incrementSelected();
 		} else {
-			for(uint8_t i=1;i<6;i+=1)
+			for(int i=1;i<6;i+=1)
 				main_area_box[i]->setWidth(full_area_w);
 			audio_menu->setSelected(0);
 		}
