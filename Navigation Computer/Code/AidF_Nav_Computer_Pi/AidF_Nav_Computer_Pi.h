@@ -30,6 +30,9 @@
 #include "Vehicle_Information/Vehicle_Info_Parameters.h"
 #include "Vehicle_Information/Power_Flow_Arrow.h"
 
+#include "Map/Nav_Parameters.h"
+#include "Map/Map_Main_Window.h"
+
 #include "Socket/AMirror_Socket.h"
 
 #ifndef aidf_nav_computer_pi_h

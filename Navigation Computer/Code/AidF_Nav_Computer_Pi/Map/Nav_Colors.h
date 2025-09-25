@@ -1,0 +1,18 @@
+#include <stdint.h>
+
+#ifndef nav_colors_h
+#define nav_colors_h
+
+#define MAP_BR_DAY 0xFFFFDBFF
+#define MAP_BR_NIGHT 0x001798FF
+
+#define ROAD_LEVEL0_DAY 0x000000FF
+#define ROAD_LEVEL0_NIGHT 0x808080FF
+#define ROAD_LEVEL1_DAY 0xFFD800FF
+#define ROAD_LEVEL1_NIGHT 0xFFD800FF
+#define ROAD_LEVEL2_DAY 0xFF6A00FF
+#define ROAD_LEVEL2_NIGHT 0xFF6A00FF
+#define ROAD_LEVEL3_DAY 0xFF0000FF
+#define ROAD_LEVEL3_NIGHT 0xFF0000FF
+
+#endif

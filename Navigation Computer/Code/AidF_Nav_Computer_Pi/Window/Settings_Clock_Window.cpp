@@ -186,8 +186,7 @@ void Settings_Clock_Window::handleEnterButton() {
 
 		if(new_timekeeper != last_timekeeper) {
 			uint8_t cancel_data[] = {0x1D, 0x0};
-			AIData cancel_msg(sizeof(cancel_data), ID_NAV_COMPUTER, last_timekeeper);
-			cancel_msg.refreshAIData(cancel_data);
+			AIData cancel_msg(sizeof(cancel_data), ID_NAV_COMPUTER, last_timekeeper, cancel_data);
 
 			bool ack = true;
 			if(last_timekeeper == ID_RADIO && !attribute_list->radio_connected)

@@ -22,6 +22,7 @@ Window_Handler::Window_Handler(SDL_Renderer* renderer, Background* br, const uin
 	this->attribute_list->aibus_handler = aibus_handler;
 
 	this->vehicle_info_paramters = new InfoParameters();
+	this->nav_parameters = new NavParameters();
 
 	this->header_box[0] = new TextBox(renderer, CLOCK_SPACING, 0, this->w/3 - CLOCK_SPACING, CLOCK_HEIGHT, ALIGN_H_L, ALIGN_V_M, CLOCK_HEIGHT*6/7, &this->color_profile->text);
 	this->header_box[1] = new TextBox(renderer, this->w/3, 0, this->w/3, CLOCK_HEIGHT, ALIGN_H_C, ALIGN_V_M, CLOCK_HEIGHT*6/7, &this->color_profile->text);
@@ -33,6 +34,7 @@ Window_Handler::Window_Handler(SDL_Renderer* renderer, Background* br, const uin
 Window_Handler::~Window_Handler() {
 	delete this->attribute_list;
 	delete this->vehicle_info_paramters;
+	delete this->nav_parameters;
 
 	delete this->header_box[0];
 	delete this->header_box[1];
@@ -84,12 +86,19 @@ void Window_Handler::setAudioText(std::string text) {
 	this->audio_header->setText(text);
 }
 
+//Get the general parameters.
 AttributeList* Window_Handler::getAttributeList() {
 	return this->attribute_list;
 }
 
+//Get the info parameters.
 InfoParameters* Window_Handler::getVehicleInfo() {
 	return this->vehicle_info_paramters;
+}
+
+//Get the nav parameters.
+NavParameters* Window_Handler::getNavParameters() {
+	return this->nav_parameters;
 }
 
 AIBusHandler* Window_Handler::getAIBusHandler() {
@@ -188,6 +197,9 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_VEHICLE_INFO) {
 		misc_window = new VehicleInfoWindow(attribute_list, vehicle_info_paramters);
+		this->setActiveWindow(misc_window, delete_last);
+	} else if(next_window == NEXT_WINDOW_MAP) {
+		misc_window = new MapMainWindow(attribute_list, nav_parameters);
 		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_MIRROR) {
 		misc_window = new MirrorWindow(attribute_list);

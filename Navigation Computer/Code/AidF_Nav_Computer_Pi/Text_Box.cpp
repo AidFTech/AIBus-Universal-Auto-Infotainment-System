@@ -32,6 +32,21 @@ TextBox::~TextBox() {
 		SDL_DestroyTexture(this->texture);
 }
 
+TextBox::TextBox(const TextBox &copy) {
+	this->renderer = copy.renderer;
+	this->x = copy.x;
+	this->y = copy.y;
+	this->w = copy.w;
+	this->h = copy.h;
+	this->h_indent = copy.h_indent;
+	this->v_indent = copy.v_indent;
+	this->size = copy.size;
+	this->color = copy.color;
+
+	this->text = copy.text;
+	this->renderText();
+}
+
 void TextBox::setRenderer(SDL_Renderer* renderer) {
 	this->renderer = renderer;
 }
@@ -119,6 +134,57 @@ void TextBox::drawText() {
 
 	SDL_Rect text_rect = {text_x, text_y, text_w, text_h};
 	SDL_RenderCopy(renderer, texture, NULL, &text_rect);
+
+	TTF_Font* AidF_Font = TTF_OpenFont("AidF Font.ttf", this->size);
+	symbol_handler->drawSymbols(this->renderer, this->texture, AidF_Font, this->text, text_x, text_y, this->size, this->color);
+	TTF_CloseFont(AidF_Font);
+}
+
+AngledTextBox::AngledTextBox(SDL_Renderer* renderer,
+			const int16_t x,
+			const int16_t y,
+			const uint16_t w,
+			const uint16_t h,
+			const uint8_t h_indent,
+			const uint8_t v_indent,
+			const uint8_t size,
+			const double angle,
+			uint32_t* text_color) : TextBox(renderer, x, y, w, h, h_indent, v_indent, size, text_color) {
+	this->angle = angle;
+}
+
+AngledTextBox::AngledTextBox(const AngledTextBox &copy) : TextBox(copy) {
+	this->angle = copy.angle;
+}
+
+//Draw the text.
+void AngledTextBox::drawText() {
+	if (this->texture == NULL || this->renderer == NULL)
+		return;
+	
+	int16_t text_x = this->x, text_y = this->y;
+
+	switch(this->h_indent) {
+		case ALIGN_H_C:
+			text_x = this->x + this->w/2 - text_w/2;
+			break;
+		case ALIGN_H_R:
+			text_x = this->x + this->w - text_w;
+			break;
+	}
+
+	switch(this->v_indent) {
+		case ALIGN_V_M:
+			text_y = this->y + this->h/2 - text_h/2;
+			break;
+		case ALIGN_V_B:
+			text_y = this->y + this->h - text_h;
+			break;
+	}
+
+	SDL_Rect text_rect = {text_x, text_y, text_w, text_h};
+	SDL_Point text_center = {0, 0};
+	SDL_RenderCopyEx(renderer, texture, NULL, &text_rect, this->angle*180/M_PI, &text_center, SDL_FLIP_NONE);
 
 	TTF_Font* AidF_Font = TTF_OpenFont("AidF Font.ttf", this->size);
 	symbol_handler->drawSymbols(this->renderer, this->texture, AidF_Font, this->text, text_x, text_y, this->size, this->color);

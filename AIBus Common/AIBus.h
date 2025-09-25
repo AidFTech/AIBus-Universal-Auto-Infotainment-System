@@ -8,6 +8,7 @@
 #define ID_NAV_COMPUTER 0x1
 #define ID_NAV_SCREEN 0x7
 
+#define ID_COMPUTER_PROXY 0x2
 #define ID_CD 0x4
 #define ID_CDC 0x6
 #define ID_RADIO 0x10
@@ -36,6 +37,7 @@ struct AIData {
 	~AIData();
 	
 	uint8_t& operator[](int i);
+	AIData& operator=(const AIData &copy);
 	
 	void refreshAIData(uint16_t newl, const uint8_t sender, const uint8_t receiver);
 	void refreshAIData(AIData newd);

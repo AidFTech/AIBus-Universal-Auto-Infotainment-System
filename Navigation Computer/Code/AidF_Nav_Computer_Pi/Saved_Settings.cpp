@@ -98,3 +98,24 @@ void saveTimekeepingParams(const bool display_12h, const bool auto_clock_set, co
 
 	saveIniFile(TIMEKEEPER_FILE, file_list);
 }
+
+//Get the map path.
+std::string getMapPath() {
+	std::vector<IniList> map_file = loadIniFile(MAP_FILE);
+	std::string map_path = "";
+
+	for(int i=0;i<map_file.size();i+=1) {
+		if(map_file[i].title.compare("AidF_Nav_Map") == 0) {
+			for(int n=0;n<map_file[i].l_s;n+=1) {
+				if(map_file[i].str_vars[n].compare("Path") == 0) {
+					map_path = map_file[i].str_values[n];
+					break;
+				}
+			}
+			if(!map_path.empty())
+				break;
+		}
+	}
+
+	return map_path;
+}

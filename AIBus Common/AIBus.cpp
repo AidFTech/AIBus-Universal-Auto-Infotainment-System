@@ -34,6 +34,17 @@ uint8_t& AIData::operator[](int i) {
 	return this->data[i];
 }
 
+AIData& AIData::operator=(const AIData &copy) {
+	delete[] this->data;
+	this->l = copy.l;
+	this->data = new uint8_t[this->l];
+
+	for(int i=0;i<this->l;i+=1)
+		this->data[i] = copy.data[i];
+
+	return *this;
+};
+
 void AIData::refreshAIData(uint16_t newl, const uint8_t sender, const uint8_t receiver) {
 	this->l = newl;
 	delete[] this->data;

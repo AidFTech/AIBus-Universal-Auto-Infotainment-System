@@ -21,6 +21,9 @@
 #include "Vehicle_Information/Vehicle_Info_Parameters.h"
 #include "Vehicle_Information/Vehicle_Info_Window.h"
 
+#include "Map/Map_Main_Window.h"
+#include "Map/Nav_Parameters.h"
+
 #include "Window/Mirror_Window.h"
 
 #ifndef nav_window_handler_h
@@ -51,6 +54,7 @@ public:
 
 	AttributeList* getAttributeList();
 	InfoParameters* getVehicleInfo();
+	NavParameters* getNavParameters();
 
 	AIBusHandler* getAIBusHandler();
 	
@@ -79,6 +83,7 @@ private:
 	NavWindow* active_window, *last_window;
 	AttributeList *attribute_list;
 	InfoParameters *vehicle_info_paramters;
+	NavParameters *nav_parameters;
 
 	AIBusHandler* aibus_handler;
 };

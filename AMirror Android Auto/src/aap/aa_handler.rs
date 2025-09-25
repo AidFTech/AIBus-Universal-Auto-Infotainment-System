@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread;
 use std::time::Duration;
 use std::ffi::c_void;
 use std::time::Instant;
@@ -183,6 +184,7 @@ impl<'a> AapHandler <'a> {
 				}
 			} else {
 				self.stop_connection();
+				thread::sleep(Duration::from_millis(1));
 			}
 
 			data = [].to_vec();

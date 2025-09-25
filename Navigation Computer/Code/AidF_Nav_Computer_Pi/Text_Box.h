@@ -29,6 +29,7 @@ public:
 			const uint8_t size,
 			uint32_t* text_color);
 	~TextBox();
+	TextBox(const TextBox &copy);
 
 	void setRenderer(SDL_Renderer* renderer);
 
@@ -40,8 +41,8 @@ public:
 	void renderText();
 	
 	std::string getText();
-	void drawText();
-private:
+	virtual void drawText();
+protected:
 	SDL_Renderer* renderer;
 	SDL_Texture* texture = NULL;
 
@@ -54,6 +55,26 @@ private:
 	uint32_t* color;
 
 	SymbolHandler* symbol_handler = new SymbolHandler();
+};
+
+class AngledTextBox : public TextBox {
+public:
+	AngledTextBox(SDL_Renderer* renderer,
+			const int16_t x,
+			const int16_t y,
+			const uint16_t w,
+			const uint16_t h,
+			const uint8_t h_indent,
+			const uint8_t v_indent,
+			const uint8_t size,
+			const double angle,
+			uint32_t* text_color);
+	
+	AngledTextBox(const AngledTextBox &copy);
+
+	void drawText();
+private:
+	double angle = 0;
 };
 
 #endif

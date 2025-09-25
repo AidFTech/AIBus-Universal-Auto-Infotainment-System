@@ -1,0 +1,200 @@
+[
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/CDC.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/CDC.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/CDC.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/CDC.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/Tone.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/Tone.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/Tone.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/Tone.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/UART.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/UART.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/UART0.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART0.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART0.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/UART0.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/UART1.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART1.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART1.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/UART1.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/UART2.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART2.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART2.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/UART2.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/UART3.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART3.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART3.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/UART3.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/UNO_compat.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UNO_compat.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UNO_compat.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/UNO_compat.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/USBCore.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/USBCore.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/USBCore.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/USBCore.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega4808/FrameworkArduino/WInterrupts.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/WInterrupts.c",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/WInterrupts.c",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/WInterrupts.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/WMath.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/WMath.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/WMath.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/WMath.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/abi.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/abi.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/abi.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/abi.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/api/Common.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Common.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Common.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/api/Common.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/api/IPAddress.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/IPAddress.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/IPAddress.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/api/IPAddress.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/api/PluggableUSB.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/PluggableUSB.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/PluggableUSB.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/api/PluggableUSB.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/api/Print.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Print.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Print.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/api/Print.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/api/RingBuffer.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/RingBuffer.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/RingBuffer.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/api/RingBuffer.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/api/Stream.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Stream.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Stream.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/api/Stream.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/api/String.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/String.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/String.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/api/String.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega4808/FrameworkArduino/hooks.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/hooks.c",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/hooks.c",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/hooks.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/main.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/main.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/main.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/main.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/FrameworkArduino/new.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/new.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/new.cpp",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/new.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega4808/FrameworkArduino/wiring.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring.c",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring.c",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/wiring.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega4808/FrameworkArduino/wiring_analog.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_analog.c",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_analog.c",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/wiring_analog.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega4808/FrameworkArduino/wiring_digital.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_digital.c",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_digital.c",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/wiring_digital.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -mmcu=atmega4808 -x assembler-with-cpp -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard -c -o .pio/build/ATmega4808/FrameworkArduino/wiring_pulse.S.o /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_pulse.S",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_pulse.S",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/wiring_pulse.S.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega4808/FrameworkArduino/wiring_pulse.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_pulse.c",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_pulse.c",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/wiring_pulse.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega4808/FrameworkArduino/wiring_shift.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_shift.c",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_shift.c",
+        "output": ".pio/build/ATmega4808/FrameworkArduino/wiring_shift.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/src/AIBus.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -Iinclude -Isrc -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard src/AIBus.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "src/AIBus.cpp",
+        "output": ".pio/build/ATmega4808/src/AIBus.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/src/AIBus_Handler.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -Iinclude -Isrc -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard src/AIBus_Handler.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "src/AIBus_Handler.cpp",
+        "output": ".pio/build/ATmega4808/src/AIBus_Handler.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/src/CAN_Handler.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -Iinclude -Isrc -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard src/CAN_Handler.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "src/CAN_Handler.cpp",
+        "output": ".pio/build/ATmega4808/src/CAN_Handler.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/src/CANslator.ino.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -Iinclude -Isrc -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard src/CANslator.ino.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "src/CANslator.ino.cpp",
+        "output": ".pio/build/ATmega4808/src/CANslator.ino.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega4808/src/main.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega4808 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60118 -DARDUINO_AVR_ATmega4808 -DF_CPU=16000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -Iinclude -Isrc -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard src/main.cpp",
+        "directory": "/media/aidan/Local Disc B/Documents/Civic Mods/GitHub/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/CAN Bus Translator/Code/CANslator",
+        "file": "src/main.cpp",
+        "output": ".pio/build/ATmega4808/src/main.cpp.o"
+    }
+]

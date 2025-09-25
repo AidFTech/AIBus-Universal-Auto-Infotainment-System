@@ -185,7 +185,7 @@ impl <'a> AMirror<'a> {
 
 		std::mem::drop(context);
 
-		self.dongle_handler.process();
+		//self.dongle_handler.process();
 		self.aa_handler.process();
 
 		context = match self.context.try_lock() {

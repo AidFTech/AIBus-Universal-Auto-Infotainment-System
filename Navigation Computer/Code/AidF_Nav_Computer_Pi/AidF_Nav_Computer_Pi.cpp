@@ -35,6 +35,11 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->window_handler = new Window_Handler(this->renderer, this->br, this->lw, this->lh, &this->active_color_profile, this->aibus_handler);
 	this->attribute_list = window_handler->getAttributeList();
 
+	{
+		NavParameters* nav_parameters = window_handler->getNavParameters();
+		nav_parameters->map_path = getMapPath();
+	}
+
 	this->attribute_list->day_profile = &this->day_profile;
 	this->attribute_list->night_profile = &this->night_profile;
 	this->night = &this->attribute_list->night;
@@ -192,6 +197,17 @@ void AidF_Nav_Computer::loop() {
 					NavWindow* active_window = this->window_handler->getActiveWindow();
 					if(ai_msg.receiver == 0xFF && ai_msg.data[0] == 0xA1)
 						answered = handleBroadcastMessage(&ai_msg) && typeid(*active_window) != typeid(IntroWindow);
+					else if(ai_msg.sender == ID_GPS_ANTENNA && ai_msg.data[0] == 0x55) {
+						answered = true;
+						aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_msg.sender);
+						handleNavMessage(&ai_msg, window_handler->getNavParameters());
+
+						NavWindow* active_window = window_handler->getActiveWindow();
+						if(typeid(*active_window) == typeid(MapMainWindow)) {
+							MapMainWindow* map_window = (MapMainWindow*)active_window;
+							map_window->refreshWindow();
+						}
+					}
 
 					if(!answered)
 						answered = audio_window->handleAIBus(&ai_msg);
