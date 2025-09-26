@@ -62,6 +62,7 @@ public:
 	void drawOnMap(SDL_Renderer* renderer, SDL_Texture* texture, const int32_t x_offset, const int32_t y_offset, const bool night);
 
 	std::string getName();
+	AngledTextBox* getNameTextBox();
 	
 private:
 	std::string road_name = "";

@@ -30,6 +30,7 @@ public:
 			uint32_t* text_color);
 	~TextBox();
 	TextBox(const TextBox &copy);
+	TextBox operator=(const TextBox &copy);
 
 	void setRenderer(SDL_Renderer* renderer);
 
@@ -43,6 +44,8 @@ public:
 	std::string getText();
 	virtual void drawText();
 protected:
+	virtual void copy(const TextBox &copy);
+
 	SDL_Renderer* renderer;
 	SDL_Texture* texture = NULL;
 
@@ -71,6 +74,8 @@ public:
 			uint32_t* text_color);
 	
 	AngledTextBox(const AngledTextBox &copy);
+	AngledTextBox operator=(const TextBox &copy);
+	AngledTextBox operator=(const AngledTextBox &copy);
 
 	void drawText();
 private:

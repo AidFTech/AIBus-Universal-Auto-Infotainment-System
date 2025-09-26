@@ -238,16 +238,16 @@ void MapObjectRoad::drawOnMap(SDL_Renderer* renderer, SDL_Texture* texture, cons
 	}
 
 	MapObject::drawOnMap(renderer, texture, getSDLColor(color), thickness, x_offset, y_offset);
-	if(road_name_render != nullptr && road_name_render != NULL) {
-		SDL_SetRenderTarget(renderer, texture);
-		road_name_render->drawText();
-		SDL_SetRenderTarget(renderer, NULL);
-	}
 }
 
 //Get the road name.
 std::string MapObjectRoad::getName() {
 	return this->road_name;
+}
+
+//Get the name text box.
+AngledTextBox* MapObjectRoad::getNameTextBox() {
+	return this->road_name_render;
 }
 
 //Return whether the object is a closed shape.

@@ -47,6 +47,11 @@ TextBox::TextBox(const TextBox &copy) {
 	this->renderText();
 }
 
+TextBox TextBox::operator=(const TextBox &copy) {
+	this->copy(copy);
+	return *this;
+}
+
 void TextBox::setRenderer(SDL_Renderer* renderer) {
 	this->renderer = renderer;
 }
@@ -140,6 +145,22 @@ void TextBox::drawText() {
 	TTF_CloseFont(AidF_Font);
 }
 
+//Copy parameters from another text box.
+void TextBox::copy(const TextBox &copy) {
+	this->renderer = copy.renderer;
+	this->x = copy.x;
+	this->y = copy.y;
+	this->w = copy.w;
+	this->h = copy.h;
+	this->h_indent = copy.h_indent;
+	this->v_indent = copy.v_indent;
+	this->size = copy.size;
+	this->color = copy.color;
+
+	this->text = copy.text;
+	this->renderText();
+}
+
 AngledTextBox::AngledTextBox(SDL_Renderer* renderer,
 			const int16_t x,
 			const int16_t y,
@@ -155,6 +176,18 @@ AngledTextBox::AngledTextBox(SDL_Renderer* renderer,
 
 AngledTextBox::AngledTextBox(const AngledTextBox &copy) : TextBox(copy) {
 	this->angle = copy.angle;
+}
+
+AngledTextBox AngledTextBox::operator=(const TextBox &copy) {
+	this->copy(copy);
+	this->angle = 0;
+	return *this;
+}
+
+AngledTextBox AngledTextBox::operator=(const AngledTextBox &copy) {
+	this->copy(copy);
+	this->angle = copy.angle;
+	return *this;
 }
 
 //Draw the text.

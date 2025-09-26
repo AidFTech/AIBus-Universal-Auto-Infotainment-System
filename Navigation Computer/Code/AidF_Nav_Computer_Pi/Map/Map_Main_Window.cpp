@@ -41,8 +41,14 @@ void MapMainWindow::drawWindow() {
 				(y1 >= up_limit || y2 >= up_limit) &&
 				(x1 <= right_limit || x2 <= right_limit) &&
 				(y1 <= down_limit || y2 <= down_limit)) ||
-				(x1 <= left_limit && y1 <= up_limit && x2 >= right_limit && y2 >= down_limit))
+				(x1 <= left_limit && y1 <= up_limit && x2 >= right_limit && y2 >= down_limit)) {
 					roads[i].drawOnMap(renderer, map_canvas, this->offset_h, this->offset_v, attribute_list->night);
+			
+					TextBox* road_name = roads[i].getNameTextBox();
+					if(road_name != NULL && road_name != nullptr) {
+						road_name->drawText();
+					}
+				}
 		}
 
 		SDL_SetRenderTarget(renderer, NULL);
@@ -55,6 +61,7 @@ void MapMainWindow::drawWindow() {
 //Refresh the window.
 void MapMainWindow::refreshWindow() {
 	loadMapData();
+	nav_parameters->update_map = true;
 
 	this->offset_h = -int(double(tile_position_x)/UINT32_MAX*tile_bounds) + this->w/2;
 	this->offset_v = -int(double(tile_position_y)/UINT32_MAX*tile_bounds) + this->h/2;

@@ -19,7 +19,7 @@ public:
 	void sendAllParameters();
 private:
 	uint8_t b_cs_pin;
-	MCP2515* bcan_2515;
+	MCP2515 bcan_2515;
 
 	AIBusHandler* ai_handler;
 	ParameterList* parameter_list;

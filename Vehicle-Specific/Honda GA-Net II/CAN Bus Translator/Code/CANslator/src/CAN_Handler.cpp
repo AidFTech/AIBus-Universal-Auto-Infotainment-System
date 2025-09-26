@@ -1,11 +1,10 @@
 #include "CAN_Handler.h"
 
-BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler, ParameterList* parameter_list, uint8_t cs_pin) {
+BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler, ParameterList* parameter_list, uint8_t cs_pin) :
+	bcan_2515(b_cs_pin) {
 	this->ai_handler = ai_handler;
 	this->b_cs_pin = cs_pin;
 	this->parameter_list = parameter_list;
-	
-	this->bcan_2515 = new MCP2515(b_cs_pin);
 	
 	auto_stop = false;
 	econ_mode = false;
@@ -32,9 +31,9 @@ BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler, ParameterList* parameter_li
 
 //Initialize the MCP2515.
 void BCAN_Handler::init() {
-	bcan_2515->reset();
-	bcan_2515->setBitrate(CAN_125KBPS);
-	bcan_2515->setNormalMode();
+	bcan_2515.reset();
+	bcan_2515.setBitrate(CAN_125KBPS);
+	bcan_2515.setNormalMode();
 }
 
 //Read a CAN frame.
@@ -47,7 +46,7 @@ void BCAN_Handler::readCANMessage() {
 		if(can_timer < 300)
 			ai_handler->cachePending(ID_CANSLATOR);
 
-		if(bcan_2515->readMessage(&can_msg) == MCP2515::ERROR_OK) {
+		if(bcan_2515.readMessage(&can_msg) == MCP2515::ERROR_OK) {
 			if(!first_can) {
 				first_can = true;
 				can_timer = 0;
@@ -221,8 +220,7 @@ void BCAN_Handler::writeAIBusKeyMessage(const uint8_t receiver, const bool repea
 		key_data[1] = key_pos;
 	}
 
-	AIData key_msg(sizeof(key_data), ID_CANSLATOR, receiver);
-	key_msg.refreshAIData(key_data);
+	AIData key_msg(sizeof(key_data), ID_CANSLATOR, receiver, key_data);
 
 	ai_handler->writeAIData(&key_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 	if(repeat) //Send again to ensure everything wakes up and gets the message.
@@ -241,8 +239,7 @@ void BCAN_Handler::writeAIBusDoorMessage(const uint8_t receiver, const bool repe
 		door_data[1] = doors_open;
 	}
 
-	AIData door_msg(sizeof(door_data), ID_CANSLATOR, receiver);
-	door_msg.refreshAIData(door_data);
+	AIData door_msg(sizeof(door_data), ID_CANSLATOR, receiver, door_data);
 
 	ai_handler->writeAIData(&door_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 	if(repeat) //Send again to ensure everything wakes up and gets the message.
@@ -255,9 +252,8 @@ void BCAN_Handler::writeAIBusBrightnessMessage(const uint8_t receiver, const boo
 	const uint8_t light_byte = (night_mode ? 0x80 : 0x0) | (lights_on ? 0x1 : 0x0);
 
 	uint8_t light_data[] = {0xA1, 0x10, brightness_norm, light_byte};
-	AIData light_msg(sizeof(light_data), ID_CANSLATOR, receiver);
+	AIData light_msg(sizeof(light_data), ID_CANSLATOR, receiver, light_data);
 
-	light_msg.refreshAIData(light_data);
 	ai_handler->writeAIData(&light_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 	if(repeat)
 		ai_handler->writeAIData(&light_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
@@ -276,8 +272,7 @@ void BCAN_Handler::writeAIBusLightMessage(const uint8_t receiver) {
 		light_data[1] = light_state_a;
 		light_data[2] = light_state_b;
 	}
-	AIData light_msg(sizeof(light_data), ID_CANSLATOR, receiver);
-	light_msg.refreshAIData(light_data);
+	AIData light_msg(sizeof(light_data), ID_CANSLATOR, receiver, light_data);
 
 	ai_handler->writeAIData(&light_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
@@ -285,8 +280,7 @@ void BCAN_Handler::writeAIBusLightMessage(const uint8_t receiver) {
 //Write the speed message.
 void BCAN_Handler::writeAIBusSpeedMessage(const uint8_t receiver) {
 	uint8_t speed_data[] = {0xA1, 0x1F, 0x4, 0x1, vehicle_speed};
-	AIData speed_msg(sizeof(speed_data), ID_CANSLATOR, receiver);
-	speed_msg.refreshAIData(speed_data);
+	AIData speed_msg(sizeof(speed_data), ID_CANSLATOR, receiver, speed_data);
 
 	ai_handler->writeAIData(&speed_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
@@ -305,8 +299,7 @@ void BCAN_Handler::writeAIBusTempMessage(const uint8_t receiver) {
 	temp_data[4] = uint8_t(norm_temp>>8);
 	temp_data[5] = uint8_t(norm_temp&0xFF);
 
-	AIData temp_msg(sizeof(temp_data), ID_CANSLATOR, receiver);
-	temp_msg.refreshAIData(temp_data);
+	AIData temp_msg(sizeof(temp_data), ID_CANSLATOR, receiver, temp_data);
 
 	ai_handler->writeAIData(&temp_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
@@ -323,8 +316,7 @@ void BCAN_Handler::writeAIBusCoolantTempMessage(const uint8_t receiver) {
 	const uint16_t abs_temp = abs(norm_temp);
 	temp_data[4] = uint8_t(abs_temp&0xFF);
 	
-	AIData temp_msg(sizeof(temp_data), ID_CANSLATOR, receiver);
-	temp_msg.refreshAIData(temp_data);
+	AIData temp_msg(sizeof(temp_data), ID_CANSLATOR, receiver, temp_data);
 
 	ai_handler->writeAIData(&temp_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
