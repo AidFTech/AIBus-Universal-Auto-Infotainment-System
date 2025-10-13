@@ -10,7 +10,8 @@ NavMenu::NavMenu(AttributeList* attribute_list,
 							const uint8_t size,
 							const uint8_t rows,
 							const bool loop,
-							std::string title) {
+							std::string title) :
+							title_box(attribute_list->renderer, x, y, text_w, text_h*7/6, ALIGN_H_L, ALIGN_V_M, text_h, &attribute_list->color_profile->text) {
 	this->attribute_list = attribute_list;
 	this->renderer = attribute_list->renderer;
 	
@@ -39,12 +40,11 @@ NavMenu::NavMenu(AttributeList* attribute_list,
 		this->rows = 1;
 	this->loop = loop;
 
-	this->title_box = new TextBox(renderer, x, y, this->w, this->text_h*7/6, ALIGN_H_L, ALIGN_V_M, this->text_h, &this->attribute_list->color_profile->text);
-	this->title_box->setText(this->title);
+	this->title_box.setText(this->title);
 
 	for(uint16_t i=0;i<this->length;i+=1) {
 		int16_t x_pos = x, y_pos = y;
-		int8_t h_indent = indent;
+		align_h_t h_indent;
 		
 		getIndexPosition(i, &x_pos, &y_pos);
 		if(indent < 0) {
@@ -58,9 +58,9 @@ NavMenu::NavMenu(AttributeList* attribute_list,
 				h_indent = ALIGN_H_R;
 			else
 				h_indent = ALIGN_H_C;
-		}
+		} else h_indent = (align_h_t)indent;
 
-		this->item_text_box.push_back(new TextBox(this->renderer, x_pos, y_pos, text_w-SQ_WIDTH, text_h, h_indent, ALIGN_V_M, size, &this->attribute_list->color_profile->text));
+		this->item_text_box.push_back(TextBox(this->renderer, x_pos, y_pos, text_w-SQ_WIDTH, text_h, h_indent, ALIGN_V_M, size, &this->attribute_list->color_profile->text));
 		this->item_slider.push_back(NULL);
 		this->item_slider_text.push_back(NULL);
 	}
@@ -68,12 +68,6 @@ NavMenu::NavMenu(AttributeList* attribute_list,
 
 NavMenu::~NavMenu() {
 	delete[] this->items;
-	
-	delete this->title_box;
-	while(this->item_text_box.size() > 0) {
-		delete this->item_text_box.back();
-		this->item_text_box.erase(this->item_text_box.end());
-	}
 	
 	while(this->item_slider.size() > 0) {
 		delete this->item_slider.back();
@@ -101,7 +95,7 @@ void NavMenu::setItem(std::string text, const uint16_t item) {
 //Refresh all listings on the menu.
 void NavMenu::setTextItems() {
 	for(uint16_t i=0;i<this->length;i+=1) {
-		this->item_text_box[i]->setText(this->items[i]);
+		this->item_text_box[i].setText(this->items[i]);
 	}
 }
 
@@ -163,7 +157,7 @@ uint16_t NavMenu::getFilledTextItems() {
 	uint16_t filled_len = 0;
 
 	for(uint16_t i=1;i<=this->length;i+=1) {
-		if(!items[i - 1].compare("") == 0 && !items[i - 1].compare(" ") == 0)
+		if(items[i - 1].compare("") != 0 && items[i - 1].compare(" ") != 0)
 			filled_len += 1;
 	}
 
@@ -176,7 +170,7 @@ void NavMenu::setTitle(std::string title) {
 	else
 		this->title = title;
 
-	this->title_box->setText(this->title);
+	this->title_box.setText(this->title);
 }
 
 int16_t NavMenu::getX() {
@@ -502,7 +496,7 @@ void NavMenu::drawMenu() {
 		setTextItems();
 	}
 
-	this->title_box->drawText();
+	this->title_box.drawText();
 
 	uint8_t title_height = 0;
 	if(this->title.compare("") != 0 && this->title.compare(" ") != 0)
@@ -514,7 +508,7 @@ void NavMenu::drawMenu() {
 		if((this->selected - 1)/row_fit_count != i/row_fit_count)
 			continue;
 
-		this->item_text_box[i]->drawText();
+		this->item_text_box[i].drawText();
 
 		if(i < this->item_slider.size() && this->item_slider[i] != NULL)
 			this->item_slider[i]->drawSlider();
@@ -573,10 +567,10 @@ void NavMenu::drawMenu() {
 }
 
 void NavMenu::refreshItems() {
-	title_box->renderText();
+	title_box.renderText();
 
 	for(uint8_t i=0;i<this->item_text_box.size();i+=1)
-		this->item_text_box[i]->renderText();
+		this->item_text_box[i].renderText();
 }
 
 void NavMenu::getIndexPosition(uint16_t index, int16_t* x_pos, int16_t* y_pos) {

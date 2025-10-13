@@ -6,12 +6,16 @@
 #include "../Text_Box.h"
 #include "../AIBus_Handler.h"
 
+#include "../Locale/Locale.h"
+
 #ifndef settings_clock_window_h
 #define settings_clock_window_h
 
-#define SETTINGS_CLOCK_MENU_MAIN 0
-#define SETTINGS_CLOCK_MENU_FORMAT 1
-#define SETTINGS_CLOCK_MENU_AUTO 2
+enum settings_clock_menu_t : uint8_t {
+	SETTINGS_CLOCK_MENU_MAIN,
+	SETTINGS_CLOCK_MENU_FORMAT,
+	SETTINGS_CLOCK_MENU_AUTO
+};
 
 #define SETTINGS_CLOCK_MENU_LEN 4
 
@@ -27,7 +31,7 @@ private:
 	void handleEnterButton();
 	void handleBackButton();
 
-	int8_t settings_clock_menu;
+	settings_clock_menu_t settings_clock_menu;
 };
 
 #endif

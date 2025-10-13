@@ -1,6 +1,6 @@
 #include "Settings_Clock_Window.h"
 
-Settings_Clock_Window::Settings_Clock_Window(AttributeList *attribute_list) : Settings_Window(attribute_list, SETTINGS_CLOCK_MENU_LEN, "Clock Settings", NEXT_WINDOW_SETTINGS_MAIN) {
+Settings_Clock_Window::Settings_Clock_Window(AttributeList *attribute_list) : Settings_Window(attribute_list, SETTINGS_CLOCK_MENU_LEN, getMenuTitle(MENU_INDEX_SETTINGS_CLOCK, attribute_list->locale), NEXT_WINDOW_SETTINGS_MAIN) {
 	initClockMain();
 }
 
@@ -8,12 +8,13 @@ Settings_Clock_Window::Settings_Clock_Window(AttributeList *attribute_list) : Se
 void Settings_Clock_Window::initClockMain() {
 	this->settings_clock_menu = SETTINGS_CLOCK_MENU_MAIN;
 
-	this->title_block->setText("Clock Settings");
+	MenuList main_menu = getMenu(MENU_INDEX_SETTINGS_CLOCK, attribute_list->locale);
+	this->title_block->setText(main_menu.title);
+
 	this->clearMenu();
 
-	this->settings_menu->setItem("Clock Format", 0);
-	this->settings_menu->setItem("Auto Clock Set", 1);
-	this->settings_menu->setItem("Set Clock", 2);
+	for(int i=0;i<main_menu.size();i+=1)
+		this->settings_menu->setItem(main_menu[i], i);
 
 	this->refreshWindow();
 
@@ -22,10 +23,12 @@ void Settings_Clock_Window::initClockMain() {
 
 //Initialize the clock format menu.
 void Settings_Clock_Window::initClockFormat() {
-	const int8_t last_menu = this->settings_clock_menu;
+	const settings_clock_menu_t last_menu = this->settings_clock_menu;
 	this->settings_clock_menu = SETTINGS_CLOCK_MENU_FORMAT;
 
-	this->title_block->setText("Clock Format");
+	MenuList clock_menu = getMenu(MENU_INDEX_SETTINGS_CLOCK_FORMAT, attribute_list->locale);
+	this->title_block->setText(clock_menu.title);
+	
 	this->clearMenu();
 
 	std::string msg_12h;
@@ -40,11 +43,11 @@ void Settings_Clock_Window::initClockFormat() {
 	else
 		msg_24h = "#COF ";
 
-	msg_12h += "12-hour";
-	msg_24h += "24-hour";
+	msg_12h += clock_menu.getLocalEntry(MENU_INDEX_SETTINGS_CLOCK_FORMAT_12H);
+	msg_24h += clock_menu.getLocalEntry(MENU_INDEX_SETTINGS_CLOCK_FORMAT_24H);
 
-	this->settings_menu->setItem(msg_12h, 0);
-	this->settings_menu->setItem(msg_24h, 1);
+	this->settings_menu->setItem(msg_12h, clock_menu.getLocalIndex(MENU_INDEX_SETTINGS_CLOCK_FORMAT_12H));
+	this->settings_menu->setItem(msg_24h, clock_menu.getLocalIndex(MENU_INDEX_SETTINGS_CLOCK_FORMAT_24H));
 
 	this->refreshWindow();
 
@@ -54,9 +57,10 @@ void Settings_Clock_Window::initClockFormat() {
 
 //Initialize the auto clock device window.
 void Settings_Clock_Window::initClockAuto() {
-	const int8_t last_menu = this->settings_clock_menu;
+	const settings_clock_menu_t last_menu = this->settings_clock_menu;
 	this->settings_clock_menu = SETTINGS_CLOCK_MENU_AUTO;
 
+	MenuList clock_menu = getMenu(MENU_INDEX_SETTINGS_AUTO_SET, attribute_list->locale);
 	this->title_block->setText("Auto Clock Set");
 	this->clearMenu();
 
@@ -69,7 +73,7 @@ void Settings_Clock_Window::initClockAuto() {
 	} else
 		msg_canslator = "#COF ";
 
-	msg_canslator += "From Vehicle";
+	msg_canslator += clock_menu.getLocalEntry(MENU_INDEX_SETTINGS_AUTO_SET_VEHICLE);
 
 	std::string msg_gps;
 	if(!timekeeper_found && attribute_list->timekeeper == ID_GPS_ANTENNA) {
@@ -77,7 +81,7 @@ void Settings_Clock_Window::initClockAuto() {
 		timekeeper_found = true;
 	} else
 		msg_gps = "#COF ";
-	msg_gps += "From GPS";
+	msg_gps += clock_menu.getLocalEntry(MENU_INDEX_SETTINGS_AUTO_SET_GPS);
 
 	std::string msg_radio;
 	if(!timekeeper_found && attribute_list->timekeeper == ID_RADIO && attribute_list->auto_clock) {
@@ -85,20 +89,20 @@ void Settings_Clock_Window::initClockAuto() {
 		timekeeper_found = true;
 	} else
 		msg_radio = "#COF ";
-	msg_radio += "From Radio";
+	msg_radio += clock_menu.getLocalEntry(MENU_INDEX_SETTINGS_AUTO_SET_RADIO);
 
 	std::string msg_off;
 	if(!timekeeper_found)
 		msg_off = "#CON ";
 	else
 		msg_off = "#COF ";
-	msg_off += "Set Clock Manually";
+	msg_off += clock_menu.getLocalEntry(MENU_INDEX_SETTINGS_AUTO_SET_MANUAL);
 
-	this->settings_menu->setItem(msg_canslator, 0); //TODO: Only if vehicle has a timekeeper.
+	this->settings_menu->setItem(msg_canslator, clock_menu.getLocalIndex(MENU_INDEX_SETTINGS_AUTO_SET_VEHICLE)); //TODO: Only if vehicle has a timekeeper.
 	if(attribute_list->gps_antenna_connected)
-		this->settings_menu->setItem(msg_gps, 1);
-	this->settings_menu->setItem(msg_radio, 2);
-	this->settings_menu->setItem(msg_off, 3);
+		this->settings_menu->setItem(msg_gps, clock_menu.getLocalIndex(MENU_INDEX_SETTINGS_AUTO_SET_GPS));
+	this->settings_menu->setItem(msg_radio, clock_menu.getLocalIndex(MENU_INDEX_SETTINGS_AUTO_SET_RADIO));
+	this->settings_menu->setItem(msg_off, clock_menu.getLocalIndex(MENU_INDEX_SETTINGS_AUTO_SET_MANUAL));
 
 	if(last_menu != SETTINGS_CLOCK_MENU_AUTO)
 		this->settings_menu->setSelected(1);
@@ -111,29 +115,38 @@ void Settings_Clock_Window::handleEnterButton() {
 		return;
 
 	if(this->settings_clock_menu == SETTINGS_CLOCK_MENU_MAIN) {
-		switch(selected) {
-		case 0: //Clock format.
+		MenuList menu = getMenu(MENU_INDEX_SETTINGS_CLOCK, attribute_list->locale);
+
+		switch(menu.getGlobalIndex(selected)) {
+		case MENU_INDEX_SETTINGS_CLOCK_CLOCK_FORMAT: //Clock format.
 			this->initClockFormat();
 			break;
-		case 1: //Auto clock.
+		case MENU_INDEX_SETTINGS_CLOCK_AUTO_SET: //Auto clock.
 			this->initClockAuto();
+			break;
+		default:
 			break;
 		}
 	} else if(this->settings_clock_menu == SETTINGS_CLOCK_MENU_FORMAT) {
 		AIBusHandler* ai_handler = attribute_list->aibus_handler;
 		uint8_t time_set_byte = 0x0;
+
 		if(attribute_list->auto_clock)
 			time_set_byte |= 0x1;
 		else
 			time_set_byte |= 0x2;
 
-		switch(selected) {
-		case 0: //12h.
+		MenuList menu = getMenu(MENU_INDEX_SETTINGS_CLOCK_FORMAT, attribute_list->locale);
+
+		switch(menu.getGlobalIndex(selected)) {
+		case MENU_INDEX_SETTINGS_CLOCK_FORMAT_12H: //12h.
 			time_set_byte |= 0x80;
 			break;
-		case 1: //24h.
+		case MENU_INDEX_SETTINGS_CLOCK_FORMAT_24H: //24h.
 			time_set_byte &= (~0x80);
 			break;
+		default:
+			return;
 		}
 
 		if(selected == 0 || selected == 1) {
@@ -160,26 +173,30 @@ void Settings_Clock_Window::handleEnterButton() {
 		uint8_t new_timekeeper = last_timekeeper;
 		bool new_auto = last_auto;
 
-		switch(selected) {
-		case 0: //Canslator.
+		MenuList menu = getMenu(MENU_INDEX_SETTINGS_AUTO_SET, attribute_list->locale);
+
+		switch(menu.getGlobalIndex(selected)) {
+		case MENU_INDEX_SETTINGS_AUTO_SET_VEHICLE: //Canslator.
 			new_timekeeper = ID_CANSLATOR;
 			new_auto = true;
 			break;
-		case 1: //GPS.
+		case MENU_INDEX_SETTINGS_AUTO_SET_GPS: //GPS.
 			if(attribute_list->gps_antenna_connected) {
 				new_timekeeper = ID_GPS_ANTENNA;
 				new_auto = true;
 			} else
 				return;
 			break;
-		case 2: //Radio.
+		case MENU_INDEX_SETTINGS_AUTO_SET_RADIO: //Radio.
 			new_timekeeper = ID_RADIO;
 			new_auto = true;
 			break;
-		case 3: //Radio, manual.
+		case MENU_INDEX_SETTINGS_AUTO_SET_MANUAL: //Radio, manual.
 			new_timekeeper = ID_RADIO;
 			new_auto = false;
 			break;
+		default:
+			return;
 		}
 
 		AIBusHandler* ai_handler = attribute_list->aibus_handler;

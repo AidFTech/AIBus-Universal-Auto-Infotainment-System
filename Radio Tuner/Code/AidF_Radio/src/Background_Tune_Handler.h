@@ -23,6 +23,8 @@ class BackgroundTuneHandler {
 
 		int getStationNames(String* names);
 		uint16_t getStationFrequency(const int index);
+
+		void setStations(const int l, String* names, uint16_t* freqs);
 	private:
 		Si4735Controller* br_tuner;
 		ParameterList* parameter_list;

@@ -42,6 +42,9 @@ AIData& AIData::operator=(const AIData &copy) {
 	for(int i=0;i<this->l;i+=1)
 		this->data[i] = copy.data[i];
 
+	this->sender = copy.sender;
+	this->receiver = copy.receiver;
+
 	return *this;
 };
 

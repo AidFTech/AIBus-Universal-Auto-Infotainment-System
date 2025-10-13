@@ -30,6 +30,7 @@
 struct AudioSource {
 	uint8_t source_id, sub_id;
 	String source_name = "", source_short = "";
+	bool connected = false; //True if the source is confirmed connected.
 };
 
 class SourceHandler {
@@ -44,6 +45,7 @@ public:
 	bool handleAIBus(AIData* ai_d);
 
 	uint8_t getCurrentSourceID();
+	uint8_t getCurrentSourceSubID();
 	uint16_t getCurrentSource();
 	void setSource(const uint16_t source);
 	bool setSourceID(const uint8_t source);
@@ -51,6 +53,7 @@ public:
 	void setImidSupportedSources(const int l, uint8_t* source_list);
 	bool getIMIDSourceSupported(const uint8_t source_id);
 
+	bool getAudioOn();
 	bool getForceSourceChanged();
 
 	void checkSources();
@@ -87,6 +90,7 @@ private:
 	
 	int getFirstOccurenceOf(const uint8_t source);
 	int getFirstOccurenceOf(const uint8_t source, const uint16_t s);
+	int getSubsourceIDs(const uint8_t source, uint16_t* index);
 	int getFirstAvailable();
 	int getFirstAvailable(const uint16_t s);
 

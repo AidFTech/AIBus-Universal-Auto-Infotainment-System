@@ -1,6 +1,6 @@
 #include "Settings_Color_Window.h"
 
-Settings_Color_Window::Settings_Color_Window(AttributeList *attribute_list) : Settings_Window(attribute_list, 2, "Colors", NEXT_WINDOW_SETTINGS_DISPLAY) {
+Settings_Color_Window::Settings_Color_Window(AttributeList *attribute_list) : Settings_Window(attribute_list, 2, getMenuTitle(MENU_INDEX_SETTINGS_COLORS, attribute_list->locale), NEXT_WINDOW_SETTINGS_DISPLAY) {
 	initColorMainMenu();
 }
 
@@ -37,7 +37,8 @@ void Settings_Color_Window::initColorMainMenu() {
 	this->color_menu = SETTINGS_COLOR_MENU_MAIN;
 	this->clearMenu();
 
-	this->title_block->setText("Colors");
+	MenuList main_menu = getMenu(MENU_INDEX_SETTINGS_COLORS, attribute_list->locale);
+	this->title_block->setText(main_menu.title);
 
 	std::vector<std::string> presets = getIniProfileList();
 	const uint16_t l = presets.size() + 2;
@@ -47,8 +48,8 @@ void Settings_Color_Window::initColorMainMenu() {
 	for(int i=0;i<l-2;i+=1)
 		this->settings_menu->setItem(presets.at(i), i);
 
-	this->settings_menu->setItem("Custom", l-2);
-	this->settings_menu->setItem("Save Preset", l-1);
+	this->settings_menu->setItem(main_menu.getLocalEntry(MENU_INDEX_SETTINGS_COLORS_CUSTOM), l-2);
+	this->settings_menu->setItem(main_menu.getLocalEntry(MENU_INDEX_SETTINGS_COLORS_SAVE), l-1);
 	
 	this->settings_menu->setSelected(1);
 }

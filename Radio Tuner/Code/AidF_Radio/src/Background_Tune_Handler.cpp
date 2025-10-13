@@ -1,7 +1,7 @@
 #include "Background_Tune_Handler.h"
 
 BackgroundTuneHandler::BackgroundTuneHandler(Si4735Controller* br_tuner, ParameterList* parameters) {
-	this->parameter_list = parameter_list;
+	this->parameter_list = parameters;
 
 	this->br_tuner = br_tuner;
 
@@ -15,7 +15,7 @@ BackgroundTuneHandler::~BackgroundTuneHandler() {
 
 }
 
-//Basic loop function.
+//Loop function.
 void BackgroundTuneHandler::loop() {
 	br_tuner->loop();
 
@@ -68,6 +68,7 @@ void BackgroundTuneHandler::loop() {
 
 }
 
+//Add a frequency to the station list. If the fequency already exists, set the station name.
 void BackgroundTuneHandler::addFrequency(const uint16_t freq, String station_name_str) {
 	bool found = false;
 	int freq_index = -1;
@@ -144,4 +145,18 @@ uint16_t BackgroundTuneHandler::getStationFrequency(const int index) {
 		return freq_list_vec.at(index);
 	else
 		return 0;
+}
+
+//Set the station list.
+void BackgroundTuneHandler::setStations(const int l, String* names, uint16_t* freqs) {
+	if(l > MAXIMUM_FREQUENCY_COUNT)
+		return;
+
+	freq_list_vec.clear();
+	station_name_vec.clear();
+
+	for(int i=0;i<l;i+=1) {
+		freq_list_vec.push_back(freqs[i]);
+		station_name_vec.push_back(names[i]);
+	}
 }

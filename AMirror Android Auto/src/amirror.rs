@@ -875,6 +875,11 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
+		//Position.
+		let latitude = context.latitude;
+		let longitude = context.longitude;
+		let altitude = context.altitude;
+
 		std::mem::drop(context);
 		let mut ai_rx_list = Vec::new();
 
@@ -895,7 +900,24 @@ impl <'a> AMirror<'a> {
 		for ai_data in ai_rx_list {
 			self.handle_aibus_message(ai_data);
 		}
-	
+
+		context = match self.context.try_lock() {
+			Ok(context) => context,
+			Err(_) => {
+				println!("AMirror Process Post Handler: Context Locked.");
+				return;
+			}
+		};
+
+		let new_latitude = context.latitude;
+		let new_longitude = context.longitude;
+		let new_altitude = context.altitude;
+
+		std::mem::drop(context);
+		
+		if new_latitude != latitude || new_longitude != longitude || new_altitude != altitude {
+			self.aa_handler.send_coordinates();
+		}
 	}
 
 	pub fn handle_aibus_message(&mut self, ai_msg: AIBusMessage) {
@@ -1471,6 +1493,49 @@ impl <'a> AMirror<'a> {
 				}
 
 				self.screen_acknowledged = true;
+			}
+		} else if ai_msg.sender == AIBUS_DEVICE_ANTENNA {
+			if ai_msg.data[0] == 0x55 && ai_msg.l() >= 14 { //Position message.
+				let lat_degrees = ((ai_msg.data[2] as i16) << 8) | ai_msg.data[3] as i16;
+				let lat_minutes = ai_msg.data[4]&0x7F;
+				let lat_seconds = ai_msg.data[5];
+				let lat_second_frac = ai_msg.data[6];
+				let lat_negative = (ai_msg.data[4]&0x80) != 0;
+
+
+				let long_degrees = ((ai_msg.data[7] as i16) << 8) | ai_msg.data[8] as i16;
+				let long_minutes = ai_msg.data[9]&0x7F;
+				let long_seconds = ai_msg.data[10];
+				let long_second_frac = ai_msg.data[11];
+				let long_negative = (ai_msg.data[9]&0x80) != 0;
+
+				//Calculate latitude:
+				let lat_sign = if lat_degrees >= 0 && !lat_negative{
+					1
+				} else {
+					-1
+				};
+				let mut latitude = lat_degrees as f64;
+				latitude += ((lat_minutes as f64)/60.0)*(lat_sign as f64);
+				latitude += ((lat_seconds as f64)/3600.0)*(lat_sign as f64);
+				latitude += ((lat_second_frac as f64)/(3600.0*255.0))*(lat_sign as f64);
+
+				context.latitude = latitude;
+
+				//Calculate longitude:
+				let long_sign = if long_degrees >= 0 && !long_negative {
+					1
+				} else {
+					-1
+				};
+				let mut longitude = long_degrees as f64;
+				longitude += ((long_minutes as f64)/60.0)*(long_sign as f64);
+				longitude += ((long_seconds as f64)/3600.0)*(long_sign as f64);
+				longitude += ((long_second_frac as f64)/(3600.0*255.0))*(lat_sign as f64);
+
+				context.longitude = longitude;
+
+				context.altitude = ((ai_msg.data[12] as i32) << 8) | (ai_msg.data[13] as i32);
 			}
 		}
 

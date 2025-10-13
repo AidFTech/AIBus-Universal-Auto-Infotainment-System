@@ -67,8 +67,8 @@ private:
 
 	std::string title;
 	std::string* items;
-	TextBox* title_box;
-	std::vector<TextBox*> item_text_box;
+	TextBox title_box;
+	std::vector<TextBox> item_text_box;
 	std::vector<NavSlider*> item_slider;
 	std::vector<TextBox*> item_slider_text;
 

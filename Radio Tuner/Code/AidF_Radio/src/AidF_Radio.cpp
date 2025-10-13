@@ -60,6 +60,8 @@ void AidFRadio::setup() {
 	AISerial.begin(AI_BAUD);
 	Wire.begin();
 	SPI.begin();
+	delay(10);
+	sram_handler.begin();
 
 	tuner.init1();
 	br_tuner.init1();
@@ -96,20 +98,24 @@ void AidFRadio::setup() {
 	src_fm1.source_short = "FM1";
 	src_fm1.source_id = ID_RADIO;
 	src_fm1.sub_id = 0;
+	src_fm1.connected = true;
 	src_fm2.source_name = "FM2";
 	src_fm2.source_short = "FM2";
 	src_fm2.source_id = ID_RADIO;
 	src_fm2.sub_id = 1;
+	src_fm2.connected = true;
 	src_am.source_name = "AM";
 	src_am.source_short = "AM";
 	src_am.source_id = ID_RADIO;
 	src_am.sub_id = 2;
+	src_am.connected = true;
 
 	AudioSource src_aux;
 	src_aux.source_name = "Aux";
 	src_aux.source_short = "Aux";
 	src_aux.source_id = ID_RADIO;
 	src_aux.sub_id = 3;
+	src_aux.connected = true;
 
 	source_handler.source_list[0] = src_fm1;
 	source_handler.source_list[1] = src_fm2;
@@ -121,6 +127,41 @@ void AidFRadio::setup() {
 	adc_handler.init();
 
 	//source_handler.sendRadioHandshake();
+	if(sram_handler.getValid()) { //Populate params.
+		StartParams start_params;
+		sram_handler.getStartParams(&start_params);
+		sram_handler.getFrequencies(&background_tuner);
+
+		const uint8_t source_count = sram_handler.getSourceCount();
+		AudioSource source_list[source_count];
+		sram_handler.getSources(source_count, source_list);
+
+		int index = -1;
+
+		for(int s=0;s<source_count;s+=1) {
+			if(source_list[s].source_id != ID_RADIO && source_list[s].source_id != 0x0)
+				source_handler.source_list[s] = source_list[s];
+
+			if(source_list[s].source_id == start_params.selected_source && source_list[s].sub_id == start_params.selected_subsource)
+				index = s;
+		}
+
+		if(index >= 0)
+		 	source_handler.setSource(index);
+		if(!start_params.audio_on)
+			source_handler.setPower(false);
+		
+		parameters.am_tune = start_params.am_freq;
+		parameters.fm1_tune = start_params.fm1_freq;
+		parameters.fm2_tune = start_params.fm2_freq;
+		
+		volume_handler.setVolume(start_params.vol);
+		volume_handler.setVolRange(start_params.max_vol);
+		volume_handler.setTreble(start_params.treble);
+		volume_handler.setBass(start_params.bass);
+		volume_handler.setBalance(start_params.balance);
+		volume_handler.setFader(start_params.fader);
+	}
 
 	uint8_t init_data[] = {0x4A, 0x1F};
 	AIData init_msg(sizeof(init_data), ID_RADIO, ID_CANSLATOR, init_data);
@@ -182,7 +223,7 @@ void AidFRadio::loop() {
 	}
 	
 	const uint8_t last_active_source_id = source_handler.getCurrentSourceID();
-	const uint16_t last_source_count = source_handler.getFilledSourceCount(), last_active_source = source_handler.getCurrentSource();
+	const uint16_t last_active_source = source_handler.getCurrentSource();
 
 	const uint16_t last_fm1 = parameters.fm1_tune, last_fm2 = parameters.fm2_tune, last_am = parameters.am_tune;
 	const bool last_info = parameters.info_mode;
@@ -218,7 +259,7 @@ void AidFRadio::loop() {
 	if(!*power_on && !power_switched)
 		return;
 
-	AudioSource source_list[SOURCE_COUNT];
+	//AudioSource source_list[SOURCE_COUNT];
 	//const uint16_t source_count = source_handler.getFilledSources(source_list), current_source = source_handler.getCurrentSource();
 	
 	const bool force_source_changed = source_handler.getForceSourceChanged() || (last_active_source_id == 0 && source_handler.getCurrentSourceID() != 0);
@@ -738,6 +779,7 @@ void AidFRadio::handleAIBus(AIData* msg) {
 					digitalWrite(POWER_ON_SW, HIGH);
 					parameters.power_on = true;
 					door_timer_enabled = false;
+					fullPowerOn();
 					source_handler.sendRadioHandshake();
 					sendIMIDPing();
 				}
@@ -1175,6 +1217,11 @@ void AidFRadio::sendAudioLightMessage(const bool audio_on) {
 	#endif
 }*/
 
+//Turn the full radio power on.
+void AidFRadio::fullPowerOn() {
+
+}
+
 //Power off procedure.
 void AidFRadio::powerOff() {
 	*power_on = false;
@@ -1187,6 +1234,31 @@ void AidFRadio::powerOff() {
 	parameters.imid_char = 0;
 	parameters.imid_lines = 0;
 	parameters.imid_radio = false;
+
+	sram_handler.writeHeader();
+	
+	StartParams start_params;
+	start_params.fm1_freq = parameters.fm1_tune;
+	start_params.fm2_freq = parameters.fm2_tune;
+	start_params.am_freq = parameters.am_tune;
+
+	const uint16_t index = source_handler.getCurrentSource();
+
+	start_params.selected_source = source_handler.source_list[index].source_id;
+	start_params.selected_subsource = source_handler.source_list[index].sub_id;
+
+	start_params.audio_on = source_handler.getAudioOn();
+	
+	start_params.vol = volume_handler.getVolume();
+	start_params.max_vol = volume_handler.getVolRange();
+	start_params.treble = volume_handler.getTreble();
+	start_params.bass = volume_handler.getBass();
+	start_params.balance = volume_handler.getBalance();
+	start_params.fader = volume_handler.getFader();
+
+	sram_handler.setStartParams(&start_params);
+	sram_handler.setSources(source_handler.source_count, source_handler.source_list);
+	sram_handler.setFrequencies(&background_tuner);
 
 	digitalWrite(POWER_ON_SW, LOW);
 	digitalWrite(AUDIO_ON_SW, HIGH);

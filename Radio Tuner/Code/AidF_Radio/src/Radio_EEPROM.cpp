@@ -1,5 +1,6 @@
 #include "Radio_EEPROM.h"
 
+//Load presets from EEPROM.
 void getEEPROMPresets(ParameterList* parameter_list) {
 	for(int i=0;i<PRESET_COUNT;i+=1) {
 		if(2*i+1+4*PRESET_COUNT >= EEPROM.length())
@@ -15,6 +16,7 @@ void getEEPROMPresets(ParameterList* parameter_list) {
 	}
 }
 
+//Save the radio presets in EEPROM.
 void setEEPROMPresets(ParameterList* parameter_list) {
 	for(int i=0;i<PRESET_COUNT;i+=1) {
 		if(2*i+1+4*PRESET_COUNT >= EEPROM.length())

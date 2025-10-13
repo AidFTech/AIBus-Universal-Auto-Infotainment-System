@@ -30,6 +30,14 @@ uint8_t SourceHandler::getCurrentSourceID() {
 		return 0;
 }
 
+//Get the subsource ID of the currently-selected source.
+uint8_t SourceHandler::getCurrentSourceSubID() {
+	if(audio_on)
+		return this->source_list[this->current_source].sub_id;
+	else
+		return 0;
+}
+
 //Get the index of the currently selected source.
 uint16_t SourceHandler::getCurrentSource() {
 	return this->current_source;
@@ -39,6 +47,7 @@ uint16_t SourceHandler::getCurrentSource() {
 void SourceHandler::setSource(const uint16_t source) {
 	if(source >= source_count)
 		return;
+	this->audio_on = true;
 	this->current_source = source;
 }
 
@@ -49,6 +58,7 @@ bool SourceHandler::setSourceID(const uint8_t source) {
 		return false;
 	else {
 		this->current_source = new_source;
+		this->audio_on = true;
 		return true;
 	}
 }
@@ -138,6 +148,11 @@ bool SourceHandler::getIMIDSourceSupported(const uint8_t source_id) {
 	return false;
 }
 
+//Return whether audio is on.
+bool SourceHandler::getAudioOn() {
+	return this->audio_on;
+}
+
 //Get whether the source should be enabled with no delay.
 bool SourceHandler::getForceSourceChanged() {
 	const bool source_changed = this->force_source_changed;
@@ -181,19 +196,30 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			
 			const uint8_t new_id = ai_d->sender;
 			if(getFirstOccurenceOf(new_id) >= 0) {
-				//ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
-				//TODO: Clear subsources?
-				//return true;
-			} else {
-				parameter_list->handshake_timer = 0;
-				parameter_list->handshake_timer_active = true;
-				parameter_list->handshake_sources.push_back(new_id);
+				if(ai_d->l >= 4) {
+					const uint8_t sub_count = ai_d->data[3];
+					uint16_t subsources[source_count];
+					const uint16_t set_sub_count = getSubsourceIDs(new_id, subsources);
+					if(set_sub_count != sub_count) {
+						clearSubsources(new_id);
 
+						for(int i=1;i<sub_count;i+=1)
+							createSubsource(new_id);
+					} else {
+						for(int i=0;i<set_sub_count;i+=1)
+							source_list[subsources[i]].connected = true;
+					}
+				}
+
+				ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+				return true;
+			} else {
 				AudioSource new_source;
 				new_source.source_id = new_id;
 				new_source.source_name = "";
 				new_source.source_short = "";
 				new_source.sub_id = 0;
+				new_source.connected = true;
 
 				this->source_list[new_index] = new_source;
 
@@ -203,6 +229,10 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						createSubsource(new_id);
 				}
 			}
+
+			parameter_list->handshake_timer = 0;
+			parameter_list->handshake_timer_active = true;
+			parameter_list->handshake_sources.push_back(new_id);
 			
 			ack = false;
 			ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
@@ -836,7 +866,7 @@ void SourceHandler::incrementSource(const bool direction) {
 //Return the number of available sources.
 uint16_t SourceHandler::getFilledSourceCount() {
 	uint16_t filled_source_count = 0;
-	for(int i=0;i<this->source_count;i+=1) {
+	for(int i=0;i<this->source_count;i+=1 && this->source_list[i].connected) {
 		if(this->source_list[i].source_id != 0)
 			filled_source_count += 1;
 	}
@@ -848,7 +878,7 @@ uint16_t SourceHandler::getFilledSourceCount() {
 uint16_t SourceHandler::getFilledSources(AudioSource* source_list) {
 	uint16_t filled_source_count = 0;
 	for(int i=0;i<this->source_count;i+=1) {
-		if(this->source_list[i].source_id != 0) {
+		if(this->source_list[i].source_id != 0 && this->source_list[i].connected) {
 			source_list[filled_source_count] = this->source_list[i];
 			filled_source_count += 1;
 		}
@@ -861,7 +891,7 @@ uint16_t SourceHandler::getFilledSources(AudioSource* source_list) {
 uint16_t SourceHandler::getSourceNames(String* source_list) {
 	uint16_t filled_source_count = 0;
 	for(int i=0;i<this->source_count;i+=1) {
-		if(this->source_list[i].source_id != 0) {
+		if(this->source_list[i].source_id != 0 && this->source_list[i].connected) {
 			source_list[filled_source_count] = this->source_list[i].source_name;
 			filled_source_count += 1;
 		}
@@ -874,7 +904,7 @@ uint16_t SourceHandler::getSourceNames(String* source_list) {
 uint16_t SourceHandler::getSourceIDs(uint8_t* source_list) {
 	uint16_t filled_source_count = 0;
 	for(int i=0;i<this->source_count;i+=1) {
-		if(this->source_list[i].source_id != 0 && this->source_list[i].sub_id == 0) {
+		if(this->source_list[i].source_id != 0 && this->source_list[i].sub_id == 0 && this->source_list[i].connected) {
 			source_list[filled_source_count] = this->source_list[i].source_id;
 			filled_source_count += 1;
 		}
@@ -895,7 +925,19 @@ int SourceHandler::getFirstOccurenceOf(const uint8_t source, const uint16_t s) {
 			return i;
 	}
 	return -1;
-	
+}
+
+//Get the indices of all sources with ID source.
+int SourceHandler::getSubsourceIDs(const uint8_t source, uint16_t* index) {
+	int ptr = 0;
+	for(int i=0;i<source_count;i+=1) {
+		if(source_list[i].source_id == source) {
+			index[ptr] = i;
+			ptr += 1;
+		}
+	}
+
+	return ptr;
 }
 
 //Get the first available source index.

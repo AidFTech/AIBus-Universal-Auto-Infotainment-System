@@ -35,7 +35,6 @@ protected:
 	virtual void drawOnMap(SDL_Renderer* renderer, SDL_Texture* texture, SDL_Color color, const uint16_t thickness, const int32_t x_offset, const int32_t y_offset);
 	virtual vector<GeometryPoint> getPoints();
 	
-	
 	GeometryCommand** commands = nullptr;
 	int command_l;
 public:
@@ -49,6 +48,8 @@ public:
 	
 	virtual void getBounds(int* x1, int* y1, int* x2, int* y2);
 	virtual void getMidpoint(int* x, int* y, double* angle);
+
+	virtual double getPointLength();
 };
 
 //Road object.

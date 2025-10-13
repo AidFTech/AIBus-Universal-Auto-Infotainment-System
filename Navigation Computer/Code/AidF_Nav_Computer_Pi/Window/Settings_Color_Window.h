@@ -8,11 +8,15 @@
 #include "../AIBus_Handler.h"
 #include "../Ini_Color_Preset.h"
 
+#include "../Locale/Locale.h"
+
 #ifndef settings_color_window_h
 #define settings_color_window_h
 
-#define SETTINGS_COLOR_MENU_MAIN 0
-#define SETTINGS_COLOR_MENU_PICKER 1
+enum settings_color_main_t : uint8_t {
+	SETTINGS_COLOR_MENU_MAIN,
+	SETTINGS_COLOR_MENU_PICKER
+};
 
 class Settings_Color_Window : public Settings_Window {
 public:
@@ -22,7 +26,7 @@ private:
 
 	void initColorMainMenu();
 	
-	int8_t color_menu;
+	settings_color_main_t color_menu;
 };
 
 #endif

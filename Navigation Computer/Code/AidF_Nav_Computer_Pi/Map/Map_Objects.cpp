@@ -100,6 +100,8 @@ void MapObject::drawOnMap(SDL_Renderer* renderer, SDL_Texture* texture, SDL_Colo
 					cursor_y = y_offset + move_point->y;
 					cursor_x_start = cursor_x;
 					cursor_y_start = cursor_y;
+
+					thickLineRGBA(renderer, cursor_x, cursor_y, cursor_x, cursor_y, thickness*3/2, 255, 0, 0, 255);
 				}
 			} else if(command->command == 2 && typeid(*command) == typeid(GeometryPointCommand)) { //Draw.
 				GeometryPointCommand* point_command = (GeometryPointCommand*)(command);
@@ -224,7 +226,10 @@ void MapObjectRoad::drawOnMap(SDL_Renderer* renderer, SDL_Texture* texture, cons
 		int x1, y1, x2, y2;
 		this->getBounds(&x1, &y1, &x2, &y2);
 
-		if(x2-x1 >= TEXT_SIZE || y2-y1 >= TEXT_SIZE) {
+		//TODO: Calculate this more accurately.
+		const int text_thresh = TEXT_SIZE*this->road_name.length()/2;
+
+		if(x2-x1 >= text_thresh || y2-y1 >= text_thresh) {
 			int mid_x = 0, mid_y = 0;
 			double angle = atan(1.0*(y2-y1)/(x2-x1));
 			this->getMidpoint(&mid_x, &mid_y, &angle);
@@ -234,6 +239,12 @@ void MapObjectRoad::drawOnMap(SDL_Renderer* renderer, SDL_Texture* texture, cons
 
 			this->road_name_render = new AngledTextBox(renderer, mid_x + x_offset, mid_y + y_offset, TEXT_SIZE*this->road_name.length(), TEXT_SIZE, ALIGN_H_L, ALIGN_V_M, TEXT_SIZE*6/7, angle, &this->color);
 			this->road_name_render->setText(this->road_name);
+
+			/*cout<<this->road_name<<": ";
+			vector<GeometryPoint> points = getPoints();
+			for(int i=0;i<points.size();i+=1)
+				cout<<points.at(i).x<<','<<points.at(i).y<<' ';
+			cout<<endl<<"MP: "<<mid_x<<','<<mid_y<<endl;*/
 		}
 	}
 
@@ -329,26 +340,55 @@ void MapObject::getMidpoint(int* x, int* y, double* angle) {
 		if(points.size() <= 0)
 			return;
 
-		if(points.size()%2 == 1) { //Odd number of points. Use middle point.
-			GeometryPoint* midpoint = &points.at(points.size()/2);
-			*x = midpoint->x;
-			*y = midpoint->y;
-			if(points.size() == 1)
-				*angle = 0;
-			else {
-				GeometryPoint* last_point = &points.at(points.size()/2-1);
-				*angle = atan(1.0*(midpoint->y-last_point->y)/(midpoint->x-last_point->x));
-			}
-			return;
-		} else { //Even number of points. Get the midpoint between the two middle points.
-			const int p1 = points.size()/2-1, p2 = points.size()/2;
-			GeometryPoint* mp1 = &points.at(p1), *mp2 = &points.at(p2);
-
-			const int x1 = mp1->x, y1 = mp1->y, x2 = mp2->x, y2 = mp2->y;
-			*x = (x1+x2)/2;
-			*y = (y1+y2)/2;
-			*angle = atan(1.0*(y2-y1)/(x2-x1));
+		if(points.size() == 1) {
+			*x = points.at(0).x;
+			*y = points.at(0).y;
+			*angle = 0;
 			return;
 		}
+
+		const double full_length = getPointLength(), half_length = full_length/2;
+		double measured_length = 0;
+
+		for(int p=0;p<points.size()-1;p+=1) {
+			GeometryPoint* p1 = &points.at(p), *p2 = &points.at(p+1);
+			const int dx = p2->x - p1->x, dy = p2->y - p1->y;
+			const double newl = sqrt(dx*dx + dy*dy);
+
+			measured_length += newl;
+
+			if(measured_length >= half_length) { //Midpoint is between p1 and p2.
+				const int start_x = p1->x, start_y = p1->y;
+				const double start_l = measured_length - newl;
+
+				//TODO: This is a placeholder.
+				*x = (p2->x + p1->x)/2;
+				*y = (p2->y + p1->y)/2;
+				if(dx != 0)
+					*angle = atan(1.0*dy/dx);
+				else
+					*angle = M_PI/2;
+					
+				break;
+			}
+		}
 	}
+}
+
+//Get the full length of the object.
+double MapObject::getPointLength() {
+	double length = 0;
+	vector<GeometryPoint> points = getPoints();
+
+	if(points.size() <= 1)
+		return 0;
+
+	for(int i=0;i<points.size()-1;i+=1) {
+		GeometryPoint* p1 = &points.at(i), *p2 = &points.at(i+1);
+		const int dx = p2->x - p1->x, dy = p2->y - p1->y;
+
+		length += sqrt(dx*dx + dy*dy);
+	}
+
+	return length;
 }

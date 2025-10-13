@@ -45,6 +45,7 @@ void HondaCDXMTrans::setup() {
 
 	pinMode(GAH_COUNT_ENABLE, OUTPUT);
 	pinMode(GAH_COUNT_CLEAR, OUTPUT);
+	pinMode(SPDIF_RESET, OUTPUT);
 
 	digitalWrite(ILL_ANODE, LOW);
 	//digitalWrite(IEBUS_TX, LOW);
@@ -58,6 +59,12 @@ void HondaCDXMTrans::setup() {
 	digitalWrite(GAH_COUNT_CLEAR, LOW);
 
 	digitalWrite(GAH_COUNT_ENABLE, LOW);
+	
+	digitalWrite(SPDIF_RESET, HIGH);
+	delay(1);
+	digitalWrite(SPDIF_RESET, LOW);
+	delay(1);
+	digitalWrite(SPDIF_RESET, HIGH);
 
 	EnIEBusParams ie_params;
 	ie_params.count_enable = GAH_COUNT_ENABLE;

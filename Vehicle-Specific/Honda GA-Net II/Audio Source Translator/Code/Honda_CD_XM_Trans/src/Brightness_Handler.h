@@ -7,13 +7,12 @@
 class BrightnessHandler {
 public:
 	BrightnessHandler(const uint8_t mcp_cs, const uint8_t ill_anode);
-	~BrightnessHandler();
 
 	void init();
 	void setBrightness(const uint8_t brightness, const bool light_on);
 
 private:
-	MCP4251* ill_mcp;
+	MCP4251 ill_mcp;
 	uint8_t ill_anode;
 };
 

@@ -1,9 +1,17 @@
 #include "CAN_Handler.h"
 
-BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler, ParameterList* parameter_list, uint8_t cs_pin) :
-	bcan_2515(b_cs_pin) {
+BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler,
+							ParameterList* parameter_list,
+							const uint8_t b_cs_pin,
+							const uint8_t imid_cs_pin,
+							const uint8_t rls_cs_pin,
+							const uint8_t f_cs_pin) :
+	bcan_2515(b_cs_pin),
+	imid_2515(imid_cs_pin),
+	rls_2515(rls_cs_pin),
+	fcan_2515(f_cs_pin),
+	menu_handler(ai_handler, parameter_list) {
 	this->ai_handler = ai_handler;
-	this->b_cs_pin = cs_pin;
 	this->parameter_list = parameter_list;
 	
 	auto_stop = false;
@@ -18,6 +26,8 @@ BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler, ParameterList* parameter_li
 	doors_open = 0x00;
 	brightness = 0x16;
 	vehicle_speed = 0;
+	wiper_pos = 0;
+	wiper_delay_pos = 0;
 	
 	outside_temp = 50;
 	electric_ac_power = 0;
@@ -34,6 +44,32 @@ void BCAN_Handler::init() {
 	bcan_2515.reset();
 	bcan_2515.setBitrate(CAN_125KBPS);
 	bcan_2515.setNormalMode();
+
+	imid_2515.reset();
+	imid_2515.setBitrate(CAN_125KBPS);
+	imid_2515.setNormalMode();
+
+	rls_2515.reset();
+	rls_2515.setBitrate(CAN_125KBPS);
+	rls_2515.setNormalMode();
+
+	fcan_2515.reset();
+	fcan_2515.setBitrate(CAN_500KBPS);
+	fcan_2515.setNormalMode();
+}
+
+//Interpret an AIBus message. Return whether the message is relevant.
+bool BCAN_Handler::handleAIBus(AIData* ai_msg) {
+	if(ai_msg->l >= 2 && ai_msg->data[0] == 0x2B && ai_msg->data[1] == 0x45) { //Settings menu request.
+		if(menu_handler.getActiveMenu() != ACTIVE_MENU_SETTINGS_MAIN) 
+			menu_handler.createMainSettingsMenu();
+		return true;
+	} else if(ai_msg->l >= 3 && ai_msg->data[0] == 0x2B && ai_msg->data[1] == 0x60) { //Option selected.
+		handleSelection((*ai_msg)[2]);
+		return true;
+	}
+
+	return false;
 }
 
 //Read a CAN frame.
@@ -52,7 +88,7 @@ void BCAN_Handler::readCANMessage() {
 				can_timer = 0;
 			}
 
-			if(can_msg.can_id == 0x92F81010 && can_msg.can_dlc == 5) {
+			if(can_msg.can_id == BCAN_ID_KEYPOS && can_msg.can_dlc == 5) { //Key position main.
 				const uint8_t last_key = key_pos;
 
 				if((can_msg.data[0]&0x28) != 0 && (can_msg.data[2]&0x80) != 0) { //ACC 2, not cranking.
@@ -66,8 +102,10 @@ void BCAN_Handler::readCANMessage() {
 					key_pos = 0;
 
 				if(key_pos != last_key)
-					writeAIBusKeyMessage(0xFF, (key_pos&0xF) == 0);
-			} else if(can_msg.can_id == 0x92F85150 && can_msg.can_dlc == 5) { //Engine running, e-brake and gear.
+					writeAIBusKeyMessage(0xFF);
+
+				parameter_list->power_on = key_pos != 0;
+			} else if(can_msg.can_id == BCAN_ID_GEAR && can_msg.can_dlc == 5) { //Engine running, e-brake and gear.
 				const uint16_t last_gear = gear;
 				const uint8_t last_key = key_pos;
 				const bool last_ebrake = e_brake;
@@ -79,32 +117,34 @@ void BCAN_Handler::readCANMessage() {
 					key_pos = 4;
 
 				if(key_pos != last_key)
-					writeAIBusKeyMessage(0xFF, (key_pos&0xF) == 0);
-			} else if(can_msg.can_id == 0x92F83010 && can_msg.can_dlc == 1) { //Left doors.
+					writeAIBusKeyMessage(0xFF);
+
+				parameter_list->power_on = key_pos != 0;
+			} else if(can_msg.can_id == BCAN_ID_LEFTDOORS && can_msg.can_dlc == 1) { //Left doors.
 				const uint8_t last_door = doors_open;
 
 				doors_open &= 0xF5;
 				doors_open |= (can_msg.data[0]&0xA0)>>4;
 
 				if(doors_open != last_door)
-					writeAIBusDoorMessage(0xFF, (key_pos&0xF) == 0);
-			} else if(can_msg.can_id == 0x92F84010 && can_msg.can_dlc == 1) { //Right doors.
+					writeAIBusDoorMessage(0xFF);
+			} else if(can_msg.can_id == BCAN_ID_RIGHTDOORS && can_msg.can_dlc == 1) { //Right doors.
 				const uint8_t last_door = doors_open;
 
 				doors_open &= 0xFA;
 				doors_open |= (can_msg.data[0]&0x50)>>4;
 
 				if(doors_open != last_door)
-					writeAIBusDoorMessage(0xFF, (key_pos&0xF) == 0);
-			} else if(can_msg.can_id == 0x92F84310 && can_msg.can_dlc == 1) { //Trunk.
+					writeAIBusDoorMessage(0xFF);
+			} else if(can_msg.can_id == BCAN_ID_TRUNK && can_msg.can_dlc == 1) { //Trunk.
 				const uint8_t last_door = doors_open;
 
 				doors_open &= 0xEF;
 				doors_open |= (can_msg.data[0]&0x80)>>3;
 
 				if(doors_open != last_door)
-					writeAIBusDoorMessage(0xFF, (key_pos&0xF) == 0);
-			} else if(can_msg.can_id == 0x92F85450 && can_msg.can_dlc == 8) { //Brightness.
+					writeAIBusDoorMessage(0xFF);
+			} else if(can_msg.can_id == BCAN_ID_BRIGHTNESS && can_msg.can_dlc == 8) { //Brightness.
 				const uint8_t last_brightness = brightness;
 				const bool last_night = night_mode, last_light = lights_on;
 
@@ -113,8 +153,8 @@ void BCAN_Handler::readCANMessage() {
 				night_mode = (can_msg.data[5]&0x40)	!= 0;
 
 				if(last_brightness != brightness || lights_on != last_light || night_mode != last_night)
-					writeAIBusBrightnessMessage(0xFF, (key_pos&0xF) == 0);
-			} else if(can_msg.can_id == 0x8AF81110 && can_msg.can_dlc == 2) { //Light state and hood.
+					writeAIBusBrightnessMessage(0xFF);
+			} else if(can_msg.can_id == BCAN_ID_LIGHTS && can_msg.can_dlc == 2) { //Light state and hood.
 				const uint8_t last_state_a = light_state_a, last_state_b = light_state_b;
 				const bool last_hood = (this->doors_open&0x20) != 0;
 
@@ -146,9 +186,26 @@ void BCAN_Handler::readCANMessage() {
 					if(hood)
 						this->doors_open |= 0x20;
 
-					writeAIBusDoorMessage(0xFF, key_pos == 0);
+					writeAIBusDoorMessage(0xFF);
 				}
-			} else if(can_msg.can_id == 0x92F85050 && can_msg.can_dlc == 5) { //Speed and ECON.
+			} else if(can_msg.can_id == BCAN_ID_WIPERSTALKPOS && can_msg.can_dlc == 3) { //Wiper stalk position.
+				const bool auto_wiper = parameter_list->auto_wiper, wiper_door_off = parameter_list->wiper_door_off;
+				const uint8_t last_wiper_pos = wiper_pos, last_delay_pos = wiper_delay_pos;
+
+				wiper_pos = can_msg.data[0];
+				wiper_delay_pos = can_msg.data[1];
+
+				if(rain_sensor_connected && !auto_wiper && ((wiper_pos != last_wiper_pos && (wiper_pos&0x40) != 0) || wiper_delay_pos < last_delay_pos)) {
+					runWiper();
+					if(wiper_timer != nullptr)
+						*wiper_timer = 0;
+				}
+
+				if((can_msg.data[0]&0x40) != 0) {
+					if(!auto_wiper || (wiper_door_off && (doors_open&0xC) != 0))
+						can_msg.data[0] &= ~0x40;
+				}
+			} else if(can_msg.can_id == BCAN_ID_SPEED && can_msg.can_dlc == 5) { //Speed and ECON.
 				const uint8_t last_speed = vehicle_speed;
 				vehicle_speed = can_msg.data[0];
 
@@ -156,7 +213,7 @@ void BCAN_Handler::readCANMessage() {
 					writeAIBusSpeedMessage(0xFF);
 
 				this->econ_mode = (can_msg.data[3]&0x20) != 0;
-			} else if(can_msg.can_id == 0x92F96250 && can_msg.can_dlc == 7) { //Temperature and range.
+			} else if(can_msg.can_id == BCAN_ID_TEMP_RANGE && can_msg.can_dlc == 7) { //Temperature and range.
 				const uint8_t last_honda_temp = honda_temp;
 				const int16_t last_temp = outside_temp;
 				const bool last_fahrenheit = honda_fahrenheit;
@@ -186,30 +243,161 @@ void BCAN_Handler::readCANMessage() {
 				
 				if(last_honda_temp != honda_temp || last_fahrenheit != honda_fahrenheit || last_temp != outside_temp)
 					writeAIBusTempMessage(0xFF);
-			} else if(can_msg.can_id == 0x92F86150 && can_msg.can_dlc == 4) { //A/C operation and auto stop.
+			} else if(can_msg.can_id == BCAN_ID_AC_AUTOSTOP && can_msg.can_dlc == 4) { //A/C operation and auto stop.
 				this->electric_ac_power = (can_msg.data[0] << 8) | can_msg.data[1];
 				this->auto_stop = (can_msg.data[3]&0x80) != 0;
-			} else if(can_msg.can_id == 0x92F85250 && can_msg.can_dlc == 4) { //Coolant temperature.
+			} else if(can_msg.can_id == BCAN_ID_COOLANT && can_msg.can_dlc == 4) { //Coolant temperature.
 				const uint8_t last_temp = coolant_temp;
 				coolant_temp = can_msg.data[0];
 
 				if(last_temp != coolant_temp)
 					writeAIBusCoolantTempMessage(0xFF);
 			}
+
+			if(can_msg.can_id == BCAN_ID_TEMP_RANGE && can_msg.can_dlc >= 3) { //Temperature message. Forward to IMID.
+				if((honda_fahrenheit && parameter_list->display_celsius) || (!honda_fahrenheit && !parameter_list->display_celsius)) {
+					const int16_t norm_temp = outside_temp/10 + 0x28;
+					const uint8_t display_temp = norm_temp >= 0 ? (norm_temp <= 0xFF ? norm_temp&0xFF : 0xFF) : 0;
+
+					can_msg.data[2] = display_temp;
+					if(parameter_list->display_celsius)
+						can_msg.data[0] &= ~0x20;
+					else
+						can_msg.data[0] |= 0x20;
+				}
+			} else if(can_msg.can_id == BCAN_ID_IMIDMSG1 && can_msg.can_dlc >= 1) { //Washer fluid low message.
+				if(parameter_list->washer_fluid_low)
+					can_msg.data[0] |= 0x1;
+			}
+
+			imid_2515.sendMessage(&can_msg);
+			rls_2515.sendMessage(&can_msg);
 		}
+
+		forwardIMIDMessage();
+		forwardRLSMessage();
 	} while(can_timer < 300);
+
+	forwardIMIDMessage();
+}
+
+//Set the wiper timer.
+void BCAN_Handler::setWiperTimer(elapsedMillis* wiper_timer) {
+	this->wiper_timer = wiper_timer;
+}
+
+//Return whether the wiper stalk is in the INT/AUTO position.
+bool BCAN_Handler::getWiperIntActive() {
+	return (this->wiper_pos&0x40) != 0;
+}
+
+//Run the wipers if in manual mode or wipers on. Return whether the wipe was successful.
+bool BCAN_Handler::runWiper() {
+	if(parameter_list->auto_wiper || (parameter_list->wiper_door_off && (doors_open&0xC) != 0))
+		return false;
+
+	if(!rain_sensor_connected)
+		return false;
+
+	can_frame wiper_msg;
+	wiper_msg.can_id = BCAN_ID_RAINSENSOR;
+	wiper_msg.can_dlc = 1;
+	wiper_msg.data[0] = 0x84;
+
+	bcan_2515.sendMessage(&wiper_msg);
+	imid_2515.sendMessage(&wiper_msg);
+
+	return true;
+}
+
+//Send a next turn message to the IMID.
+void BCAN_Handler::setNavNextTurn(const uint8_t entry_angle, const uint8_t exit_angle, const uint16_t roads_visible, const uint8_t step_num, const uint8_t special, String street_name) {
+	street_name.toUpperCase();
+	
+	const int street_msg_count = 3 + ((street_name.length()-1)/6 + 1);
+
+	can_frame count_msg;
+	count_msg.can_id = BCAN_ID_NAV_DATA_LEN;
+	count_msg.can_dlc = 4;
+	count_msg.data[0] = 0x20;
+	count_msg.data[1] = 0x0;
+	count_msg.data[2] = 7*street_msg_count;
+	count_msg.data[3] = street_msg_count;
+
+	broadcastBCAN(&count_msg);
+
+	const int normalized_angle = (exit_angle-entry_angle-8)%256;
+	const unsigned int honda_angle = (((255-normalized_angle)*16)/256)&0xF;
+
+	for(int m=0;m<street_msg_count;m+=1) {
+		can_frame name_msg;
+		name_msg.can_id = BCAN_ID_NAV_NEXT_TURN;
+		name_msg.can_dlc = 8;
+
+		for(int i=0;i<name_msg.can_dlc;i+=1)
+			name_msg.data[i] = 0;
+
+		name_msg.data[0] = m+1;
+		if(m==0) { //Start bytes.
+			name_msg.data[1] = step_num;
+			uint8_t* special_option = &name_msg.data[2];
+			switch(special) {
+			case AIDF_NAV_SPECIAL_TRAFFIC_CIRCLE:
+			case AIDF_NAV_SPECIAL_TRAFFIC_CIRCLE_EXIT:
+			case AIDF_NAV_SPECIAL_TRAFFIC_CIRCLE_ENTER_EXIT:
+				*special_option = 0x1;
+				break;
+			case AIDF_NAV_SPECIAL_UTURN_LEFT:
+			case AIDF_NAV_SPECIAL_UTURN_RIGHT:
+				*special_option = 0x6;
+				break;
+			case AIDF_NAV_SPECIAL_TOLL:
+			case AIDF_NAV_SPECIAL_FERRY:
+			case AIDF_NAV_SPECIAL_TRAIN:
+				*special_option = 0x7;
+				break;
+			case AIDF_NAV_SPECIAL_WAYPOINT:
+				*special_option = 0x8;
+				break;
+			case AIDF_NAV_SPECIAL_DESTINATION:
+				*special_option = 0x9;
+				break;
+			default:
+				*special_option = 0x0;
+				break;
+			}
+
+			name_msg.data[3] = honda_angle&0xF;
+			name_msg.data[4] = (roads_visible&0xFF00)>>8;
+			name_msg.data[5] = roads_visible&0xFF;
+			name_msg.data[6] = street_name.length();
+		} else if(m>=3) { //Street name.
+			const String substr = street_name.substring((m-3)*6, (m-2)*6);
+			for(int i=0;i<6&&i<substr.length();i+=1)
+				name_msg.data[i+1] = uint8_t(substr.charAt(i));
+		}
+
+		name_msg.data[7] = getHondaNavChecksum(&name_msg);
+		broadcastBCAN(&name_msg);
+	}
+}
+
+//Broadcast a BCAN message to all units.
+void BCAN_Handler::broadcastBCAN(can_frame* can_msg) {
+	bcan_2515.sendMessage(can_msg);
+	imid_2515.sendMessage(can_msg);
+	rls_2515.sendMessage(can_msg);
 }
 
 //Write all CAN-derived parameters.
 void BCAN_Handler::sendAllParameters() {
-	writeAIBusKeyMessage(0xFF, true);
-	writeAIBusDoorMessage(0xFF, true);
-	writeAIBusBrightnessMessage(0xFF, true);
-	
+	writeAIBusKeyMessage(0xFF);
+	writeAIBusDoorMessage(0xFF);
+	writeAIBusBrightnessMessage(0xFF);	
 }
 
 //Write the key state message.
-void BCAN_Handler::writeAIBusKeyMessage(const uint8_t receiver, const bool repeat) {
+void BCAN_Handler::writeAIBusKeyMessage(const uint8_t receiver) {
 	uint8_t key_data[receiver == 0xFF ? 3 : 2];
 	if(receiver == 0xFF) {
 		key_data[0] = 0xA1;
@@ -223,12 +411,10 @@ void BCAN_Handler::writeAIBusKeyMessage(const uint8_t receiver, const bool repea
 	AIData key_msg(sizeof(key_data), ID_CANSLATOR, receiver, key_data);
 
 	ai_handler->writeAIData(&key_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
-	if(repeat) //Send again to ensure everything wakes up and gets the message.
-		ai_handler->writeAIData(&key_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
 
 //Write the door state message.
-void BCAN_Handler::writeAIBusDoorMessage(const uint8_t receiver, const bool repeat) {
+void BCAN_Handler::writeAIBusDoorMessage(const uint8_t receiver) {
 	uint8_t door_data[receiver == 0xFF ? 3: 2];
 	if(receiver == 0xFF) {
 		door_data[0] = 0xA1;
@@ -242,12 +428,10 @@ void BCAN_Handler::writeAIBusDoorMessage(const uint8_t receiver, const bool repe
 	AIData door_msg(sizeof(door_data), ID_CANSLATOR, receiver, door_data);
 
 	ai_handler->writeAIData(&door_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
-	if(repeat) //Send again to ensure everything wakes up and gets the message.
-		ai_handler->writeAIData(&door_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
 
 //Write the brightness state message.
-void BCAN_Handler::writeAIBusBrightnessMessage(const uint8_t receiver, const bool repeat) {
+void BCAN_Handler::writeAIBusBrightnessMessage(const uint8_t receiver) {
 	const uint8_t brightness_norm = brightness >= 0x16 ? 255 : brightness*11;
 	const uint8_t light_byte = (night_mode ? 0x80 : 0x0) | (lights_on ? 0x1 : 0x0);
 
@@ -255,8 +439,6 @@ void BCAN_Handler::writeAIBusBrightnessMessage(const uint8_t receiver, const boo
 	AIData light_msg(sizeof(light_data), ID_CANSLATOR, receiver, light_data);
 
 	ai_handler->writeAIData(&light_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
-	if(repeat)
-		ai_handler->writeAIData(&light_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
 
 //Write the light state message.
@@ -319,4 +501,127 @@ void BCAN_Handler::writeAIBusCoolantTempMessage(const uint8_t receiver) {
 	AIData temp_msg(sizeof(temp_data), ID_CANSLATOR, receiver, temp_data);
 
 	ai_handler->writeAIData(&temp_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
+}
+
+//Forward a message from the IMID to the rest of the system.
+void BCAN_Handler::forwardIMIDMessage() {
+	struct can_frame can_msg;
+	if(imid_2515.readMessage(&can_msg) == MCP2515::ERROR_OK) {
+		bcan_2515.sendMessage(&can_msg);
+		rls_2515.sendMessage(&can_msg);
+	}
+}
+
+//Forward a message from the RLS to the rest of the system.
+void BCAN_Handler::forwardRLSMessage() {
+	struct can_frame can_msg;
+	if(rls_2515.readMessage(&can_msg) != MCP2515::ERROR_OK)
+		return;
+
+	light_sensor_connected = true;
+
+	if((can_msg.can_id&0xFF) == 0x74)
+		rain_sensor_connected = true;
+
+	if((can_msg.can_id&0xFFFFFF00) == (BCAN_ID_RAINSENSOR&0xFFFFFF00)) { //Rain sensor function.
+		if(can_msg.can_dlc >= 1 && (can_msg.data[0]&0xE0) != 0) {
+			if((doors_open&0xC) != 0 && parameter_list->wiper_door_off) //Doors are open, do not wipe.
+				can_msg.data[0] &= ~0xE0;
+			else if(!parameter_list->auto_wiper) //Intermittent mode.
+				can_msg.data[0] &= ~0xE0;
+		}
+	} else if((can_msg.can_id&0xFFFFFF00) == (BCAN_ID_LIGHTSENSOR&0xFFFFFF00) && can_msg.can_dlc >= 1) { //Light sensor.
+		if(parameter_list->headlight_temp_setting != HEADLIGHT_TEMP_OFF) {
+			const int16_t outside_temp = parameter_list->display_celsius ? this->outside_temp : (this->outside_temp - 320)*5/9;
+
+			const bool last_headlight_temp = headlight_on_temp;
+			if(outside_temp <= headlight_temp_limit) {
+				headlight_on_temp = true;
+				if((can_msg.data[0]&0xC) == 0)
+					can_msg.data[0] |= 0xDC;
+			} else
+				headlight_on_temp = false;
+
+			if(last_headlight_temp != headlight_on_temp)
+				calculateHeadlightTemperature();
+		}
+
+		//TODO: Manual transmission messages.
+		if(parameter_list->parking_lights && (gear == 0x4001 || (gear == 0x401 && e_brake))) {
+			if((can_msg.data[0]&0xC) == 0)
+				can_msg.data[0] |= 0x14;
+		}
+	}
+
+	bcan_2515.sendMessage(&can_msg);
+	imid_2515.sendMessage(&can_msg);
+}
+
+//Get the headlight-temperature integration limit temp.
+void BCAN_Handler::calculateHeadlightTemperature() {
+	switch(parameter_list->headlight_temp_setting) {
+	case HEADLIGHT_TEMP_5:
+		headlight_temp_limit = 50;
+		break;
+	case HEADLIGHT_TEMP_10:
+		headlight_temp_limit = 100;
+		break;
+	case HEADLIGHT_TEMP_15:
+		headlight_temp_limit = 150;
+		break;
+	case HEADLIGHT_TEMP_OFF:
+	default:
+		return;
+	}
+
+	if(headlight_on_temp)
+		headlight_temp_limit += HEADLIGHT_TEMP_BUFFER;
+}
+
+uint8_t getHondaNavChecksum(can_frame* can_msg) {
+	unsigned int chx = 0;
+
+	for(int i=0;i<can_msg->can_dlc - 1; i+=1) {
+		const uint8_t msn = (can_msg->data[i]&0xF0)>>8, lsn = can_msg->data[i]&0xF;
+		chx += msn + lsn;
+	}
+
+	return chx&0xF;
+}
+
+//Handle a menu selection.
+void BCAN_Handler::handleSelection(const uint8_t selection) {
+	const int selected = selection - 1;
+	
+	if(selected < 0)
+		return;
+
+	if(menu_handler.getActiveMenu() == ACTIVE_MENU_SETTINGS_MAIN) {
+		MenuList menu = getMenu(MENU_INDEX_SETTINGS_MAIN, parameter_list->locale);
+		switch(menu.getGlobalIndex(selected)) {
+		case MENU_INDEX_SETTINGS_MAIN_COMFORT_CONVENIENCE:
+			menu_handler.createComfortConvenienceMenu(light_sensor_connected, rain_sensor_connected);
+			break;
+		default:
+			break;
+		}
+	} else if(menu_handler.getActiveMenu() == ACTIVE_MENU_SETTINGS_COMFORT_CONVENIENCE) {
+		MenuList menu = getMenu(MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE, parameter_list->locale);
+		switch(menu.getGlobalIndex(selected)) {
+		case MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE_PARKING_LIGHTS:
+			parameter_list->parking_lights = !parameter_list->parking_lights;
+			menu_handler.createComfortConvenienceMenu(light_sensor_connected, rain_sensor_connected);
+			break;
+		case MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE_RAINSENSOR:
+			parameter_list->auto_wiper = !parameter_list->auto_wiper;
+			menu_handler.createComfortConvenienceMenu(light_sensor_connected, rain_sensor_connected);
+			break;
+		case MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE_WIPER_DOOR_OFF:
+			parameter_list->wiper_door_off = !parameter_list->wiper_door_off;
+			menu_handler.createComfortConvenienceMenu(light_sensor_connected, rain_sensor_connected);
+			break;
+		default:
+			break;
+		}
+	}
 }

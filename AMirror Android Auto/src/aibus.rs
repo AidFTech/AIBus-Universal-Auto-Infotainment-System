@@ -7,6 +7,7 @@ pub const AIBUS_DEVICE_RADIO: u8 = 0x10;
 pub const AIBUS_DEVICE_AMIRROR: u8 = 0x8E;
 pub const AIBUS_DEVICE_CANSLATOR: u8 = 0x57;
 pub const AIBUS_DEVICE_IMID: u8 = 0x11;
+pub const AIBUS_DEVICE_ANTENNA: u8 = 0x3B;
 
 pub struct AIBusMessage {
 	pub sender: u8,

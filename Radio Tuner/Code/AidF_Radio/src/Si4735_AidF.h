@@ -44,7 +44,7 @@ public:
 	ParameterList* getParameterList();
 private:
 	ParameterList* parameters;
-	SI4735* tuner;
+	SI4735 tuner;
 
 	uint8_t reset_pin;
 	int8_t address_state = LOW;

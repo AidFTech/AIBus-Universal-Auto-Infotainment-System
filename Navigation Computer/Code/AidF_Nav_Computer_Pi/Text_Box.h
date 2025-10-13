@@ -9,13 +9,17 @@
 #ifndef text_box_h
 #define text_box_h
 
-#define ALIGN_H_L 0
-#define ALIGN_H_C 1
-#define ALIGN_H_R 2
+enum align_h_t : uint8_t {
+	ALIGN_H_L,
+	ALIGN_H_C,
+	ALIGN_H_R
+};
 
-#define ALIGN_V_T 0
-#define ALIGN_V_M 1
-#define ALIGN_V_B 2
+enum align_v_t : uint8_t {
+	ALIGN_V_T,
+	ALIGN_V_M,
+	ALIGN_V_B
+};
 
 class TextBox {
 public:
@@ -24,8 +28,8 @@ public:
 			const int16_t y,
 			const uint16_t w,
 			const uint16_t h,
-			const uint8_t h_indent,
-			const uint8_t v_indent,
+			const align_h_t h_indent,
+			const align_v_t v_indent,
 			const uint8_t size,
 			uint32_t* text_color);
 	~TextBox();
@@ -54,10 +58,12 @@ protected:
 
 	std::string text = "";
 
-	uint8_t h_indent, v_indent, size;
+	align_h_t h_indent;
+	align_v_t v_indent;
+	uint8_t size;
 	uint32_t* color;
 
-	SymbolHandler* symbol_handler = new SymbolHandler();
+	SymbolHandler symbol_handler;
 };
 
 class AngledTextBox : public TextBox {
@@ -67,8 +73,8 @@ public:
 			const int16_t y,
 			const uint16_t w,
 			const uint16_t h,
-			const uint8_t h_indent,
-			const uint8_t v_indent,
+			const align_h_t h_indent,
+			const align_v_t v_indent,
 			const uint8_t size,
 			const double angle,
 			uint32_t* text_color);

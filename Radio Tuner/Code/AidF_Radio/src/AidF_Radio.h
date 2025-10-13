@@ -18,6 +18,7 @@
 #include "Text_Split.h"
 
 #include "Radio_EEPROM.h"
+#include "Radio_RAM.h"
 
 #ifndef aidf_radio_h
 #define aidf_radio_h
@@ -145,6 +146,8 @@ private:
 
 	elapsedMillis control_timer;
 
+	SRAMHandler sram_handler = SRAMHandler(RAM_CS);
+
 	volatile bool tuner_reset = false;
 	
 	void handleAIBus(AIData* msg);
@@ -160,6 +163,8 @@ private:
 	void sendIMIDPing();
 	void sendIMIDRequest();
 	void sendAudioLightMessage(const bool audio_on);
+
+	void fullPowerOn();
 	void powerOff();
 };
 

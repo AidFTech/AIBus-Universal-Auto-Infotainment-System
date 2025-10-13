@@ -6,12 +6,16 @@
 #include "../Text_Box.h"
 #include "../AIBus_Handler.h"
 
+#include "../Locale/Locale.h"
+
 #ifndef settings_display_window_h
 #define settings_display_window_h
 
-#define SETTINGS_DISPLAY_MENU_MAIN 0
-#define SETTINGS_DISPLAY_MENU_DAYNIGHT 1
-#define SETTINGS_DISPLAY_MENU_UPPER 2
+enum settings_display_menu_t : uint8_t {
+	SETTINGS_DISPLAY_MENU_MAIN,
+	SETTINGS_DISPLAY_MENU_DAYNIGHT,
+	SETTINGS_DISPLAY_MENU_UPPER
+};
 
 class Settings_Display_Window : public Settings_Window {
 public:
@@ -23,7 +27,7 @@ private:
 	void handleEnterButton();
 	void handleBackButton();
 
-	int8_t settings_display_menu;
+	settings_display_menu_t settings_display_menu;
 };
 
 #endif

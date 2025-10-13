@@ -42,6 +42,8 @@ struct AttributeList {
 
 	uint16_t w, h;
 
+	uint8_t locale = 0; //TODO: This.
+
 	int8_t next_window = NEXT_WINDOW_NULL;
 	uint8_t day_night_settings = DAY_NIGHT_AUTO;
 	bool night = false;

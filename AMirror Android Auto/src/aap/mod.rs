@@ -5,3 +5,4 @@ pub mod aap_messages;
 pub mod aap_channel_descriptor;
 pub mod sensor_messages;
 pub mod media_messages;
+pub mod protos;

@@ -158,6 +158,26 @@ bool MapMainWindow::handleAIBus(AIData* msg) {
 				nav_parameters->update_map = true;
 				return true;
 			}
+		} else if(msg->l >= 3 && msg->data[0] == 0x32) { //Knob turn.
+			const uint8_t knob = msg->data[1], steps = msg->data[2]&0xF;
+			const bool cw = (msg->data[2]&0x10) != 0;
+			
+			if(knob == 0x7) {
+				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
+				if(cw) {
+					if(nav_parameters->zoom + steps <= 14)
+						nav_parameters->zoom += steps;
+					else
+					 	nav_parameters->zoom = 14;
+				} else {
+					if(nav_parameters->zoom - steps >= 0)
+						nav_parameters->zoom -= steps;
+					else
+					 	nav_parameters->zoom = 0;
+				}
+				refreshWindow();
+				return true;
+			}
 		}
 	}
 

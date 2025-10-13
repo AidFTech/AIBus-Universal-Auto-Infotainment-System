@@ -14,7 +14,7 @@ pub enum ServiceChannels {
 	MaximumChannel=256,
 }
 
-pub enum SensorType {
+pub enum SensorTypeOld {
 	SensorTypeLocation = 1,
 	SensorTypeCompass,
 	SensorTypeSpeed,

@@ -25,6 +25,11 @@ pub struct Context {
 	pub imid_text_len: u8,
 	pub imid_native_mirror: bool,
 
+	//Position:
+	pub latitude: f64,
+	pub longitude: f64,
+	pub altitude: i32,
+
 	//Nav screen buttons:
 	pub aibt_vertical_toggle: bool, //Vertical toggle options present.
 	pub aibt_horizontal_toggle: bool, //Horizontal toggle options present.
@@ -65,6 +70,10 @@ impl Context {
 
 			phone_req_off: false,
 			home_held: false,
+
+			latitude: 0.0,
+			longitude: 0.0,
+			altitude: 0,
 			
 			imid_row_count: 0,
 			imid_text_len: 0,
