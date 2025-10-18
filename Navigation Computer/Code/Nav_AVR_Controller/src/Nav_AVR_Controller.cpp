@@ -16,19 +16,24 @@ void loop() {
 void NavAVRController::setup() {
 	pinMode(PI_POWER, OUTPUT); //Hard Pi power.
 	pinMode(POWER_ON, OUTPUT); //System power force on.
-	pinMode(PI_RUNNING, INPUT); //High if the Pi is running normally.
-	pinMode(PI_BOOT, INPUT); //High if the Pi is starting to boot.
+	pinMode(PI_RUNNING, OUTPUT); //High if the Pi is running normally.
+	pinMode(PI_BOOT, OUTPUT); //High if the Pi is starting to boot.
 	pinMode(PI_OFF_HARDWARE, OUTPUT); //Drive low to power Pi off.
 	pinMode(PI_OFF_SOFT, OUTPUT); //Drive high to power Pi off when it is on.
 
-	pinMode(AI_RX, INPUT);
+	pinMode(AI_RX, INPUT_PULLUP);
+
+	//For non-Pi testing:
+	digitalWrite(PI_RUNNING, LOW);
+	digitalWrite(PI_BOOT, LOW);
 
 	digitalWrite(PI_POWER, LOW);
 	digitalWrite(POWER_ON, LOW);
-	digitalWrite(PI_OFF_HARDWARE, LOW);
+	digitalWrite(PI_OFF_HARDWARE, HIGH);
 	digitalWrite(PI_OFF_SOFT, LOW);
 
 	AISerial.begin(AI_BAUD);
+	delay(1000);
 
 	uint8_t init_data[] = {0x4A, 0x1F};
 	AIData init_msg(sizeof(init_data), ID_COMPUTER_PROXY, ID_CANSLATOR, init_data);
@@ -42,8 +47,6 @@ void NavAVRController::setup() {
 void NavAVRController::loop() {
 	AIData ai_msg;
 	elapsedMillis ai_timer;
-
-	ai_handler.readAIData(&ai_msg);
 
 	do {
 		if(ai_handler.dataAvailable() > 0) {

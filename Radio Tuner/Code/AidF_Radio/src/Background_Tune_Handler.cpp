@@ -126,12 +126,26 @@ void BackgroundTuneHandler::setSeekMode(const bool seek) {
 
 //Get the list of station names. Return the total count.
 int BackgroundTuneHandler::getStationNames(String* names) {
+	return getStationNames(names, true);
+}
+
+//Get the list of station names without frequency prefixes. Return the total count.
+int BackgroundTuneHandler::getRawStationNames(String* names) {
+	return getStationNames(names, false);
+}
+
+//Get the list of station names. Return the total count.
+int BackgroundTuneHandler::getStationNames(String* names, const bool freq) {
 	for(int i=0;i<freq_list_vec.size();i+=1) {
-		String new_station_name = String(freq_list_vec.at(i)/100) + "." + String(freq_list_vec.at(i)%100);
-		new_station_name += " MHz";
+		String new_station_name = "";
+		
+		if(freq) {
+			new_station_name = String(freq_list_vec.at(i)/100) + "." + String(freq_list_vec.at(i)%100);
+			new_station_name += " MHz: ";
+		}
 		
 		if(station_name_vec.at(i).length() > 0)
-			new_station_name += ": " + station_name_vec.at(i);
+			new_station_name += station_name_vec.at(i);
 
 		names[i] = new_station_name;
 	}

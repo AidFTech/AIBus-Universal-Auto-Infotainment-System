@@ -22,6 +22,7 @@ class BackgroundTuneHandler {
 		void setSeekMode(const bool seek);
 
 		int getStationNames(String* names);
+		int getRawStationNames(String* names);
 		uint16_t getStationFrequency(const int index);
 
 		void setStations(const int l, String* names, uint16_t* freqs);
@@ -49,6 +50,7 @@ class BackgroundTuneHandler {
 		unsigned long seek_timer_limit = SEEK_TIME;
 		
 		void addFrequency(const uint16_t freq, String station_name);
+		int getStationNames(String* names, const bool freq);
 };
 
 #endif

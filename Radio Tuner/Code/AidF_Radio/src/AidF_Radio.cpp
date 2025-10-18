@@ -190,7 +190,7 @@ void AidFRadio::loop() {
 		}
 	}
 	
-	/*if(!*power_on) {
+	if(!*power_on) {
 		AIData msg;
 		if(aibus_handler.readAIData(&msg)) {
 			if(msg.l == 1 && msg.data[0] == 0x1 && msg.receiver == ID_RADIO) //Ping.
@@ -211,7 +211,7 @@ void AidFRadio::loop() {
 
 		if(!power_switched)
 			return;
-	}*/
+	}
 
 	if(door_timer_enabled && door_timer > DOOR_TIMER && parameters.key_position == 0)
 		powerOff();
@@ -221,6 +221,8 @@ void AidFRadio::loop() {
 		adc_handler.init();
 		source_handler.sendRadioHandshake();
 	}
+
+	const bool last_power = *power_on;
 	
 	const uint8_t last_active_source_id = source_handler.getCurrentSourceID();
 	const uint16_t last_active_source = source_handler.getCurrentSource();
@@ -235,6 +237,7 @@ void AidFRadio::loop() {
 	const bool last_send_time = parameters.send_time, last_12h = parameters.send_12h, last_auto_clock = parameters.auto_clock;
 
 	const bool last_phone = parameters.phone_active;
+	const bool last_computer_connected = parameters.computer_connected;
 
 	AIData msg;
 	do {
@@ -256,6 +259,9 @@ void AidFRadio::loop() {
 		}
 	} while(aibus_timer < 50);
 
+	if(!last_power && *power_on)
+		power_switched = true;
+
 	if(!*power_on && !power_switched)
 		return;
 
@@ -270,7 +276,8 @@ void AidFRadio::loop() {
 			source_handler.getCurrentSource() != last_active_source ||
 			force_source_changed ||
 			(source_change_timer_enable && source_change_timer > SOURCE_CHANGE_TIMER) ||
-			parameters.phone_active != last_phone) {
+			parameters.phone_active != last_phone ||
+			parameters.computer_connected != last_computer_connected) {
 		src_ping_timer = 0;
 		parameters.info_mode = false;
 		parameters.current_preset = 0;

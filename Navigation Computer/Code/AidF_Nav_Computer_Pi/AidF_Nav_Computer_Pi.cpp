@@ -94,6 +94,7 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	delete phone_window;
 }
 
+//Main object loop.
 void AidF_Nav_Computer::loop() {
 	SDL_Event event;
 	if(SDL_PollEvent(&event)) {
@@ -159,19 +160,19 @@ void AidF_Nav_Computer::loop() {
 				if(!*canslator_connected && ai_msg.sender == ID_CANSLATOR)
 					*canslator_connected = true;
 
-				if(!*radio_connected && ai_msg.sender == ID_RADIO)
+				if(!*radio_connected && ai_msg.sender == ID_RADIO && !getInitMessage(&ai_msg))
 					*radio_connected = true;
 
-				if(!attribute_list->gps_antenna_connected && ai_msg.sender == ID_GPS_ANTENNA)
+				if(!attribute_list->gps_antenna_connected && ai_msg.sender == ID_GPS_ANTENNA && !getInitMessage(&ai_msg))
 					attribute_list->gps_antenna_connected = true;
 
-				if(!*mirror_connected && ai_msg.sender == ID_ANDROID_AUTO) {
+				if(!*mirror_connected && ai_msg.sender == ID_ANDROID_AUTO && !getInitMessage(&ai_msg)) {
 					*mirror_connected = true;
 					this->setMirrorColors();
 				}
 
 				//Send clock settings.
-				if(!attribute_list->timekeeper_detected && ai_msg.sender == attribute_list->timekeeper && this->key_position != 0) {
+				if(!attribute_list->timekeeper_detected && ai_msg.sender == attribute_list->timekeeper && this->key_position != 0 && !getInitMessage(&ai_msg)) {
 					attribute_list->timekeeper_detected = true;
 
 					uint8_t clock_data[] = {0x1D, 0x0};
@@ -337,17 +338,23 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 	if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 3 && ai_d->data[1] == 0x2) { //Key position message.
 		this->key_position = ai_d->data[2]&0xF;
 		
-		if(this->key_position == 0x0 && (this->door_position&0xF) != 0)
-			this->running = false;
-		else
+		if(this->key_position == 0x0 && (this->door_position&0xC) != 0) {
+			if(this->key_switched_on)
+				this->running = false;
+		} else
 			this->running = true;
+
+		if(this->key_position != 0)
+			this->key_switched_on = true;
+
 		return true;
 	} else if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 3 && ai_d->data[1] == 0x43) { //Door message.
 		this->door_position = ai_d->data[2];
 
-		if(this->key_position == 0x0 && (this->door_position&0xF) != 0)
-			this->running = false;
-		else
+		if(this->key_position == 0x0 && (this->door_position&0xC) != 0) {
+			if(this->key_switched_on)
+				this->running = false;
+		} else
 			this->running = true;
 		return true;
 	} else if(ai_d->l >= 3 && (ai_d->sender == ID_GPS_ANTENNA || ai_d->sender == ID_CANSLATOR || ai_d->sender == ID_RADIO) && ai_d->data[1] == 0x1F) { //Time/day, speed, temp, etc.
@@ -604,9 +611,11 @@ void AidF_Nav_Computer::getBackground() {
 		this->br = new BR_Gradient(this->lw, this->lh, active_color_profile.background, active_color_profile.background2, active_color_profile.vertical, active_color_profile.square);
 }
 
+//Thread setup.
 void setup(AidF_Nav_Computer* nav_computer) {
 }
 
+//Thread loop.
 void loop(AidF_Nav_Computer* nav_computer) {
 	nav_computer->loop();
 }

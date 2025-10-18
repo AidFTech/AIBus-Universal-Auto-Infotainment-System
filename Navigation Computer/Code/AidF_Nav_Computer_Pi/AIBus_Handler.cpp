@@ -558,6 +558,17 @@ uint16_t stringToNumber(std::string str) {
 }
 #endif
 
+//Determine whether a message the initialization message.
+bool getInitMessage(AIData* ai_d) {
+	if(ai_d->l < 2)
+		return false;
+
+	if(ai_d->data[0] == 0x4A && ai_d->data[1] == 0x1F)
+		return true;
+	else
+		return false;
+}
+
 void printBytes(AIData* ai_d) {
 	const uint8_t l = ai_d->l + 4;
 	uint8_t data[l];

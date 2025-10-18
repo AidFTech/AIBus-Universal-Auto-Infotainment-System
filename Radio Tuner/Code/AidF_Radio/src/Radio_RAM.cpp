@@ -78,15 +78,25 @@ void SRAMHandler::setSources(const uint16_t l, AudioSource* source_list) {
 
 		head += SOURCE_SUB_ID + 1;
 
-		const int name_len = source_list[i].source_name.length() + 1;
-		const char* source_name = source_list[i].source_name.c_str();
-		sram.writeBlock(head, name_len, (void*)source_name);
-		head += name_len;
+		if(source_list[i].source_name.length() > 0) {
+			const int name_len = source_list[i].source_name.length() + 1;
+			const char* source_name = source_list[i].source_name.c_str();
+			sram.writeBlock(head, name_len, (void*)source_name);
+			head += name_len;
+		} else {
+			sram.writeByte(head, 0);
+			head += 1;
+		}
 
-		const int short_len = source_list[i].source_short.length() + 1;
-		const char* short_name = source_list[i].source_short.c_str();
-		sram.writeBlock(head, short_len, (void*)short_name);
-		head += short_len;
+		if(source_list[i].source_short.length() > 0) {
+			const int short_len = source_list[i].source_short.length() + 1;
+			const char* short_name = source_list[i].source_short.c_str();
+			sram.writeBlock(head, short_len, (void*)short_name);
+			head += short_len;
+		} else {
+			sram.writeByte(head, 0);
+			head += 1;
+		}
 	}
 }
 
@@ -129,7 +139,7 @@ void SRAMHandler::getSources(const uint16_t l, AudioSource* source_list) {
 //Save tuner frequencies to RAM.
 void SRAMHandler::setFrequencies(BackgroundTuneHandler* tuner) {
 	String names[MAXIMUM_FREQUENCY_COUNT];
-	const int l = tuner->getStationNames(names);
+	const int l = tuner->getRawStationNames(names);
 
 	int head = FM_STATION_START;
 	
@@ -138,11 +148,16 @@ void SRAMHandler::setFrequencies(BackgroundTuneHandler* tuner) {
 		writeUint16(head, freq);
 		head += sizeof(uint16_t);
 
-		const int name_l = names[i].length() + 1;
-		const char* name_c = names[i].c_str();
+		if(names[i].length() > 0) {
+			const int name_l = names[i].length() + 1;
+			const char* name_c = names[i].c_str();
 
-		sram.writeBlock(head, name_l, (void*)name_c);
-		head += name_l;
+			sram.writeBlock(head, name_l, (void*)name_c);
+			head += name_l;
+		} else {
+			sram.writeByte(head, 0);
+			head += 1;
+		}
 	}
 
 	sram.writeByte(FM_STATION_COUNT, l);

@@ -79,6 +79,7 @@ private:
 	void getBackground();
 
 	uint8_t key_position = 0, door_position = 0;
+	bool key_switched_on = false; //True once the key has been cycled on.
 
 	uint16_t lw, lh;
 	bool* night;

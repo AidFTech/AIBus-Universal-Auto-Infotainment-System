@@ -5096,7 +5096,10 @@ impl ::protobuf::Message for InputSourceService {
     #[allow(unused_variables)]
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
-        my_size += ::protobuf::rt::vec_packed_int32_size(1, &self.keycodes_supported);
+        //my_size += ::protobuf::rt::vec_packed_int32_size(1, &self.keycodes_supported);
+        for value in &self.keycodes_supported {
+            my_size += ::protobuf::rt::int32_size(1, *value);
+        }
         for value in &self.touchscreen {
             let len = value.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
@@ -5117,7 +5120,10 @@ impl ::protobuf::Message for InputSourceService {
     }
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
-        os.write_repeated_packed_int32(1, &self.keycodes_supported)?;
+        //os.write_repeated_packed_int32(1, &self.keycodes_supported)?;
+        for v in &self.keycodes_supported {
+            os.write_int32(1, *v)?;
+        }
         for v in &self.touchscreen {
             ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
         };

@@ -86,6 +86,7 @@ uint16_t stringToNumber(std::string str);
 #endif
 
 bool readAIByteData(AIData* ai_d, uint8_t* data, const uint8_t d_l);
+bool getInitMessage(AIData* ai_d);
 
 void printBytes(AIData* ai_d);
 #endif

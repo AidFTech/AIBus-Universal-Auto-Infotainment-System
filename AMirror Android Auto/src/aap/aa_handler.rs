@@ -113,6 +113,7 @@ pub struct AapHandler <'a> {
 	home_hold: bool,
 
 	connection_start: Instant,
+	android_start: i64,
 	ping_timer: Instant,
 }
 
@@ -150,6 +151,7 @@ impl<'a> AapHandler <'a> {
 			home_hold: false,
 
 			connection_start: Instant::now(),
+			android_start: 0,
 			ping_timer: Instant::now(),
 		}
 	}
@@ -581,12 +583,6 @@ impl<'a> AapHandler <'a> {
 
 		if last_frame { //Last frame, mark the message as complete.
 			self.data_complete[current_channel] = true;
-
-			if current_channel != ServiceChannels::VideoChannel as usize 
-			&& current_channel != ServiceChannels::MediaAudioChannel as usize 
-			&& current_channel != ServiceChannels::Audio1Channel as usize {
-				println!("Ch {}, Data: {:X?}", current_channel, self.current_data[current_channel]);
-			}
 		}
 		return true;
 	}
@@ -605,10 +601,10 @@ impl<'a> AapHandler <'a> {
 		let msg_type = u16::from_be_bytes([full_msg_data[0], full_msg_data[1]]);
 		let msg_data = &full_msg_data[2..];
 
-		/*if chan != VideoChannel as usize && chan != MediaAudioChannel as usize && full_msg_data.len() < 100 {
-			println!("Received message type {}, on channel {}, length {}.", msg_type, chan as u8, msg_data.len() - 2);
-			//println!("Message: {:X?}", msg_data);
-		}*/
+		if chan != ServiceChannels::VideoChannel as usize && full_msg_data.len() < 100 {
+			println!("Received message type {}, on channel {}, length {}.", msg_type, chan as u8, msg_data.len() as isize - 2);
+			println!("Message: {:X?}", msg_data);
+		}
 
 		if msg_type == ControlMessageType::MESSAGE_VERSION_RESPONSE as u16 { //Version response.
 			self.begin_ssl_handshake();
@@ -653,11 +649,13 @@ impl<'a> AapHandler <'a> {
 			}
 		} else if msg_type == ControlMessageType::MESSAGE_PING_REQUEST as u16 {
 			let mut ping = PingRequest::new();
-			let mut timestamp = self.get_timestamp() as i64;
+			//let mut timestamp = self.get_timestamp() as i64;
 
 			match ping.merge_from_bytes(msg_data) {
 				Ok(_) => {
-					timestamp = ping.timestamp();
+					//timestamp = ping.timestamp();
+					self.android_start = ping.timestamp();
+					self.connection_start = Instant::now();
 				}
 				Err(_) => {
 
@@ -665,9 +663,21 @@ impl<'a> AapHandler <'a> {
 			}
 
 			let mut response = PingResponse::new();
-			response.set_timestamp(timestamp);
+			response.set_timestamp(self.get_timestamp() as i64);
 
 			self.write_message(true, chan as u8, response, ControlMessageType::MESSAGE_PING_RESPONSE as u16, Duration::from_millis(5000), true);
+		} else if msg_type == ControlMessageType::MESSAGE_PING_RESPONSE as u16 { //Ping response with timestamp.
+			let mut pong = PingResponse::new();
+
+			match pong.merge_from_bytes(msg_data) {
+				Ok(_) => {
+					self.android_start = pong.timestamp();
+					self.connection_start = Instant::now();
+				}
+				Err(_) => {
+
+				}
+			}
 		} else if msg_type == ControlMessageType::MESSAGE_NAV_FOCUS_REQUEST as u16 {
 			let mut response = NavFocusNotification::new();
 			response.set_focus_type(NavFocusType::NAV_FOCUS_PROJECTED);
@@ -684,7 +694,9 @@ impl<'a> AapHandler <'a> {
 					println!("Shutdown message: Context locked.");
 				}
 			}
-		} else if chan == ServiceChannels::PhoneStatusChannel as usize {
+		} else if chan == ServiceChannels::PhoneStatusChannel as usize &&
+					(msg_type == MediaPlaybackStatusMessageId::MEDIA_PLAYBACK_STATUS as u16 ||
+					msg_type ==  MediaPlaybackStatusMessageId::MEDIA_PLAYBACK_METADATA as u16) {
 			if msg_type == MediaPlaybackStatusMessageId::MEDIA_PLAYBACK_STATUS as u16 {
 				let mut playback_msg = MediaPlaybackStatus::new();
 				let mut msg_read = false;
@@ -733,6 +745,8 @@ impl<'a> AapHandler <'a> {
 				}
 
 				if msg_read {
+					println!("Media message: {:X?}", msg_data);
+
 					let mut context = match self.context.try_lock() {
 						Ok(context) => context,
 						Err(_) => {
@@ -757,7 +771,7 @@ impl<'a> AapHandler <'a> {
 			}
 		} else if chan == ServiceChannels::MediaAudioChannel as usize || chan == ServiceChannels::Audio1Channel as usize ||
 			chan == ServiceChannels::Audio2Channel as usize || chan == ServiceChannels::VideoChannel as usize || chan == ServiceChannels::MicrophoneChannel as usize {
-			//self.send_media_ack(chan as u8);
+			self.send_media_ack(chan as u8);
 			if msg_type == MediaMessageId::MEDIA_MESSAGE_SETUP as u16 {
 				self.handle_media_setup_request(chan as u8);
 			} else if msg_type == MediaMessageId::MEDIA_MESSAGE_START as u16 {
@@ -1178,7 +1192,7 @@ impl<'a> AapHandler <'a> {
 		let mut nav_message = LocationData::new();
 		nav_message.set_latitude_e7((context.latitude * 1E7) as i32);
 		nav_message.set_longitude_e7((context.longitude * 1E7) as i32);
-		nav_message.set_altitude_e2(context.altitude);
+		nav_message.set_altitude_e2(context.altitude*100);
 
 		let mut nav_sensor_message = SensorBatch::new();
 		nav_sensor_message.location_data.push(nav_message);
@@ -1188,7 +1202,7 @@ impl<'a> AapHandler <'a> {
 
 	///Get the current timestamp.
 	fn get_timestamp(&self) -> u64 {
-		let time = (Instant::now() - self.connection_start).as_nanos();
+		let time = (Instant::now() - self.connection_start).as_millis() + self.android_start as u128;
 		return (time&0xFFFFFFFFFFFFFF) as u64;
 	}
 
@@ -1362,7 +1376,7 @@ impl<'a> AapHandler <'a> {
 			}
 		}
 		
-		video_config.set_frame_rate(VideoFrameRateType::VIDEO_FPS_30);
+		video_config.set_frame_rate(VideoFrameRateType::VIDEO_FPS_60);
 		video_config.set_width_margin(margin_w);
 		video_config.set_height_margin(margin_h);
 		video_config.set_density(160);
@@ -1454,6 +1468,7 @@ impl<'a> AapHandler <'a> {
 		navigation_service_wrapper.navigation_status_service = MessageField::some(navigation_service);
 		response.services.push(navigation_service_wrapper);
 
+		response.set_make("AidF".to_string());
 		response.set_head_unit_make("AidF".to_string());
 		response.set_head_unit_model("AIA-RPI100".to_string());
 		response.set_can_play_native_media_during_vr(true);
@@ -1488,7 +1503,7 @@ impl<'a> AapHandler <'a> {
 			}
 		};
 
-		self.write_message(true, chan as u8, icon_sdr, ControlMessageType::MESSAGE_SERVICE_DISCOVERY_REQUEST as u16, Duration::from_millis(2000), false);
+		//self.write_message(true, chan as u8, icon_sdr, ControlMessageType::MESSAGE_SERVICE_DISCOVERY_REQUEST as u16, Duration::from_millis(2000), false);
 	}
 
 	///Handle an audio focus request.

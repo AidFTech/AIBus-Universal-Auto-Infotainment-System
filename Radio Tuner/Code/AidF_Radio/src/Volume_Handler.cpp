@@ -304,6 +304,9 @@ bool VolumeHandler::getVolumeChanged() {
 
 //Display the volume.
 void VolumeHandler::setVolumeDisplay() {
+	if(!parameters->power_on)
+		return;
+
 	uint8_t max_vol = 255;
 	if(this->vol_range < 255)
 		max_vol = this->vol_range&0xFF;
