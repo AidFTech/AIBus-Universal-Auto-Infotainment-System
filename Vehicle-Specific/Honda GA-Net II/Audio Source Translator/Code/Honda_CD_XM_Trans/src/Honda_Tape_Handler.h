@@ -5,6 +5,8 @@
 #include "Honda_Source_Handler.h"
 #include "Honda_IMID_Handler.h"
 
+#include "Locale.h"
+
 #include "Trans_EEPROM.h"
 
 #include <stdint.h>

@@ -1,9 +1,9 @@
 #include "Locale.h"
 
 //Get the menu with defined locale.
-MenuList getMenu(const canslator_menu_index index, const uint8_t locale) {
+MenuList getMenu(const translator_menu_index index, const uint8_t locale) {
 	int menu_index = -1;
-	for(int i=0;i<sizeof(MENU_START_INDEX)/sizeof(canslator_menu_index);i+=1) {
+	for(int i=0;i<sizeof(MENU_START_INDEX)/sizeof(translator_menu_index);i+=1) {
 		if(MENU_START_INDEX[i] == index) {
 			menu_index = i;
 			break;
@@ -12,8 +12,8 @@ MenuList getMenu(const canslator_menu_index index, const uint8_t locale) {
 
 	if(menu_index < 0) {
 		MenuList menu_list;
-		menu_list.start = (canslator_menu_index)0;
-		menu_list.end = (canslator_menu_index)0;
+		menu_list.start = (translator_menu_index)0;
+		menu_list.end = (translator_menu_index)0;
 		menu_list.menu_str = nullptr;
 		menu_list.title = nullptr;
 
@@ -21,8 +21,8 @@ MenuList getMenu(const canslator_menu_index index, const uint8_t locale) {
 	}
 
 	MenuList return_list;
-	return_list.start = (canslator_menu_index)(MENU_START_INDEX[menu_index] + 1);
-	if(menu_index < sizeof(MENU_START_INDEX)/sizeof(canslator_menu_index) - 1)
+	return_list.start = (translator_menu_index)(MENU_START_INDEX[menu_index] + 1);
+	if(menu_index < sizeof(MENU_START_INDEX)/sizeof(translator_menu_index) - 1)
 		return_list.end = MENU_START_INDEX[menu_index + 1];
 	else
 		return_list.end = MENU_INDEX_LEN;

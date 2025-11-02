@@ -148,11 +148,16 @@ void TextHandler::sendShortRDSMessage(String text) {
 //Send the full RDS message to the screen.
 void TextHandler::sendLongRDSMessage(String text) {
 	if(text.length() > 0) {
-		for(int i=0;i<text.length();i+=1) {
-			if(text.charAt(i) < 0x20)
-				text.setCharAt(i, ' ');
+		for(int c=0;c<text.length();c+=1) {
+			if(text.charAt(c) < ' ') {
+				text = text.substring(0,c);
+				break;
+			}
 		}
-		
+
+		if(text.length() <= 0)
+			return;
+
 		String sub_text[5] = {"","","","",""};
 		
 		splitText(14, text, sub_text, 5);
@@ -204,13 +209,15 @@ void TextHandler::createRadioMenu(const uint8_t sub) {
 	if(sub != SUB_AM && sub != SUB_FM1 && sub != SUB_FM2)
 		return;
 
+	MenuList radio_menu = getMenu(MENU_INDEX_RADIO_MAIN_MENU, 0);
+
 	String manual_tune_msg;
 	if(parameter_list->manual_tune_mode)
-		manual_tune_msg = F("< Manual Tune >");
+		manual_tune_msg = String("< ") + radio_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_MANUAL) + String(" >");
 	else
-		manual_tune_msg = F("Manual Tune");
+		manual_tune_msg = radio_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_MANUAL);
 
-	String preset_msg = F("Presets");
+	String preset_msg = radio_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_PRESETS);
 	AIData manual_tune_aid = getTextMessage(manual_tune_msg, 0xB, 0);
 	ai_handler->writeAIData(&manual_tune_aid, parameter_list->computer_connected);
 
@@ -221,7 +228,7 @@ void TextHandler::createRadioMenu(const uint8_t sub) {
 	ai_handler->writeAIData(&preset_aid, parameter_list->computer_connected);
 
 	if(sub != SUB_AM) {
-		String scan_msg = F("Scan"), list_msg = F("Station List");
+		String scan_msg = radio_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_SCAN), list_msg = radio_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_STATION_LIST);
 		
 		AIData scan_aid = getTextMessage(scan_msg, 0xB, 2);
 		ai_handler->writeAIData(&scan_aid, parameter_list->computer_connected);

@@ -8,6 +8,7 @@ HondaTapeHandler::HondaTapeHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_d
 	getTapeSettings(&this->autostart, &this->fwd_start);
 }
 
+//Tape handler loop function.
 void HondaTapeHandler::loop() {
 	if(this->source_sel) {
 		if(*active_menu == MENU_TAPE && setting_changed) {
@@ -23,6 +24,7 @@ void HondaTapeHandler::loop() {
 	}
 }
 
+//Interpret a tape IEBus message.
 void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message) {
 	if(the_message->receiver != IE_ID_RADIO || the_message->sender != IE_ID_TAPE)
 		return;
@@ -145,6 +147,7 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message) {
 		sendIEAckMessage(the_message->sender);
 }
 
+//Interpret a tape AIBus message.
 void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 	if(the_message->receiver != ID_TAPE)
 		return;
@@ -312,10 +315,12 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 		sendAIAckMessage(sender);
 }
 
+//Send the AIBus handshake message to the radio.
 void HondaTapeHandler::sendSourceNameMessage() {
 	sendSourceNameMessage(ID_RADIO);
 }
 
+//Send the AIBus handshake message.
 void HondaTapeHandler::sendSourceNameMessage(const uint8_t id) {
 	uint8_t ai_handshake_data[] = {0x1, 0x1, 0x13};
 	AIData ai_handshake_msg(sizeof(ai_handshake_data), ID_TAPE, id);
@@ -335,6 +340,7 @@ void HondaTapeHandler::sendSourceNameMessage(const uint8_t id) {
 	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
 }
 
+//Get the AIBus direction byte.
 uint8_t HondaTapeHandler::getDirectionByte(const bool rev, const bool repeat, const bool nr, const bool cr_o2) {
 	uint8_t the_return = 0;
 	if(rev)
@@ -352,6 +358,7 @@ uint8_t HondaTapeHandler::getDirectionByte(const bool rev, const bool repeat, co
 	return the_return;
 }
 
+//Send the next track IEBus message.
 void HondaTapeHandler::sendButtonMessage(const uint8_t button) {
 	uint8_t button_data[] = {0x30, 0x0, 0x13, 0x2, 0x13, button};
 	IE_Message button_message(sizeof(button_data), IE_ID_RADIO, IE_ID_TAPE, 0xF, true);
@@ -362,6 +369,7 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button) {
 	getIEAckMessage(device_ie_id);
 }
 
+//Send the previous track IEBus message.
 void HondaTapeHandler::sendButtonMessage(const uint8_t button, const uint8_t tracks) {
 	uint8_t button_data[] = {0x30, 0x0, 0x13, 0x2, 0x13, button, tracks};
 	IE_Message button_message(sizeof(button_data), IE_ID_RADIO, IE_ID_TAPE, 0xF, true);
@@ -372,6 +380,7 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button, const uint8_t tra
 	getIEAckMessage(device_ie_id);
 }
 
+//Send the IEBus status request message.
 void HondaTapeHandler::sendStatusRequest() {
 	if(!source_sel)
 		return;
@@ -380,10 +389,12 @@ void HondaTapeHandler::sendStatusRequest() {
 	sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function_data, sizeof(function_data));
 }
 
+//Determine whether the up/down symbol should be shown.
 bool HondaTapeHandler::getDisplaySymbol() {
 	return (tape_mode == TAPE_MODE_PLAY || tape_mode == TAPE_MODE_REW || tape_mode == TAPE_MODE_REVSKIP || tape_mode == TAPE_MODE_FF || tape_mode == TAPE_MODE_FWDSKIP);
 }
 
+//Send the tape info messages as required.
 void HondaTapeHandler::sendTapeTextMessage() {
 	if(!text_control)
 		return;
@@ -615,6 +626,7 @@ void HondaTapeHandler::sendTapeTextMessage() {
 	this->sendMirrorMessage(nr_msg, 4, true);
 }
 
+//Set the function buttons on the main screen.
 void HondaTapeHandler::sendFunctionTextMessage() {
 	AIData title = getTextMessage(ID_TAPE, F("Tape"), 0x0, 0, false);
 	AIData function1 = getTextMessage(ID_TAPE, F("Repeat"), 0x2, 0, false);
@@ -632,6 +644,7 @@ void HondaTapeHandler::sendFunctionTextMessage() {
 	this->sendMirrorMessage(F("Tape"), 0, true);
 }
 
+//Send a tape status AIBus message.
 void HondaTapeHandler::sendTapeUpdateMessage(const uint8_t receiver) {
 	uint8_t tape_update_data[] = {0x31, tape_mode, getDirectionByte(!this->fwd, this->repeat_on, this->nr_on, this->cro2), track_count};
 	AIData tape_update_message(sizeof(tape_update_data), ID_TAPE, receiver);
@@ -646,9 +659,11 @@ void HondaTapeHandler::sendTapeUpdateMessage(const uint8_t receiver) {
 	ai_driver->writeAIData(&tape_update_message, ack);
 }
 
+//Create the tape main menu.
 void HondaTapeHandler::createTapeMenu() {
-	const uint8_t menu_size = 3;
-	startAudioMenu(menu_size, menu_size, false, "Tape Settings");
+	const MenuList main_menu = getMenu(MENU_INDEX_TAPE_SETTINGS, parameter_list->locale);
+	const uint8_t menu_size = main_menu.size();
+	startAudioMenu(menu_size, menu_size, false, main_menu.title);
 
 	elapsedMillis cancel_wait;
 	while(cancel_wait < 20) {
@@ -670,8 +685,21 @@ void HondaTapeHandler::createTapeMenu() {
 	displayAudioMenu(1);
 }
 
+//Create a tape main menu option.
 void HondaTapeHandler::createTapeMenuOption(const uint8_t option) {
-	switch(option) {
+	const MenuList main_menu = getMenu(MENU_INDEX_TAPE_SETTINGS, parameter_list->locale);
+
+	String item_txt = "";
+
+	if(option==main_menu.getLocalIndex(MENU_INDEX_TAPE_SETTINGS_AUTO_START))
+		item_txt = autostart ? "#RON " : "#ROF ";
+	else if(option==main_menu.getLocalIndex(MENU_INDEX_TAPE_SETTINGS_FWD_START))
+		item_txt = fwd_start ? "#RON " : "#ROF ";
+
+	item_txt += main_menu[option];
+	appendAudioMenu(option, item_txt);
+
+	/*switch(option) {
 	case 0:
 		if(fwd_start)
 			appendAudioMenu(0, "#RON Start in Forward Mode");
@@ -687,5 +715,5 @@ void HondaTapeHandler::createTapeMenuOption(const uint8_t option) {
 	case 2:
 		appendAudioMenu(2, "Audio Settings");
 		break;
-	}
+	}*/
 }

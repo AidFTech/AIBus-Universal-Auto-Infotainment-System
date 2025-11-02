@@ -12,6 +12,7 @@
 #define MAXIMUM_FREQUENCY_COUNT 32
 
 #define SEEK_TIME 1000
+#define FIVE_SEC_LIMIT 55000
 
 class BackgroundTuneHandler {
 	public:
@@ -36,8 +37,9 @@ class BackgroundTuneHandler {
 		String station_name[MAXIMUM_FREQUENCY_COUNT];
 		Vector<String> station_name_vec;
 
-		uint16_t time_frequency = 0, last_frequency = 0;
-		bool time_station_set = false, time_set = false;
+		bool time_set = false; //True if the system is in time set mode.
+		unsigned long last_seek_timer = 0;
+		uint16_t last_checked_freq = 0;
 
 		uint8_t max_rssi = 0;
 

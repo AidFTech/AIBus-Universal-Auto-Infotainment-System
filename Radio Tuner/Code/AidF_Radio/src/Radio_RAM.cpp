@@ -24,6 +24,13 @@ bool SRAMHandler::getValid() {
 	return true;
 }
 
+//Clear the RAM.
+void SRAMHandler::clearRAM() {
+	for(int i=0;i<0x2000;i+=1) {
+		sram.writeByte(i, 0);
+	}
+}
+
 //Save startup parameters to RAM.
 void SRAMHandler::setStartParams(StartParams* start_params) {
 	sram.writeByte(SELECTED_SOURCE, start_params->selected_source);
@@ -32,6 +39,7 @@ void SRAMHandler::setStartParams(StartParams* start_params) {
 	writeUint16(FM1_FREQ, start_params->fm1_freq);
 	writeUint16(FM2_FREQ, start_params->fm2_freq);
 	writeUint16(AM_FREQ, start_params->am_freq);
+	writeInt16(CLOCK_FREQ, start_params->clock_freq);
 
 	writeUint16(VOL, start_params->vol);
 	writeUint16(MAX_VOL, start_params->max_vol);
@@ -48,6 +56,7 @@ void SRAMHandler::getStartParams(StartParams* start_params) {
 	start_params->fm1_freq = readUint16(FM1_FREQ);
 	start_params->fm2_freq = readUint16(FM2_FREQ);
 	start_params->am_freq = readUint16(AM_FREQ);
+	start_params->clock_freq = readInt16(CLOCK_FREQ);
 
 	start_params->audio_on = sram.readByte(AUDIO_ON) != 0;
 	

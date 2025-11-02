@@ -1,6 +1,6 @@
 #include "CAN_Menu_Handler.h"
 
-CANMenuHandler::CANMenuHandler(AIBusHandler* ai_handler, ParameterList* parmaeter_list) {
+CANMenuHandler::CANMenuHandler(AIBusHandler* ai_handler, ParameterList* parameter_list) {
 	this->ai_handler = ai_handler;
 	this->parameter_list = parameter_list;
 }

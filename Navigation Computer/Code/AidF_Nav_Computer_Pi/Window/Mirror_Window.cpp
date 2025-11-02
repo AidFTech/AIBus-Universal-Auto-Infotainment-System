@@ -1,28 +1,26 @@
 #include "Mirror_Window.h"
 
-MirrorWindow::MirrorWindow(AttributeList *attribute_list) : NavWindow(attribute_list) {
-	title_box = new TextBox(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 50, &this->color_profile->text);
-	title_box->setText("Phone Mirror");
+MirrorWindow::MirrorWindow(AttributeList *attribute_list) : NavWindow(attribute_list), 
+	title_box(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 50, &this->color_profile->text),
+	message_box(renderer, 25, 50 + 42, 800, 60, ALIGN_H_L, ALIGN_V_M, 36, &this->color_profile->text) {
 
-	message_box = new TextBox(renderer, 25, 50 + 42, 800, 60, ALIGN_H_L, ALIGN_V_M, 36, &this->color_profile->text);
+	title_box.setText(getString(LOCALE_STRING_MIRROR, attribute_list->locale));
 
 	if(this->attribute_list->phone_type != 0) {
 		if(this->attribute_list->phone_name.length() > 0)
-			message_box->setText("Waiting for " + this->attribute_list->phone_name + ".");
+			message_box.setText(getString(LOCALE_STRING_MIRROR_WAITING_1, attribute_list->locale) +
+								this->attribute_list->phone_name
+								+ getString(LOCALE_STRING_MIRROR_WAITING_2, attribute_list->locale));
 		else
-			message_box->setText("Waiting for phone to connect.");
-	} else {
-		message_box->setText("Phone not connected.");
-	}
+			message_box.setText(getString(LOCALE_STRING_MIRROR_WAITING_GENERIC, attribute_list->locale));
+	} else
+		message_box.setText(getString(LOCALE_STRING_MIRROR_NOT_CONNECTED, attribute_list->locale));
 
 	this->writeConnectDisconnectMessage(true);
 }
 
 MirrorWindow::~MirrorWindow() {
 	this->attribute_list->phone_active = false;
-
-	delete title_box;
-	delete message_box;
 }
 
 void MirrorWindow::refreshWindow() {
@@ -31,23 +29,24 @@ void MirrorWindow::refreshWindow() {
 
 	if(this->attribute_list->phone_type != 0) {
 		if(this->attribute_list->phone_name.length() > 0)
-			message_box->setText("Waiting for " + this->attribute_list->phone_name + ".");
+			message_box.setText(getString(LOCALE_STRING_MIRROR_WAITING_1, attribute_list->locale) +
+								this->attribute_list->phone_name
+								+ getString(LOCALE_STRING_MIRROR_WAITING_2, attribute_list->locale));
 		else
-			message_box->setText("Waiting for phone to connect.");
-	} else {
-		message_box->setText("Phone not connected.");
-	}
+			message_box.setText(getString(LOCALE_STRING_MIRROR_WAITING_GENERIC, attribute_list->locale));
+	} else
+		message_box.setText(getString(LOCALE_STRING_MIRROR_NOT_CONNECTED, attribute_list->locale));
 
-	this->title_box->renderText();
-	this->message_box->renderText();
+	this->title_box.renderText();
+	this->message_box.renderText();
 }
 
 void MirrorWindow::drawWindow() {
 	if(!this->active)
 		return;
 
-	this->title_box->drawText();
-	this->message_box->drawText();
+	this->title_box.drawText();
+	this->message_box.drawText();
 }
 
 void MirrorWindow::exitWindow() {

@@ -19,7 +19,28 @@ BackgroundTuneHandler::~BackgroundTuneHandler() {
 void BackgroundTuneHandler::loop() {
 	br_tuner->loop();
 
-	if(station_seek) {
+	if(parameter_list->clock_freq >= 0 && (parameter_list->minute_timer >= FIVE_SEC_LIMIT || parameter_list->minute_timer < 5000)) { //Reset the clock as needed.
+		if(!time_set) {
+			time_set = true;
+
+			last_checked_freq = br_tuner->getFrequency();
+			last_seek_timer = seek_timer;
+
+			br_tuner->setFrequency(parameter_list->clock_freq);
+		}
+
+		if(br_tuner->getRSSI() >= FM_STEREO_THRESH)
+			br_tuner->getDateTime();
+		else
+			parameter_list->clock_freq = -1;
+	} else if(station_seek) {
+		if(time_set) {
+			time_set = false;
+
+			seek_timer = last_seek_timer;
+			br_tuner->setFrequency(last_checked_freq);
+		}
+
 		const uint16_t freq = br_tuner->getFrequency();
 
 		const uint8_t rssi = br_tuner->getRSSI();
@@ -32,18 +53,23 @@ void BackgroundTuneHandler::loop() {
 		rssi_count += 1;
 		if(callsign_broadcast)
 			rds_mean += 2;
+
+		if(parameter_list->clock_freq < 0) {
+			if(br_tuner->getDateTimePresent() && rssi >= FM_STEREO_THRESH)
+				parameter_list->clock_freq = br_tuner->getFrequency();
+		}
 		
 		if(seek_timer > seek_timer_limit) {
 			if(rssi_count > 0) {
-				if(rssi_mean/rssi_count >= FM_STEREO_THRESH || (rds.length() > 0 && rds_mean > 1)) { //List this station.
+				if(rssi_mean/rssi_count >= FM_STEREO_THRESH && (rds.length() > 0 && rds_mean > 1)) { //List this station.
 					addFrequency(freq, rds);
 				} else { //Remove this station.
 					int index = -1;
 					for(int i=0;i<freq_list_vec.size();i+=1) {
-						if(freq_list_vec.at(i) == freq)
+						if(freq_list_vec.at(i) == freq) {
 							index = i;
-						if(index >= 0)
 							break;
+						}
 					}
 
 					if(index >= 0) {

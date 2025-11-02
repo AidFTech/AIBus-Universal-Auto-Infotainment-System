@@ -1,42 +1,34 @@
 #include "Main_Menu_Window.h"
 
-Main_Menu_Window::Main_Menu_Window(AttributeList *attribute_list) : NavWindow(attribute_list) {
-	title_box = new TextBox(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, MAIN_TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 55, &this->color_profile->text);
-	title_box->setText("Main Menu");
-
-	this->main_menu = new NavMenu(attribute_list, 0, MAIN_TITLE_AREA_Y + MAIN_TITLE_HEIGHT*11/10, w/2, 42, 12, -1, 36, 6, true, "");
+Main_Menu_Window::Main_Menu_Window(AttributeList *attribute_list) : NavWindow(attribute_list),
+	title_box(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, MAIN_TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 55, &this->color_profile->text),
+	main_menu(attribute_list, 0, MAIN_TITLE_AREA_Y + MAIN_TITLE_HEIGHT*11/10, w/2, 42, 12, -1, 36, 6, true, "") {
+	
 	setMainMenu();
-}
-
-Main_Menu_Window::~Main_Menu_Window() {
-	delete this->title_box;
-	delete this->main_menu;
 }
 
 void Main_Menu_Window::drawWindow() {
 	if(!this->active)
 		return;
 	
-	this->title_box->drawText();
-	this->main_menu->drawMenu();
+	this->title_box.drawText();
+	this->main_menu.drawMenu();
 }
 
 void Main_Menu_Window::refreshWindow() {
-	this->title_box->renderText();
-	this->main_menu->refreshItems();
+	this->title_box.renderText();
+	this->main_menu.refreshItems();
 }
 
 void Main_Menu_Window::setMainMenu() {
-	main_menu->setItem("Navigation", 0);
-	main_menu->setItem("Audio", 1);
-	main_menu->setItem("Phone", 2);
-	main_menu->setItem("Settings", 5);
-	main_menu->setItem("Monitor Off", 6);
-	main_menu->setItem("Consumption", 11);
-	main_menu->setItem("Information", 10);
-	main_menu->setItem("Phone Mirror", 9);
+	MenuList main_menu_list = getMenu(MENU_INDEX_MAIN, attribute_list->locale);
 
-	main_menu->setSelected(1);
+	title_box.setText(main_menu_list.title);
+
+	for(int i=0;i<main_menu_list.size();i+=1)
+		this->main_menu.setItem(main_menu_list[i], MENU_INDEX[i]);
+
+	this->main_menu.setSelected(1);
 }
 
 bool Main_Menu_Window::handleAIBus(AIData* msg) {
@@ -79,10 +71,10 @@ void Main_Menu_Window::interpretMenuChange(AIData* ai_b) {
 
 		if(!clockwise) {
 			for(uint8_t i=0;i<steps;i+=1)
-				this->main_menu->incrementSelected();
+				this->main_menu.incrementSelected();
 		} else {
 			for(uint8_t i=0;i<steps;i+=1)
-				this->main_menu->decrementSelected();
+				this->main_menu.decrementSelected();
 		}
 	} else if(ai_b->data[0] == 0x30){
 		int8_t control = -1;
@@ -103,31 +95,31 @@ void Main_Menu_Window::interpretMenuChange(AIData* ai_b) {
 				return;
 		}
 
-		this->main_menu->navigateSelected(control);
+		this->main_menu.navigateSelected(control);
 	}
 }
 
 void Main_Menu_Window::handleEnterButton() {
-	const int16_t option = this->main_menu->getSelected() - 1;
+	const int16_t option = this->main_menu.getSelected() - 1;
 	if(option < 0)
 		return;
 
-	this->main_menu->setSelected(1);
+	this->main_menu.setSelected(1);
 	switch(option) {
-		case 0:
+		case MAIN_MENU_ITEM_NAVIGATION:
 			attribute_list->next_window = NEXT_WINDOW_MAP;
 			break;
-		case 1:
+		case MAIN_MENU_ITEM_AUDIO:
 			attribute_list->next_window = NEXT_WINDOW_AUDIO;
 			break;
-		case 2:
+		case MAIN_MENU_ITEM_PHONE:
 			attribute_list->next_window = NEXT_WINDOW_PHONE;
 			break;
-		case 5:
+		case MAIN_MENU_ITEM_SETTINGS:
 			attribute_list->next_window = NEXT_WINDOW_SETTINGS_MAIN;
 			break;
-		case 6:
-			this->main_menu->setSelected(1);
+		case MAIN_MENU_ITEM_MONITOR_OFF:
+			this->main_menu.setSelected(1);
 			{
 				AIData screen_off_msg(2, ID_NAV_COMPUTER, ID_NAV_SCREEN);
 				//TODO: Cut all controls to the screen.
@@ -136,13 +128,13 @@ void Main_Menu_Window::handleEnterButton() {
 				this->attribute_list->aibus_handler->writeAIData(&screen_off_msg);
 			}
 			break;
-		case 9:
+		case MAIN_MENU_ITEM_MIRROR:
 			attribute_list->next_window = NEXT_WINDOW_MIRROR;
 			break;
-		case 10:
+		case MAIN_MENU_ITEM_INFORMATION:
 			attribute_list->next_window = NEXT_WINDOW_VEHICLE_INFO;
 			break;
-		case 11:
+		case MAIN_MENU_ITEM_CONSUMPTION:
 			attribute_list->next_window = NEXT_WINDOW_CONSUMPTION;
 			break;
 	}

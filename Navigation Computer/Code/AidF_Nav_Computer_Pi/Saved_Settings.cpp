@@ -61,7 +61,7 @@ void getTimekeepingParams(bool* display_12h, bool* auto_clock_set, uint8_t* time
 					new_timekeeper = (uint8_t)(timekeeping_file[i].num_values[n]&0xFF);
 				else if(timekeeping_file[i].num_vars[n].compare("Auto") == 0)
 					new_auto_clock = timekeeping_file[i].num_values[n] != 0;
-				else if(timekeeping_file[i].num_vars[n].compare("Display_12h") == 0)
+				else if(timekeeping_file[i].num_vars[n].compare("Display12h") == 0)
 					new_12h = timekeeping_file[i].num_values[n] != 0;
 			}
 
@@ -90,7 +90,7 @@ void saveTimekeepingParams(const bool display_12h, const bool auto_clock_set, co
 	timekeeping_file.num_vars[1] = "Auto";
 	timekeeping_file.num_values[1] = auto_clock_set ? 1 : 0;
 
-	timekeeping_file.num_vars[2] = "Display_12h";
+	timekeeping_file.num_vars[2] = "Display12h";
 	timekeeping_file.num_values[2] = display_12h ? 1 : 0;
 
 	std::vector<IniList> file_list(0);

@@ -6,6 +6,8 @@
 #include "Honda_Source_Handler.h"
 #include "Honda_IMID_Handler.h"
 
+#include "Locale.h"
+
 #include "IE_CD_Status.h"
 
 #ifndef __AVR__

@@ -3,6 +3,8 @@
 #include "../Window/Nav_Window.h"
 #include "../AidF_Color_Profile.h"
 
+#include "../Locale/Locale.h"
+
 #ifndef mirror_window_h
 #define mirror_window_h
 
@@ -18,9 +20,7 @@ public:
 
 	void writeConnectDisconnectMessage(const bool connect);
 private:
-	TextBox* title_box;
-
-	TextBox* message_box;
+	TextBox title_box, message_box;
 };
 
 #endif

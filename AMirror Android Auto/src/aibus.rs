@@ -61,6 +61,19 @@ impl AIBusMessage {
 	}
 }
 
+///Get whether a message is the initialization message.
+pub fn get_init_message(ai_data: &AIBusMessage) -> bool {
+	if ai_data.l() < 2 {
+		return false;
+	}
+
+	if ai_data.data[0] == 0x4A && ai_data.data[1] == 0x1F {
+		return true;
+	} else {
+		return false;
+	}
+}
+
 ///Get an AIBus message from a vector of bytes.
 pub fn get_aibus_message(data: Vec<u8>) -> AIBusMessage {
 	if data.len() < 4 {

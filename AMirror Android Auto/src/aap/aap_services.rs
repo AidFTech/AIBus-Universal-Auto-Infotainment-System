@@ -11,6 +11,7 @@ pub enum ServiceChannels {
 	PhoneStatusChannel,
 	NotificationChannel,
 	NavigationChannel,
+	MediaStatusChannel,
 	MaximumChannel=256,
 }
 

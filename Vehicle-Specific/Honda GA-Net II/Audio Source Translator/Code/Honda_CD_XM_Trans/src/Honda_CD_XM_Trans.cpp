@@ -61,9 +61,9 @@ void HondaCDXMTrans::setup() {
 	digitalWrite(GAH_COUNT_ENABLE, LOW);
 	
 	digitalWrite(SPDIF_RESET, HIGH);
-	delay(1);
+	delay(100);
 	digitalWrite(SPDIF_RESET, LOW);
-	delay(1);
+	delay(30);
 	digitalWrite(SPDIF_RESET, HIGH);
 
 	EnIEBusParams ie_params;
@@ -114,8 +114,6 @@ void HondaCDXMTrans::loop() {
 	#endif
 
 	IE_Message ie_msg;
-
-	const uint8_t last_source = parameters.active_source, last_subsource = parameters.active_subsource;
 
 	if (parameters.power_on) { // Don't check IEBus if the car isn't on.
 		elapsedMillis ie_timer;
@@ -169,17 +167,17 @@ void HondaCDXMTrans::loop() {
 				(ai_msg.sender == ID_XM && xm_handler.getEstablished()))
 				continue;
 
-			if (!parameters.computer_connected && ai_msg.sender == ID_NAV_COMPUTER)
+			if (!parameters.computer_connected && ai_msg.sender == ID_NAV_COMPUTER && !getInitMessage(&ai_msg))
 				parameters.computer_connected = true;
 
-			if (!parameters.screen_connected && ai_msg.sender == ID_NAV_SCREEN)
+			if (!parameters.screen_connected && ai_msg.sender == ID_NAV_SCREEN && !getInitMessage(&ai_msg))
 				parameters.screen_connected = true;
 
-			if (!parameters.mirror_connected && ai_msg.sender == ID_ANDROID_AUTO)
+			if (!parameters.mirror_connected && ai_msg.sender == ID_ANDROID_AUTO && !getInitMessage(&ai_msg))
 				parameters.mirror_connected = true;
 
 			#ifndef AI_DEBUG
-			if (!parameters.radio_connected && ai_msg.sender == ID_RADIO) {
+			if (!parameters.radio_connected && ai_msg.sender == ID_RADIO && !getInitMessage(&ai_msg)) {
 				parameters.radio_connected = true;
 
 				if (cd_handler.getEstablished())
@@ -193,6 +191,17 @@ void HondaCDXMTrans::loop() {
 					imid_handler.writeVolumeLimitMessage();
 			}
 			#endif
+			
+			if(getInitMessage(&ai_msg)) {
+				if(ai_msg.sender == ID_RADIO)
+					parameters.radio_connected = false;
+				else if(ai_msg.sender == ID_NAV_COMPUTER)
+					parameters.computer_connected = false;
+				else if(ai_msg.sender == ID_NAV_SCREEN)
+					parameters.screen_connected = false;
+				else if(ai_msg.sender == ID_ANDROID_AUTO)
+					parameters.mirror_connected = false;
+			}
 
 			if (ai_msg.sender == ID_IMID_SCR && !imid_handler.getEstablished()) { //An external IMID is available.
 				if (ai_msg.l >= 2 && ai_msg.data[0] == 0x3B) { // External IMID is announcing itself.

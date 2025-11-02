@@ -34,6 +34,8 @@ public:
 	void getParameters(ParameterList* parameters, const uint8_t setting);
 	bool getRdsInfo(String* rds);
 	bool getCallsign(String* rds);
+	bool getDateTime();
+	bool getDateTimePresent();
 	void clearRds();
 
 	uint8_t getRSSI();
@@ -56,6 +58,7 @@ private:
 	bool queued_frequency_set = false;
 
 	bool getRdsInfo(String* rds, const bool init);
+	bool getDateTime(ParameterList* parameters);
 };
 
 //String getRDSString(uint16_t* registers);

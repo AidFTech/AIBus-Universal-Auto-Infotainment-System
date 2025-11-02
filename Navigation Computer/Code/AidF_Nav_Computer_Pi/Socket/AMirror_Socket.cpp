@@ -1,5 +1,4 @@
 #include "AMirror_Socket.h"
-#include <iostream>
 
 SocketMessage::SocketMessage(const uint8_t opcode, const uint16_t l) {
 	this->opcode = opcode;
@@ -35,11 +34,11 @@ AMirrorSocket::AMirrorSocket() {
 	this->server_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 
 	struct sockaddr_un server_address;
-    server_address.sun_family = AF_UNIX;
-    strcpy(server_address.sun_path, SOCKET_PATH);
+	server_address.sun_family = AF_UNIX;
+	strcpy(server_address.sun_path, SOCKET_PATH);
 
-    bind(this->server_socket, (struct sockaddr*) &server_address, sizeof(server_address));
-    listen(this->server_socket, 5);
+	const int bnd = bind(this->server_socket, (struct sockaddr*) &server_address, sizeof(server_address));
+	listen(this->server_socket, 5);
 
 	this->client_socket = accept(this->server_socket, NULL, NULL);
 }
@@ -86,17 +85,17 @@ int AMirrorSocket::readSocketMessage(SocketMessage* msg) {
 	const int message_size = recv(this->client_socket, data, DEFAULT_READ_LENGTH, 0);
 	
 	if(message_size < 0)
-        return -1;
+		return -1;
 	else if(message_size == 0)
 		return 0;
 
-    if(message_size < strlen(SOCKET_START) + 1)
-        return -1;
+	if(message_size < strlen(SOCKET_START) + 1)
+		return -1;
 
-    for(uint8_t i=0;i<strlen(SOCKET_START);i+=1) {
-        if(data[i] != (uint8_t)SOCKET_START[i])
-            return -1;
-    }
+	for(uint8_t i=0;i<strlen(SOCKET_START);i+=1) {
+		if(data[i] != (uint8_t)SOCKET_START[i])
+			return -1;
+	}
 
 	const uint8_t opcode = data[strlen(SOCKET_START)], msg_length = data[strlen(SOCKET_START) + 1]-1;
 	if(msg_length > message_size - strlen(SOCKET_START) - 2)

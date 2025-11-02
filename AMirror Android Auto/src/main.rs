@@ -100,6 +100,8 @@ fn main() {
 					//Do nothing.
 				} else if ai_msg.receiver == 0xFF {
 					send_ack = false;
+				} else if get_init_message(&ai_msg) {
+					send_ack = false;
 				} else if ai_msg.receiver == AIBUS_DEVICE_RADIO {
 					match radio_connected_aibus.try_lock() {
 						Ok(radio_connected) => {
@@ -382,5 +384,6 @@ fn main() {
 		}
 	}
 
+	amirror.save_settings();
 	aibus_handle.join().unwrap();
 }

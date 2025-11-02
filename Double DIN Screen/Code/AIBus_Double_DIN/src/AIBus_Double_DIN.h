@@ -2,14 +2,11 @@
 #include <MCP23S08.h>
 #include <MCP4251.h>
 #include <SPI.h>
+#define TWI_BUFFER_SIZE 128
 #define BUFFER_LENGTH 128
 #include <Wire.h>
 
 //Must be compiled with an I2C cache size of at least 128.
-#define XSTR(x) STR(x)
-#define STR(x) #x
-#pragma message "Size: " XSTR(TWI_BUFFER_SIZE)
-
 #include "AIBus.h"
 #include "AIBus_Handler.h"
 #include "AIBT_Parameters.h"

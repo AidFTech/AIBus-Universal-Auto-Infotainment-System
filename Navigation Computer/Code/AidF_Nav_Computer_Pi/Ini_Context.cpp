@@ -48,6 +48,10 @@ IniList::IniList(const IniList &copy) {
 //Generate a set of lists from an INI file.
 std::vector<IniList> loadIniFile(const char* fpath) {
 	std::ifstream file(fpath);
+
+	if(file.fail())
+		return std::vector<IniList>(0);
+
 	std::vector<std::string> text_lines(0);
 
 	std::string file_text;

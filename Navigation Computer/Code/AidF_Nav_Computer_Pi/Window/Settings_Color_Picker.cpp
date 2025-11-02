@@ -2,7 +2,10 @@
 
 Color_Picker_Window::Color_Picker_Window(AttributeList* attribute_list) : NavWindow(attribute_list) {
 	this->title_block = new TextBox(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 55, &this->color_profile->text);
-	title_block->setText("Color Selection");
+
+	const MenuList sel_menu = getMenu(MENU_INDEX_COLOR_PICKER, attribute_list->locale);
+
+	title_block->setText(sel_menu.title);
 
 	this->last_day_night_setting = attribute_list->day_night_settings;
 	attribute_list->day_night_settings = DAY_NIGHT_DAY;
@@ -10,12 +13,10 @@ Color_Picker_Window::Color_Picker_Window(AttributeList* attribute_list) : NavWin
 
 	this->color_menu = new NavMenu(this->attribute_list, 0, MAIN_TITLE_AREA_Y + 55, attribute_list->w*4/9, 40, 9, ALIGN_H_L, 36, 9, false, "");
 
-	this->color_menu->setItem("Background", 0);
-	this->color_menu->setItem("Text", 1);
-	this->color_menu->setItem("Button", 2);
-	this->color_menu->setItem("Selection", 3);
-	this->color_menu->setItem("Headerbar", 4);
-	this->color_menu->setItem("Outline", 5);
+	const int end_index = sel_menu.getLocalIndex(MENU_INDEX_COLOR_PICKER_OUTLINE) + 1;
+	
+	for(int i=0;i<end_index;i+=1)
+		this->color_menu->setItem(sel_menu[i], i);
 
 	this->color_menu->setSelected(1);
 
@@ -231,23 +232,18 @@ int16_t Color_Picker_Window::getSliderY(const uint8_t s) {
 void Color_Picker_Window::handleEnterButton() {
 	if(!color_option_active) {
 		const int selected = this->color_menu->getSelected() - 1;
+		const MenuList color_menu = getMenu(MENU_INDEX_COLOR_PICKER, attribute_list->locale);
 
 		if(selected < 0)
 			return;
 
-		if(selected >= 7) {
-			switch(selected) {
-			case 7:
-				attribute_list->day_night_settings = DAY_NIGHT_DAY;
-				setColorProfile(attribute_list->color_profile, *attribute_list->day_profile);
-				setDayNightOption();
-				break;
-			case 8:
-				attribute_list->day_night_settings = DAY_NIGHT_NIGHT;
-				setColorProfile(attribute_list->color_profile, *attribute_list->night_profile);
-				setDayNightOption();
-				break;
-			}
+		if(selected == color_menu.getLocalIndex(MENU_INDEX_COLOR_PICKER_DAY)) {
+			attribute_list->day_night_settings = DAY_NIGHT_DAY;
+			setColorProfile(attribute_list->color_profile, *attribute_list->day_profile);
+			setDayNightOption();
+		} else if(selected == color_menu.getLocalIndex(MENU_INDEX_COLOR_PICKER_NIGHT)) {
+			attribute_list->day_night_settings = DAY_NIGHT_NIGHT;
+			setColorProfile(attribute_list->color_profile, *attribute_list->night_profile);
 			setDayNightOption();
 		} else {
 			color_element = 0;
@@ -255,7 +251,7 @@ void Color_Picker_Window::handleEnterButton() {
 			color_option_active = true;
 			color_slider_active = false;
 			
-			color_option = selected + 1;
+			color_option = color_option_t(selected + 1);
 			setSliderValues();
 		}
 	} else {
@@ -270,16 +266,18 @@ void Color_Picker_Window::handleEnterButton() {
 }
 
 void Color_Picker_Window::setDayNightOption() {
-	std::string day_sel = "#COF";
+	std::string day_sel = "#COF ";
 	if(this->attribute_list->day_night_settings == DAY_NIGHT_DAY)
-		day_sel = "#CON";
+		day_sel = "#CON ";
 	
-	std::string night_sel = "#COF";
+	std::string night_sel = "#COF ";
 	if(this->attribute_list->day_night_settings == DAY_NIGHT_NIGHT)
-		night_sel = "#CON";
+		night_sel = "#CON ";
 
-	this->color_menu->setItem(day_sel + "  Day", 7);
-	this->color_menu->setItem(night_sel + "  Night", 8);
+	const MenuList sel_menu = getMenu(MENU_INDEX_COLOR_PICKER, attribute_list->locale);
+
+	this->color_menu->setItem(day_sel + sel_menu.getLocalEntry(MENU_INDEX_COLOR_PICKER_DAY), sel_menu.getLocalIndex(MENU_INDEX_COLOR_PICKER_DAY));
+	this->color_menu->setItem(night_sel + sel_menu.getLocalEntry(MENU_INDEX_COLOR_PICKER_NIGHT), sel_menu.getLocalIndex(MENU_INDEX_COLOR_PICKER_NIGHT));
 	setSliderValues();
 
 	solid_br = false;

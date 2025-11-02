@@ -59,11 +59,11 @@ void PCM9211Handler::setADCOn() {
 
 //Set the output to digital input from the Pi.
 void PCM9211Handler::setPiOut() {
-	writeRegister(REG_OUTPUT_PORT, 0x44);
+	writeRegister(REG_OUTPUT_PORT, 0x04);
 	writeRegister(REG_RECOUT0_SOURCE, 0xF);
 	writeRegister(REG_DIR_INPUT_SOURCE, 0xCF);
-	writeRegister(REG_DIT_FUNCTION0, 0x44);
-	writeRegister(REG_DIT_FUNCTION1, 0x70);
+	writeRegister(REG_DIT_FUNCTION0, 0x04);
+	writeRegister(REG_DIT_FUNCTION1, 0x10);
 }
 
 //Set the output to digital input from an external source.
@@ -77,7 +77,7 @@ void PCM9211Handler::setExtOut() {
 
 //Set the MPO0 and MPO1 outputs.
 void PCM9211Handler::setMPOOutputs(const uint8_t mpo1, const uint8_t mpo0) {
-	writeRegister(REG_MPO_SETTING, ((mpo1&0xF)<<4) | mpo0&0xF);
+	writeRegister(REG_MPO_SETTING, ((mpo1&0xF)<<4) | (mpo0&0xF));
 }
 
 //Write to a register.

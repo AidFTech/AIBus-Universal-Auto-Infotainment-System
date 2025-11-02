@@ -13,7 +13,7 @@
 
 class Settings_Window : public NavWindow {
 public:
-	Settings_Window(AttributeList *attribute_list, const uint16_t setting_count, std::string header, const int back_index);
+	Settings_Window(AttributeList *attribute_list, const uint16_t setting_count, std::string header, const next_window_t back_index);
 	~Settings_Window();
 
 	virtual void drawWindow();
@@ -31,7 +31,7 @@ protected:
 	TextBox *title_block;
 	NavMenu *settings_menu;
 	
-	int back_index = 0;
+	next_window_t back_index = NEXT_WINDOW_NULL;
 
 	bool allow_ext_menu = false;
 	uint8_t ext_menu_sender = ID_NAV_COMPUTER;

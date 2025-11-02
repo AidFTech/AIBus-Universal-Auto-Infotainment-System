@@ -50,7 +50,7 @@ bool VolumeHandler::handleAIBus(AIData *msg) {
 						new_volume = vol_range;
 				} else {
 					if(inc <= volume)
-						new_volume -= msg->data[2]&0xF;
+						new_volume -= inc;
 					else
 						new_volume = 0;
 				}
@@ -159,7 +159,7 @@ void VolumeHandler::setVolume(const uint16_t volume) {
 		this->volume = this->vol_range;
 
 	if(!this->parameters->digital_amp) { //Analog mode.
-		uint16_t lf_vol = volume*DEFAULT_TONE_RANGE/vol_range, rf_vol = volume*DEFAULT_TONE_RANGE/vol_range, lr_vol = volume*DEFAULT_TONE_RANGE/vol_range, rr_vol = volume*DEFAULT_TONE_RANGE/vol_range;
+		uint16_t lf_vol = this->volume*DEFAULT_TONE_RANGE/vol_range, rf_vol = this->volume*DEFAULT_TONE_RANGE/vol_range, lr_vol = volume*DEFAULT_TONE_RANGE/vol_range, rr_vol = volume*DEFAULT_TONE_RANGE/vol_range;
 		if(balance < 0) { //Left balance.
 			rf_vol = rf_vol*(DEFAULT_TONE_RANGE/2 - abs(balance))/(DEFAULT_TONE_RANGE/2);
 			rr_vol = rr_vol*(DEFAULT_TONE_RANGE/2 - abs(balance))/(DEFAULT_TONE_RANGE/2);

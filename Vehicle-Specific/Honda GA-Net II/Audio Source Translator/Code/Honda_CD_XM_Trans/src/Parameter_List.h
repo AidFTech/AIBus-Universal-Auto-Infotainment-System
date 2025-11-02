@@ -27,6 +27,8 @@ struct ParameterList {
 
 	int8_t audio_pin = -1;
 
+	uint8_t locale = 0;
+
 	uint8_t external_imid_char = 0, external_imid_lines = 0;
 	bool external_imid_tape = false, external_imid_cd = false, external_imid_xm = false;
 

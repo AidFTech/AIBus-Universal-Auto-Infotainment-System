@@ -58,4 +58,6 @@ protected:
 	virtual bool awaitAcknowledgement(AIData* ai_d);
 };
 
+bool getInitMessage(AIData* ai_d);
+
 #endif

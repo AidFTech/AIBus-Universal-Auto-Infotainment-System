@@ -2,11 +2,13 @@
 
 #include <elapsedMillis.h>
 #include <MCP4251.h>
+#include <RTCx.h>
 
 #include <Wire.h>
 
 #include "AIBus.h"
 #include "AIBus_Handler.h"
+#include "Locale.h"
 #include "Audio_Source.h"
 #include "Text_Handler.h"
 #include "Parameter_List.h"
@@ -134,9 +136,11 @@ private:
 
 	elapsedMillis background_tune_timer = 0;
 
-	String rds_program_split[12];
+	String rds_program_split[RDS_SEGMENT_COUNT];
 
 	bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
+	bool key_on = false; //True if the key has been at any time during this power cycle.
+	bool rtc_on = false; //True if the clock is on and functional.
 
 	bool source_change_timer_enable = false;
 	elapsedMillis source_change_timer;

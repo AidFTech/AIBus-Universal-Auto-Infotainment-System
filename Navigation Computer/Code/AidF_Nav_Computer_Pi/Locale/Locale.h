@@ -1,9 +1,86 @@
 #include <stdint.h>
 
+#include "Locale_Common.h"
+
 #ifndef locale_h
 #define locale_h
 
-enum menu_index_t {
+enum nav_text_index: unsigned int {
+	//Consumption Headers
+	LOCALE_STRING_CONSUMPTION,
+
+	//Vehicle Info Headers
+	LOCALE_STRING_VEHICLE_INFORMATION,
+	LOCALE_STRING_HYBRID_POWER_FLOW,
+
+	//Vehicle Info Parameters
+	LOCALE_STRING_COOLANT_TEMP,
+	LOCALE_STRING_OUTSIDE_TEMP,
+
+	//Phone Mirror Headers
+	LOCALE_STRING_MIRROR,
+	LOCALE_STRING_MIRROR_WAITING_1,
+	LOCALE_STRING_MIRROR_WAITING_2,
+	LOCALE_STRING_MIRROR_WAITING_GENERIC,
+	LOCALE_STRING_MIRROR_NOT_CONNECTED,
+};
+
+static const char* TEXT_ENG[] {
+	//Consumption Headers
+	"Consumption",
+
+	//Vehicle Info Headers
+	"Vehicle Information",
+	"Hybrid Power Flow",
+
+	//Vehicle Info Parameters
+	"Coolant Temp",
+	"Outside Temp",
+
+	"Phone Mirror",
+	"Waiting for ",
+	".",
+	"Waiting for phone to connect.",
+	"Phone not connected.",
+};
+
+enum nav_menu_index : menu_index_t {
+	//Main menu.
+	MENU_INDEX_MAIN,
+	MENU_INDEX_MAIN_NAVIGATION,
+	MENU_INDEX_MAIN_AUDIO,
+	MENU_INDEX_MAIN_PHONE,
+	MENU_INDEX_MAIN_SETTINGS,
+	MENU_INDEX_MAIN_MONITOR_OFF,
+	MENU_INDEX_MAIN_CONSUMPTION,
+	MENU_INDEX_MAIN_INFORMATION,
+	MENU_INDEX_MAIN_MIRROR,
+
+	//Information menu.
+	MENU_INDEX_INFORMATION_MAIN,
+	MENU_INDEX_INFORMATION_MAIN_DISP_1,
+	MENU_INDEX_INFORMATION_MAIN_DISP_2,
+	MENU_INDEX_INFORMATION_MAIN_DISP_3,
+	MENU_INDEX_INFORMATION_MAIN_DISP_4,
+	MENU_INDEX_INFORMATION_MAIN_UNIT,
+	MENU_INDEX_INFORMATION_MAIN_CRUISE,
+
+	//Information param menu.
+	MENU_INDEX_INFORMATION_PARAM,
+	MENU_INDEX_INFORMATION_PARAM_OFF,
+	MENU_INDEX_INFORMATION_PARAM_BATTERY,
+	MENU_INDEX_INFORMATION_PARAM_OUTSIDE_TEMP,
+	MENU_INDEX_INFORMATION_PARAM_COOLANT_TEMP,
+	MENU_INDEX_INFORMATION_PARAM_INST_ECONOMY,
+	MENU_INDEX_INFORMATION_PARAM_AVERAGE_ECONOMY,
+	MENU_INDEX_INFORMATION_PARAM_TRIP_TIMER,
+	MENU_INDEX_INFORMATION_PARAM_CRUISE_SPEED,
+	MENU_INDEX_INFORMATION_PARAM_GEAR,
+	MENU_INDEX_INFORMATION_PARAM_RANGE,
+	MENU_INDEX_INFORMATION_PARAM_TRIP_DISTANCE,
+	MENU_INDEX_INFORMATION_PARAM_REMAINING_TIME,
+	MENU_INDEX_INFORMATION_PARAM_REMAINING_DIST,
+
 	//Main settings menu.
 	MENU_INDEX_SETTINGS_MAIN,
 	MENU_INDEX_SETTINGS_MAIN_DISPLAY,
@@ -30,6 +107,17 @@ enum menu_index_t {
 	MENU_INDEX_SETTINGS_DAY_NIGHT_DAY,
 	MENU_INDEX_SETTINGS_DAY_NIGHT_NIGHT,
 
+	//Color picker menu.
+	MENU_INDEX_COLOR_PICKER,
+	MENU_INDEX_COLOR_PICKER_BACKGROUND,
+	MENU_INDEX_COLOR_PICKER_TEXT,
+	MENU_INDEX_COLOR_PICKER_BUTTON,
+	MENU_INDEX_COLOR_PICKER_SELECTION,
+	MENU_INDEX_COLOR_PICKER_HEADERBAR,
+	MENU_INDEX_COLOR_PICKER_OUTLINE,
+	MENU_INDEX_COLOR_PICKER_DAY,
+	MENU_INDEX_COLOR_PICKER_NIGHT,
+
 	//Clock settings menu.
 	MENU_INDEX_SETTINGS_CLOCK,
 	MENU_INDEX_SETTINGS_CLOCK_CLOCK_FORMAT,
@@ -51,17 +139,57 @@ enum menu_index_t {
 	MENU_INDEX_LEN
 };
 
-static const menu_index_t MENU_START_INDEX[] = {
+static const nav_menu_index MENU_START_INDEX[] = {
+	MENU_INDEX_MAIN,
+	MENU_INDEX_INFORMATION_MAIN,
+	MENU_INDEX_INFORMATION_PARAM,
 	MENU_INDEX_SETTINGS_MAIN,
 	MENU_INDEX_SETTINGS_DISPLAY,
 	MENU_INDEX_SETTINGS_COLORS,
 	MENU_INDEX_SETTINGS_DAY_NIGHT,
+	MENU_INDEX_COLOR_PICKER,
 	MENU_INDEX_SETTINGS_CLOCK,
 	MENU_INDEX_SETTINGS_CLOCK_FORMAT,
 	MENU_INDEX_SETTINGS_AUTO_SET
 };
 
 static const char* MENUS_ENG[] = {
+	//Main menu.
+	"Main Menu",
+	"Navigation",
+	"Audio",
+	"Phone",
+	"Settings",
+	"Monitor Off",
+	"Consumption",
+	"Information",
+	"Phone Mirror",
+
+	//Information menu.
+	"Vehicle Information Settings",
+	"Lower Display 1",
+	"Lower Display 2",
+	"Lower Display 3",
+	"Lower Display 4",
+	"Units",
+	"Display Cruise Speed",
+
+	//Information parameter menu.
+	"Lower Display ",
+	"Off",
+	"Battery Voltage",
+	"Outside Temperature",
+	"Coolant Temperature",
+	"Instantaneous Economy",
+	"Trip Average Economy",
+	"Trip Timer",
+	"Cruise Speed",
+	"Gear",
+	"Range",
+	"Trip Distance",
+	"Remaining Time (nav)",
+	"Remaining Distance (nav)",
+
 	//Main settings menu.
 	"Settings",
 	"Display Settings",
@@ -88,6 +216,17 @@ static const char* MENUS_ENG[] = {
 	"Day",
 	"Night",
 
+	//Color picker menu.
+	"Color Selection",
+	"Background",
+	"Text",
+	"Button",
+	"Selection",
+	"Headerbar",
+	"Outline",
+	"Day",
+	"Night",
+
 	//Clock settings menu.
 	"Clock Settings",
 	"Clock Format",
@@ -107,47 +246,9 @@ static const char* MENUS_ENG[] = {
 	"Set Clock Manually",
 };
 
-struct MenuList {
-	menu_index_t start, end;
-	const char** menu_str;
-	const char* title;
+const char* getString(const nav_text_index index, const uint8_t locale);
 
-	//The menu length.
-	unsigned int size() {
-		return end - start;
-	}
-
-	//Get the local menu index of the option.
-	int getLocalIndex(const menu_index_t index) {
-		if(index < start || index >= end)
-			return -1;
-		else
-			return index - start;
-	}
-
-	//Get a local menu entry at index.
-	const char* getLocalEntry(const menu_index_t index) {
-		const int new_index = getLocalIndex(index);
-		if(new_index >= 0)
-			return (*this)[new_index];
-		else
-			return nullptr;
-	}
-
-	//Get the global menu index of int index.
-	menu_index_t getGlobalIndex(const int index) {
-		if(index < 0 || index >= size())
-			return (menu_index_t)0;
-		else
-			return (menu_index_t)(index + start);
-	}
-
-	const char* operator[] (int index) {
-		return menu_str[index];
-	}
-};
-
-const char* getMenuTitle(const menu_index_t index, const uint8_t locale);
-MenuList getMenu(const menu_index_t index, const uint8_t locale);
+const char* getMenuTitle(const nav_menu_index index, const uint8_t locale);
+MenuList getMenu(const nav_menu_index index, const uint8_t locale);
 
 #endif

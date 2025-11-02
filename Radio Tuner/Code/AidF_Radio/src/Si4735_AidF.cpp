@@ -160,23 +160,8 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 
 	if(parameters->has_rds) {
 		getCallsign(&parameters->rds_station_name);
-
 		getRdsInfo(&parameters->rds_program_name, false);
-
-		uint16_t year, month, day, hour = parameters->hour, minute = parameters->min;
-		const int16_t last_hour = parameters->hour, last_min = parameters->min;
-		
-		const int minute_limit = 5;
-
-		if(parameters->auto_clock && tuner.getRdsDateTime(&year, &month, &day, &hour, &minute) && parameters->fm_stereo) {
-			const bool set_clock = getTimePlausible(hour, minute, last_hour, last_min, minute_limit);
-			
-			if(set_clock) {
-				parameters->hour = hour;
-				parameters->min = minute;
-				parameters->minute_timer = 0;
-			}
-		}
+		getDateTime(parameters);
 	}
 }
 
@@ -215,6 +200,46 @@ bool Si4735Controller::getCallsign(String* rds) {
 	*rds += callsign_letters;
 	
 	return true;
+}
+
+//Save the date and time to the parameter list.
+bool Si4735Controller::getDateTime() {
+	return getDateTime(this->parameters);
+}
+
+//Return whether a date/time signal is present in this frequency, but do not actually set the date/time.
+bool Si4735Controller::getDateTimePresent() {
+	ParameterList dummy_parameters;
+	dummy_parameters.hour = parameters->hour;
+	dummy_parameters.min = parameters->min;
+	dummy_parameters.auto_clock = true;
+	dummy_parameters.fm_stereo = parameters->fm_stereo;
+	
+	return this->getDateTime(&dummy_parameters);
+}
+
+//Save the date and time to a parameter list.
+bool Si4735Controller::getDateTime(ParameterList* parameters) {
+	uint16_t year, month, day, hour = parameters->hour, minute = parameters->min;
+	const int16_t last_hour = parameters->hour, last_min = parameters->min;
+	
+	const int minute_limit = 5;
+
+	if(parameters->auto_clock && tuner.getRdsDateTime(&year, &month, &day, &hour, &minute) && parameters->fm_stereo) {
+		const bool set_clock = getTimePlausible(hour, minute, last_hour, last_min, minute_limit);
+		
+		if(set_clock) {
+			parameters->hour = hour;
+			parameters->min = minute;
+			parameters->minute_timer = 0;
+
+			parameters->clock_freq = tuner.getCurrentFrequency();
+
+			return true;
+		}
+	}
+
+	return false;
 }
 
 //Fill string rds with RDS program info. Return true if successful.

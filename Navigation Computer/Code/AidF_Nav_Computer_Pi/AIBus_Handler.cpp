@@ -6,16 +6,12 @@ AIBusHandler::AIBusHandler(std::string port, int** socket_list, const int socket
 	gpioCfgSetInternals(1<<10);
 	gpioInitialise();
 
-	char c_port[port.length() + 1];
-	for(uint8_t i=0;i<port.length();i+=1)
-		c_port[i] = port[i];
-
-	c_port[port.length()] = '\0';
+	const char* c_port = port.c_str();
 	
 	const int test_port = aiserialOpen(c_port);
 	if(test_port<0) {
 		ai_port = 0; //TODO: Throw an error.
-		std::cout<<"AIBus not connected.\n";
+		//std::cout<<"AIBus not connected.\n";
 	} else 
 		this->ai_port = test_port;
 
@@ -27,6 +23,7 @@ AIBusHandler::AIBusHandler(std::string port, int** socket_list, const int socket
 		this->socket_list[i] = socket_list[i];
 
 	this->socket_l = socket_l;
+	this->timer = timer;
 }
 #else
 AIBusHandler::AIBusHandler(int** socket_list, const int socket_l, unsigned long* timer) {
@@ -54,11 +51,7 @@ AIBusHandler::~AIBusHandler() {
 
 #ifndef RPI_UART
 int AIBusHandler::connectAIPort(std::string port) {
-	char c_port[port.length() + 1];
-	for(uint8_t i=0;i<port.length();i+=1)
-		c_port[i] = port[i];
-
-	c_port[port.length()] = '\0';
+	const char* c_port = port.c_str();
 	
 	const int test_port = aiserialOpen(c_port);
 	if(test_port<0) {

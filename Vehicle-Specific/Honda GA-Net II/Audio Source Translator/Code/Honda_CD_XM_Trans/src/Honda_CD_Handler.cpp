@@ -10,6 +10,7 @@ HondaCDHandler::HondaCDHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_drive
 	getCDSettings(&this->autostart, &this->use_function_timer, &this->split);
 }
 
+//CDC handler loop function.
 void HondaCDHandler::loop() {
 	if(this->source_sel) {
 		if(text_timer_enabled && text_timer >= TEXT_REFRESH_TIMER) {
@@ -145,6 +146,7 @@ void HondaCDHandler::loop() {
 	}
 }
 
+//Interpret a CDC IEBus message.
 void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 	if(the_message->receiver != IE_ID_RADIO || the_message->sender != IE_ID_CDC)
 		return;
@@ -400,6 +402,7 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 		ie_driver->sendAcknowledgement(the_message->receiver, the_message->sender);
 }
 
+//Interpret a CDC AIBus message.
 void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 	if(the_message->receiver != ID_CDC)
 		return;
@@ -684,10 +687,12 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 		sendAIAckMessage(sender);
 }
 
+//Send the AIBus handshake message to the radio.
 void HondaCDHandler::sendSourceNameMessage() {
 	sendSourceNameMessage(ID_RADIO);
 }
 
+//Send the AIBus handshake message.
 void HondaCDHandler::sendSourceNameMessage(const uint8_t id) {
 	uint8_t ai_handshake_data[] = {0x1, 0x1, 0x6};
 	AIData ai_handshake_msg(sizeof(ai_handshake_data), ID_CDC, id);
@@ -707,18 +712,22 @@ void HondaCDHandler::sendSourceNameMessage(const uint8_t id) {
 	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
 }
 
+//Send the next track IEBus message.
 void HondaCDHandler::sendNextTrackMessage() {
 	this->sendButtonMessage(BUTTON_TRACK_NEXT);
 }
 
+//Send the previous track IEBus mesage.
 void HondaCDHandler::sendPrevTrackMessage() {
 	this->sendButtonMessage(BUTTON_TRACK_PREV);
 }
 
+//Send the pause IEBus message.
 void HondaCDHandler::sendPauseMessage() {
 	this->sendButtonMessage(BUTTON_PAUSE_RESUME);
 }
 
+//Send the AIBus CD status message.
 void HondaCDHandler::sendAICDStatusMessage(const uint8_t recipient) {
 	uint8_t cd_status_data[] = {0x39, 0x0, ai_cd_status, 0x0, 0x3F, 0x0, this->disc, this->track};
 	AIData cd_status_message(sizeof(cd_status_data), ID_CDC, ID_RADIO);
@@ -733,6 +742,7 @@ void HondaCDHandler::sendAICDStatusMessage(const uint8_t recipient) {
 	ai_driver->writeAIData(&cd_status_message, ack);
 }
 
+//Send the AIBus CD text message.
 void HondaCDHandler::sendAICDTextMessage(const uint8_t recipient, const uint8_t field) {
 	uint8_t ai_field = 1;
 	char* affected;
@@ -839,10 +849,12 @@ void HondaCDHandler::sendAICDTextMessage(const uint8_t recipient, const uint8_t 
 		delete[] affected;
 }
 
+//Send a button IEBus message.
 void HondaCDHandler::sendButtonByte(const uint8_t byte_msg) {
 	this->sendButtonMessage(byte_msg);
 }
 
+//Send a button IEBus message.
 void HondaCDHandler::sendButtonMessage(const uint8_t button) {
 	uint8_t button_data[] = {0x30, 0x0, 0x6, 0x2, 0x6, button};
 	IE_Message button_message(sizeof(button_data), IE_ID_RADIO, IE_ID_CDC, 0xF, true);
@@ -852,6 +864,7 @@ void HondaCDHandler::sendButtonMessage(const uint8_t button) {
 	getIEAckMessage(device_ie_id);
 }
 
+//Send a multi-byte button IEBus message.
 void HondaCDHandler::sendButtonMessage(const uint8_t button, const uint8_t state) {
 	uint8_t button_data[] = {0x30, 0x0, 0x6, 0x2, 0x6, button, state};
 	IE_Message button_message(sizeof(button_data), IE_ID_RADIO, IE_ID_CDC, 0xF, true);
@@ -861,6 +874,7 @@ void HondaCDHandler::sendButtonMessage(const uint8_t button, const uint8_t state
 	getIEAckMessage(device_ie_id);
 }
 
+//Send an AIBus track message.
 void HondaCDHandler::sendCDTrackMessage() {
 	this->sendCDTrackMessage(this->track > 0 && this-> track <= 99);
 }
@@ -1031,6 +1045,7 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 	}
 }
 
+//Send the AIBus load/wait message.
 void HondaCDHandler::sendCDLoadWaitMessage(const uint8_t message_type) {
 	String message_text = "";
 
@@ -1141,6 +1156,7 @@ void HondaCDHandler::sendCDLoadWaitMessage(const uint8_t message_type) {
 	}*/
 }
 
+//Start the text send timer.
 void HondaCDHandler::startTextTimer(const uint8_t field) {
 	text_timer = 0;
 	text_timer_enabled = true;
@@ -1179,6 +1195,7 @@ void HondaCDHandler::startTextTimer(const uint8_t field) {
 	}
 }
 
+//Send the IEBus text request message.
 void HondaCDHandler::sendTextRequest() {
 	if(!source_sel)
 		return;
@@ -1622,6 +1639,7 @@ void HondaCDHandler::sendIMIDInfoMessage(const bool resend) {
 	}
 }
 
+//Send an info message to the IMID.
 void HondaCDHandler::sendIMIDInfoMessage(String text) {
 	if(parameter_list->imid_connected) {
 		imid_handler->writeIMIDTextMessage(text);
@@ -1648,6 +1666,7 @@ void HondaCDHandler::sendIMIDInfoMessage(String text) {
 	}
 }
 
+//Send an info header message to the IMID.
 void HondaCDHandler::sendIMIDInfoHeader(String text) {
 	if(parameter_list->external_imid_char <= 0 || parameter_list->external_imid_lines < 2)
 		return;
@@ -1671,6 +1690,7 @@ void HondaCDHandler::sendIMIDInfoHeader(String text) {
 	ai_driver->writeAIData(&imid_msg);
 }
 
+//Clear the internal CD text.
 void HondaCDHandler::clearCDText(const bool song_title, const bool artist, const bool album, const bool folder, const bool file) {
 	if(song_title) {
 		for(int i=0;i<sizeof(this->song_title)/sizeof(char);i+=1)
@@ -1698,6 +1718,7 @@ void HondaCDHandler::clearCDText(const bool song_title, const bool artist, const
 	}
 }
 
+//Clear the CD text on the main screen.
 void HondaCDHandler::clearAICDText(const bool song_title, const bool artist, const bool album, const bool folder, const bool file) {
 	if(song_title) {
 		uint8_t clear_data[] = {0x20, 0x60, 0x1};
@@ -1754,6 +1775,7 @@ void HondaCDHandler::clearAICDText(const bool song_title, const bool artist, con
 	}
 }
 
+//Clear the CD text on the IMID.
 void HondaCDHandler::clearExternalCDIMID(const bool album) {
 	if(parameter_list->external_imid_lines <= 1)
 		return;
@@ -1791,6 +1813,7 @@ void HondaCDHandler::clearExternalCDIMID(const bool album) {
 	ai_driver->writeAIData(&clear_msg);
 }
 
+//Set the function buttons on the main screen.
 void HondaCDHandler::sendFunctionTextMessage() {
 	AIData function1 = getTextMessage(ID_CDC, F("Repeat"), 0x2, 0, false);
 	AIData function2 = getTextMessage(ID_CDC, F("Random"), 0x2, 1, false);
@@ -1807,9 +1830,11 @@ void HondaCDHandler::sendFunctionTextMessage() {
 	ai_driver->writeAIData(&function6, parameter_list->computer_connected);
 }
 
+//Create the main settings menu.
 void HondaCDHandler::createCDMainMenu() {
-	const uint8_t menu_size = 6;
-	startAudioMenu(menu_size, menu_size, false, "CDC Settings");
+	const MenuList main_menu = getMenu(MENU_INDEX_CDC_SETTINGS, parameter_list->locale);
+	const uint8_t menu_size = main_menu.size();
+	startAudioMenu(menu_size, menu_size, false, main_menu.title);
 
 	elapsedMillis cancel_wait;
 	while(cancel_wait < 20) {
@@ -1831,8 +1856,26 @@ void HondaCDHandler::createCDMainMenu() {
 	displayAudioMenu(1);
 }
 
+//Create an option on the main settings menu.
 void HondaCDHandler::createCDMainMenuOption(const uint8_t option) {
-	switch(option) {
+	const MenuList main_menu = getMenu(MENU_INDEX_CDC_SETTINGS, parameter_list->locale);
+	
+	String item_txt = "";
+
+	if(option==main_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_AUTOSTART))
+		item_txt = autostart ? "#RON " : "#ROF ";
+	else if(option==main_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_TEXT_IMID)) {
+		if(!parameter_list->imid_connected)
+			return;
+
+		item_txt = use_function_timer ? "#RON " : "#ROF ";
+	} else if(option==main_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_SCROLL))
+		item_txt = split ? "#ROF " : "#RON ";
+
+	item_txt += main_menu[option];
+	appendAudioMenu(option, item_txt);
+
+	/*switch(option) {
 	case 0:
 		appendAudioMenu(0, "Track List");
 		break;
@@ -1861,13 +1904,13 @@ void HondaCDHandler::createCDMainMenuOption(const uint8_t option) {
 	case 5:
 		appendAudioMenu(5, "Audio Settings");
 		break;
-	}
+	}*/
 }
 
+//Create the disc menu.
 void HondaCDHandler::createCDChangeDiscMenu() {
 	uint8_t clear_data[] = {0x2B, 0x4A};
-	AIData clear_msg(sizeof(clear_data), device_ai_id, ID_NAV_COMPUTER);
-	clear_msg.refreshAIData(clear_data);
+	AIData clear_msg(sizeof(clear_data), device_ai_id, ID_NAV_COMPUTER, clear_data);
 
 	ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
 
@@ -1888,9 +1931,11 @@ void HondaCDHandler::createCDChangeDiscMenu() {
 
 	if(!canceled)
 		return;
+
+	const MenuList disc_menu = getMenu(MENU_INDEX_CDC_DISC, parameter_list->locale);
 	
 	const uint8_t menu_size = 6;
-	startAudioMenu(menu_size, menu_size, false, "Select Disc");
+	startAudioMenu(menu_size, menu_size, false, disc_menu.title);
 
 	for(uint8_t i=0;i<6;i+=1)
 		createCDChangeDiscMenuOption(i);
@@ -1903,6 +1948,8 @@ void HondaCDHandler::createCDChangeDiscMenu() {
 	*active_menu = MENU_SELECT_DISC;
 }
 
+//Create an option on the disc menu.
 void HondaCDHandler::createCDChangeDiscMenuOption(const uint8_t option) {
-	appendAudioMenu(option, "Disc " + String(option+1));
+	const MenuList disc_menu = getMenu(MENU_INDEX_CDC_DISC, parameter_list->locale);
+	appendAudioMenu(option, disc_menu[0] + String(option+1));
 }

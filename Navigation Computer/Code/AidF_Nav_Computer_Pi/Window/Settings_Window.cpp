@@ -1,6 +1,6 @@
 #include "Settings_Window.h"
 
-Settings_Window::Settings_Window(AttributeList *attribute_list, const uint16_t setting_count, std::string header, const int back_index) : NavWindow(attribute_list) {
+Settings_Window::Settings_Window(AttributeList *attribute_list, const uint16_t setting_count, std::string header, const next_window_t back_index) : NavWindow(attribute_list) {
 	this->title_block = new TextBox(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 55, &this->color_profile->text);
 	title_block->setText(header);
 

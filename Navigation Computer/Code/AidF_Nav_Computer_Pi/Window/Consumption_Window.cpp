@@ -1,11 +1,11 @@
 #include "Consumption_Window.h"
 
-Consumption_Window::Consumption_Window(AttributeList *attribute_list) : NavWindow(attribute_list) {
+Consumption_Window::Consumption_Window(AttributeList *attribute_list) : NavWindow(attribute_list),
+	title_box(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 40, &this->color_profile->text) {
 	this->aibus_handler = attribute_list->aibus_handler;
 	this->requestConsumptionInfo();
 
-	title_box = new TextBox(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 40, &this->color_profile->text);
-	title_box->setText("Consumption");
+	title_box.setText(getString(LOCALE_STRING_CONSUMPTION, attribute_list->locale));
 
 	for(uint8_t i=0;i<TRIP_INFO_COUNT;i+=1) {
 		split_info_box_left[i] = new TextBox(renderer, MAIN_TITLE_AREA_X, CONSUMPTION_MAIN_AREA_Y+i*CONSUMPTION_MAIN_AREA_HEIGHT, this->w/2-MAIN_TITLE_AREA_X, CONSUMPTION_MAIN_AREA_HEIGHT, ALIGN_H_L, ALIGN_V_M, 32, &this->color_profile->text);
@@ -14,8 +14,6 @@ Consumption_Window::Consumption_Window(AttributeList *attribute_list) : NavWindo
 }
 
 Consumption_Window::~Consumption_Window() {
-	delete title_box;
-
 	for(uint8_t i=0;i<TRIP_INFO_COUNT;i+=1) {
 		delete split_info_box_left[i];
 		delete split_info_box_right[i];
@@ -35,7 +33,7 @@ void Consumption_Window::requestConsumptionInfo() {
 }
 
 void Consumption_Window::drawWindow() {
-	title_box->drawText();
+	title_box.drawText();
 
 	if(this->settings_menu == NULL) {
 		for(uint8_t i=0;i<TRIP_INFO_COUNT;i+=1) {
@@ -48,7 +46,7 @@ void Consumption_Window::drawWindow() {
 }
 
 void Consumption_Window::refreshWindow() {
-	this->title_box->renderText();
+	this->title_box.renderText();
 
 	for(uint8_t i=0;i<TRIP_INFO_COUNT;i+=1) {
 		split_info_box_left[i]->renderText();

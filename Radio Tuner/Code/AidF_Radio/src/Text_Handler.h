@@ -9,6 +9,7 @@
 #endif
 
 #include "Text_Split.h"
+#include "Locale.h"
 
 #ifndef text_handler_h
 #define text_handler_h

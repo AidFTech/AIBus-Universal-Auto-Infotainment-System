@@ -28,6 +28,13 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 
 	#ifdef RPI_UART
 	this->aibus_handler = new AIBusHandler("/dev/ttyS0", socket_list, 1, &elapsed_millis.time);
+
+	gpioSetMode(GPIO_I2S_MCLK, PI_OUTPUT);
+	gpioWrite(GPIO_I2S_MCLK, PI_LOW);
+	gpioSetMode(GPIO_DAC_MUTE, PI_OUTPUT);
+	gpioWrite(GPIO_DAC_MUTE, PI_HIGH);
+	gpioSetMode(GPIO_USB_PWR, PI_OUTPUT);
+	gpioWrite(GPIO_USB_PWR, PI_HIGH);
 	#else
 	this->aibus_handler = new AIBusHandler(socket_list, 1, &elapsed_millis.time);
 	#endif
@@ -74,11 +81,15 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 AidF_Nav_Computer::~AidF_Nav_Computer() {
 	attribute_list->frame = -1;
 
+	#ifndef RPI_UART
 	std::cout<<"Waiting for threads to exit...\n";
+	#endif
 	pthread_cancel(socket_thread);
 	pthread_cancel(frame_thread);
 	pthread_cancel(timer_thread);
+	#ifndef RPI_UART
 	std::cout<<"Threads exited!\n";
+	#endif
 	
 	if(this->socket_parameters.amirror_socket != nullptr)
 		delete this->socket_parameters.amirror_socket;
@@ -169,6 +180,13 @@ void AidF_Nav_Computer::loop() {
 				if(!*mirror_connected && ai_msg.sender == ID_ANDROID_AUTO && !getInitMessage(&ai_msg)) {
 					*mirror_connected = true;
 					this->setMirrorColors();
+				}
+
+				if(getInitMessage(&ai_msg)) {
+					if(ai_msg.sender == ID_RADIO)
+						*radio_connected = false;
+					else if(ai_msg.sender == ID_ANDROID_AUTO)
+						*mirror_connected = false;
 				}
 
 				//Send clock settings.

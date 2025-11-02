@@ -233,14 +233,15 @@ void Audio_Window::drawWindow() {
 
 	if(this->settings_menu == NULL || !this->settings_menu_active) {
 		main_area_box[0]->drawText();
+
+		for(uint8_t i=0;i<3;i+=1)
+			subtitle_area_box[i]->drawText();
+
 		if(!settings_menu_prep) {
 			this->audio_menu->drawMenu();
 
 			for(uint8_t i=1;i<6;i+=1)
 				main_area_box[i]->drawText();
-
-			for(uint8_t i=0;i<3;i+=1)
-				subtitle_area_box[i]->drawText();
 			
 			for(uint8_t i=0;i<6;i+=1)
 				function_area_box[i]->drawText();

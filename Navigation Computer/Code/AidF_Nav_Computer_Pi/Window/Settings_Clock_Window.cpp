@@ -61,7 +61,7 @@ void Settings_Clock_Window::initClockAuto() {
 	this->settings_clock_menu = SETTINGS_CLOCK_MENU_AUTO;
 
 	MenuList clock_menu = getMenu(MENU_INDEX_SETTINGS_AUTO_SET, attribute_list->locale);
-	this->title_block->setText("Auto Clock Set");
+	this->title_block->setText(clock_menu.title);
 	this->clearMenu();
 
 	bool timekeeper_found = false;

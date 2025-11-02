@@ -3,6 +3,8 @@ use std::time::{Duration, Instant};
 
 use image::Rgba;
 
+use ini::Ini;
+
 use crate::aap::aa_handler::AapHandler;
 use crate::aibus_handler::AIBusHandler;
 use crate::mirror::messages::*;
@@ -21,6 +23,20 @@ const ALBUM_NAME: u8 = 0x3;
 const MENU_NONE: u8 = 0;
 const MENU_SETTINGS: u8 = 1;
 const MENU_DISPLAY: u8 = 2;
+
+const SETTING_PATH: &str = "./AidF_Mirror_Settings.ini";
+const SETTING_SECTION: &str = "Mirror_Options";
+
+const SETTING_DISPLAY_TITLE: &str = "DisplayTitle";
+const SETTING_DISPLAY_ARTIST: &str = "DisplayArtist";
+const SETTING_DISPLAY_ALBUM: &str = "DisplayAlbum";
+const SETTING_DISPLAY_APP: &str = "DisplayApp";
+const SETTING_DISPLAY_PHONE: &str = "DisplayPhone";
+
+const SETTING_SCROLL_PARAM: &str = "ScrollParam";
+const SETTING_SPLIT: &str = "SplitParam";
+const SETTING_AUTOMIRROR: &str = "AutoMirrorStart";
+const SETTING_AUTOMUSIC: &str = "AutoMusicStart";
 
 pub struct AMirror<'a> {
 	context: &'a Arc<Mutex<Context>>,
@@ -80,6 +96,81 @@ impl <'a> AMirror<'a> {
 		let mutex_mirror_handler = MirrorHandler::new(context, mpv_video, rd_audio, nav_audio, w, h);
 		let mutex_aa_handler = AapHandler::new(context, mpv_video, rd_audio, nav_audio, w, h);
 
+		let mut display_title = false;
+		let mut display_artist = false;
+		let mut display_album = false;
+		let mut display_app = false;
+		let mut display_phone = false;
+
+		let mut auto_music_start = false;
+		let mut auto_mirror_start = true;
+		let mut imid_split = true;
+		let mut imid_scroll = -1;
+
+		match Ini::load_from_file(SETTING_PATH) {
+			Ok(load_file) => {
+				for (section, property) in load_file.iter() {
+					match section {
+						Some(section) => {
+							if section == SETTING_SECTION { //Mirror setting list.
+								for(key, mut value) in property.iter() {
+									value = value.trim();
+									if key == SETTING_DISPLAY_TITLE {
+										if value.to_uppercase() == "TRUE" || value == "1" {
+											display_title = true;
+										}
+									} else if key == SETTING_DISPLAY_ARTIST {
+										if value.to_uppercase() == "TRUE" || value == "1" {
+											display_artist = true;
+										}
+									} else if key == SETTING_DISPLAY_ALBUM {
+										if value.to_uppercase() == "TRUE" || value == "1" {
+											display_album = true;
+										}
+									} else if key == SETTING_DISPLAY_APP {
+										if value.to_uppercase() == "TRUE" || value == "1" {
+											display_app = true;
+										}
+									} else if key == SETTING_DISPLAY_PHONE {
+										if value.to_uppercase() == "TRUE" || value == "1" {
+											display_phone = true;
+										}
+									} else if key == SETTING_AUTOMIRROR {
+										if value.to_uppercase() == "FALSE" || value == "0" {
+											auto_mirror_start = false;
+										}
+									} else if key == SETTING_AUTOMUSIC {
+										if value.to_uppercase() == "TRUE" || value == "1" {
+											auto_music_start = true;
+										}
+									} else if key == SETTING_SPLIT {
+										if value.to_uppercase() == "FALSE" || value == "0" {
+											imid_split = false;
+										}
+									} else if key == SETTING_SCROLL_PARAM {
+										match value.parse::<i8>() {
+											Ok(int) => {
+												imid_scroll = int;
+											}
+											Err(_) => {
+
+											}
+										}
+									}
+								}
+							}
+						}
+						None => {
+
+						}
+					}
+				}
+			}
+			Err(_) => {
+				//The file wasn't found.
+			}
+		}
+
 		return Self{
 			context,
 			mpv_video,
@@ -89,17 +180,17 @@ impl <'a> AMirror<'a> {
 
 			aibus_handler,
 
-			display_title: false,
-			display_artist: false,
-			display_album: false,
-			display_app: false,
-			display_phone: false,
+			display_title,
+			display_artist,
+			display_album,
+			display_app,
+			display_phone,
 
-			auto_music_start: false, //TODO: Load this in from an external file.
-			auto_mirror_start: true, //TODO: Ditto.
+			auto_music_start, //TODO: Load this in from an external file.
+			auto_mirror_start, //TODO: Ditto.
 
-			imid_scroll: -1,
-			imid_split: true,
+			imid_scroll,
+			imid_split,
 			imid_scroll_pos: 0,
 			imid_scroll_wrap: false,
 			imid_scroll_header: false,
@@ -198,6 +289,7 @@ impl <'a> AMirror<'a> {
 
 		if context.phone_active != phone_active || context.home_held {
 			context.home_held = false;
+
 			self.dongle_handler.set_minimize(!context.phone_active);
 
 			let mut phone_connect_byte = 0x1;
@@ -920,6 +1012,7 @@ impl <'a> AMirror<'a> {
 		}
 	}
 
+	///Read an AIBus message.
 	pub fn handle_aibus_message(&mut self, ai_msg: AIBusMessage) {
 		let mut context = match self.context.try_lock() {
 			Ok(context) => context,
@@ -929,7 +1022,7 @@ impl <'a> AMirror<'a> {
 			}
 		};
 
-		if ai_msg.sender == AIBUS_DEVICE_RADIO && !context.radio_connected && self.powered_on {
+		if ai_msg.sender == AIBUS_DEVICE_RADIO && !context.radio_connected && !get_init_message(&ai_msg) && self.powered_on {
 			context.radio_connected = true;
 
 			std::mem::drop(context);
@@ -945,7 +1038,7 @@ impl <'a> AMirror<'a> {
 			};
 		}
 
-		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN && !context.screen_connected && self.powered_on {
+		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN && !context.screen_connected && !get_init_message(&ai_msg) && self.powered_on {
 			context.screen_connected = true;
 
 			self.write_aibus_message(AIBusMessage {
@@ -969,6 +1062,14 @@ impl <'a> AMirror<'a> {
 
 			self.write_aibus_message(ack_msg);
 		}*/
+
+		if get_init_message(&ai_msg) {
+			if ai_msg.sender == AIBUS_DEVICE_RADIO {
+				context.radio_connected = false;
+			} else if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN {
+				context.screen_connected = false;
+			}
+		}
 
 		if ai_msg.l() >= 2 && ai_msg.data[0] == 0x23 { //Overlay.
 			let set_overlay = (ai_msg.data[1]&0x10) != 0;
@@ -1169,6 +1270,7 @@ impl <'a> AMirror<'a> {
 					if context.phone_req_off {
 						context.phone_req_off = false;
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_HOME);
+						self.aa_handler.send_start_request();
 					}
 				} else {
 					self.write_aibus_message(AIBusMessage {
@@ -1324,26 +1426,68 @@ impl <'a> AMirror<'a> {
 						context.imid_text_len = ai_msg.data[2];
 						context.imid_row_count = ai_msg.data[3];
 
+						let display_sel = {
+							let mut c = 0;
+
+							if self.display_title {
+								c += 1;
+							}
+							if self.display_artist {
+								c += 1;
+							}
+							if self.display_album {
+								c += 1;
+							}
+							if self.display_app {
+								c += 1;
+							}
+							if self.display_phone {
+								c += 1;
+							}
+
+							c
+						};
+
 						if context.imid_row_count >= 5 {
-							self.display_app = true;
-							self.display_album = true;
-							self.display_artist = true;
-							self.display_title = true;
-							self.display_phone = true;
+							if display_sel > context.imid_row_count {
+								self.display_app = true;
+								self.display_album = true;
+								self.display_artist = true;
+								self.display_title = true;
+								self.display_phone = true;
+							}
 						} else if context.imid_row_count >= 4 {
-							self.display_album = true;
-							self.display_artist = true;
-							self.display_title = true;
-							self.display_phone = true;
+							if display_sel > context.imid_row_count {
+								self.display_album = true;
+								self.display_artist = true;
+								self.display_title = true;
+								self.display_phone = true;
+								self.display_app = false;
+							}
 						} else if context.imid_row_count >= 3 {
-							self.display_album = true;
-							self.display_artist = true;
-							self.display_title = true;
+							if display_sel > context.imid_row_count {
+								self.display_album = true;
+								self.display_artist = true;
+								self.display_title = true;
+								self.display_phone = false;
+								self.display_app = false;
+							}
 						} else if context.imid_row_count >= 2 {
-							self.display_artist = true;
-							self.display_title = true;
+							if display_sel > context.imid_row_count {
+								self.display_artist = true;
+								self.display_title = true;
+								self.display_album = false;
+								self.display_phone = false;
+								self.display_app = false;
+							}
 						} else if context.imid_row_count >= 1 {
-							self.display_title = true;
+							if display_sel > context.imid_row_count {
+								self.display_title = true;
+								self.display_artist = false;
+								self.display_album = false;
+								self.display_app = false;
+								self.display_phone = false;
+							}
 						}
 					}
 				} else if ai_msg.data[1] == 0x57 && ai_msg.l() >= 3 { //Supported device list.
@@ -1552,10 +1696,29 @@ impl <'a> AMirror<'a> {
 		self.aa_handler.handle_aibus_message(ai_msg);
 	}
 
+	///Get the context.
 	pub fn get_context(&mut self) -> &'a Arc<Mutex<Context>> {
 		return self.context;
 	}
 
+	///Save the settings file.
+	pub fn save_settings(self) {
+		let mut settings = Ini::new();
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_DISPLAY_TITLE, bool::to_string(&self.display_title));
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_DISPLAY_ARTIST, bool::to_string(&self.display_artist));
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_DISPLAY_ALBUM, bool::to_string(&self.display_album));
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_DISPLAY_APP, bool::to_string(&self.display_app));
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_DISPLAY_PHONE, bool::to_string(&self.display_phone));
+
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_AUTOMIRROR, bool::to_string(&self.auto_mirror_start));
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_AUTOMUSIC, bool::to_string(&self.auto_music_start));
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_SPLIT, bool::to_string(&self.imid_split));
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_SCROLL_PARAM, i8::to_string(&self.imid_scroll));
+
+		let _ = settings.write_to_file(SETTING_PATH);
+	}
+
+	///Write an AIBus message.
 	fn write_aibus_message(&mut self, ai_msg: AIBusMessage) {
 		let mut aibus_handler = match self.aibus_handler.try_lock() {
 			Ok(aibus_handler) => aibus_handler,

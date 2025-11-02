@@ -1,9 +1,19 @@
 #include "Locale.h"
 
+//Get a string with the defined locale.
+const char* getString(const nav_text_index index, const uint8_t locale) {
+	switch(locale) {
+	case 0: //English
+		return TEXT_ENG[index];
+	default:
+		return TEXT_ENG[index];
+	}
+}
+
 //Get a menu title with defined locale.
-const char* getMenuTitle(const menu_index_t index, const uint8_t locale) {
+const char* getMenuTitle(const nav_menu_index index, const uint8_t locale) {
 	int menu_index = -1;
-	for(int i=0;i<sizeof(MENU_START_INDEX)/sizeof(menu_index_t);i+=1) {
+	for(int i=0;i<sizeof(MENU_START_INDEX)/sizeof(nav_menu_index);i+=1) {
 		if(MENU_START_INDEX[i] == index) {
 			menu_index = i;
 			break;
@@ -17,9 +27,9 @@ const char* getMenuTitle(const menu_index_t index, const uint8_t locale) {
 }
 
 //Get the menu with defined locale.
-MenuList getMenu(const menu_index_t index, const uint8_t locale) {
+MenuList getMenu(const nav_menu_index index, const uint8_t locale) {
 	int menu_index = -1;
-	for(int i=0;i<sizeof(MENU_START_INDEX)/sizeof(menu_index_t);i+=1) {
+	for(int i=0;i<sizeof(MENU_START_INDEX)/sizeof(nav_menu_index);i+=1) {
 		if(MENU_START_INDEX[i] == index) {
 			menu_index = i;
 			break;
@@ -28,8 +38,8 @@ MenuList getMenu(const menu_index_t index, const uint8_t locale) {
 
 	if(menu_index < 0) {
 		MenuList menu_list;
-		menu_list.start = (menu_index_t)0;
-		menu_list.end = (menu_index_t)0;
+		menu_list.start = (nav_menu_index)0;
+		menu_list.end = (nav_menu_index)0;
 		menu_list.menu_str = nullptr;
 		menu_list.title = nullptr;
 
@@ -37,8 +47,8 @@ MenuList getMenu(const menu_index_t index, const uint8_t locale) {
 	}
 
 	MenuList return_list;
-	return_list.start = (menu_index_t)(MENU_START_INDEX[menu_index] + 1);
-	if(menu_index < sizeof(MENU_START_INDEX)/sizeof(menu_index_t) - 1)
+	return_list.start = (nav_menu_index)(MENU_START_INDEX[menu_index] + 1);
+	if(menu_index < sizeof(MENU_START_INDEX)/sizeof(nav_menu_index) - 1)
 		return_list.end = MENU_START_INDEX[menu_index + 1];
 	else
 		return_list.end = MENU_INDEX_LEN;

@@ -1,14 +1,15 @@
 #include "Vehicle_Info_Window.h"
 
-VehicleInfoWindow::VehicleInfoWindow(AttributeList *attribute_list, InfoParameters* info_parameters) : NavWindow(attribute_list) {
+VehicleInfoWindow::VehicleInfoWindow(AttributeList *attribute_list, InfoParameters* info_parameters) : NavWindow(attribute_list),
+	title_box(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 40, &this->color_profile->text) {
+	
 	this->info_parameters = info_parameters;
 	this->param_index = info_parameters->param_index;
 
-	title_box = new TextBox(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 40, &this->color_profile->text);
 	if(info_parameters->hybrid_system_present)
-		title_box->setText("Hybrid Power Flow");
+		title_box.setText(getString(LOCALE_STRING_HYBRID_POWER_FLOW, attribute_list->locale));
 	else
-		title_box->setText("Vehicle Information");
+		title_box.setText(getString(LOCALE_STRING_VEHICLE_INFORMATION, attribute_list->locale));
 
 	for(int i=0;i<PARAM_COUNT;i+=1) {
 		const int16_t tx = this->w/PARAM_COUNT*i, ty = this->h-PARAM_H;
@@ -81,8 +82,6 @@ VehicleInfoWindow::VehicleInfoWindow(AttributeList *attribute_list, InfoParamete
 }
 
 VehicleInfoWindow::~VehicleInfoWindow() {
-	delete title_box;
-
 	if(settings_menu != NULL)
 		delete settings_menu;
 
@@ -123,7 +122,7 @@ VehicleInfoWindow::~VehicleInfoWindow() {
 }
 
 void VehicleInfoWindow::refreshWindow() {
-	this->title_box->renderText();
+	this->title_box.renderText();
 	
 	if(this->silhouette_texture != NULL)
 		SDL_DestroyTexture(this->silhouette_texture);
@@ -173,7 +172,7 @@ void VehicleInfoWindow::drawWindow() {
 		if(info_parameters->hybrid_system_present)
 			silhouette_start_y -= 30;
 		
-		this->title_box->drawText();
+		this->title_box.drawText();
 
 		//Draw the lower info parameters.
 		for(int i=0;i<PARAM_COUNT;i+=1) {
@@ -431,6 +430,8 @@ void VehicleInfoWindow::handleEnterButton() {
 		return;
 
 	if(active_menu == INFO_ACTIVE_MENU_MAIN) {
+		MenuList settings_menu_list = getMenu(MENU_INDEX_INFORMATION_MAIN, attribute_list->locale);
+
 		switch(selected) {
 		case 0:
 		case 1:
@@ -441,20 +442,20 @@ void VehicleInfoWindow::handleEnterButton() {
 		case 5:
 			info_parameters->display_cruise = !info_parameters->display_cruise;
 			if(info_parameters->display_cruise)
-				this->settings_menu->setItem("#RON Display Cruise Speed", 5);
+				this->settings_menu->setItem(std::string("#RON ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CRUISE), 5);
 			else
-				this->settings_menu->setItem("#ROF Display Cruise Speed", 5);
+				this->settings_menu->setItem(std::string("#ROF ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CRUISE), 5);
 			break;
 		}
 	} else if(active_menu == INFO_ACTIVE_MENU_PARAM) {
-		param_index[active_param] = selected;
+		param_index[active_param] = (info_param)selected;
 		createDefaultSettingsMenu();
 		refreshWindow();
 	}
 }
 
 //Refresh the given parameter.
-void VehicleInfoWindow::refreshParam(TextBox* title, TextBox* text, const uint8_t param) {
+void VehicleInfoWindow::refreshParam(TextBox* title, TextBox* text, const info_param param) {
 	if(param == INFO_PARAM_BATTERY_VOLTAGE) { //Battery voltage.
 		title->setText("Vbat");
 
@@ -471,7 +472,7 @@ void VehicleInfoWindow::refreshParam(TextBox* title, TextBox* text, const uint8_
 		} else
 			text->setText("-.--V");
 	} else if(param == INFO_PARAM_OUTSIDE_TEMP && info_parameters->outside_temp_sent) { //Outside temp.
-		title->setText("Outside Temp");
+		title->setText(getString(LOCALE_STRING_OUTSIDE_TEMP, attribute_list->locale));
 
 		std::string temp_text = std::to_string(info_parameters->outside_temp/10) + '\xb0';
 		if(info_parameters->outside_temp_fahrenheit)
@@ -480,8 +481,8 @@ void VehicleInfoWindow::refreshParam(TextBox* title, TextBox* text, const uint8_
 			temp_text += "C";
 
 		text->setText(temp_text);
-	} else if(param == INFO_PARAM_COOLANT_TEMP && info_parameters->coolant_temp_sent) { //Outside temp.
-		title->setText("Coolant Temp");
+	} else if(param == INFO_PARAM_COOLANT_TEMP && info_parameters->coolant_temp_sent) { //Coolant temp.
+		title->setText(getString(LOCALE_STRING_COOLANT_TEMP, attribute_list->locale));
 
 		std::string temp_text = std::to_string(info_parameters->coolant_temp/10) + '\xb0';
 		if(info_parameters->coolant_temp_fahrenheit)
@@ -503,25 +504,25 @@ void VehicleInfoWindow::createDefaultSettingsMenu() {
 	if(settings_menu != NULL)
 		delete settings_menu;
 
-	this->settings_menu = new NavMenu(attribute_list, 0, 40, this->w, 35, INFO_SETTING_COUNT, ALIGN_H_L, 30, INFO_SETTING_COUNT, false, "Vehicle Information Settings");
+	MenuList settings_menu_list = getMenu(MENU_INDEX_INFORMATION_MAIN, attribute_list->locale);
 
-	this->settings_menu->setItem("Lower Display 1", 0);
-	this->settings_menu->setItem("Lower Display 2", 1);
-	this->settings_menu->setItem("Lower Display 3", 2);
-	this->settings_menu->setItem("Lower Display 4", 3);
+	this->settings_menu = new NavMenu(attribute_list, 0, 40, this->w, 35, INFO_SETTING_COUNT, ALIGN_H_L, 30, INFO_SETTING_COUNT, false, settings_menu_list.title);
 
-	this->settings_menu->setItem("Units", 4); //TODO: Only if units menu exists.
-	if(info_parameters->display_cruise)
-		this->settings_menu->setItem("#RON Display Cruise Speed", 5);
-	else
-		this->settings_menu->setItem("#ROF Display Cruise Speed", 5);
+	for(int i=0;i<settings_menu_list.size();i+=1) {
+		if(i == settings_menu_list.getLocalIndex(MENU_INDEX_INFORMATION_MAIN_CRUISE)) {
+			const std::string cruise_option = info_parameters->display_cruise ? "#RON " : "#ROF ";
+			this->settings_menu->setItem(cruise_option + settings_menu_list[i], i);
+		} else //TODO: Print the Units option only if a Units menu exists.
+			this->settings_menu->setItem(settings_menu_list[i], i);
+	}
 
 	this->settings_menu->setSelected(1);
 }
 
 //Create the parameter settings menu.
 void VehicleInfoWindow::createParamSettingsMenu(const uint8_t active_param) {
-	const uint8_t param_count = 13;
+	MenuList param_menu = getMenu(MENU_INDEX_INFORMATION_PARAM, attribute_list->locale);
+	const int param_count = param_menu.size();
 
 	this->active_menu = INFO_ACTIVE_MENU_PARAM;
 	this->active_param = active_param;
@@ -529,7 +530,7 @@ void VehicleInfoWindow::createParamSettingsMenu(const uint8_t active_param) {
 	if(settings_menu != NULL)
 		delete settings_menu;
 
-	this->settings_menu = new NavMenu(attribute_list, 0, 40, this->w, 35, param_count, ALIGN_H_L, 30, param_count, false, "Lower Display " + std::to_string(active_param + 1));
+	this->settings_menu = new NavMenu(attribute_list, 0, 40, this->w, 35, param_count, ALIGN_H_L, 30, param_count, false, param_menu.title + std::to_string(active_param + 1));
 
 	std::string params[param_count];
 	for(int i=0;i<param_count;i+=1) {
@@ -539,19 +540,8 @@ void VehicleInfoWindow::createParamSettingsMenu(const uint8_t active_param) {
 			params[i] = "#COF ";
 	}
 
-	params[0] += "Off";
-	params[1] += "Battery Voltage";
-	params[2] += "Outside Temperature";
-	params[3] += "Coolant Temperature";
-	params[4] += "Instantaneous Economy";
-	params[5] += "Trip Average Economy";
-	params[6] += "Trip Timer";
-	params[7] += "Cruise Speed";
-	params[8] += "Gear";
-	params[9] += "Range";
-	params[10] += "Trip Distance";
-	params[11] += "Remaining Time (nav)";
-	params[12] += "Remaining Distance (nav)";
+	for(int i=0;i<param_count;i+=1)
+		params[i] += param_menu[i];
 
 	for(int i=0;i<param_count;i+=1) {
 		bool sel = true;
@@ -564,10 +554,10 @@ void VehicleInfoWindow::createParamSettingsMenu(const uint8_t active_param) {
 			}
 
 			if(i < 8) {
-				if((info_parameters->supported_b)&(1<<(i-1)) == 0)
+				if(((info_parameters->supported_b)&(1<<(i-1))) == 0)
 					sel = false;
 			} else if(i < 16) {
-				if((info_parameters->supported_a)&(1<<(16-i-1)) == 0)
+				if(((info_parameters->supported_a)&(1<<(16-i-1))) == 0)
 					sel = false;
 			}
 		}

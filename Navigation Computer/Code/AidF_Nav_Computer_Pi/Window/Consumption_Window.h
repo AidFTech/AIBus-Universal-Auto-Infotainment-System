@@ -6,6 +6,8 @@
 #include "../Text_Box.h"
 #include "../AIBus_Handler.h"
 
+#include "../Locale/Locale.h"
+
 #ifndef consumption_window_h
 #define consumption_window_h
 
@@ -36,7 +38,8 @@ private:
 
 	AIBusHandler* aibus_handler;
 
-	TextBox* title_box;
+	TextBox title_box;
+	
 	TextBox* split_info_box_left[TRIP_INFO_COUNT];
 	TextBox* split_info_box_right[TRIP_INFO_COUNT];
 

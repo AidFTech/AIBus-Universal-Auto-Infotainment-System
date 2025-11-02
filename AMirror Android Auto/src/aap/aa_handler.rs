@@ -113,8 +113,9 @@ pub struct AapHandler <'a> {
 	home_hold: bool,
 
 	connection_start: Instant,
-	android_start: i64,
 	ping_timer: Instant,
+
+	android_start: i64,
 }
 
 const EMPTY_DATA_ARRAY: Vec<u8> = Vec::new();
@@ -151,6 +152,7 @@ impl<'a> AapHandler <'a> {
 			home_hold: false,
 
 			connection_start: Instant::now(),
+
 			android_start: 0,
 			ping_timer: Instant::now(),
 		}
@@ -623,6 +625,22 @@ impl<'a> AapHandler <'a> {
 					println!("Error: {}", e);
 				}
 			}
+		} else if chan == ServiceChannels::VideoChannel as usize && msg_type == MediaMessageId::MEDIA_MESSAGE_VIDEO_FOCUS_REQUEST as u16 {
+			let mut request = VideoFocusRequestNotification::new();
+			match request.merge_from_bytes(msg_data) {
+				Ok(_) => {
+					let mut response = VideoFocusNotification::new();
+					response.set_unsolicited(false);
+					response.set_focus(request.mode());
+
+					println!("Focus Request: {}", request.mode() as u16);
+
+					self.write_message(true, chan as u8, response, MediaMessageId::MEDIA_MESSAGE_VIDEO_FOCUS_NOTIFICATION as u16, Duration::from_millis(5000), true);
+				}
+				Err(e) => {
+					println!("Error: {}", e);
+				}
+			}
 		} else if msg_type == ControlMessageType::MESSAGE_CHANNEL_OPEN_REQUEST as u16 { //Channel open request.
 			let mut request = ChannelOpenRequest::new();
 			let request_data = msg_data;
@@ -694,7 +712,7 @@ impl<'a> AapHandler <'a> {
 					println!("Shutdown message: Context locked.");
 				}
 			}
-		} else if chan == ServiceChannels::PhoneStatusChannel as usize &&
+		} else if chan == ServiceChannels::MediaStatusChannel as usize &&
 					(msg_type == MediaPlaybackStatusMessageId::MEDIA_PLAYBACK_STATUS as u16 ||
 					msg_type ==  MediaPlaybackStatusMessageId::MEDIA_PLAYBACK_METADATA as u16) {
 			if msg_type == MediaPlaybackStatusMessageId::MEDIA_PLAYBACK_STATUS as u16 {
@@ -745,8 +763,6 @@ impl<'a> AapHandler <'a> {
 				}
 
 				if msg_read {
-					println!("Media message: {:X?}", msg_data);
-
 					let mut context = match self.context.try_lock() {
 						Ok(context) => context,
 						Err(_) => {
@@ -787,6 +803,18 @@ impl<'a> AapHandler <'a> {
 			} else if msg_type == MediaMessageId::MEDIA_MESSAGE_STOP as u16 {
 				self.channel_session[chan] = 0;
 				println!("Stop requested on channel {}", chan);
+
+				if chan == ServiceChannels::VideoChannel as usize {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							context.phone_active = false;
+							context.phone_req_off = true;
+						}
+						Err(_) => {
+							println!("Shutdown message: Context locked.");
+						}
+					}
+				}
 			}
 		}
 
@@ -953,6 +981,16 @@ impl<'a> AapHandler <'a> {
 		} else if ai_msg.sender == AIBUS_DEVICE_ANTENNA {
 			
 		}
+	}
+
+	///Send a start request to the phone after a stop request.
+	pub fn send_start_request(&mut self) {
+		if !self.usb_handler.get_connected() {
+			return;
+		}
+
+		self.send_button_message(KeyCode::KEYCODE_HOME as u32, 0x0);
+		self.send_button_message(KeyCode::KEYCODE_HOME as u32, 0x2);
 	}
 
 	///Set night mode.
@@ -1141,6 +1179,7 @@ impl<'a> AapHandler <'a> {
 		press_msg.key_event = MessageField::some(press_event);
 		press_msg.set_timestamp(self.get_timestamp());
 
+		println!("Sent: {:X?}", press_msg.write_to_bytes());
 		self.write_message(true, ServiceChannels::TouchChannel as u8, press_msg, InputMessageId::INPUT_MESSAGE_INPUT_REPORT as u16, Duration::from_millis(5000), true);
 	}
 
@@ -1172,6 +1211,7 @@ impl<'a> AapHandler <'a> {
 
 		std::mem::drop(os);
 
+		println!("Sent: {:X?}", send_data);
 		self.write_block(true, ServiceChannels::TouchChannel as u8, send_data, InputMessageId::INPUT_MESSAGE_INPUT_REPORT as u16, Duration::from_millis(5000), true);
 	}
 
@@ -1444,12 +1484,12 @@ impl<'a> AapHandler <'a> {
 		mic_source_wrapper.media_source_service = MessageField::some(mic_source);
 		response.services.push(mic_source_wrapper);
 
-		//Phone status:
-		let phone_status_service = PhoneStatusService::new();
-		let mut phone_service_wrapper = Service::new();
-		phone_service_wrapper.set_id(ServiceChannels::PhoneStatusChannel as i32);
-		phone_service_wrapper.phone_status_service = MessageField::some(phone_status_service);
-		response.services.push(phone_service_wrapper);
+		//Media playback:
+		let media_playback_status_service = MediaPlaybackStatusService::new();
+		let mut media_status_service_wrapper = Service::new();
+		media_status_service_wrapper.set_id(ServiceChannels::MediaStatusChannel as i32);
+		media_status_service_wrapper.media_playback_service = MessageField::some(media_playback_status_service);
+		response.services.push(media_status_service_wrapper);
 
 		//Notifications:
 		let notification_service = GenericNotificationService::new();
@@ -1468,18 +1508,12 @@ impl<'a> AapHandler <'a> {
 		navigation_service_wrapper.navigation_status_service = MessageField::some(navigation_service);
 		response.services.push(navigation_service_wrapper);
 
-		response.set_make("AidF".to_string());
+		//response.set_make("AidF".to_string());
 		response.set_head_unit_make("AidF".to_string());
 		response.set_head_unit_model("AIA-RPI100".to_string());
 		response.set_can_play_native_media_during_vr(true);
 
 		response.set_display_name("AidF".to_string());
-		
-		//println!("Message: {:X?}", self.current_data);
-		println!("Response: {:X?}", response.write_to_bytes());
-		self.write_message(true, chan as u8, response, ControlMessageType::MESSAGE_SERVICE_DISCOVERY_RESPONSE as u16, Duration::from_millis(2000), false);
-
-		self.had_sdr = true;
 
 		let mut icon_sdr = ServiceDiscoveryRequest::new();
 		icon_sdr.set_label_text("AidF".to_string());
@@ -1503,7 +1537,12 @@ impl<'a> AapHandler <'a> {
 			}
 		};
 
-		//self.write_message(true, chan as u8, icon_sdr, ControlMessageType::MESSAGE_SERVICE_DISCOVERY_REQUEST as u16, Duration::from_millis(2000), false);
+		self.write_message(true, chan as u8, icon_sdr, ControlMessageType::MESSAGE_SERVICE_DISCOVERY_REQUEST as u16, Duration::from_millis(2000), false);
+
+		println!("Response: {:X?}", response.write_to_bytes());
+		self.write_message(true, chan as u8, response, ControlMessageType::MESSAGE_SERVICE_DISCOVERY_RESPONSE as u16, Duration::from_millis(2000), false);
+
+		self.had_sdr = true;
 	}
 
 	///Handle an audio focus request.

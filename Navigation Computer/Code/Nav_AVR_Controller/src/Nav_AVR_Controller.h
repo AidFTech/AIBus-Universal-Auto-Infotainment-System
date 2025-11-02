@@ -26,6 +26,7 @@
 #endif
 
 #define DOOR_TIMER 30000
+#define PI_BOOT_TIMER 20
 
 #define AISerial Serial
 
@@ -46,6 +47,9 @@ private:
 
 	elapsedMillis door_timer = 0;
 	bool door_timer_enabled = false;
+
+	elapsedMillis pi_boot_timer = 0;
+	bool boot_timer_enabled = false;
 
 	void powerOn();
 	void powerOff();

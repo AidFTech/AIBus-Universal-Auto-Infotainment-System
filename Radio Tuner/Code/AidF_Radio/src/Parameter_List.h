@@ -40,6 +40,8 @@ struct ParameterList {
 	uint16_t fm2_presets[PRESET_COUNT];
 	uint16_t am_presets[PRESET_COUNT];
 
+	int16_t clock_freq = -1; //The time-setting frequency.
+
 	uint8_t current_preset = 0, preferred_preset = 0;
 	bool tune_changed = false;
 
@@ -60,6 +62,8 @@ struct ParameterList {
 
 	uint16_t screen_w = 800, screen_h = 480;
 	uint16_t option_height = 0x23;
+
+	uint8_t locale = 0; //Language
 };
 
 #endif

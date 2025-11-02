@@ -4,6 +4,7 @@
 
 #include "AIBus.h"
 #include "AIBus_Handler.h"
+#include "Locale.h"
 #include "Parameter_List.h"
 #include "Text_Handler.h"
 #include "Si4735_AidF.h"

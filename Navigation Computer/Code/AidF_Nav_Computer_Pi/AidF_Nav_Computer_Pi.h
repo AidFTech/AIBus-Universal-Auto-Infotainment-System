@@ -13,6 +13,10 @@
 #include "Ini_Color_Preset.h"
 #include "Saved_Settings.h"
 
+#ifdef RPI_UART
+#include <pigpio.h>
+#endif
+
 #include "Background/Nav_Background.h"
 #include "Background/Nav_Solid_Background.h"
 #include "Background/Nav_Gradient_Background.h"
@@ -47,6 +51,12 @@
 #define AIBUS_WAIT 5
 
 #define SOCKET_AIBUS_TEST
+
+#ifdef RPI_UART
+#define GPIO_I2S_MCLK 4
+#define GPIO_DAC_MUTE 17
+#define GPIO_USB_PWR 26
+#endif
 
 struct FrameParameters {
 	int* frame;

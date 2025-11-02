@@ -17,9 +17,11 @@
 #define COLOR_ENG1 0xFF6B54FF
 #define COLOR_ENG2 0xDC2508FF
 
-#define INFO_ACTIVE_MENU_NONE 0
-#define INFO_ACTIVE_MENU_MAIN 1
-#define INFO_ACTIVE_MENU_PARAM 2
+enum info_active_menu : uint8_t {
+	INFO_ACTIVE_MENU_NONE,
+	INFO_ACTIVE_MENU_MAIN,
+	INFO_ACTIVE_MENU_PARAM,
+};
 
 #include "DRL_Img.h"
 #include "SideMarkers_Img.h"
@@ -31,6 +33,8 @@
 
 #include "Hybrid_Img.h"
 #include "Power_Flow_Arrow.h"
+
+#include "../Locale/Locale.h"
 
 #define PARAM_H 80
 
@@ -48,12 +52,12 @@ public:
 
 private:
 	InfoParameters* info_parameters;
-	TextBox* title_box;
+	TextBox title_box;
 
 	//Info display:
 	TextBox* param_titles[PARAM_COUNT];
 	TextBox* param_text[PARAM_COUNT];
-	uint8_t* param_index;
+	info_param* param_index;
 
 	SDL_Texture* drl_texture = NULL,
 				*side_texture = NULL,
@@ -69,10 +73,11 @@ private:
 
 	NavMenu* settings_menu = NULL;
 
-	uint8_t active_menu = INFO_ACTIVE_MENU_NONE, active_param = 0;
+	info_active_menu active_menu = INFO_ACTIVE_MENU_NONE;
+	uint8_t active_param = 0;
 
 	void handleEnterButton();
-	void refreshParam(TextBox* title, TextBox* text, const uint8_t param);
+	void refreshParam(TextBox* title, TextBox* text, const info_param param);
 	
 	void createDefaultSettingsMenu();
 	void createParamSettingsMenu(const uint8_t active_param);

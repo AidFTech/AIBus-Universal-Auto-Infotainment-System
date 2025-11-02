@@ -45,19 +45,21 @@
 
 #define PARAM_COUNT 4
 
-#define INFO_PARAM_NONE 0
-#define INFO_PARAM_BATTERY_VOLTAGE 1
-#define INFO_PARAM_OUTSIDE_TEMP 2
-#define INFO_PARAM_COOLANT_TEMP 3
-#define INFO_PARAM_INST_ECONOMY 4
-#define INFO_PARAM_TRIP_AVERAGE_ECONOMY 5
-#define INFO_PARAM_TRIP_TIMER 6
-#define INFO_PARAM_CRUISE_SPEED 7
-#define INFO_PARAM_GEAR 8
-#define INFO_PARAM_RANGE 9
-#define INFO_PARAM_TRIP_DISTANCE 10
-#define INFO_PARAM_REMAINING_TIME 11
-#define INFO_PARAM_REMAINING_DIST 12
+enum info_param : uint8_t {
+	INFO_PARAM_NONE,
+	INFO_PARAM_BATTERY_VOLTAGE,
+	INFO_PARAM_OUTSIDE_TEMP,
+	INFO_PARAM_COOLANT_TEMP,
+	INFO_PARAM_INST_ECONOMY,
+	INFO_PARAM_TRIP_AVERAGE_ECONOMY,
+	INFO_PARAM_TRIP_TIMER,
+	INFO_PARAM_CRUISE_SPEED,
+	INFO_PARAM_GEAR,
+	INFO_PARAM_RANGE,
+	INFO_PARAM_TRIP_DISTANCE,
+	INFO_PARAM_REMAINING_TIME,
+	INFO_PARAM_REMAINING_DIST,
+};
 
 struct InfoParameters {
 	//Supported common parameters.
@@ -90,7 +92,7 @@ struct InfoParameters {
 	uint8_t charge_assist_pos = 0x7F; //The position of the charge/assist meter, centered at 0x7F.
 
 	//Displayed parameters:
-	uint8_t param_index[PARAM_COUNT];
+	info_param param_index[PARAM_COUNT];
 };
 
 void setLightState(AIData* light_msg, InfoParameters* info_parameters);

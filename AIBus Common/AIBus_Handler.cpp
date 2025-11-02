@@ -15,10 +15,12 @@ AIBusHandler::~AIBusHandler() {
 	
 }
 
+//The amount of AIBus data available.
 int AIBusHandler::dataAvailable() {
 	return dataAvailable(true);
 }
 
+//The amount of AIBus data available.
 int AIBusHandler::dataAvailable(const bool cache) {
 	if(!cache || cached_msg.l <= 0)
 		return ai_serial->available();
@@ -26,10 +28,12 @@ int AIBusHandler::dataAvailable(const bool cache) {
 		return cached_msg.l;
 }
 
+//Read AIBus data from the main stream and cache.
 bool AIBusHandler::readAIData(AIData* ai_d) {
 	return readAIData(ai_d, true);
 }
 
+//Read AIBus data from the main stream.
 bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 	if(cache && cached_msg.l > 0) {
 		ai_d->refreshAIData(cached_msg);
@@ -150,6 +154,7 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 	}
 }
 
+//Read AIBus data from a byte array.
 bool AIBusHandler::readAIData(AIData* ai_d, uint8_t* data, const uint8_t d_l) {
 	if(d_l < 2)
 		return false;
@@ -166,13 +171,14 @@ bool AIBusHandler::readAIData(AIData* ai_d, uint8_t* data, const uint8_t d_l) {
 	return true;
 }
 
+//Write an AIBus message.
 bool AIBusHandler::writeAIData(AIData* ai_d) {
 	return writeAIData(ai_d, ai_d->receiver != 0xFF && ai_d->data[0] != 0x80);
 }
 
+//Write an AIBus message.
 bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 	uint8_t data[ai_d->l + 4];
-	const unsigned int full_length = ai_d->l + 4;
 	ai_d->getBytes(data);
 
 	int byte_count = ai_serial->available();
@@ -181,8 +187,16 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 		while(micros() >= UINT32_MAX - AI_DELAY_U*2);
 		if(this->rx_pin >= 0) {
 			int8_t rx = digitalRead(this->rx_pin);
+			elapsedMillis rx_timer;
 			if(rx == LOW)
 				timer = 0;
+			while(rx == LOW) {
+				if(rx_timer > 10) { //Problem.
+					uint8_t ping[] = {0xF, 0xF0};
+					ai_serial->write(ping, sizeof(ping));
+					break;
+				}
+			}
 		} else {
 			const int new_byte_count = ai_serial->available();
 			if(new_byte_count > byte_count) {
@@ -230,6 +244,7 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 		return true;
 }
 
+//Send an acknowledgement message.
 void AIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t receiver) {
 	AIData ack_msg(1, sender, receiver);
 	ack_msg.data[0] = 0x80;
@@ -237,6 +252,7 @@ void AIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t recei
 	writeAIData(&ack_msg, false);
 }
 
+//Wait for receiver acknowledgement.
 bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 	elapsedMillis repeat_time = 0;
 	bool acknowledge = false;
@@ -271,6 +287,7 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 	return acknowledge;
 }
 
+//Cache a message.
 void AIBusHandler::cacheMessage(AIData* ai_msg) {
 	if(cached_msg.l <= 0)
 		cached_msg.refreshAIData(*ai_msg);
@@ -282,6 +299,7 @@ void AIBusHandler::cacheMessage(AIData* ai_msg) {
 	}
 }
 
+//Cache any pending messages sent to the specified ID.
 bool AIBusHandler::cachePending(const uint8_t id) {
 	AIData ai_msg;
 	if(ai_serial->available() > 0) {
@@ -299,4 +317,15 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 		}
 	}
 	return false;
+}
+
+//Determine whether a message the initialization message.
+bool getInitMessage(AIData* ai_d) {
+	if(ai_d->l < 2)
+		return false;
+
+	if(ai_d->data[0] == 0x4A && ai_d->data[1] == 0x1F)
+		return true;
+	else
+		return false;
 }

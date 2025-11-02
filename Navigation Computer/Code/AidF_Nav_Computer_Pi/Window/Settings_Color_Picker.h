@@ -2,21 +2,27 @@
 #include <string>
 
 #include "Nav_Window.h"
+
 #include "../Menu/Nav_Menu.h"
 #include "../Menu/Nav_Slider.h"
 #include "../Text_Box.h"
 #include "../AIBus_Handler.h"
 #include "../Ini_Color_Preset.h"
 
+#include "../Locale/Locale.h"
+
 #ifndef settings_color_picker_h
 #define settings_color_picker_h
 
-#define COLOR_OPTION_BACKGROUND 1
-#define COLOR_OPTION_TEXT 2
-#define COLOR_OPTION_BUTTON 3
-#define COLOR_OPTION_SELECTION 4
-#define COLOR_OPTION_HEADERBAR 5
-#define COLOR_OPTION_OUTLINE 6
+enum color_option_t : uint8_t {
+	COLOR_OPTION_NONE,
+	COLOR_OPTION_BACKGROUND = 1,
+	COLOR_OPTION_TEXT,
+	COLOR_OPTION_BUTTON,
+	COLOR_OPTION_SELECTION,
+	COLOR_OPTION_HEADERBAR,
+	COLOR_OPTION_OUTLINE
+};
 
 #define SLIDER_COUNT 7
 
@@ -55,7 +61,7 @@ private:
 
 	uint8_t last_day_night_setting; //Last selected day/night setting.
 
-	uint8_t color_option = COLOR_OPTION_BACKGROUND; //The selected color attribute to change.
+	color_option_t color_option = COLOR_OPTION_BACKGROUND; //The selected color attribute to change.
 
 	bool color_option_active = false; //True if the color sliders are selected, false if not.
 	bool color_slider_active = false; //True whether the slider is active.

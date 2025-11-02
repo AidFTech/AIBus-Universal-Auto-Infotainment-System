@@ -20,7 +20,8 @@ enum ADDR {
 	FM1_FREQ,
 	FM2_FREQ = FM1_FREQ + sizeof(uint16_t),
 	AM_FREQ = FM2_FREQ + sizeof(uint16_t),
-	VOL = AM_FREQ + sizeof(uint16_t),
+	CLOCK_FREQ = AM_FREQ + sizeof(uint16_t),
+	VOL = CLOCK_FREQ + sizeof(int16_t),
 	MAX_VOL = VOL + sizeof(uint16_t),
 	TREBLE = MAX_VOL + sizeof(uint16_t),
 	BASS = TREBLE + sizeof(uint16_t),
@@ -42,6 +43,7 @@ enum SOURCE_ADDR {
 struct StartParams {
 	uint8_t selected_source = 0, selected_subsource = 0;
 	uint16_t fm1_freq = 0, fm2_freq = 0, am_freq = 0;
+	int16_t clock_freq = -1;
 
 	bool audio_on = false;
 	
@@ -57,6 +59,8 @@ public:
 
 	void writeHeader();
 	bool getValid();
+
+	void clearRAM();
 
 	void setStartParams(StartParams* start_params);
 	void getStartParams(StartParams* start_params);

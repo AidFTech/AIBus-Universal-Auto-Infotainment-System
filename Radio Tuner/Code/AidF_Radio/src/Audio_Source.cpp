@@ -187,12 +187,6 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
 				return true;
 			}
-
-			const int new_index = getFirstAvailable();
-			if(new_index < 0) {
-				ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
-				return true;
-			}
 			
 			const uint8_t new_id = ai_d->sender;
 			if(getFirstOccurenceOf(new_id) >= 0) {
@@ -211,9 +205,20 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					}
 				}
 
+				for(int i=0;i<source_count;i+=1) {
+					if(source_list[i].source_id == new_id)
+						source_list[i].connected = true;
+				}
+
 				ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
 				return true;
 			} else {
+				const int new_index = getFirstAvailable();
+				if(new_index < 0) {
+					ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+					return true;
+				}
+
 				AudioSource new_source;
 				new_source.source_id = new_id;
 				new_source.source_name = "";
@@ -241,6 +246,12 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			uint8_t function_data[] = {0x40, 0x10, current_source_id, sub_id};
 			AIData function_msg(sizeof(function_data), ID_RADIO, new_id, function_data);
 			ai_handler->writeAIData(&function_msg);
+
+			if(current_source_id == new_id) {
+				uint8_t text_function_data[] = {0x40, 0x1, current_source_id};
+				AIData text_function_msg(sizeof(text_function_data), ID_RADIO, new_id, text_function_data);
+				ai_handler->writeAIData(&text_function_msg);
+			}
 		} else if(ai_d->data[1] == 0x2) { //Sub-source.
 			const uint8_t id = ai_d->sender;
 
@@ -287,6 +298,8 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					this->source_list[index].source_short = name;
 			} else 
 				this->source_list[index].source_short = name;
+
+			this->source_list[index].connected = true;
 		}
 		//ack = false;
 		
@@ -448,7 +461,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				for(int s=start + 1;s<source_count;s+=1) {
 					bool source_found = false;
 
-					if((source_list[s].source_id != ID_RADIO && source_list[s].source_id != 0) || (source_list[s].source_id == ID_RADIO && source_list[s].sub_id > 2)) {
+					if((source_list[s].source_id != ID_RADIO && source_list[s].source_id != 0 && source_list[s].connected) || (source_list[s].source_id == ID_RADIO && source_list[s].sub_id > 2)) {
 						new_src = s;
 						source_found = true;
 					}
@@ -523,10 +536,10 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				for(int s=start + 1;s<source_count;s+=1) {
 					bool source_found = false;
 
-					if(source_list[s].source_id == ID_TAPE) {
+					if(source_list[s].source_id == ID_TAPE && source_list[s].connected) {
 						new_src = s;
 						source_found = true;
-					} else if(source_list[s].source_id == ID_CDC || source_list[s].source_id == ID_CD) {
+					} else if((source_list[s].source_id == ID_CDC || source_list[s].source_id == ID_CD) && source_list[s].connected) {
 						new_src = s;
 						source_found = true;
 					}
@@ -832,7 +845,7 @@ void SourceHandler::incrementSource(const bool direction) {
 			new_source = 0;
 		
 		const uint16_t old_source = new_source;
-		while(this->source_list[new_source].source_id == 0) {
+		while(this->source_list[new_source].source_id == 0 || !this->source_list[new_source].connected) {
 			new_source += 1;
 			if(new_source >= this->source_count)
 				new_source = 0;
@@ -850,7 +863,7 @@ void SourceHandler::incrementSource(const bool direction) {
 			new_source = current_source - 1;
 
 		const uint16_t old_source = new_source;
-		while(this->source_list[new_source].source_id == 0) {
+		while(this->source_list[new_source].source_id == 0 || !this->source_list[new_source].connected) {
 			if(new_source <= 0)
 				new_source = this->source_count - 1;
 			else
@@ -866,8 +879,8 @@ void SourceHandler::incrementSource(const bool direction) {
 //Return the number of available sources.
 uint16_t SourceHandler::getFilledSourceCount() {
 	uint16_t filled_source_count = 0;
-	for(int i=0;i<this->source_count;i+=1 && this->source_list[i].connected) {
-		if(this->source_list[i].source_id != 0)
+	for(int i=0;i<this->source_count;i+=1) {
+		if(this->source_list[i].source_id != 0 && this->source_list[i].connected)
 			filled_source_count += 1;
 	}
 
@@ -1066,7 +1079,7 @@ void SourceHandler::createSourceMenu() {
 	AudioSource active_list[source_count];
 	const uint16_t active_count = getFilledSources(active_list);
 	
-	if(!createMenu("Source", active_count))
+	if(!createMenu(getMenu(MENU_INDEX_SOURCES, parameter_list->locale).title, active_count))
 		return;
 	
 	for(int i=0;i<active_count;i+=1) {
@@ -1102,7 +1115,7 @@ void SourceHandler::createPresetMenu(const uint8_t group) {
 	else
 		return;
 
-	if(!createMenu("Presets", 6))
+	if(!createMenu(getMenu(MENU_INDEX_RADIO_MAIN_MENU, parameter_list->locale).getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_PRESETS), 6))
 		return;
 
 	for(int i=0;i<6;i+=1) {
@@ -1142,7 +1155,7 @@ void SourceHandler::createStationListMenu() {
 	if(station_count <= 0)
 		return;
 
-	if(!createMenu("Stations", station_count))
+	if(!createMenu(getMenu(MENU_INDEX_RADIO_MAIN_MENU, parameter_list->locale).getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_STATION_LIST), station_count))
 		return;
 
 	tuner_background->setSeekMode(false);
@@ -1170,7 +1183,7 @@ void SourceHandler::createStationListMenu() {
 
 //Create the tone menu.
 void SourceHandler::createToneMenu() {
-	if(!createMenu("Tone", 5))
+	if(!createMenu(getMenu(MENU_INDEX_TONE, parameter_list->locale).title, 5))
 		return;
 	
 	for(int i=0;i<5;i+=1)
@@ -1185,6 +1198,7 @@ void SourceHandler::createToneMenu() {
 
 //Create an item in the tone menu.
 void SourceHandler::createToneMenuItem(const int item) {
+	MenuList tone_menu = getMenu(MENU_INDEX_TONE, parameter_list->locale);
 	const uint8_t slider_max = DEFAULT_SLIDER_RANGE;
 	uint8_t slider_pos = 0xFF;
 	
@@ -1193,23 +1207,23 @@ void SourceHandler::createToneMenuItem(const int item) {
 
 	switch(item) {
 	case TONE_OPTION_BASS:
-		option_text = "Bass";
+		option_text = tone_menu.getLocalEntry(MENU_INDEX_TONE_BASS);
 		slider_parameter = volume_handler->getBass();
 		break;
 	case TONE_OPTION_TREBLE:
-		option_text = "Treble";
+		option_text = tone_menu.getLocalEntry(MENU_INDEX_TONE_TREBLE);
 		slider_parameter = volume_handler->getTreble();
 		break;
 	case TONE_OPTION_BALANCE:
-		option_text = "Balance";
+		option_text = tone_menu.getLocalEntry(MENU_INDEX_TONE_BALANCE);
 		slider_parameter = volume_handler->getBalance();
 		break;
 	case TONE_OPTION_FADER:
-		option_text = "Fader";
+		option_text = tone_menu.getLocalEntry(MENU_INDEX_TONE_FADER);
 		slider_parameter = volume_handler->getFader();
 		break;
 	case TONE_OPTION_SVC:
-		option_text = "SVC";
+		option_text = tone_menu.getLocalEntry(MENU_INDEX_TONE_SVC);
 		break;
 	}
 
