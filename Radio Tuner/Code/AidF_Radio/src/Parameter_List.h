@@ -26,8 +26,11 @@ struct ParameterList {
 	bool timer_active = false;
 
 	int8_t hour = -1, min = -1, offset = 0;
+	int8_t day = -1, month = -1;
+	uint16_t year = 0;
 	elapsedMillis minute_timer;
 	bool send_time = true, send_12h = false, auto_clock = true;
+	bool received_time_change_message = false; //True if a clock set message has been received.
 	
 	uint16_t fm1_tune, fm2_tune, am_tune;
 	bool fm_stereo = false, has_rds = false, info_mode = false;

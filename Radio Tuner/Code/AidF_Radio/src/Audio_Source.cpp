@@ -1,6 +1,6 @@
 #include "Audio_Source.h"
 
-SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, VolumeHandler* volume_handler, uint16_t source_count) {
+SourceHandler::SourceHandler(AIBusHandler* ai_handler, TextHandler* text_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, VolumeHandler* volume_handler, uint16_t source_count) {
 	this->source_count = source_count;
 	this->source_list = new AudioSource[source_count];
 
@@ -11,6 +11,7 @@ SourceHandler::SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_m
 	}
 
 	this->ai_handler = ai_handler;
+	this->text_handler = text_handler;
 	this->parameter_list = parameter_list;
 	this->tuner_main = tuner_main;
 	this->tuner_background = tuner_background;
@@ -146,6 +147,11 @@ bool SourceHandler::getIMIDSourceSupported(const uint8_t source_id) {
 	}
 
 	return false;
+}
+
+//Turn the audio on or off.
+void SourceHandler::setAudioOn(const bool audio_on) {
+	this->audio_on = audio_on;
 }
 
 //Return whether audio is on.
@@ -403,7 +409,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			} else if((button == 0x2A || button == 0x2B) && state == 0) { //Left/right buttons.
 				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected) && source_list[current_source].source_id == ID_RADIO) {
 					manualTuneIncrement(button == 0x2B, 1);
-					parameter_list->tune_changed = true;
+					//parameter_list->tune_changed = true;
 				}
 			} else if(button == 0x7 && state == 2) { //Enter button.
 				parameter_list->manual_tune_mode = false;
@@ -422,8 +428,10 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			} else if(button == 0x53 && state == 2) { //Info button.
 				if(parameter_list->imid_char > 0 && parameter_list->imid_lines == 1 && getCurrentSourceID() == ID_RADIO)
 					parameter_list->info_mode = !parameter_list->info_mode;
-				else
+				else {
 					parameter_list->info_mode = false;
+					this->text_handler->setOverlayHeader(parameter_list->rds_program_name);
+				}
 			} else if(button == 0x36 && state == 0x2) { //AM/FM button.
 				const uint8_t source_id = getCurrentSourceID();
 				if(source_id == ID_RADIO) { //Increment AM/FM.
@@ -601,7 +609,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			if(ai_d->data[1] == 0x7) { //Function knob.
 				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected) && source_list[current_source].source_id == ID_RADIO) {
 					manualTuneIncrement(clockwise, steps);
-					parameter_list->tune_changed = true;
+					//parameter_list->tune_changed = true;
 				} else if(parameter_list->bass_adjust || parameter_list->treble_adjust || parameter_list->balance_adjust || parameter_list->fader_adjust) {
 					volume_handler->setAIBusParameter(ai_d);
 
@@ -712,22 +720,23 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					}
 					clearMenu();
 				} else if(menu_open == TONE_MENU) {
-					const uint8_t selection = ai_d->data[2]-1;
+					const int selection = ai_d->data[2]-1;
 
 					if(selection < TONE_OPTION_SVC) {
 						bool* switch_mode;
+						const MenuList tone_menu = getMenu(MENU_INDEX_TONE, parameter_list->locale);
 
-						switch(selection) {
-						case TONE_OPTION_BASS:
+						switch(tone_menu.getGlobalIndex(selection)) {
+						case MENU_INDEX_TONE_BASS:
 							switch_mode = &parameter_list->bass_adjust;
 							break;
-						case TONE_OPTION_TREBLE:
+						case MENU_INDEX_TONE_TREBLE:
 							switch_mode = &parameter_list->treble_adjust;
 							break;
-						case TONE_OPTION_BALANCE:
+						case MENU_INDEX_TONE_BALANCE:
 							switch_mode = &parameter_list->balance_adjust;
 							break;
-						case TONE_OPTION_FADER:
+						case MENU_INDEX_TONE_FADER:
 							switch_mode = &parameter_list->fader_adjust;
 							break;
 						}
@@ -783,11 +792,12 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 
 //Set the manual tuning message.
 void SourceHandler::sendManualTuneMessage() {
+	const MenuList main_menu = getMenu(MENU_INDEX_RADIO_MAIN_MENU, parameter_list->locale);
 	if(parameter_list->manual_tune_mode) { //TODO Integrate the text handler.
-		AIData change_msg = getTextMessage("< Manual Tune >", 0xB, 0x0);
+		AIData change_msg = getTextMessage(String("< ") + main_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_MANUAL) + " >", 0xB, 0x0);
 		ai_handler->writeAIData(&change_msg);
 	} else {
-		AIData change_msg = getTextMessage("Manual Tune", 0xB, 0x0);
+		AIData change_msg = getTextMessage(main_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_MANUAL), 0xB, 0x0);
 		ai_handler->writeAIData(&change_msg);
 	}
 }
@@ -819,15 +829,33 @@ void SourceHandler::manualTuneIncrement(const bool up, const uint8_t steps) {
 			if(*current_frequency < lower_limit || *current_frequency > upper_limit)
 				*current_frequency = lower_limit;
 		}
-		this->tuner_main->queueFrequency(*current_frequency);
 	} else {
 		for(int i=0;i<steps;i+=1) {
 			*current_frequency -= increment;
 			if(*current_frequency < lower_limit || *current_frequency > upper_limit)
 				*current_frequency = upper_limit;
 		}
-		this->tuner_main->queueFrequency(*current_frequency);
 	}
+
+	if(!this->tuner_main->getQueued()) {
+		text_handler->sendStereoMessage(false);
+		text_handler->sendShortRDSMessage("");
+		text_handler->sendLongRDSMessage("");
+		text_handler->sendIMIDCallsignMessage("");
+		text_handler->sendMirrorMessage("", 3, false);
+
+		parameter_list->rds_program_name = "";
+		parameter_list->rds_station_name = "";
+		parameter_list->fm_stereo = false;
+		parameter_list->has_rds = false;
+
+		uint8_t clear_data[] = {0x20, 0x71, 0x1};
+		AIData clear_msg(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER, clear_data);
+		ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
+	}
+
+	this->tuner_main->queueFrequency(*current_frequency);
+	text_handler->sendTunedFrequencyMessage(*current_frequency, source_list[current_source].sub_id != SUB_AM, true);
 }
 
 //Increment source up.

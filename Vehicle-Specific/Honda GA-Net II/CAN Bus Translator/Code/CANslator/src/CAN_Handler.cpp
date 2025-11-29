@@ -20,7 +20,6 @@ BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler,
 	brightness_bar = false;
 	lights_on = false;
 	
-	hybrid_battery_level = 6;
 	coolant_temp = 0x35;
 	eco_bar = 0x1C;
 	doors_open = 0x00;
@@ -32,7 +31,7 @@ BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler,
 	outside_temp = 50;
 	electric_ac_power = 0;
 	eco_leaf_meter = 0;
-	gear = 0x4002;
+	honda_gear = 0x4002;
 	
 	odo_km = 0;
 
@@ -106,11 +105,11 @@ void BCAN_Handler::readCANMessage() {
 
 				parameter_list->power_on = key_pos != 0;
 			} else if(can_msg.can_id == BCAN_ID_GEAR && can_msg.can_dlc == 5) { //Engine running, e-brake and gear.
-				const uint16_t last_gear = gear;
+				const uint16_t last_gear = honda_gear;
 				const uint8_t last_key = key_pos;
 				const bool last_ebrake = e_brake;
 
-				gear = ((can_msg.data[0]<<8) | can_msg.data[1])&0x5005;
+				honda_gear = ((can_msg.data[0]<<8) | can_msg.data[1])&0x5005;
 				e_brake = (can_msg.data[1]&0x2) != 0;
 
 				if(can_msg.data[2] == 0x0) //Engine on.
@@ -205,12 +204,35 @@ void BCAN_Handler::readCANMessage() {
 					if(!auto_wiper || (wiper_door_off && (doors_open&0xC) != 0))
 						can_msg.data[0] &= ~0x40;
 				}
+
+				parameter_list->wiper_time_limit = int32_t((WIPER_TIMER_L - WIPER_TIMER_H)*wiper_delay_pos)/255 + WIPER_TIMER_H;
 			} else if(can_msg.can_id == BCAN_ID_SPEED && can_msg.can_dlc == 5) { //Speed and ECON.
 				const uint8_t last_speed = vehicle_speed;
 				vehicle_speed = can_msg.data[0];
 
-				if(vehicle_speed != last_speed)
+				if(vehicle_speed != last_speed) {
 					writeAIBusSpeedMessage(0xFF);
+
+					if(parameter_list->trim == TRIM_HYBRID) {
+						if(vehicle_speed > 0) {
+							if((hybrid_status&0x40) != 0 && (hybrid_status&0x2) == 0) { //Engine to motor but not battery.
+								hybrid_status = 0x20;
+								writeAIBusHybridStatusMessage();
+							} else if((hybrid_status&0x40) != 0 && (hybrid_status&0x2) != 0) { //Engine to motor and battery.
+								hybrid_status = 0x62;
+								writeAIBusHybridStatusMessage();
+							}
+						} else {
+							if((hybrid_status&0x20) != 0 && (hybrid_status&0x2) == 0) { //Engine to wheels but not battery.
+								hybrid_status = 0x40;
+								writeAIBusHybridStatusMessage();
+							} else if((hybrid_status&0x20) != 0 && (hybrid_status&0x2) != 0) { //Engine to wheels and battery.
+								hybrid_status = 0x42;
+								writeAIBusHybridStatusMessage();
+							}
+						}
+					}
+				}
 
 				this->econ_mode = (can_msg.data[3]&0x20) != 0;
 			} else if(can_msg.can_id == BCAN_ID_TEMP_RANGE && can_msg.can_dlc == 7) { //Temperature and range.
@@ -218,8 +240,14 @@ void BCAN_Handler::readCANMessage() {
 				const int16_t last_temp = outside_temp;
 				const bool last_fahrenheit = honda_fahrenheit;
 
+				const uint16_t last_range = range;
+				const bool last_range_miles = range_miles;
+
 				honda_fahrenheit = (can_msg.data[0]&0x2) != 0;
 				honda_temp = can_msg.data[2];
+
+				range_miles = (can_msg.data[0]&0x80) != 0;
+				range = ((can_msg.data[0]&0x7) << 8) | can_msg.data[1];
 
 				if((parameter_list->display_celsius && !honda_fahrenheit) || (!parameter_list->display_celsius && honda_fahrenheit)) {
 					outside_temp = (honda_temp - 0x28)*10;
@@ -243,6 +271,11 @@ void BCAN_Handler::readCANMessage() {
 				
 				if(last_honda_temp != honda_temp || last_fahrenheit != honda_fahrenheit || last_temp != outside_temp)
 					writeAIBusTempMessage(0xFF);
+
+				if(last_range_miles != range_miles || last_range != range)
+					writeAIBusRangeMessage();
+
+				parameter_list->display_miles = range_miles;
 			} else if(can_msg.can_id == BCAN_ID_AC_AUTOSTOP && can_msg.can_dlc == 4) { //A/C operation and auto stop.
 				this->electric_ac_power = (can_msg.data[0] << 8) | can_msg.data[1];
 				this->auto_stop = (can_msg.data[3]&0x80) != 0;
@@ -252,6 +285,56 @@ void BCAN_Handler::readCANMessage() {
 
 				if(last_temp != coolant_temp)
 					writeAIBusCoolantTempMessage(0xFF);
+			} else if(can_msg.can_id == BCAN_ID_HYBRID_SYSTEM && can_msg.can_dlc == 7) { //Hybrid status.
+				if(parameter_list->trim == TRIM_HYBRID) { // @ TODO: This message may mean something different in other trims.
+					const uint8_t last_hybrid_status = hybrid_status, last_hybrid_battery = hybrid_battery, last_charge_assist = charge_assist;
+
+					switch(can_msg.data[2]&0xF) {
+					case 0x1: //Battery only.
+						hybrid_status = 0x9;
+						break;
+					case 0x2: //Regenerative charging.
+						hybrid_status = 0x14;
+						break;
+					case 0x3: //Engine and battery both providing power.
+						hybrid_status = 0x29;
+						break;
+					case 0x4: //Engine only.
+						if(vehicle_speed > 0)
+							hybrid_status = 0x20;
+						else
+						 	hybrid_status = 0x40;
+						break;
+					case 0x5: //Engine charging battery.
+						hybrid_status = 0x42;
+						if(vehicle_speed > 0)
+							hybrid_status |= 0x20;
+						break;
+					default:
+						hybrid_status = 0;
+						break;
+					}
+
+					const uint8_t honda_battery = can_msg.data[3]&0xF;
+					hybrid_battery = uint32_t(honda_battery*255)/8; // @TODO: Calculate from F-CAN if possible.
+
+					switch(can_msg.data[2]&0xF) {
+					case 0x1:
+					case 0x3:
+						charge_assist = 0x7F + (can_msg.data[1]&0xF);
+						break;
+					case 0x2:
+					case 0x5:
+						charge_assist = 0x7F + (0xF - can_msg.data[1]&0xF); // @TODO: Check.
+						break;
+					default:
+						charge_assist = 0x7F;
+						break;
+					}
+
+					if(hybrid_init && (hybrid_status != last_hybrid_status || hybrid_battery != last_hybrid_battery || charge_assist != last_charge_assist))
+						writeAIBusHybridStatusMessage();
+				}
 			}
 
 			if(can_msg.can_id == BCAN_ID_TEMP_RANGE && can_msg.can_dlc >= 3) { //Temperature message. Forward to IMID.
@@ -389,11 +472,26 @@ void BCAN_Handler::broadcastBCAN(can_frame* can_msg) {
 	rls_2515.sendMessage(can_msg);
 }
 
-//Write all CAN-derived parameters.
-void BCAN_Handler::sendAllParameters() {
+//Write all common CAN-derived parameters.
+void BCAN_Handler::sendCommonParameters() {
 	writeAIBusKeyMessage(0xFF);
 	writeAIBusDoorMessage(0xFF);
 	writeAIBusBrightnessMessage(0xFF);	
+	writeAIBusLightMessage(0xFF);
+	writeAIBusTempMessage(0xFF);
+	writeAIBusSpeedMessage(0xFF);
+}
+
+//Write info parameters.
+void BCAN_Handler::sendInfoParameters() {
+	if(parameter_list->trim == TRIM_HYBRID) {
+		writeAIBusHybridHandshake();
+		writeAIBusHybridStatusMessage();
+	}
+
+	writeAIBusTempMessage(0xFF);
+	writeAIBusCoolantTempMessage(0xFF);
+	writeAIBusRangeMessage();
 }
 
 //Write the key state message.
@@ -503,6 +601,39 @@ void BCAN_Handler::writeAIBusCoolantTempMessage(const uint8_t receiver) {
 	ai_handler->writeAIData(&temp_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
 
+//Write the range message.
+void BCAN_Handler::writeAIBusRangeMessage() {
+	uint8_t range_data[] = {0xA1, 0x1F, 0x7, 0x2, 0x0, 0x0};
+
+	if(range_miles)
+		range_data[3] |= 0x80;
+
+	range_data[4] = range>>8;
+	range_data[5] = range&0xFF;
+
+	AIData range_msg(sizeof(range_data), ID_CANSLATOR, 0xFF, range_data);
+	ai_handler->writeAIData(&range_msg, false);
+}
+
+//Write the hybrid system handshake.
+void BCAN_Handler::writeAIBusHybridHandshake() {
+	uint8_t hybrid_data[] = {0xA1, 0x33, 0x1, 0x12, 0x30};
+	AIData hybrid_msg(sizeof(hybrid_data), ID_CANSLATOR, 0xFF, hybrid_data);
+	ai_handler->writeAIData(&hybrid_msg, false);
+
+	hybrid_init = true;
+}
+
+//Write the hybrid system status.
+void BCAN_Handler::writeAIBusHybridStatusMessage() {
+	if(!hybrid_init)
+		return;
+
+	uint8_t hybrid_data[] = {0xA1, 0x33, 0x2, hybrid_status, hybrid_battery, charge_assist};
+	AIData hybrid_msg(sizeof(hybrid_data), ID_CANSLATOR, 0xFF, hybrid_data);
+	ai_handler->writeAIData(&hybrid_msg, false);
+}
+
 //Forward a message from the IMID to the rest of the system.
 void BCAN_Handler::forwardIMIDMessage() {
 	struct can_frame can_msg;
@@ -547,7 +678,7 @@ void BCAN_Handler::forwardRLSMessage() {
 		}
 
 		//TODO: Manual transmission messages.
-		if(parameter_list->parking_lights && (gear == 0x4001 || (gear == 0x401 && e_brake))) {
+		if(parameter_list->parking_lights && (honda_gear == 0x4001 || (honda_gear == 0x401 && e_brake))) {
 			if((can_msg.data[0]&0xC) == 0)
 				can_msg.data[0] |= 0x14;
 		}
@@ -578,6 +709,7 @@ void BCAN_Handler::calculateHeadlightTemperature() {
 		headlight_temp_limit += HEADLIGHT_TEMP_BUFFER;
 }
 
+//Get the Honda CAN bus checksum.
 uint8_t getHondaNavChecksum(can_frame* can_msg) {
 	unsigned int chx = 0;
 
@@ -611,14 +743,17 @@ void BCAN_Handler::handleSelection(const uint8_t selection) {
 		case MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE_PARKING_LIGHTS:
 			parameter_list->parking_lights = !parameter_list->parking_lights;
 			menu_handler.createComfortConvenienceMenu(light_sensor_connected, rain_sensor_connected);
+			setCanslatorSettings(parameter_list);
 			break;
 		case MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE_RAINSENSOR:
 			parameter_list->auto_wiper = !parameter_list->auto_wiper;
 			menu_handler.createComfortConvenienceMenu(light_sensor_connected, rain_sensor_connected);
+			setCanslatorSettings(parameter_list);
 			break;
 		case MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE_WIPER_DOOR_OFF:
 			parameter_list->wiper_door_off = !parameter_list->wiper_door_off;
 			menu_handler.createComfortConvenienceMenu(light_sensor_connected, rain_sensor_connected);
+			setCanslatorSettings(parameter_list);
 			break;
 		default:
 			break;

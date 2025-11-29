@@ -180,6 +180,9 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 	} else if(next_window == NEXT_WINDOW_SETTINGS_CLOCK) {
 		misc_window = new Settings_Clock_Window(&attribute_list);
 		this->setActiveWindow(misc_window, delete_last);
+	} else if(next_window == NEXT_WINDOW_SETTINGS_CLOCK_SET) {
+		misc_window = new SettingsClockSetWindow(&attribute_list);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_SETTINGS_EXT) {
 		misc_window = new Settings_Ext_Window(&attribute_list);
 		this->setActiveWindow(misc_window, delete_last);

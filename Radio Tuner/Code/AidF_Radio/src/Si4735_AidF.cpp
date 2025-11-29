@@ -34,16 +34,23 @@ void Si4735Controller::loop() {
 	if(parameters->tune_changed)
 		last_frequency_change = 0;
 
-	if(queued_frequency_set) {
+	if(queued_frequency_set && queue_timer > QUEUE_TIMER) {
 		setFrequency(queued_frequency);
 		queued_frequency_set = false;
+		parameters->tune_changed = true;
 	}
+}
+
+//Return whether a frequency is queued.
+bool Si4735Controller::getQueued() {
+	return queued_frequency_set;
 }
 
 //Set the desired frequency on the next loop.
 void Si4735Controller::queueFrequency(const uint16_t des_freq) {
 	queued_frequency = des_freq;
 	queued_frequency_set = true;
+	queue_timer = 0;
 }
 
 //Set the desired frequency, within the tuning range.
@@ -220,7 +227,7 @@ bool Si4735Controller::getDateTimePresent() {
 
 //Save the date and time to a parameter list.
 bool Si4735Controller::getDateTime(ParameterList* parameters) {
-	uint16_t year, month, day, hour = parameters->hour, minute = parameters->min;
+	uint16_t year = parameters->year, month = parameters->month, day = parameters->day, hour = parameters->hour, minute = parameters->min;
 	const int16_t last_hour = parameters->hour, last_min = parameters->min;
 	
 	const int minute_limit = 5;
@@ -233,7 +240,13 @@ bool Si4735Controller::getDateTime(ParameterList* parameters) {
 			parameters->min = minute;
 			parameters->minute_timer = 0;
 
+			parameters->year = year;
+			parameters->month = month;
+			parameters->day = day;
+
 			parameters->clock_freq = tuner.getCurrentFrequency();
+
+			parameters->received_time_change_message = false;
 
 			return true;
 		}

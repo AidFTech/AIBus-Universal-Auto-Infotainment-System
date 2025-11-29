@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <SI4735.h>
+#include <elapsedMillis.h>
 
 #include "Parameter_List.h"
 #include "Text_Handler.h"
@@ -9,6 +10,7 @@
 #define si4735_aidf_h
 
 #define FM_STEREO_THRESH 30
+#define QUEUE_TIMER 500
 
 class Si4735Controller {
 public:
@@ -18,6 +20,8 @@ public:
 	void init1();
 	void init2();
 	void loop();
+
+	bool getQueued();
 
 	void queueFrequency(const uint16_t des_freq);
 	uint16_t setFrequency(const uint16_t des_freq);
@@ -56,6 +60,7 @@ private:
 
 	uint16_t queued_frequency = 0;
 	bool queued_frequency_set = false;
+	elapsedMillis queue_timer;
 
 	bool getRdsInfo(String* rds, const bool init);
 	bool getDateTime(ParameterList* parameters);

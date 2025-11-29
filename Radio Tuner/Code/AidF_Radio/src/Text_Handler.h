@@ -28,7 +28,7 @@ public:
 	void clearAllText(const bool refresh);
 	
 	void setBlankHeader(String header);
-	void sendSourceTextControl(const uint8_t recipient, const uint8_t source);
+	void sendSourceTextControl(const uint8_t recipient, const uint8_t source, bool ack = true);
 
 	void setOverlayHeader(String text);
 	

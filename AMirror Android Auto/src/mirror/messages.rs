@@ -423,7 +423,9 @@ impl MetaDataMessage {
 				let value = String::from(element_split_value);
 				meta_message.string_vars.push(MetaDataString {variable: var_name, value: value});
 			} else {
-				let value = match String::from(element_split[1]).parse::<i32>() {
+				let filtered_str: String = element_split[1].chars().filter(|c| c.is_digit(10)).collect();
+
+				let value = match filtered_str.parse::<i32>() {
 					Ok(value) => value,
 					Err(_) => 0,
 				};

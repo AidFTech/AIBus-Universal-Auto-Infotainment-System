@@ -1,5 +1,7 @@
 #include <stdint.h>
 #include <string>
+#include <vector>
+#include <iostream>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
@@ -8,6 +10,8 @@
 
 #ifndef text_box_h
 #define text_box_h
+
+using namespace std;
 
 enum align_h_t : uint8_t {
 	ALIGN_H_L,
@@ -41,11 +45,11 @@ public:
 	void setWidth(const uint16_t w);
 	void setHeight(const uint16_t h);
 
-	void setText(std::string text);
+	void setText(string text);
 	void setText(const char* text);
-	void renderText();
+	virtual void renderText();
 	
-	std::string getText();
+	string getText();
 	virtual void drawText();
 protected:
 	virtual void copy(const TextBox &copy);
@@ -56,7 +60,7 @@ protected:
 	int16_t x, y;
 	uint16_t w, h, text_w, text_h;
 
-	std::string text = "";
+	string text = "";
 
 	align_h_t h_indent;
 	align_v_t v_indent;
@@ -64,6 +68,19 @@ protected:
 	uint32_t* color;
 
 	SymbolHandler symbol_handler;
+};
+
+class WrapTextBox: public TextBox {
+public:
+	WrapTextBox(SDL_Renderer* renderer,
+			const int16_t x,
+			const int16_t y,
+			const uint16_t w,
+			const uint16_t h,
+			const uint8_t size,
+			uint32_t* text_color);
+
+	void renderText();
 };
 
 class AngledTextBox : public TextBox {
@@ -87,5 +104,7 @@ public:
 private:
 	double angle = 0;
 };
+
+string asciiToUTF8(const string ascii_str);
 
 #endif

@@ -20,17 +20,13 @@
 #define UINT32_MAX 0xFFFFFFFF
 #endif
 
-#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-#define AI_CACHE_SIZE 256
-#endif
-
 #ifndef AI_CACHE_SIZE
-#define AI_CACHE_SIZE 32
+#define AI_CACHE_SIZE 16
 #endif
 
 class AIBusHandler {
 public:
-	AIBusHandler(Stream* serial, const int8_t rx_pin);
+	AIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int ai_cache_size = AI_CACHE_SIZE);
 	~AIBusHandler();
 
 	virtual int dataAvailable();
@@ -50,8 +46,8 @@ protected:
 	Stream* ai_serial;
 	int8_t rx_pin = -1;
 
-	uint8_t cached_byte[AI_CACHE_SIZE];
-	Vector<uint8_t> cached_vec;
+	AIData* cached_byte;
+	Vector<AIData> cached_vec;
 
 	AIData cached_msg;
 
@@ -59,5 +55,6 @@ protected:
 };
 
 bool getInitMessage(AIData* ai_d);
+bool getPoweroffMessage(AIData* ai_d);
 
 #endif

@@ -13,6 +13,11 @@
 
 #define ADDR_AIDF_HEADER 0
 
+#define CLOCK_MODE_BROADCAST_AUTO 0x1
+#define CLOCK_MODE_BROADCAST_MANUAL 0x2
+#define CLOCK_MODE_RTC_INIT 0x4
+#define CLOCK_MODE_12H 0x80
+
 enum ADDR {
 	SELECTED_SOURCE = sizeof(AIDF_RAM_HEADER),
 	SELECTED_SUBSOURCE,
@@ -21,7 +26,8 @@ enum ADDR {
 	FM2_FREQ = FM1_FREQ + sizeof(uint16_t),
 	AM_FREQ = FM2_FREQ + sizeof(uint16_t),
 	CLOCK_FREQ = AM_FREQ + sizeof(uint16_t),
-	VOL = CLOCK_FREQ + sizeof(int16_t),
+	CLOCK_MODE = CLOCK_FREQ + sizeof(int16_t),
+	VOL,
 	MAX_VOL = VOL + sizeof(uint16_t),
 	TREBLE = MAX_VOL + sizeof(uint16_t),
 	BASS = TREBLE + sizeof(uint16_t),
@@ -44,6 +50,8 @@ struct StartParams {
 	uint8_t selected_source = 0, selected_subsource = 0;
 	uint16_t fm1_freq = 0, fm2_freq = 0, am_freq = 0;
 	int16_t clock_freq = -1;
+
+	uint8_t clock_mode;
 
 	bool audio_on = false;
 	

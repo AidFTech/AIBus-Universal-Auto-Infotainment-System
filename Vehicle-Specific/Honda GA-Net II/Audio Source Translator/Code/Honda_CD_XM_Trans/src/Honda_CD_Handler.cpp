@@ -626,19 +626,21 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 			*active_menu = 0;
 		} else if(the_message->data[1] == 0x60 && the_message->l >= 3 && sender == ID_NAV_COMPUTER) {
 			if(*active_menu == MENU_CD) {
-				switch(the_message->data[2]) {
-				case 1: //Track list.
+				const MenuList cd_menu = getMenu(MENU_INDEX_CDC_SETTINGS, parameter_list->locale);
+
+				switch(cd_menu.getGlobalIndex(int(the_message->data[2]) - 1)) {
+				case MENU_INDEX_CDC_SETTINGS_TRACK_LIST: //Track list.
 					//TODO: Figure this out.
 					break;
-				case 2: //Change disc.
+				case MENU_INDEX_CDC_SETTINGS_CHANGE_DISC: //Change disc.
 					createCDChangeDiscMenu();
 					break;
-				case 3: //Autostart.
+				case MENU_INDEX_CDC_SETTINGS_AUTOSTART: //Autostart.
 					this->autostart = !this->autostart;
-					createCDMainMenuOption(2);
+					createCDMainMenuOption(cd_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_AUTOSTART));
 					setting_changed = true;
 					break;
-				case 4: //CD text.
+				case MENU_INDEX_CDC_SETTINGS_TEXT_IMID: //CD text.
 					this->use_function_timer = !this->use_function_timer;
 					setting_changed = true;
 
@@ -654,15 +656,17 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 
 					createCDMainMenuOption(3);
 					break;
-				case 5: //Scrolling.
+				case MENU_INDEX_CDC_SETTINGS_SCROLL: //Scrolling.
 					this->split = !this->split;
 					createCDMainMenuOption(4);
 					scroll_timer = SCROLL_TIMER_FULL;
 					scroll_state = -1;
 					setting_changed = true;
 					break;
-				case 6: //Radio settings.
+				case MENU_INDEX_CDC_SETTINGS_AUDIO: //Radio settings.
 					//TODO: Request radio settings.
+					break;
+				default:
 					break;
 				}
 			} else if(*active_menu == MENU_SELECT_DISC) {
@@ -820,7 +824,7 @@ void HondaCDHandler::sendAICDTextMessage(const uint8_t recipient, const uint8_t 
 		}
 	}
 
-	String meta_text = F("");
+	String meta_text = "";
 	for(int i=0;i<len;i+=1) {
 		if(uint8_t(affected[i]) >= 0x20)
 			meta_text += affected[i];
@@ -1387,6 +1391,27 @@ void HondaCDHandler::incrementInfo() {
 			clearExternalIMID();
 		sendIMIDInfoMessage();
 
+		String nav_header = "";
+		switch(display_parameter) {
+		case TEXT_SONG:
+			nav_header = String("Track: ") + this->song_title;
+			break;
+		case TEXT_ARTIST:
+			nav_header = String("Artist: ") + this->artist;
+			break;
+		case TEXT_ALBUM:
+			nav_header = String("Album: ") + this->album;
+			break;
+		case TEXT_FOLDER:
+			nav_header = String("Folder: ") + this->folder;
+			break;
+		case TEXT_FILE:
+			nav_header = String("File: ") + this->filename;
+			break;
+		}
+
+		if(nav_header.length() > 0)
+			setNavHeader(nav_header);
 	} else {
 		if(use_function_timer && parameter_list->imid_connected && text_mode != TEXT_MODE_BLANK) {
 			imid_handler->setIMIDSource(ID_CD, 0);

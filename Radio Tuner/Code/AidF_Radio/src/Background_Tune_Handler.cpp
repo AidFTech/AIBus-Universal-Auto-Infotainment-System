@@ -19,7 +19,9 @@ BackgroundTuneHandler::~BackgroundTuneHandler() {
 void BackgroundTuneHandler::loop() {
 	br_tuner->loop();
 
-	if(parameter_list->clock_freq >= 0 && (parameter_list->minute_timer >= FIVE_SEC_LIMIT || parameter_list->minute_timer < 5000)) { //Reset the clock as needed.
+	if(parameter_list->clock_freq >= 0 &&
+		((!parameter_list->received_time_change_message && (parameter_list->minute_timer >= FIVE_SEC_LIMIT || parameter_list->minute_timer < 5000))
+	 	|| (parameter_list->received_time_change_message && clock_timer > CLOCK_START_TIME))) { //Reset the clock as needed.
 		if(!time_set) {
 			time_set = true;
 
@@ -33,6 +35,9 @@ void BackgroundTuneHandler::loop() {
 			br_tuner->getDateTime();
 		else
 			parameter_list->clock_freq = -1;
+
+		if(clock_timer > CLOCK_END_TIME)
+			clock_timer = 0;
 	} else if(station_seek) {
 		if(time_set) {
 			time_set = false;

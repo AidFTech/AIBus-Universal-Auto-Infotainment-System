@@ -6,7 +6,7 @@ SRAMHandler::SRAMHandler(const uint8_t ram_cs) :
 
 //Start the RAM handler.
 void SRAMHandler::begin() {
-	sram.begin();
+	sram.begin(1000000);
 }
 
 //Write the model number to RAM.
@@ -41,6 +41,8 @@ void SRAMHandler::setStartParams(StartParams* start_params) {
 	writeUint16(AM_FREQ, start_params->am_freq);
 	writeInt16(CLOCK_FREQ, start_params->clock_freq);
 
+	sram.writeByte(CLOCK_MODE, start_params->clock_mode);
+
 	writeUint16(VOL, start_params->vol);
 	writeUint16(MAX_VOL, start_params->max_vol);
 	writeUint16(TREBLE, start_params->treble);
@@ -57,6 +59,8 @@ void SRAMHandler::getStartParams(StartParams* start_params) {
 	start_params->fm2_freq = readUint16(FM2_FREQ);
 	start_params->am_freq = readUint16(AM_FREQ);
 	start_params->clock_freq = readInt16(CLOCK_FREQ);
+
+	start_params->clock_mode = sram.readByte(CLOCK_MODE);
 
 	start_params->audio_on = sram.readByte(AUDIO_ON) != 0;
 	
@@ -204,26 +208,43 @@ void SRAMHandler::getFrequencies(BackgroundTuneHandler* tuner) {
 
 //Read a 2B number.
 uint16_t SRAMHandler::readUint16(const uint32_t addr) {
-	uint16_t num;
-	sram.readBlock(addr, sizeof(uint16_t), (void*)&num);
+	uint16_t num = 0;
+	uint8_t bytes[sizeof(uint16_t)];
+
+	sram.readBlock(addr, sizeof(uint16_t), (void*)bytes);
+
+	for(int i=0;i<sizeof(bytes);i+=1) {
+		num <<= 8;
+		num |= bytes[i];
+	}
 
 	return num;
 }
 
 //Read a 2B number.
 int16_t SRAMHandler::readInt16(const uint32_t addr) {
-	int16_t num;
-	sram.readBlock(addr, sizeof(int16_t), (void*)&num);
+	int16_t num = 0;
+
+	uint8_t bytes[sizeof(int16_t)];
+
+	sram.readBlock(addr, sizeof(int16_t), (void*)bytes);
+
+	for(int i=0;i<sizeof(bytes);i+=1) {
+		num <<= 8;
+		num |= bytes[i];
+	}
 
 	return num;
 }
 
 //Write a 2B number.
 void SRAMHandler::writeUint16(const uint32_t addr, const uint16_t data) {
-	sram.writeBlock(addr, sizeof(uint16_t), (void*)&data);
+	uint8_t bytes[] = {uint8_t(data>>8), uint8_t(data&0xFF)};
+	sram.writeBlock(addr, sizeof(uint16_t), (void*)bytes);
 }
 
 //Write a 2B number.
 void SRAMHandler::writeInt16(const uint32_t addr, const int16_t data) {
-	sram.writeBlock(addr, sizeof(int16_t), (void*)&data);
+	uint8_t bytes[] = {uint8_t(data>>8), uint8_t(data&0xFF)};
+	sram.writeBlock(addr, sizeof(uint16_t), (void*)bytes);
 }

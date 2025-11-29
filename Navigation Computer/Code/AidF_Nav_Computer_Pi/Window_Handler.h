@@ -15,6 +15,7 @@
 #include "Window/Settings_Color_Window.h"
 #include "Window/Settings_Color_Picker.h"
 #include "Window/Settings_Clock_Window.h"
+#include "Window/Settings_Clock_Set_Window.h"
 #include "Window/Settings_Ext_Window.h"
 #include "Window/Intro_Window.h"
 

@@ -9,6 +9,7 @@ HondaXMHandler::HondaXMHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_drive
 		channel_names[i] = "";
 }
 
+//XM handler loop function.
 void HondaXMHandler::loop() {
 	if(preset_received) {
 		preset_request_increment += 1;
@@ -118,6 +119,7 @@ void HondaXMHandler::loop() {
 	}
 }
 
+//Interpret a Sirius IEBus message.
 void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 	if(the_message->receiver != IE_ID_RADIO || the_message->sender != IE_ID_SIRIUS)
 		return;
@@ -324,6 +326,7 @@ void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 		sendIEAckMessage(IE_ID_SIRIUS);
 }
 
+//Interpret an XM AIBus message.
 void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 	if(the_message->receiver != ID_XM)
 		return;
@@ -394,6 +397,25 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 					if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0)
 						clearExternalIMID();
 					sendIMIDInfoMessage();
+					
+					String nav_header = "";
+					switch(display_parameter) {
+					case N_SONG_NAME:
+						nav_header = "Song: " + song;
+						break;
+					case N_ARTIST_NAME:
+						nav_header = "Artist: " + artist;
+						break;
+					case N_CHANNEL_NAME:
+						nav_header = "Channel: " + channel_name;
+						break;
+					case N_GENRE:
+						nav_header = "Genre: " + genre;
+						break;
+					}
+
+					if(nav_header.length() > 0)
+						setNavHeader(nav_header);
 				} else {
 					if(parameter_list->imid_connected) {
 						if(xm2)
@@ -724,17 +746,19 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 			setTextDisplay(N_GENRE);
 		} else if(the_message->data[1] == 0x60 && the_message->l >= 3 && sender == ID_NAV_COMPUTER) {
 			if(*active_menu == MENU_XM) {
-				switch(the_message->data[2]) {
-				case 1: //Preset list.
+				const MenuList xm_menu = getMenu(MENU_INDEX_XM_SETTINGS, parameter_list->locale);
+
+				switch(xm_menu.getGlobalIndex(int(the_message->data[2]) - 1)) {
+				case MENU_INDEX_XM_SETTINGS_PRESETS: //Preset list.
 					createXMPresetMenu();
 					break;
-				case 2: //Direct tune.
+				case MENU_INDEX_XM_SETTINGS_DIRECT_TUNE: //Direct tune.
 					manual_tune = !manual_tune;
-					createXMMainMenuOption(1);
+					createXMMainMenuOption(xm_menu.getLocalIndex(MENU_INDEX_XM_SETTINGS_DIRECT_TUNE));
 
 					this->requestControl();
 					if(!manual_tune) {
-						uint8_t req_data[] = {0x77, 0x1, 0x10}; //TODO: Update if AA is requesting control.
+						uint8_t req_data[] = {0x77, 0x1, 0x10};
 						AIData req_msg(sizeof(req_data), ID_XM, ID_NAV_SCREEN);
 
 						req_msg.refreshAIData(req_data);
@@ -742,20 +766,22 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 					}
 					
 					break;
-				case 3: //Channel list.
+				case MENU_INDEX_XM_SETTINGS_CHANNEL_LIST: //Channel list.
 					createXMChannelMenu();
 					break;
-				case 4: //Manual entry.
+				case MENU_INDEX_XM_SETTINGS_MANUAL_ENTRY: //Manual entry.
 					createXMDirectMenu();
 					break;
-				case 5: //Scroll.
+				case MENU_INDEX_XM_SETTINGS_SCROLL_INFO: //Scroll.
 					this->split = !this->split;
-					createXMMainMenuOption(4);
+					createXMMainMenuOption(xm_menu.getLocalIndex(MENU_INDEX_XM_SETTINGS_SCROLL_INFO));
 					scroll_timer = XM_SCROLL_TIMER_FULL;
 					scroll_state = -1;
 					break;
-				case 6: //Audio settings.
+				case MENU_INDEX_XM_SETTINGS_AUDIO: //Audio settings.
 					//TODO: Audio menu from radio.
+					break;
+				default:
 					break;
 				}
 			} else if(*active_menu == MENU_PRESET_LIST) {
@@ -783,10 +809,12 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		sendAIAckMessage(sender);
 }
 
+//Send the AIBus handshake message to the radio.
 void HondaXMHandler::sendSourceNameMessage() {
 	sendSourceNameMessage(ID_RADIO);
 }
 
+//Send the AIBus handshake message.
 void HondaXMHandler::sendSourceNameMessage(const uint8_t id) {
 	uint8_t ai_handshake_data[] = {0x1, 0x1, 0x19, 0x2};
 	AIData ai_handshake_msg(sizeof(ai_handshake_data), ID_XM, id);
@@ -820,10 +848,12 @@ void HondaXMHandler::sendSourceNameMessage(const uint8_t id) {
 	ai_driver->writeAIData(&ai_name_msg, parameter_list->radio_connected);
 }
 
+//Get the current XM2 setting.
 bool HondaXMHandler::getXM2() {
 	return this->xm2;
 }
 
+//Set the nav header.
 void HondaXMHandler::setNumberDisplay() {
 	if(!text_control)
 		return;
@@ -861,6 +891,7 @@ void HondaXMHandler::setNumberDisplay() {
 	setNavHeader(nav_header);
 }
 
+//Set a text display on the nav screen.
 void HondaXMHandler::setTextDisplay(const uint8_t field) {
 	if(!text_control)
 		return;
@@ -928,6 +959,7 @@ void HondaXMHandler::setTextDisplay(const uint8_t field) {
 	setIMIDTextDisplay(field, selected);
 }
 
+//Request text from the XM tuner.
 void HondaXMHandler::sendTextRequest() {
 	if(!source_sel)
 		return;
@@ -942,6 +974,7 @@ void HondaXMHandler::sendTextRequest() {
 	getIEAckMessage(device_ie_id);
 }
 
+//Set text on the IMID.
 void HondaXMHandler::setIMIDTextDisplay(const uint8_t field, String selected) {
 	if(!text_control)
 		return;
@@ -1156,6 +1189,7 @@ void HondaXMHandler::savePreset(uint8_t preset) {
 	getPreset(preset);
 }
 
+//Send the AIBus channel number message.
 void HondaXMHandler::sendAINumberMessage(const uint8_t receiver) {
 	uint8_t number_data[] = {0x39, 0x00, uint8_t((*channel&0xFF00)>>8), uint8_t(*channel&0xFF), current_preset};
 	AIData number_msg(sizeof(number_data), ID_XM, receiver);
@@ -1171,6 +1205,7 @@ void HondaXMHandler::sendAINumberMessage(const uint8_t receiver) {
 	ai_driver->writeAIData(&number_msg, ack);
 }
 
+//Send an AIBus text message.
 void HondaXMHandler::sendAITextMessage(const uint8_t receiver, const uint8_t field) {
 	String selected;
 	if(field < 1 || field > 4)
@@ -1226,6 +1261,7 @@ void HondaXMHandler::sendAITextMessage(const uint8_t receiver, const uint8_t fie
 	ai_driver->writeAIData(&text_msg, ack);
 }
 
+//Send an IMID channel number message.
 void HondaXMHandler::sendIMIDNumberMessage() {
 	if(parameter_list->imid_connected) {
 		if(display_parameter == N_TEXT_NONE)
@@ -1407,6 +1443,7 @@ void HondaXMHandler::sendIMIDInfoMessage(const bool resend) {
 	}
 }
 
+//Send an AIBus IMID info message.
 void HondaXMHandler::sendIMIDInfoHeader(String text) {
 	if(parameter_list->external_imid_char <= 0 || parameter_list->external_imid_lines < 2)
 		return;
@@ -1430,6 +1467,7 @@ void HondaXMHandler::sendIMIDInfoHeader(String text) {
 	ai_driver->writeAIData(&imid_msg);
 }
 
+//Send a full IMID info message.
 void HondaXMHandler::sendIMIDInfoMessage(String text) {
 	if(parameter_list->imid_connected) {
 		imid_handler->writeIMIDTextMessage(text);
@@ -1454,6 +1492,7 @@ void HondaXMHandler::sendIMIDInfoMessage(String text) {
 	}
 }
 
+//Clear XM text from the internal memory.
 void HondaXMHandler::clearXMText(const bool song_title, const bool artist, const bool channel, const bool genre) {
 	if(song_title)
 		this->song = String("");
@@ -1468,6 +1507,7 @@ void HondaXMHandler::clearXMText(const bool song_title, const bool artist, const
 		this->genre = String("");
 }
 
+//Clear XM text from the nav screen and external IMID.
 void HondaXMHandler::clearAIXMText(const bool song_title, const bool artist, const bool channel, const bool genre) {
 	if(song_title) {
 		uint8_t clear_data[] = {0x20, 0x60, 0x1};
@@ -1512,9 +1552,12 @@ void HondaXMHandler::clearAIXMText(const bool song_title, const bool artist, con
 	}
 }
 
+//Create the XM main menu.
 void HondaXMHandler::createXMMainMenu() {
-	const uint8_t menu_size = 6;
-	startAudioMenu(menu_size, menu_size, false, "XM Tuner Settings");
+	const MenuList main_menu = getMenu(MENU_INDEX_XM_SETTINGS, parameter_list->locale);
+
+	const uint8_t menu_size = main_menu.size();
+	startAudioMenu(menu_size, menu_size, false, main_menu.title);
 
 	elapsedMillis cancel_wait;
 	while(cancel_wait < 20) {
@@ -1536,8 +1579,27 @@ void HondaXMHandler::createXMMainMenu() {
 	displayAudioMenu(1);
 }
 
+//Create an XM main menu option.
 void HondaXMHandler::createXMMainMenuOption(const uint8_t option) {
-	switch(option) {
+	const MenuList main_menu = getMenu(MENU_INDEX_XM_SETTINGS, parameter_list->locale);
+
+	String item_txt = "";
+
+	if(option == main_menu.getLocalIndex(MENU_INDEX_XM_SETTINGS_DIRECT_TUNE)) {
+		if(manual_tune)
+			item_txt = String("< ") + main_menu[option] + " >";
+		else
+			item_txt = main_menu[option];
+
+		appendAudioMenu(option, item_txt);
+		return;
+	} else if(option == main_menu.getLocalIndex(MENU_INDEX_XM_SETTINGS_SCROLL_INFO))
+		item_txt = split ? "#ROF " : "#RON ";
+	
+	item_txt += main_menu[option];
+	appendAudioMenu(option, item_txt);
+
+	/*switch(option) {
 	case 0:
 		appendAudioMenu(0, "Presets");
 		break;
@@ -1562,9 +1624,10 @@ void HondaXMHandler::createXMMainMenuOption(const uint8_t option) {
 	case 5:
 		appendAudioMenu(5, "Audio Settings");
 		break;
-	}
+	}*/
 }
 
+//Create the XM preset menu.
 void HondaXMHandler::createXMPresetMenu() {
 	bool clear = false;
 
@@ -1591,7 +1654,9 @@ void HondaXMHandler::createXMPresetMenu() {
 	if(!clear)
 		return;
 
-	startAudioMenu(6, 6, false, "Select Preset");
+	const MenuList preset_menu = getMenu(MENU_INDEX_XM_PRESET, parameter_list->locale);
+
+	startAudioMenu(6, 6, false, preset_menu.title);
 	for(uint8_t i=0;i<6;i+=1)
 		createXMPresetMenuOption(i);
 	
@@ -1603,6 +1668,7 @@ void HondaXMHandler::createXMPresetMenu() {
 		displayAudioMenu(1);
 }
 
+//Create an XM preset menu option.
 void HondaXMHandler::createXMPresetMenuOption(const uint8_t option) {
 	uint16_t preset_ch = xm1_preset[option];
 	String preset_name = xm1_preset_name[option];
@@ -1611,9 +1677,12 @@ void HondaXMHandler::createXMPresetMenuOption(const uint8_t option) {
 		preset_name = xm2_preset_name[option];
 	}
 
-	appendAudioMenu(option, String(option + 1) + ". CH" + String(preset_ch) + ": " + preset_name);
+	const MenuList preset_menu = getMenu(MENU_INDEX_XM_PRESET, parameter_list->locale);
+
+	appendAudioMenu(option, String(option + 1) + preset_menu.getLocalEntry(MENU_INDEX_XM_PRESET_CHANNEL) + String(preset_ch) + ": " + preset_name);
 }
 
+//Create the XM direct tune menu.
 void HondaXMHandler::createXMDirectMenu() {
 	bool clear = false;
 
@@ -1640,7 +1709,9 @@ void HondaXMHandler::createXMDirectMenu() {
 	if(!clear)
 		return;
 
-	startAudioMenu(12, 2, false, "Enter Channel Number");
+	const MenuList direct_menu = getMenu(MENU_INDEX_XM_DIRECT, parameter_list->locale);
+
+	startAudioMenu(12, 2, false, direct_menu.title);
 
 	*active_menu = MENU_DIRECT_TUNE;
 	direct_num = 0;
@@ -1653,7 +1724,10 @@ void HondaXMHandler::createXMDirectMenu() {
 	displayAudioMenu(1);
 }
 
+//Create an XM direct tune menu option.
 void HondaXMHandler::createXMDirectMenuOption(const uint8_t option) {
+	const MenuList direct_menu = getMenu(MENU_INDEX_XM_DIRECT, parameter_list->locale);
+
 	if(option < 10)
 		appendAudioMenu(option, String((option + 1)%10));
 	else {
@@ -1662,12 +1736,13 @@ void HondaXMHandler::createXMDirectMenuOption(const uint8_t option) {
 			appendAudioMenu(option, "#REV   ");
 			break;
 		case 11:
-			appendAudioMenu(option, "Enter");
+			appendAudioMenu(option, direct_menu.getLocalEntry(MENU_INDEX_XM_DIRECT_ENTER));
 			break;
 		}
 	}
 }
 
+//Clear the upper field in the audio window.
 void HondaXMHandler::clearUpperField() {
 	if(!text_control)
 		return;
@@ -1689,6 +1764,7 @@ void HondaXMHandler::clearUpperField() {
 	}
 }
 
+//In the direct tune menu, add a number.
 void HondaXMHandler::appendDirectNumber(const uint8_t num) {
 	if(num > 0 && num <= 10) {
 		if(direct_num*10+int(num)%10 <= SUPPORTED_CHANNEL_COUNT) {
@@ -1735,6 +1811,7 @@ void HondaXMHandler::appendDirectNumber(const uint8_t num) {
 	}
 }
 
+//Create the XM channel menu.
 void HondaXMHandler::createXMChannelMenu() {
 	bool clear = false;
 
@@ -1776,10 +1853,12 @@ void HondaXMHandler::createXMChannelMenu() {
 		displayAudioMenu(1);
 }
 
+//Request screen control.
 void HondaXMHandler::requestControl() {
 	requestControl(ID_XM);
 }
 
+//Request screen control.
 void HondaXMHandler::requestControl(const uint8_t id) {
 	if(id == 0)
 		return;

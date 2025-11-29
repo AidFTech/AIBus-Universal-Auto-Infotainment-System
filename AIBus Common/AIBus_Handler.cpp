@@ -1,18 +1,20 @@
 #include "AIBus_Handler.h"
 
-AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin) {
+AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int ai_cache_size) {
 	this->ai_serial = serial;
 	this->rx_pin = rx_pin;
 
 	if(this->rx_pin >= 0)
 		pinMode(this->rx_pin, INPUT_PULLUP);
 
-	cached_vec.setStorage(cached_byte, 0);
+	cached_byte = new AIData[ai_cache_size];
+
+	cached_vec.setStorage(cached_byte, ai_cache_size, 0);
 	this->ai_serial->setTimeout(1);
 }
 
 AIBusHandler::~AIBusHandler() {
-	
+	delete[] cached_byte;
 }
 
 //The amount of AIBus data available.
@@ -39,7 +41,7 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 		ai_d->refreshAIData(cached_msg);
 		cached_msg.refreshAIData(0,0,0);
 
-		if(cached_vec.size() >= 4) {
+		/*if(cached_vec.size() >= 4) {
 			const uint8_t l = cached_vec.at(1);
 			uint8_t data[l+2];
 
@@ -54,7 +56,15 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 				readAIData(&cached_msg, data, l);
 			}
 		} else if(cached_vec.size() > 0)
-			cached_vec.clear();
+			cached_vec.clear();*/
+		if(cached_vec.size() > 0) {
+			cached_msg.refreshAIData(cached_vec.at(0));
+
+			if(cached_vec.size() <= 1)
+				cached_vec.clear();
+			else
+				cached_vec.remove(0);
+		}
 		
 		return true;
 	}
@@ -264,7 +274,7 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 			if(new_msg.sender == ai_d->sender)
 				continue;
 
-			if(new_msg.sender == ai_d->receiver && new_msg.receiver == ai_d->sender && new_msg.data[0] == 0x80) {
+			if(new_msg.sender == ai_d->receiver && new_msg.receiver == ai_d->sender && new_msg.l > 0 && new_msg.data[0] == 0x80) {
 				acknowledge = true;
 				break;
 			} else if(new_msg.sender != ai_d->sender) {
@@ -291,11 +301,11 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 void AIBusHandler::cacheMessage(AIData* ai_msg) {
 	if(cached_msg.l <= 0)
 		cached_msg.refreshAIData(*ai_msg);
-	else if(ai_msg->l + 4 < (cached_vec.max_size() - cached_vec.size() - 1)) {
-		uint8_t data[ai_msg->l + 4];
+	else if(cached_vec.size() < cached_vec.max_size()) {
+		/*uint8_t data[ai_msg->l + 4];
 		ai_msg->getBytes(data);
-		for(int i=0;i<ai_msg->l + 4;i+=1)
-			cached_vec.push_back(data[i]);
+		for(int i=0;i<ai_msg->l + 4;i+=1)*/
+			cached_vec.push_back(*ai_msg);
 	}
 }
 
@@ -306,12 +316,12 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 		if(readAIData(&ai_msg, false)) {
 			if(ai_msg.sender != id) {
 				if(ai_msg.receiver == id || ai_msg.receiver == 0xFF) {
-					if(ai_msg.receiver == id && ai_msg.l >= 1 && ai_msg.data[0] != 0x80)
-						sendAcknowledgement(id, ai_msg.sender);
-					if((ai_msg.receiver == id || ai_msg.receiver == 0xFF) && ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
+					if(ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
+						if(ai_msg.receiver == id)
+							sendAcknowledgement(id, ai_msg.sender);
 						cacheMessage(&ai_msg);
+						return true;
 					}
-					return true;
 				}
 			}
 		}
@@ -319,12 +329,23 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 	return false;
 }
 
-//Determine whether a message the initialization message.
+//Determine whether a message is the initialization message.
 bool getInitMessage(AIData* ai_d) {
 	if(ai_d->l < 2)
 		return false;
 
 	if(ai_d->data[0] == 0x4A && ai_d->data[1] == 0x1F)
+		return true;
+	else
+		return false;
+}
+
+//Determine whether a message is the poweroff message.
+bool getPoweroffMessage(AIData* ai_d) {
+	if(ai_d->l < 1)
+		return false;
+	
+	if(ai_d->data[0] == 0xA0)
 		return true;
 	else
 		return false;

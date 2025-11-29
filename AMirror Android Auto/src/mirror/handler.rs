@@ -144,6 +144,18 @@ impl<'a> MirrorHandler<'a> {
 
 		//Carplay stuff.
 		if !self.dongle_usb_conn.connected {
+			if phone_type == 3 {
+				match self.context.try_lock() {
+					Ok(mut context) => {
+						context.phone_type = 0;
+					}
+					Err(_) => {
+						println!("Carplay Handler stop connection: Context locked.");
+						return;
+					}
+				};
+			}
+
 			self.startup = false;
 			let run = self.dongle_usb_conn.connect();
 
@@ -155,6 +167,7 @@ impl<'a> MirrorHandler<'a> {
 		} else if !self.startup {
 			self.send_dongle_startup();
 		}
+
 		let mirror_message = self.dongle_usb_conn.read();
 
 		match mirror_message {
@@ -379,14 +392,14 @@ impl<'a> MirrorHandler<'a> {
 
 		} else if message.message_type == 4 {
 			// Phone disconnected.
-			match self.mpv_video.try_lock() {
+			/*match self.mpv_video.try_lock() {
 				Ok(mut mpv_video) => {
 					mpv_video.stop();
 				}
 				Err(_) => {
 					println!("Carplay Handler: MPV Video Locked")
 				}
-			}
+			}*/
 
 			match self.context.try_lock() {
 				Ok(mut context) => {
@@ -402,6 +415,17 @@ impl<'a> MirrorHandler<'a> {
 			}
 
 		} else if message.message_type == 6 { //Video.
+			match self.context.try_lock() {
+				Ok(context) => {
+					if context.phone_type != 3 {
+						return;
+					}
+				}
+				Err(_) => {
+					return;
+				}
+			}
+
 			let mut data = vec![0;0];
 			for i in 20..message.data.len() {
 				data.push(message.data[i]);
@@ -416,6 +440,17 @@ impl<'a> MirrorHandler<'a> {
 				}
 			}
 		} else if message.message_type == 7 { //Audio.
+			match self.context.try_lock() {
+				Ok(context) => {
+					if context.phone_type != 3 {
+						return;
+					}
+				}
+				Err(_) => {
+					return;
+				}
+			}
+			
 			if message.data.len() > 16 {
 				let mut rd_audio = match self.rd_audio.try_lock() {
 					Ok(rd_audio) => rd_audio,
@@ -546,6 +581,10 @@ impl<'a> MirrorHandler<'a> {
 						album_changed = true;
 					}
 				}
+			}
+		} for int_var in meta_message.int_vars {
+			if int_var.variable == "MediaSongPlayTime" && context.audio_selected {
+				context.track_time = int_var.value/1000;
 			}
 		}
 	}

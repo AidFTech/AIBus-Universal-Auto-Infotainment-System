@@ -43,6 +43,17 @@ Audio_Window::~Audio_Window() {
 		delete this->function_area_box[i];
 }
 
+//Audio window loop function.
+void Audio_Window::loop() {
+	if(this->settings_menu_prep && attribute_list->timer != nullptr && (*attribute_list->timer - prep_time) > SETTINGS_MENU_PREP_LIMIT) {
+		settings_menu_prep = false;
+
+		uint8_t clear_data[] = {0x2B, 0x40};
+		AIData clear_msg(sizeof(clear_data), ID_NAV_COMPUTER, settings_menu_sender, clear_data);
+		attribute_list->aibus_handler->writeAIData(&clear_msg);
+	}
+}
+
 //Handle an AIBus message. Return true if the message is meant for the audio screen.
 bool Audio_Window::handleAIBus(AIData* msg) {
 	if(msg->receiver != ID_NAV_COMPUTER)
@@ -78,6 +89,9 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 				entry_name += msg->data[i+3];
 			
 			this->settings_menu->setItem(entry_name, entry);
+			
+			if(attribute_list->timer != nullptr)
+				prep_time = *attribute_list->timer;
 		} else if(msg->data[1] == 0x52 && this->settings_menu != NULL) { //Display the menu.
 			if(!getSettingsMenuValid(msg->sender) || (!this->settings_menu_active && !this->settings_menu_prep))
 				return false;
@@ -143,6 +157,8 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 				this->settings_menu->getSlider(index)->setSelected(sel);
 			}
 
+			if(attribute_list->timer != nullptr)
+				prep_time = *attribute_list->timer;
 		} else if(msg->data[1] == 0x4A && this->settings_menu != NULL) { //Clear the menu.
 			this->settings_menu_active = false;
 			this->settings_menu_prep = false;
@@ -488,6 +504,7 @@ void Audio_Window::initializeSettingsMenu(AIData* ai_b) {
 
 	this->settings_menu = new NavMenu(attribute_list, x, y, w, h, count, -1, h*6/7, rows, loop, title);
 	settings_menu_prep = true;
+	prep_time = *attribute_list->timer;
 }
 
 void Audio_Window::setText(const uint8_t group, const uint8_t area, std::string text) {

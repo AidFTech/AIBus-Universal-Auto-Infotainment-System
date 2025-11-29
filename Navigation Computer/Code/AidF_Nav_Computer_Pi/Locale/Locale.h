@@ -6,6 +6,13 @@
 #define locale_h
 
 enum nav_text_index: unsigned int {
+	//Nav Messages
+	LOCALE_STRING_MAP_NOT_FOUND,
+
+	//Setting Headers
+	LOCALE_STRING_SET_CLOCK,
+	LOCALE_STRING_CANT_SET_CLOCK,
+	
 	//Consumption Headers
 	LOCALE_STRING_CONSUMPTION,
 
@@ -16,6 +23,13 @@ enum nav_text_index: unsigned int {
 	//Vehicle Info Parameters
 	LOCALE_STRING_COOLANT_TEMP,
 	LOCALE_STRING_OUTSIDE_TEMP,
+	LOCALE_STRING_RANGE,
+	LOCALE_STRING_INST_ECONOMY,
+	LOCALE_STRING_AVG_ECONOMY,
+	LOCALE_STRING_TRIP_TIMER,
+	LOCALE_STRING_TRIP_DISTANCE,
+	LOCALE_STRING_CRUISE_SPEED,
+	LOCALE_STRING_GEAR,
 
 	//Phone Mirror Headers
 	LOCALE_STRING_MIRROR,
@@ -26,6 +40,13 @@ enum nav_text_index: unsigned int {
 };
 
 static const char* TEXT_ENG[] {
+	//Nav Messages
+	"Map data not found. Please check the mounted SD card.",
+
+	//Setting Headers
+	"Set Clock",
+	"Disable Auto Clock Set before adjusting the time.",
+
 	//Consumption Headers
 	"Consumption",
 
@@ -36,7 +57,15 @@ static const char* TEXT_ENG[] {
 	//Vehicle Info Parameters
 	"Coolant Temp",
 	"Outside Temp",
+	"Range",
+	"Inst. Economy",
+	"Avg Economy",
+	"Trip Timer",
+	"Trip Distance",
+	"Cruise Speed",
+	"Gear",
 
+	//Mirror Messages
 	"Phone Mirror",
 	"Waiting for ",
 	".",

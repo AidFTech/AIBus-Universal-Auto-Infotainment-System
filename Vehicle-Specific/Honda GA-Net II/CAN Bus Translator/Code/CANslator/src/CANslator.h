@@ -1,12 +1,14 @@
 #include <Arduino.h>
 #include <stdint.h>
 #include <mcp2515.h>
+#include <Vector.h>
 
 #include "AIBus.h"
-#include "AIBus_Handler.h"
+#include "En_AIBus_Handler.h"
 #include "CAN_Handler.h"
 #include "CAN_Menu_Handler.h"
 #include "Parameter_List.h"
+#include "CANslator_EEPROM.h"
 
 #ifndef canslator_h
 #define canslator_h
@@ -39,9 +41,6 @@
 
 #define PARAM_TIMER 750
 
-#define WIPER_TIMER_L 15000
-#define WIPER_TIMER_H 6000
-
 #if !defined(HAVE_HWSERIAL1)
 #define AISerial Serial
 #else
@@ -53,7 +52,7 @@ public:
 	void setup();
 	void loop();
 private:
-	AIBusHandler ai_handler = AIBusHandler(&AISerial, AI_RX);
+	EnAIBusHandler ai_handler = EnAIBusHandler(&AISerial, AI_RX, 4, 64);
 	ParameterList parameters;
 
 	BCAN_Handler bcan_handler = BCAN_Handler(&ai_handler, &parameters, BCAN_CS, BCAN_IMID_CS, BCAN_RLS_CS, FCAN_CS);
@@ -61,10 +60,16 @@ private:
 	bool param_timer_enabled = false;
 	elapsedMillis param_timer;
 
-	uint32_t wiper_time_limit = WIPER_TIMER_L; //The wiper time limit.
 	elapsedMillis wiper_timer; //The wiper timer.
 
+	elapsedMillis minute_timer = 0;
+	uint32_t minute_count = 0;
+
+	uint32_t trip_distance = 0;
+
 	void handleAIBus(AIData* ai_msg);
+	void writeAIBusTimerMessage();
+	void writeAIBusTripDistanceMessage();
 };
 
 int main();

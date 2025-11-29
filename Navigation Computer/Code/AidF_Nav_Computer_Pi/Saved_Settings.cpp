@@ -119,3 +119,52 @@ std::string getMapPath() {
 
 	return map_path;
 }
+
+//Get vehicle info parameters from a saved file.
+void getVehicleInfoParams(bool* display_cruise, uint8_t* displayed_params, const int param_count) {
+	std::vector<IniList> info_file = loadIniFile(INFO_FILE);
+
+	for(int i=0;i<info_file.size();i+=1) {
+		if(info_file[i].title.compare("VehicleInfo") == 0) {
+			for(int n=0;n<info_file[i].l_n;n+=1) {
+				if(info_file[i].num_vars[n].compare("DisplayCruise") == 0)
+					*display_cruise = info_file[i].num_values[n] != 0;
+				else if(info_file[i].num_vars[n].find("DisplayParam") == 0) {
+					const std::string param_var = info_file[i].num_vars[n].substr(sizeof("DisplayParam") - 1);
+
+					try {
+						const int param = std::stoi(param_var);
+						if(param > param_count)
+							continue;
+
+						displayed_params[param] = info_file[i].num_values[n];
+					} catch(const std::invalid_argument &e) {
+
+					} catch(const std::out_of_range &e) {
+
+					}
+				}
+			}
+		}
+	}
+}
+
+//Save vehicle info parameters to a file.
+void saveVehicleInfoParams(const bool display_cruise, uint8_t* displayed_params, const int param_count) {
+	IniList info_file(param_count + 1, 0);
+
+	info_file.title = "VehicleInfo";
+
+	info_file.num_vars[0] = "DisplayCruise";
+	info_file.num_values[0] = display_cruise ? 1 : 0;
+
+	for(int i=0;i<param_count;i+=1) {
+		info_file.num_vars[i+1] = "DisplayParam" + std::to_string(i);
+		info_file.num_values[i+1] = displayed_params[i];
+	}
+
+	std::vector<IniList> file_list(0);
+	file_list.push_back(info_file);
+
+	saveIniFile(INFO_FILE, file_list);
+}

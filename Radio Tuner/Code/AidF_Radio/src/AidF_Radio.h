@@ -90,6 +90,8 @@
 
 #define SOURCE_CHANGE_TIMER 1000
 
+#define SOURCE_CHECK_TIMER 10000
+
 #define RDS_SEGMENT_COUNT 12
 #define RDS_IMID_TIMER 3000
 
@@ -116,7 +118,7 @@ private:
 
 	Si4735Controller tuner = Si4735Controller(TUNER_RESET, HIGH, &parameters), br_tuner = Si4735Controller(TUNER_RESET, LOW, &parameters);
 	BackgroundTuneHandler background_tuner = BackgroundTuneHandler(&br_tuner, &parameters);
-	SourceHandler source_handler = SourceHandler(&aibus_handler, &tuner, &background_tuner, &parameters, &volume_handler, SOURCE_COUNT);
+	SourceHandler source_handler = SourceHandler(&aibus_handler, &text_handler, &tuner, &background_tuner, &parameters, &volume_handler, SOURCE_COUNT);
 
 	PCM9211Handler adc_handler = PCM9211Handler(ADC_CS);
 
@@ -135,6 +137,9 @@ private:
 	int rds_imid_index = 0;
 
 	elapsedMillis background_tune_timer = 0;
+
+	elapsedMillis source_check_timer = 0;
+	bool source_check_enabled = true;
 
 	String rds_program_split[RDS_SEGMENT_COUNT];
 
@@ -174,5 +179,7 @@ private:
 
 void setup();
 void loop();
+
+int getSourceRank(const void* source_a, const void* source_b);
 
 #endif

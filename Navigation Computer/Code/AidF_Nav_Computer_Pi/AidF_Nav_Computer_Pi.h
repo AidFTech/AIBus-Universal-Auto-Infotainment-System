@@ -1,9 +1,12 @@
 #include <stdint.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_video.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mouse.h>
 #include <string>
 #include <fstream>
 #include <vector>
+#include <cstdlib>
 #include <pthread.h>
 
 #include "AidF_Color_Profile.h"
@@ -37,7 +40,7 @@
 #include "Map/Nav_Parameters.h"
 #include "Map/Map_Main_Window.h"
 
-#include "Socket/AMirror_Socket.h"
+#include "Socket/AIBus_Socket.h"
 
 #ifndef aidf_nav_computer_pi_h
 #define aidf_nav_computer_pi_h
@@ -72,6 +75,10 @@ class AidF_Nav_Computer {
 public:
 	bool running = true;
 
+	#ifdef RPI_UART
+	bool test_mode = false; //If true, do not shut the Pi down upon termination.
+	#endif
+
 	AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, const uint16_t lh);
 	~AidF_Nav_Computer();
 
@@ -83,6 +90,9 @@ public:
 	AidFColorProfile* getColorProfile();
 private:
 	bool handleBroadcastMessage(AIData* ai_d);
+
+	void sendPowerOffMessage();
+
 	void setDayNight(const bool night);
 	void setMirrorColors();
 
@@ -111,9 +121,9 @@ private:
 	Main_Menu_Window* main_window;
 	NavWindow* misc_window;
 
-	pthread_t socket_thread, frame_thread, timer_thread;
+	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread;
 
-	SocketHandlerParameters socket_parameters;
+	SocketHandlerParameters amirror_socket_parameters, abta_socket_parameters;
 	FrameParameters frame_parameters;
 	ElapsedMillis elapsed_millis;
 

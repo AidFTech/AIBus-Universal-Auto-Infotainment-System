@@ -39,7 +39,7 @@ public:
 	AudioSource* source_list;
 	uint16_t source_count;
 
-	SourceHandler(AIBusHandler* ai_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, VolumeHandler* volume_handler, uint16_t source_count);
+	SourceHandler(AIBusHandler* ai_handler, TextHandler* text_handler, Si4735Controller* tuner_main, BackgroundTuneHandler* tuner_background, ParameterList* parameter_list, VolumeHandler* volume_handler, uint16_t source_count);
 	~SourceHandler();
 
 	void sendRadioHandshake();
@@ -54,9 +54,10 @@ public:
 	void setImidSupportedSources(const int l, uint8_t* source_list);
 	bool getIMIDSourceSupported(const uint8_t source_id);
 
+	void setAudioOn(const bool audio_on);
 	bool getAudioOn();
-	bool getForceSourceChanged();
 
+	bool getForceSourceChanged();
 	void checkSources();
 	
 	void setPower(const bool power);
@@ -82,6 +83,8 @@ private:
 	AIBusHandler* ai_handler;
 	Si4735Controller* tuner_main;
 	BackgroundTuneHandler *tuner_background;
+
+	TextHandler* text_handler;
 
 	ParameterList* parameter_list;
 

@@ -16,6 +16,7 @@
 #include "../Text_Box.h"
 #include "../AIBus_Handler.h"
 #include "../AidF_Color_Profile.h"
+#include "../Locale/Locale.h"
 
 #ifndef map_main_window_h
 #define map_main_window_h
@@ -38,6 +39,10 @@ private:
 
 	NavParameters* nav_parameters;
 	SDL_Texture* map_canvas = NULL;
+
+	WrapTextBox map_fail_msg;
+
+	bool map_success = false; //True once a map has been loaded successfully.
 
 	int tile_bounds = 4096;
 	int set_row = 0, set_column = 0;

@@ -124,6 +124,9 @@ void Settings_Clock_Window::handleEnterButton() {
 		case MENU_INDEX_SETTINGS_CLOCK_AUTO_SET: //Auto clock.
 			this->initClockAuto();
 			break;
+		case MENU_INDEX_SETTINGS_CLOCK_MANUAL_SET:
+			attribute_list->next_window = NEXT_WINDOW_SETTINGS_CLOCK_SET;
+			break;
 		default:
 			break;
 		}

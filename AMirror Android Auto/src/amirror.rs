@@ -276,7 +276,7 @@ impl <'a> AMirror<'a> {
 
 		std::mem::drop(context);
 
-		//self.dongle_handler.process();
+		self.dongle_handler.process();
 		self.aa_handler.process();
 
 		context = match self.context.try_lock() {
@@ -1004,11 +1004,14 @@ impl <'a> AMirror<'a> {
 		let new_latitude = context.latitude;
 		let new_longitude = context.longitude;
 		let new_altitude = context.altitude;
+		let phone_type = context.phone_type;
 
 		std::mem::drop(context);
 		
 		if new_latitude != latitude || new_longitude != longitude || new_altitude != altitude {
-			self.aa_handler.send_coordinates();
+			if phone_type == 5 {
+				self.aa_handler.send_coordinates();
+			}
 		}
 	}
 
@@ -1022,7 +1025,7 @@ impl <'a> AMirror<'a> {
 			}
 		};
 
-		if ai_msg.sender == AIBUS_DEVICE_RADIO && !context.radio_connected && !get_init_message(&ai_msg) && self.powered_on {
+		if ai_msg.sender == AIBUS_DEVICE_RADIO && !context.radio_connected && !get_init_message(&ai_msg) && !get_poweroff_message(&ai_msg) && self.powered_on {
 			context.radio_connected = true;
 
 			std::mem::drop(context);
@@ -1038,7 +1041,7 @@ impl <'a> AMirror<'a> {
 			};
 		}
 
-		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN && !context.screen_connected && !get_init_message(&ai_msg) && self.powered_on {
+		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN && !context.screen_connected && !get_init_message(&ai_msg) && !get_poweroff_message(&ai_msg) && self.powered_on {
 			context.screen_connected = true;
 
 			self.write_aibus_message(AIBusMessage {
@@ -1046,6 +1049,21 @@ impl <'a> AMirror<'a> {
 				receiver: AIBUS_DEVICE_NAV_SCREEN,
 				data: [0x31, 0x30].to_vec(),
 			});
+		}
+
+		if ai_msg.sender == AIBUS_DEVICE_PHONE && !context.bluetooth_connected && !get_init_message(&ai_msg) && !get_poweroff_message(&ai_msg) && self.powered_on {
+			context.bluetooth_connected = true;
+			//TODO: Ping for address.
+		}
+
+		if get_init_message(&ai_msg) || get_poweroff_message(&ai_msg) {
+			if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN {
+				context.screen_connected = false;
+			} else if ai_msg.sender == AIBUS_DEVICE_PHONE {
+				context.bluetooth_connected = false;
+			} else if ai_msg.sender == AIBUS_DEVICE_RADIO {
+				context.radio_connected = false;
+			}
 		}
 
 		if ai_msg.receiver != AIBUS_DEVICE_AMIRROR && ai_msg.receiver != 0xFF {
@@ -1573,6 +1591,24 @@ impl <'a> AMirror<'a> {
 					self.imid_refresh = true;
 					self.imid_scroll_pos = 0;
 					self.scroll_timer = Instant::now();
+
+					let mut overlay_text = "".to_string();
+
+					if self.imid_scroll == 0 { //Phone.
+						overlay_text = "Phone: ".to_string() + &context.phone_name;
+					} else if self.imid_scroll == 1 { //Song.
+						overlay_text = "Track: ".to_string() + &context.song_title;
+					} else if self.imid_scroll == 2 { //Artist.
+						overlay_text = "Artist: ".to_string() + &context.artist;
+					} else if self.imid_scroll == 3 { //Album.
+						overlay_text = "Album: ".to_string() + &context.album;
+					} else if self.imid_scroll == 4 { //App.
+						overlay_text = "App: ".to_string() + &context.app;
+					}
+					
+					if overlay_text.len() > 0 {
+						self.write_nav_overlay(overlay_text);
+					}
 				} else if button == 0x26 { //Audio button.
 					if state == 0x2 {
 						if !self.audio_held {
@@ -1589,7 +1625,9 @@ impl <'a> AMirror<'a> {
 									}
 								}
 							} else {
-								self.aa_handler.show_audio_window();
+								if context.phone_type == 5 {
+									self.aa_handler.show_audio_window();
+								}
 							}
 						} else {
 							self.write_aibus_message(AIBusMessage {
@@ -1691,9 +1729,14 @@ impl <'a> AMirror<'a> {
 			});
 		}
 
+		let phone_type = context.phone_type;
+
 		std::mem::drop(context);
-		self.dongle_handler.handle_aibus_message(ai_msg.clone());
-		self.aa_handler.handle_aibus_message(ai_msg);
+		if phone_type == 3 {
+			self.dongle_handler.handle_aibus_message(ai_msg.clone());
+		} else if phone_type == 5 {
+			self.aa_handler.handle_aibus_message(ai_msg);
+		}
 	}
 
 	///Get the context.

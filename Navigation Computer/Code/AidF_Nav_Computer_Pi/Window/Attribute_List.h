@@ -28,6 +28,7 @@ enum next_window_t : int16_t {
 	NEXT_WINDOW_SETTINGS_DISPLAY,
 	NEXT_WINDOW_SETTINGS_INFO,
 	NEXT_WINDOW_SETTINGS_CLOCK,
+	NEXT_WINDOW_SETTINGS_CLOCK_SET,
 	NEXT_WINDOW_SETTINGS_FORMAT,
 	NEXT_WINDOW_SETTINGS_COLOR,
 	NEXT_WINDOW_SETTINGS_COLOR_PICKER,
@@ -65,7 +66,11 @@ struct AttributeList {
 	bool auto_clock = true; //True if the timekeeper device receives its time data automatically.
 	bool timekeeper_detected = false; //True if a message from the timekeeper device has been received.
 
+	int8_t hour = -1, minute = -1; //Hour and minute.
+
 	uint16_t vehicle_speed = 0;
+	
+	unsigned long* timer = nullptr;
 
 	AIBusHandler* aibus_handler;
 };

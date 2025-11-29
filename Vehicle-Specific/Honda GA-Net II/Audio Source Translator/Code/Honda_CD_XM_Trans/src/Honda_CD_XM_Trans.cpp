@@ -63,7 +63,7 @@ void HondaCDXMTrans::setup() {
 	digitalWrite(SPDIF_RESET, HIGH);
 	delay(100);
 	digitalWrite(SPDIF_RESET, LOW);
-	delay(30);
+	delay(100);
 	digitalWrite(SPDIF_RESET, HIGH);
 
 	EnIEBusParams ie_params;
@@ -167,17 +167,17 @@ void HondaCDXMTrans::loop() {
 				(ai_msg.sender == ID_XM && xm_handler.getEstablished()))
 				continue;
 
-			if (!parameters.computer_connected && ai_msg.sender == ID_NAV_COMPUTER && !getInitMessage(&ai_msg))
+			if (!parameters.computer_connected && ai_msg.sender == ID_NAV_COMPUTER && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg))
 				parameters.computer_connected = true;
 
-			if (!parameters.screen_connected && ai_msg.sender == ID_NAV_SCREEN && !getInitMessage(&ai_msg))
+			if (!parameters.screen_connected && ai_msg.sender == ID_NAV_SCREEN && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg))
 				parameters.screen_connected = true;
 
-			if (!parameters.mirror_connected && ai_msg.sender == ID_ANDROID_AUTO && !getInitMessage(&ai_msg))
+			if (!parameters.mirror_connected && ai_msg.sender == ID_ANDROID_AUTO && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg))
 				parameters.mirror_connected = true;
 
 			#ifndef AI_DEBUG
-			if (!parameters.radio_connected && ai_msg.sender == ID_RADIO && !getInitMessage(&ai_msg)) {
+			if (!parameters.radio_connected && ai_msg.sender == ID_RADIO && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg)) {
 				parameters.radio_connected = true;
 
 				if (cd_handler.getEstablished())
@@ -187,12 +187,14 @@ void HondaCDXMTrans::loop() {
 				if (xm_handler.getEstablished())
 					xm_handler.sendSourceNameMessage();
 
-				if (imid_handler.getEstablished())
+				if (imid_handler.getEstablished()) {
+					imid_handler.writeScreenLayoutMessage();
 					imid_handler.writeVolumeLimitMessage();
+				}
 			}
 			#endif
 			
-			if(getInitMessage(&ai_msg)) {
+			if(getInitMessage(&ai_msg) || getPoweroffMessage(&ai_msg)) {
 				if(ai_msg.sender == ID_RADIO)
 					parameters.radio_connected = false;
 				else if(ai_msg.sender == ID_NAV_COMPUTER)
@@ -260,8 +262,6 @@ void HondaCDXMTrans::loop() {
 							sendPingHandshake(&ie_handler, IE_ID_TAPE);
 							sendPingHandshake(&ie_handler, IE_ID_SIRIUS);
 						} else {
-							parameters.power_on = false;
-
 							if ((parameters.door_position & 0xF) != 0)
 								powerOff();
 							else {
@@ -274,7 +274,7 @@ void HondaCDXMTrans::loop() {
 					const uint8_t last_door_state = parameters.door_position;
 					parameters.door_position = ai_msg.data[2] & 0xF;
 
-					if (last_door_state == 0x0 && parameters.door_position != 0x0 && !parameters.power_on) {
+					if (last_door_state == 0x0 && parameters.door_position != 0x0 && parameters.key_position == 0) {
 						powerOff();
 					}
 
@@ -433,8 +433,7 @@ void HondaCDXMTrans::sendIMIDRequest() {
 		ack_id = ID_XM;
 
 	uint8_t imid_request_data[] = {0x4, 0xE6, 0x3B};
-	AIData imid_request_msg(sizeof(imid_request_data), ack_id, ID_IMID_SCR);
-	imid_request_msg.refreshAIData(imid_request_data);
+	AIData imid_request_msg(sizeof(imid_request_data), ack_id, ID_IMID_SCR, imid_request_data);
 
 	ai_handler.writeAIData(&imid_request_msg);
 
@@ -472,6 +471,28 @@ void HondaCDXMTrans::sendIMIDRequest() {
 
 //Perform power off procedures.
 void HondaCDXMTrans::powerOff() {
+	parameters.power_on = false;
+
+	uint8_t poweroff_data[] = {0xA0};
+	AIData poweroff_msg(sizeof(poweroff_data), ID_IMID_SCR, 0xFF, poweroff_data);
+
+	if(parameters.imid_connected)
+		ai_handler.writeAIData(&poweroff_msg, false);
+	if(cd_handler.getEstablished()) {
+		poweroff_msg.sender = ID_CD;
+		ai_handler.writeAIData(&poweroff_msg, false);
+		poweroff_msg.sender = ID_CDC;
+		ai_handler.writeAIData(&poweroff_msg, false);
+	}
+	if(tape_handler.getEstablished()) {
+		poweroff_msg.sender = ID_TAPE;
+		ai_handler.writeAIData(&poweroff_msg, false);
+	}
+	if(xm_handler.getEstablished()) {
+		poweroff_msg.sender = ID_XM;
+		ai_handler.writeAIData(&poweroff_msg, false);
+	}
+
 	digitalWrite(GA_ON, LOW);
 	digitalWrite(MAIN_POWER, LOW);
 	digitalWrite(AUDIO_ON, LOW);

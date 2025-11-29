@@ -169,7 +169,7 @@ void VehicleInfoWindow::drawWindow() {
 		const int16_t silhouette_start_x = attribute_list->w/2 - 600/2;
 
 		int16_t silhouette_start_y = attribute_list->h/2 - 240/2;
-		if(info_parameters->hybrid_system_present)
+		if(info_parameters->charge_assist_meter)
 			silhouette_start_y -= 30;
 		
 		this->title_box.drawText();
@@ -372,6 +372,21 @@ void VehicleInfoWindow::drawWindow() {
 					corner_gw12.drawFilled(COLOR_ENG1, COLOR_ENG2, outline_color, frame, CORNER_ANGLE_UL, true);
 				}
 			}
+
+			if(info_parameters->charge_assist_meter) {
+				PowerFlowArrow arrow_charge(renderer, w/2 - CHARGE_ASSIST_W/2, silhouette_start_y + 250, CHARGE_ASSIST_W/2, CHARGE_ASSIST_H);
+				PowerFlowArrow arrow_assist(renderer, w/2, silhouette_start_y + 250, CHARGE_ASSIST_W/2, CHARGE_ASSIST_H);
+				if(info_parameters->charge_assist_pos > 0x7F) { //Assist.
+					arrow_charge.drawOutline(dimmed_button, outline_color);
+					arrow_assist.drawPartialFilled(COLOR_ASSIST1, COLOR_ASSIST2, outline_color, dimmed_button, frame, ARROW_DIR_RIGHT, uint8_t((int(info_parameters->charge_assist_pos)-0x7F)*2), false);
+				} else if(info_parameters->charge_assist_pos < 0x7F) { //Charge.
+					arrow_charge.drawPartialFilled(COLOR_REG1, COLOR_REG2, outline_color, dimmed_button, frame, ARROW_DIR_LEFT, uint8_t((0x7F-int(info_parameters->charge_assist_pos))*2), false);
+					arrow_assist.drawOutline(dimmed_button, outline_color);
+				} else {
+					arrow_charge.drawOutline(dimmed_button, outline_color);
+					arrow_assist.drawOutline(dimmed_button, outline_color);
+				}
+			}
 		}
 	} else
 		this->settings_menu->drawMenu();
@@ -430,25 +445,29 @@ void VehicleInfoWindow::handleEnterButton() {
 		return;
 
 	if(active_menu == INFO_ACTIVE_MENU_MAIN) {
-		MenuList settings_menu_list = getMenu(MENU_INDEX_INFORMATION_MAIN, attribute_list->locale);
+		const MenuList settings_menu_list = getMenu(MENU_INDEX_INFORMATION_MAIN, attribute_list->locale);
 
-		switch(selected) {
-		case 0:
-		case 1:
-		case 2:
-		case 3:
+		switch(settings_menu_list.getGlobalIndex(selected)) {
+		case MENU_INDEX_INFORMATION_MAIN_DISP_1:
+		case MENU_INDEX_INFORMATION_MAIN_DISP_2:
+		case MENU_INDEX_INFORMATION_MAIN_DISP_3:
+		case MENU_INDEX_INFORMATION_MAIN_DISP_4:
 			createParamSettingsMenu(uint8_t(selected));
 			break;
-		case 5:
+		case MENU_INDEX_INFORMATION_MAIN_CRUISE:
 			info_parameters->display_cruise = !info_parameters->display_cruise;
 			if(info_parameters->display_cruise)
 				this->settings_menu->setItem(std::string("#RON ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CRUISE), 5);
 			else
 				this->settings_menu->setItem(std::string("#ROF ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CRUISE), 5);
+			saveParamSettings();
+			break;
+		default:
 			break;
 		}
 	} else if(active_menu == INFO_ACTIVE_MENU_PARAM) {
 		param_index[active_param] = (info_param)selected;
+		saveParamSettings();
 		createDefaultSettingsMenu();
 		refreshWindow();
 	}
@@ -484,14 +503,162 @@ void VehicleInfoWindow::refreshParam(TextBox* title, TextBox* text, const info_p
 	} else if(param == INFO_PARAM_COOLANT_TEMP && info_parameters->coolant_temp_sent) { //Coolant temp.
 		title->setText(getString(LOCALE_STRING_COOLANT_TEMP, attribute_list->locale));
 
-		std::string temp_text = std::to_string(info_parameters->coolant_temp/10) + '\xb0';
+		string temp_text = std::to_string(info_parameters->coolant_temp/10) + '\xb0';
 		if(info_parameters->coolant_temp_fahrenheit)
 			temp_text += "F";
 		else
 			temp_text += "C";
 
 		text->setText(temp_text);
-	} else {
+	} else if(param == INFO_PARAM_RANGE) {
+		title->setText(getString(LOCALE_STRING_RANGE, attribute_list->locale));
+
+		string range_text = to_string(info_parameters->range);
+		if(info_parameters->range_miles)
+			range_text += "mi";
+		else
+			range_text += "km";
+
+		text->setText(range_text);
+	} else if(param == INFO_PARAM_INST_ECONOMY || param == INFO_PARAM_TRIP_AVERAGE_ECONOMY) {
+		float econ = -1;
+		econ_unit unit = ECON_L_100KM;
+
+		if(param == INFO_PARAM_INST_ECONOMY) {
+			title->setText(getString(LOCALE_STRING_INST_ECONOMY, attribute_list->locale));
+			econ = info_parameters->inst_mpg;
+			unit = info_parameters->inst_units;
+		} else if(param == INFO_PARAM_TRIP_AVERAGE_ECONOMY) {
+			title->setText(getString(LOCALE_STRING_AVG_ECONOMY, attribute_list->locale));
+			econ = info_parameters->avg_mpg;
+			unit = info_parameters->avg_units;
+		}
+
+		string econ_text;
+		if(econ >= 0) {
+			econ_text = to_string(econ);
+			if(econ_text.length() > 4)
+				econ_text = econ_text.substr(0, 4);
+			if(econ_text.length() > 0 && econ_text[econ_text.length()-1] == '.')
+				econ_text.pop_back();
+		} else {
+			if(unit == ECON_L_100KM)
+				econ_text = "-.--";
+			else
+				econ_text = "--.-";
+		}
+
+		switch(unit) {
+		case ECON_L_100KM:
+			econ_text += "L/100km";
+			break;
+		case ECON_KM_L:
+			econ_text += "km/L";
+			break;
+		case ECON_MPG_US:
+		case ECON_MPG_IMP:
+			econ_text += "mpg";
+			break;
+		}
+
+		text->setText(econ_text);
+	} else if(param == INFO_PARAM_TRIP_TIMER) {
+		title->setText(getString(LOCALE_STRING_TRIP_TIMER, attribute_list->locale));
+
+		const int msd = info_parameters->trip_time/60, lsd = info_parameters->trip_time%60;
+		
+		string timer_str = to_string(msd) + ":";
+		if(lsd >= 10)
+			timer_str += to_string(lsd);
+		else
+			timer_str += "0" + to_string(lsd);
+
+		if(info_parameters->trip_time_minutes)
+			timer_str += "m";
+
+		text->setText(timer_str);
+	} else if(param == INFO_PARAM_TRIP_DISTANCE) {
+		title->setText(getString(LOCALE_STRING_TRIP_DISTANCE, attribute_list->locale));
+		
+		string dist_str = to_string(info_parameters->trip_distance/10) + "." + to_string(info_parameters->trip_distance%10);
+		if(info_parameters->distance_miles)
+			dist_str += "mi";
+		else
+			dist_str += "km";
+
+		text->setText(dist_str);
+	} else if(param == INFO_PARAM_CRUISE_SPEED) {
+		title->setText(getString(LOCALE_STRING_CRUISE_SPEED, attribute_list->locale));
+
+		if(info_parameters->cruise_speed >= 0) {
+			string speed_str = to_string(info_parameters->cruise_speed/10);
+			if(info_parameters->cruise_mph)
+				speed_str += "mph";
+			else
+				speed_str += "km/h";
+
+			text->setText(speed_str);
+		} else {
+			text->setText("--");
+		}
+	} else if(param == INFO_PARAM_GEAR) {
+		title->setText(getString(LOCALE_STRING_GEAR, attribute_list->locale));
+
+		string gear_str = "";
+		switch(info_parameters->transmission_type) {
+		case TRANSMISSION_MANUAL:
+		case TRANSMISSION_SMG:
+			if(info_parameters->gear <= 0) {
+				if(info_parameters->selected_pos == TRANSMISSION_POS_NEUTRAL)
+					gear_str = "N";
+				else if(info_parameters->selected_pos == TRANSMISSION_POS_REVERSE)
+					gear_str = "R";
+			} else {
+				if(info_parameters->transmission_type == TRANSMISSION_SMG) {
+					if(info_parameters->selected_pos == TRANSMISSION_POS_MANUAL)
+						gear_str = "M";
+					else
+						gear_str = "A";
+				} else
+					gear_str = "";
+				gear_str += to_string(int(info_parameters->gear));
+			}
+			break;
+		case TRANSMISSION_OTHER:
+			break;
+		default:
+			if(info_parameters->selected_pos == TRANSMISSION_POS_NEUTRAL)
+				gear_str = "N";
+			else if(info_parameters->selected_pos == TRANSMISSION_POS_REVERSE)
+				gear_str = "R";
+			else if(info_parameters->selected_pos == TRANSMISSION_POS_PARK)
+				gear_str = "P";
+			else if(info_parameters->selected_pos == TRANSMISSION_POS_DRIVE)
+				gear_str = "D";
+			else if(info_parameters->selected_pos == TRANSMISSION_POS_MANUAL)
+				gear_str = "M";
+			else if(info_parameters->selected_pos == TRANSMISSION_POS_LOW)
+				gear_str += "L";
+
+			switch(info_parameters->transmission_type) {
+			case TRANSMISSION_AUTOMATIC:
+			case TRANSMISSION_SEMI_AUTO:
+			case TRANSMISSION_DCT:
+				if(info_parameters->gear > 0)
+					gear_str += to_string(int(info_parameters->gear));
+				break;
+			case TRANSMISSION_IVT:
+			case TRANSMISSION_CVT:
+				if(info_parameters->selected_pos == TRANSMISSION_POS_MANUAL && info_parameters->gear > 0)
+					gear_str += to_string(int(info_parameters->gear));
+			default:
+				break;
+			}
+			break;
+		}
+
+		text->setText(gear_str);
+ 	} else {
 		title->setText("");
 		text->setText("");
 	}
@@ -557,7 +724,7 @@ void VehicleInfoWindow::createParamSettingsMenu(const uint8_t active_param) {
 				if(((info_parameters->supported_b)&(1<<(i-1))) == 0)
 					sel = false;
 			} else if(i < 16) {
-				if(((info_parameters->supported_a)&(1<<(16-i-1))) == 0)
+				if(((info_parameters->supported_a)&(1<<(i-8))) == 0)
 					sel = false;
 			}
 		}
@@ -567,4 +734,13 @@ void VehicleInfoWindow::createParamSettingsMenu(const uint8_t active_param) {
 	}
 
 	this->settings_menu->setSelected(1);
+}
+
+//Save parameter settings to a file.
+void VehicleInfoWindow::saveParamSettings() {
+	uint8_t params[PARAM_COUNT];
+	for(int i=0;i<PARAM_COUNT;i+=1)
+		params[i] = (uint8_t)this->info_parameters->param_index[i];
+
+	saveVehicleInfoParams(this->info_parameters->display_cruise, params, PARAM_COUNT);
 }

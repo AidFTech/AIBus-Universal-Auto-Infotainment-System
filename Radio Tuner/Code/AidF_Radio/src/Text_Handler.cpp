@@ -58,11 +58,14 @@ void TextHandler::setBlankHeader(String header) {
 }
 
 //Send a text control message to recipient, indicating source is in control.
-void TextHandler::sendSourceTextControl(const uint8_t recipient, const uint8_t source) {
+void TextHandler::sendSourceTextControl(const uint8_t recipient, const uint8_t source, bool ack) {
 	uint8_t data[] = {0x40, 0x01, source};
 	AIData text_control_msg(sizeof(data), ID_RADIO, recipient, data);
 
-	ai_handler->writeAIData(&text_control_msg);
+	if(recipient == ID_RADIO || recipient == 0 || recipient == 0xFF)
+		ack = false;
+
+	ai_handler->writeAIData(&text_control_msg, ack);
 }
 
 //Write text to the overlay header in the nav window.

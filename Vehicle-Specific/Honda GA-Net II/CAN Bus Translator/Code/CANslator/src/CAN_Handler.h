@@ -8,6 +8,7 @@
 #include "Parameter_List.h"
 #include "CAN_Menu_Handler.h"
 #include "Locale.h"
+#include "CANslator_EEPROM.h"
 
 #ifndef can_handler_h
 #define can_handler_h
@@ -20,6 +21,7 @@
 #define BCAN_ID_BRIGHTNESS 0x92F85450
 #define BCAN_ID_LIGHTS 0x8AF81110
 #define BCAN_ID_SPEED 0x92F85050
+#define BCAN_ID_HYBRID_SYSTEM 0x92F96050
 #define BCAN_ID_TEMP_RANGE 0x92F96250
 #define BCAN_ID_AC_AUTOSTOP 0x92F86150
 #define BCAN_ID_COOLANT 0x92F85250
@@ -36,7 +38,7 @@
 
 #define HEADLIGHT_TEMP_BUFFER 20 //Buffer for headlight temp hysteresis.
 
-enum AidFNavSpecial : uint8_t {
+enum aidf_nav_special_t : uint8_t {
 	AIDF_NAV_SPECIAL_NORMAL,
 	AIDF_NAV_SPECIAL_DESTINATION,
 	AIDF_NAV_SPECIAL_TOLL,
@@ -64,7 +66,8 @@ public:
 	bool getWiperIntActive();
 	bool runWiper();
 	
-	void sendAllParameters();
+	void sendCommonParameters();
+	void sendInfoParameters();
 
 	void setNavNextTurn(const uint8_t entry_angle, const uint8_t exit_angle, const uint16_t roads_visible, const uint8_t step_num, const uint8_t special, String street_name);
 private:
@@ -77,8 +80,8 @@ private:
 	
 	//BCAN-derived variables:
 	bool auto_stop :1, econ_mode :1, e_brake :1, brightness_bar :1, lights_on:1, night_mode :1;
-	uint8_t hybrid_battery_level, coolant_temp, eco_bar, doors_open, brightness, vehicle_speed, wiper_pos, wiper_delay_pos;
-	uint16_t electric_ac_power, eco_leaf_meter, gear;
+	uint8_t coolant_temp, eco_bar, doors_open, brightness, vehicle_speed, wiper_pos, wiper_delay_pos;
+	uint16_t electric_ac_power, eco_leaf_meter, honda_gear;
 	int16_t outside_temp; //Last digit is tenths place.
 	uint32_t odo_km;
 
@@ -88,6 +91,14 @@ private:
 	uint8_t key_pos = 0;
 
 	uint8_t light_state_a = 0, light_state_b = 0;
+
+	//Range:
+	uint16_t range = 0;
+	bool range_miles = false;
+
+	//Hybrid-specific:
+	uint8_t hybrid_status = 0x0, charge_assist = 0x7F, hybrid_battery = 0x0;
+	bool hybrid_init = false; //True if the hybrid handshake has been sent.
 
 	void broadcastBCAN(can_frame* can_msg);
 
@@ -107,6 +118,11 @@ private:
 	void writeAIBusSpeedMessage(const uint8_t receiver);
 	
 	void writeAIBusCoolantTempMessage(const uint8_t receiver);
+	void writeAIBusVoltageMessage();
+	void writeAIBusRangeMessage();
+
+	void writeAIBusHybridHandshake();
+	void writeAIBusHybridStatusMessage();
 
 	//CAN message handling:
 	void forwardIMIDMessage();

@@ -27,11 +27,20 @@ enum translator_menu_index : menu_index_t {
 
 	//XM settings menu.
 	MENU_INDEX_XM_SETTINGS,
+	MENU_INDEX_XM_SETTINGS_PRESETS,
 	MENU_INDEX_XM_SETTINGS_DIRECT_TUNE,
 	MENU_INDEX_XM_SETTINGS_CHANNEL_LIST,
 	MENU_INDEX_XM_SETTINGS_MANUAL_ENTRY,
 	MENU_INDEX_XM_SETTINGS_SCROLL_INFO,
 	MENU_INDEX_XM_SETTINGS_AUDIO,
+
+	//XM preset menu.
+	MENU_INDEX_XM_PRESET,
+	MENU_INDEX_XM_PRESET_CHANNEL,
+
+	//XM direct tune.
+	MENU_INDEX_XM_DIRECT,
+	MENU_INDEX_XM_DIRECT_ENTER,
 
 	MENU_INDEX_LEN
 };
@@ -41,6 +50,8 @@ static const translator_menu_index MENU_START_INDEX[] = {
 	MENU_INDEX_CDC_DISC,
 	MENU_INDEX_TAPE_SETTINGS,
 	MENU_INDEX_XM_SETTINGS,
+	MENU_INDEX_XM_PRESET,
+	MENU_INDEX_XM_DIRECT,
 };
 
 static const char* MENUS_ENG[] = {
@@ -65,11 +76,20 @@ static const char* MENUS_ENG[] = {
 
 	//XM settings menu.
 	"XM Tuner Settings",
+	"Presets",
 	"Direct Tune",
 	"Channel List",
 	"Manual Entry",
 	"Scroll Info Text",
 	"Audio Settings",
+
+	//XM preset menu.
+	"Select Preset",
+	". CH",
+
+	//XM direct tune menu.
+	"Enter Channel Number",
+	"Enter",
 };
 
 MenuList getMenu(const translator_menu_index index, const uint8_t locale);

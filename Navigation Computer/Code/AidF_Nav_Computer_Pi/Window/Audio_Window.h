@@ -6,6 +6,7 @@
 #define audio_window_h
 
 #define SUB_AREA_WIDTH 400
+#define SETTINGS_MENU_PREP_LIMIT 750
 
 #define MAIN_AREA_GROUP 0
 #define SUB_AREA_GROUP 1
@@ -16,6 +17,8 @@ class Audio_Window : public NavWindow {
 public:
 	Audio_Window(AttributeList *attribute_list);
 	~Audio_Window();
+
+	void loop();
 
 	void drawWindow();
 	void refreshWindow();
@@ -53,6 +56,8 @@ private:
 	NavMenu* audio_menu, *settings_menu = NULL;
 	uint8_t settings_menu_sender = ID_RADIO;
 	bool settings_menu_active = false, settings_menu_prep = false;
+
+	unsigned long prep_time = 0;
 
 	//Dimensions.
 	int area_w = 400, area_h = 60;

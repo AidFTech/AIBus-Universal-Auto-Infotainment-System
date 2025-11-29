@@ -61,6 +61,34 @@ enum info_param : uint8_t {
 	INFO_PARAM_REMAINING_DIST,
 };
 
+enum econ_unit : uint8_t {
+	ECON_L_100KM,
+	ECON_KM_L,
+	ECON_MPG_US,
+	ECON_MPG_IMP,
+};
+
+enum transmission_type_t : uint8_t {
+	TRANSMISSION_MANUAL,
+	TRANSMISSION_AUTOMATIC,
+	TRANSMISSION_SEMI_AUTO,
+	TRANSMISSION_DCT,
+	TRANSMISSION_SMG,
+	TRANSMISSION_CVT,
+	TRANSMISSION_IVT,
+	TRANSMISSION_ECVT,
+	TRANSMISSION_EV_DD,
+	TRANSMISSION_EV_DD_ENGINE,
+
+	TRANSMISSION_OTHER = 0xFF,
+};
+#define TRANSMISSION_POS_PARK 0x4
+#define TRANSMISSION_POS_REVERSE 0x2
+#define TRANSMISSION_POS_NEUTRAL 0x0
+#define TRANSMISSION_POS_DRIVE 0x1
+#define TRANSMISSION_POS_LOW 0x8
+#define TRANSMISSION_POS_MANUAL 0x9
+
 struct InfoParameters {
 	//Supported common parameters.
 	uint8_t supported_a = 0xF, supported_b = 0xFF;
@@ -76,6 +104,27 @@ struct InfoParameters {
 	bool outside_temp_sent = false, coolant_temp_sent = false;
 
 	bool outside_temp_fahrenheit = false, coolant_temp_fahrenheit = false;
+
+	//Trip info:
+	uint16_t range = 0;
+	bool range_miles = false;
+	
+	float inst_mpg = -1, avg_mpg = -1;
+	econ_unit inst_units = ECON_L_100KM, avg_units = ECON_L_100KM;
+
+	uint32_t trip_distance = 0; //x10
+	bool distance_miles = false;
+
+	uint16_t trip_time = 0;
+	bool trip_time_minutes = false;
+
+	//Cruise control.
+	int16_t cruise_speed = -1; //x10
+	bool cruise_mph = false;
+
+	//Transmission.
+	transmission_type_t transmission_type = TRANSMISSION_OTHER;
+	int8_t selected_pos = -1, gear = -1;
 
 	//Display:
 	bool display_cruise = true;

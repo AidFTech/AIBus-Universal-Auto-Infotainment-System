@@ -8,6 +8,7 @@ pub const AIBUS_DEVICE_AMIRROR: u8 = 0x8E;
 pub const AIBUS_DEVICE_CANSLATOR: u8 = 0x57;
 pub const AIBUS_DEVICE_IMID: u8 = 0x11;
 pub const AIBUS_DEVICE_ANTENNA: u8 = 0x3B;
+pub const AIBUS_DEVICE_PHONE: u8 = 0xC8;
 
 pub struct AIBusMessage {
 	pub sender: u8,
@@ -68,6 +69,18 @@ pub fn get_init_message(ai_data: &AIBusMessage) -> bool {
 	}
 
 	if ai_data.data[0] == 0x4A && ai_data.data[1] == 0x1F {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+pub fn get_poweroff_message(ai_data: &AIBusMessage) -> bool {
+	if ai_data.l() < 1 {
+		return false;
+	}
+
+	if ai_data.data[0] == 0xA0 {
 		return true;
 	} else {
 		return false;

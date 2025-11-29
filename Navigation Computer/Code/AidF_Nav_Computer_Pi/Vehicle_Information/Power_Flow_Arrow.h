@@ -25,6 +25,7 @@ public:
 	
 	void drawOutline(const uint32_t fill_color, const uint32_t outline_color);
 	void drawFilled(const uint32_t fill_color1, const uint32_t fill_color2, const uint32_t outline_color, const int frame, const uint8_t dir, const bool arrowhead);
+	void drawPartialFilled(const uint32_t fill_color1, const uint32_t fill_color2, const uint32_t outline_color, const uint32_t br_color, const int frame, const uint8_t dir, const uint8_t percent, const bool arrowhead);
 	
 private:
 	SDL_Renderer* renderer;

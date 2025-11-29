@@ -274,10 +274,12 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 				sendButtonMessage(HONDA_BUTTON_FF);
 			else if(button == 0x15 && state == 0x2) //Preset 5. NR.
 				sendButtonMessage(HONDA_BUTTON_NR);
-			else if(button == 0x24 && state == 0x2) //Reverse search. //TODO: Skip multiple tracks.
+			else if(button == 0x24 && state == 0x2) //Reverse search. // @TODO: Skip multiple tracks.
 				sendButtonMessage(HONDA_BUTTON_SKIPREV, 1);
 			else if(button == 0x25 && state == 0x2) //FWD search.
 				sendButtonMessage(HONDA_BUTTON_SKIPFWD, 1);
+			else if(button == 0x53 && state == 0x2) //Info.
+				sendFullTapeNavOverlay();
 		}
 	} else if(the_message->l >= 2 && the_message->data[0] == 0x2B && source_sel) {
 		ack = false;
@@ -289,19 +291,23 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			//TODO: Change the active menu depending on what cleared it.
 			*active_menu = 0;
 		} else if(the_message->data[1] == 0x60 && the_message->l >= 3 && sender == ID_NAV_COMPUTER && *active_menu == MENU_TAPE) {
-			switch(the_message->data[2]) {
-			case 1: //Start in forward mode.
+			const MenuList tape_menu = getMenu(MENU_INDEX_TAPE_SETTINGS, parameter_list->locale);
+			
+			switch(tape_menu.getGlobalIndex(int(the_message->data[2]) - 1)) {
+			case MENU_INDEX_TAPE_SETTINGS_FWD_START: //Start in forward mode.
 				this->fwd_start = !this->fwd_start;
 				setting_changed = true;
-				createTapeMenuOption(0);
+				createTapeMenuOption(tape_menu.getLocalIndex(MENU_INDEX_TAPE_SETTINGS_FWD_START));
 				break;
-			case 2: //Autostart.
+			case MENU_INDEX_TAPE_SETTINGS_AUTO_START: //Autostart.
 				this->autostart = !this->autostart;
 				setting_changed = true;
-				createTapeMenuOption(1);
+				createTapeMenuOption(tape_menu.getLocalIndex(MENU_INDEX_TAPE_SETTINGS_AUTO_START));
 				break;
-			case 3: //Radio settings.
+			case MENU_INDEX_TAPE_SETTINGS_AUDIO: //Radio settings.
 				//TODO: Request radio settings.
+				break;
+			default:
 				break;
 			}
 		}
@@ -657,6 +663,49 @@ void HondaTapeHandler::sendTapeUpdateMessage(const uint8_t receiver) {
 		ack = false;
 	
 	ai_driver->writeAIData(&tape_update_message, ack);
+}
+
+//Send the overlay to the nav screen.
+void HondaTapeHandler::sendFullTapeNavOverlay() {
+	String tape_msg = "";
+
+	switch(tape_mode) {
+	case TAPE_MODE_PLAY:
+		tape_msg += "Play";
+		break;
+	case TAPE_MODE_REVSKIP:
+	case TAPE_MODE_REW:
+		tape_msg += "Rew";
+		break;
+	case TAPE_MODE_FWDSKIP:
+	case TAPE_MODE_FF:
+		tape_msg += "FF";
+		break;
+	case TAPE_MODE_LOAD:
+		tape_msg += "Load";
+		break;
+	case TAPE_MODE_EJECT:
+		tape_msg += "Eject";
+		break;
+	default:
+		tape_msg += "Tape";
+		break;
+	}
+
+	if(getDisplaySymbol()) {
+		if(fwd)
+			tape_msg += " #UP ";
+		else
+			tape_msg += " #DN ";
+	}
+
+	if(repeat_on)
+		tape_msg += "   Repeat";
+
+	if(nr_on)
+		tape_msg += "   NR";
+
+	setNavHeader(tape_msg);
 }
 
 //Create the tape main menu.

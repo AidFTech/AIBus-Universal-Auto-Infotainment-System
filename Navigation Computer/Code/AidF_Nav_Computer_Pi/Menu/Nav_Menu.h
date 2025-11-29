@@ -61,6 +61,8 @@ public:
 
 	uint16_t getFilledTextItems();
 	void refreshItems();
+
+	void getSelectedIndexPosition(int16_t* x_pos, int16_t* y_pos);
 private:
 	AttributeList* attribute_list;
 	SDL_Renderer* renderer;

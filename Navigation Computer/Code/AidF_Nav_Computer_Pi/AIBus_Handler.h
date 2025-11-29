@@ -8,7 +8,7 @@
 #include "AIBus/AIBus.h"
 #include "AIBus/AIBus_Serial.h"
 
-#include "Socket/AMirror_Socket.h"
+#include "Socket/AIBus_Socket.h"
 
 #include <string>
 #include <stdint.h>
@@ -24,6 +24,8 @@
 
 #define REPEAT_DELAY 100
 #define MAX_REPEAT 50
+
+using namespace std;
 
 class AIBusHandler {
 public:
@@ -57,7 +59,7 @@ public:
 
 private:
 	#ifndef RPI_UART
-	int connectAIPort(std::string port);
+	int connectAIPort(string port);
 	#endif
 
 	bool awaitAcknowledgement(AIData* ai_d);
@@ -71,7 +73,7 @@ private:
 	bool port_connected = false;
 	#endif
 
-	std::vector<uint8_t> cached_bytes;
+	vector<AIData> cached_vec;
 	AIData cached_msg, cached_tx;
 
 	int** socket_list;
@@ -81,11 +83,12 @@ private:
 };
 
 #ifndef RPI_UART
-uint16_t stringToNumber(std::string str);
+uint16_t stringToNumber(string str);
 #endif
 
 bool readAIByteData(AIData* ai_d, uint8_t* data, const uint8_t d_l);
 bool getInitMessage(AIData* ai_d);
+bool getPowerOffMessage(AIData* ai_d);
 
 void printBytes(AIData* ai_d);
 #endif

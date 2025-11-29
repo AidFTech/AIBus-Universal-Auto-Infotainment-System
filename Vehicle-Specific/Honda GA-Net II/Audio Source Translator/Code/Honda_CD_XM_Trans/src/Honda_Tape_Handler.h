@@ -74,6 +74,8 @@ private:
 	void sendTapeTextMessage();
 	void sendFunctionTextMessage();
 
+	void sendFullTapeNavOverlay();
+
 	void createTapeMenu();
 	void createTapeMenuOption(const uint8_t option);
 };

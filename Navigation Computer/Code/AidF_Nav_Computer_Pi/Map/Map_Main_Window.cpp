@@ -1,9 +1,11 @@
 #include "Map_Main_Window.h"
 
-MapMainWindow::MapMainWindow(AttributeList* attribute_list, NavParameters* parameters) : NavWindow(attribute_list) {
+MapMainWindow::MapMainWindow(AttributeList* attribute_list, NavParameters* parameters) : NavWindow(attribute_list),
+	map_fail_msg(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y *3/2, attribute_list->w - 2*MAIN_TITLE_AREA_X, TITLE_HEIGHT, 32, &attribute_list->color_profile->text) {
 	this->nav_parameters = parameters;
 
 	this->map_canvas = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, this->w, this->h);
+	map_fail_msg.setText(getString(LOCALE_STRING_MAP_NOT_FOUND, attribute_list->locale));
 
 	refreshWindow();
 }
@@ -23,6 +25,11 @@ MapMainWindow::~MapMainWindow() {
 
 //Draw the window.
 void MapMainWindow::drawWindow() {
+	if(!map_success) {
+		map_fail_msg.drawText();
+		return;
+	}
+
 	if(nav_parameters->update_map) {
 		nav_parameters->update_map = false;
 		const uint32_t br_color = attribute_list->night ? MAP_BR_NIGHT : MAP_BR_DAY;
@@ -65,10 +72,18 @@ void MapMainWindow::refreshWindow() {
 
 	this->offset_h = -int(double(tile_position_x)/UINT32_MAX*tile_bounds) + this->w/2;
 	this->offset_v = -int(double(tile_position_y)/UINT32_MAX*tile_bounds) + this->h/2;
+
+	map_fail_msg.renderText();
 }
 
 //Load the map data.
 void MapMainWindow::loadMapData() {
+	map_success = false;
+
+	//Check that the map file exists.
+	if(this->nav_parameters->map_path.length() <= 0)
+		return;
+
 	//Open the map file.
 	sqlite3_open(this->nav_parameters->map_path.c_str(), &this->sq_database);
 	if(sq_database == NULL)
@@ -97,6 +112,8 @@ void MapMainWindow::loadMapData() {
 	set_row = row;
 	set_column = column;
 	tile_set = true;
+
+	map_success = true;
 
 	//TODO: Do we want to close this if we are going to need the map again?
 	sqlite3_close(sq_database);

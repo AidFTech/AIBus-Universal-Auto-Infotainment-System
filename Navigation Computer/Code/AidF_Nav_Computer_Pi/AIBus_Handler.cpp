@@ -1,8 +1,8 @@
 #include "AIBus_Handler.h"
 
 #ifdef RPI_UART
-AIBusHandler::AIBusHandler(std::string port, int** socket_list, const int socket_l, unsigned long* timer) {
-	this->cached_bytes = std::vector<uint8_t>(0);
+AIBusHandler::AIBusHandler(string port, int** socket_list, const int socket_l, unsigned long* timer) {
+	this->cached_vec = vector<AIData>(0);
 	gpioCfgSetInternals(1<<10);
 	gpioInitialise();
 
@@ -11,7 +11,7 @@ AIBusHandler::AIBusHandler(std::string port, int** socket_list, const int socket
 	const int test_port = aiserialOpen(c_port);
 	if(test_port<0) {
 		ai_port = 0; //TODO: Throw an error.
-		//std::cout<<"AIBus not connected.\n";
+		//cout<<"AIBus not connected.\n";
 	} else 
 		this->ai_port = test_port;
 
@@ -27,8 +27,8 @@ AIBusHandler::AIBusHandler(std::string port, int** socket_list, const int socket
 }
 #else
 AIBusHandler::AIBusHandler(int** socket_list, const int socket_l, unsigned long* timer) {
-	this->cached_bytes = std::vector<uint8_t>(0);
-	std::cout<<"Ready!\nEnter the sender, receiver, and data. Separate all characters with a space. Do not include the checksum.\n";
+	this->cached_vec = vector<AIData>(0);
+	cout<<"Ready!\nEnter the sender, receiver, and data. Separate all characters with a space. Do not include the checksum.\n";
 
 	this->socket_list = new int*[socket_l];
 	for(int i=0;i<socket_l;i+=1)
@@ -50,7 +50,7 @@ AIBusHandler::~AIBusHandler() {
 }
 
 #ifndef RPI_UART
-int AIBusHandler::connectAIPort(std::string port) {
+int AIBusHandler::connectAIPort(string port) {
 	const char* c_port = port.c_str();
 	
 	const int test_port = aiserialOpen(c_port);
@@ -76,26 +76,32 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 		if(cache && cached_msg.l > 0) {
 			ai_d->refreshAIData(cached_msg);
 
-			if(cached_bytes.size() > 4) {
-				const int l = cached_bytes.at(1);
-				if(cached_bytes.size() < l + 2) {
-					cached_bytes.clear();
+			/*if(cached_vec.size() > 4) {
+				const int l = cached_vec.at(1);
+				if(cached_vec.size() < l + 2) {
+					cached_vec.clear();
 					writeToSocket(ai_d);
 					return true;
 				}
 
 				uint8_t data[l+2];
 				for(int i=0;i<l+2;i+=1) {
-					data[i] = cached_bytes.at(0);
-					cached_bytes.erase(cached_bytes.begin());
+					data[i] = cached_vec.at(0);
+					cached_vec.erase(cached_vec.begin());
 				}
 
 				readAIByteData(&cached_msg, data, sizeof(data));
 
 			} else {
-				if(cached_bytes.size() > 0)
-					cached_bytes.clear();
+				if(cached_vec.size() > 0)
+					cached_vec.clear();
 
+				cached_msg.refreshAIData(0,0,0);
+			}*/
+			if(cached_vec.size() > 0) {
+				cached_msg.refreshAIData(cached_vec.at(0));
+				cached_vec.erase(cached_vec.begin());
+			} else {
 				cached_msg.refreshAIData(0,0,0);
 			}
 			
@@ -114,8 +120,8 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 			unsigned long start = *this->timer;
 			while(aiserialBytesAvailable(this->ai_port) < l) {
 				#ifdef RPI_UART
-				if(gpioRead(AI_RX) == 0)
-					start = *this->timer;
+				//if(gpioRead(AI_RX) == 0)
+				//	start = *this->timer;
 				#endif
 				
 				if((*this->timer - start) > 5) {
@@ -176,21 +182,21 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 
 	} else {
 		#ifndef RPI_UART
-		std::string ai_t;
-		std::getline(std::cin, ai_t);
+		string ai_t;
+		getline(cin, ai_t);
 
 		if(ai_t.empty())
 			return false;
 
-		if(ai_t.find('/') != std::string::npos) { //Possible serial start.
+		if(ai_t.find('/') != string::npos) { //Possible serial start.
 			const int success = connectAIPort(ai_t);
 			if(success >= 0)
-				std::cout<<ai_t<<" connection successful!\n";
+				cout<<ai_t<<" connection successful!\n";
 			return false;
 		}
 
 		int pos = 0;
-		std::vector<uint8_t> d_v;
+		vector<uint8_t> d_v;
 		while(pos < ai_t.length()) {
 			int space_index = ai_t.find_first_of(' ', pos);
 			if(space_index == pos) {
@@ -201,7 +207,7 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 			if(space_index < 0)
 				space_index = ai_t.length();
 
-			std::string substr = ai_t.substr(pos, space_index-pos);
+			string substr = ai_t.substr(pos, space_index-pos);
 			
 			const uint8_t data = stringToNumber(substr)&0xFF;
 			d_v.push_back(data);
@@ -262,11 +268,12 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 					if(cached_msg.l <= 0)
 						cached_msg.refreshAIData(msg);
 					else {
-						uint8_t data[msg.l+4];
+						/*uint8_t data[msg.l+4];
 						msg.getBytes(data);
 
 						for(int i=0;i<sizeof(data);i+=1)
-							cached_bytes.push_back(data[i]);
+							cached_vec.push_back(data[i]);*/
+						cached_vec.push_back(msg);
 					}
 				}
 			}
@@ -304,11 +311,12 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 					if(cached_msg.l <= 0)
 						cached_msg.refreshAIData(msg);
 					else {
-						uint8_t data[msg.l+4];
+						/*uint8_t data[msg.l+4];
 						msg.getBytes(data);
 
 						for(int i=0;i<sizeof(data);i+=1)
-							cached_bytes.push_back(data[i]);
+							cached_vec.push_back(data[i]);*/
+						cached_vec.push_back(msg);
 					}
 				}
 			}
@@ -354,11 +362,12 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 					if(cached_msg.l <= 0)
 						cached_msg.refreshAIData(new_msg);
 					else {
-						uint8_t data[new_msg.l+4];
+						/*uint8_t data[new_msg.l+4];
 						new_msg.getBytes(data);
 
 						for(int i=0;i<sizeof(data);i+=1)
-							cached_bytes.push_back(data[i]);
+							cached_vec.push_back(data[i]);*/
+						cached_vec.push_back(new_msg);
 					}
 				}
 				repeat_time = *this->timer;
@@ -416,11 +425,12 @@ bool AIBusHandler::cachePending() {
 					if(cached_msg.l <= 0)
 						cached_msg.refreshAIData(ai_msg);
 					else {
-						uint8_t data[ai_msg.l+4];
+						/*uint8_t data[ai_msg.l+4];
 						ai_msg.getBytes(data);
 
 						for(int i=0;i<sizeof(data);i+=1)
-							cached_bytes.push_back(data[i]);
+							cached_vec.push_back(data[i]);*/
+						cached_vec.push_back(ai_msg);
 					}
 				}
 				return true;
@@ -440,11 +450,12 @@ void AIBusHandler::cacheMessage(AIData* ai_msg) {
 			if(cached_msg.l <= 0)
 				cached_msg.refreshAIData(*ai_msg);
 			else {
-				uint8_t data[ai_msg->l+4];
+				/*uint8_t data[ai_msg->l+4];
 				ai_msg->getBytes(data);
 
 				for(int i=0;i<sizeof(data);i+=1)
-					cached_bytes.push_back(data[i]);
+					cached_vec.push_back(data[i]);*/
+				cached_vec.push_back(*ai_msg);
 			}
 		}
 	}
@@ -484,7 +495,7 @@ void AIBusHandler::writeToSocket(AIData* ai_d) {
 }
 
 #ifndef RPI_UART
-uint16_t stringToNumber(std::string str) {
+uint16_t stringToNumber(string str) {
 	uint16_t the_return = 0;
 	
 	for(int i=0;i<str.length() && i < 4;i+=1) {
@@ -562,13 +573,24 @@ bool getInitMessage(AIData* ai_d) {
 		return false;
 }
 
+//Determine whether a message is the poweroff message.
+bool getPowerOffMessage(AIData* ai_d) {
+	if(ai_d->l < 1)
+		return false;
+	
+	if(ai_d->data[0] == 0xA0)
+		return true;
+	else
+		return false;
+}
+
 void printBytes(AIData* ai_d) {
 	const uint8_t l = ai_d->l + 4;
 	uint8_t data[l];
 	ai_d->getBytes(data);
 	#ifndef RPI_UART
 	for(uint8_t i=0;i<l;i+=1)
-		std::cout<<std::hex<<int(data[i])<<" "<<std::dec;
-	std::cout<<'\n';
+		cout<<hex<<int(data[i])<<" "<<dec;
+	cout<<'\n';
 	#endif
 }

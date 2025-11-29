@@ -143,6 +143,16 @@ void NavAVRController::loop() {
 		boot_timer_enabled = false;
 		digitalWrite(PI_POWER, HIGH);
 	}
+
+	if((!boot && !run) && pi_boot_timer > 30000 && pi_on && key_position != 0) { //Pi crashed? Power cycle it.
+		uint8_t poweroff_data[] = {0xA0};
+		AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_COMPUTER, 0xFF, poweroff_data);
+		ai_handler.writeAIData(&poweroff_msg, false);
+
+		digitalWrite(PI_POWER, LOW);
+		delay(100);
+		powerOn();
+	}
 }
 
 //Turn full power on.
@@ -150,6 +160,7 @@ void NavAVRController::powerOn() {
 	digitalWrite(PI_OFF_HARDWARE, HIGH);
 	digitalWrite(POWER_ON, HIGH);
 	boot_timer_enabled = true;
+	pi_boot_timer = 0;
 	pi_on = true;
 	shutdown = false;
 }

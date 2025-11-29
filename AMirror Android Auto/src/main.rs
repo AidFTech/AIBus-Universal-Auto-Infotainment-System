@@ -39,6 +39,9 @@ fn main() {
 	let screen_connected = Arc::new(Mutex::new(false));
 	let screen_connected_aibus = Arc::clone(&screen_connected);
 
+	let bluetooth_connected = Arc::new(Mutex::new(false));
+	let bluetooth_connected_aibus = Arc::clone(&bluetooth_connected);
+
 	let aibus_handle = thread::spawn( move || {
 		let mut amirror_stream = match init_default_socket() {
 			Some(socket) => socket,
@@ -124,6 +127,15 @@ fn main() {
 					match screen_connected_aibus.try_lock() {
 						Ok(screen_connected) => {
 							send_ack = *screen_connected;
+						}
+						Err(_) => {
+							send_ack = true;
+						}
+					}
+				} else if ai_msg.receiver == AIBUS_DEVICE_PHONE {
+					match bluetooth_connected_aibus.try_lock() {
+						Ok(bluetooth_connected) => {
+							send_ack = *bluetooth_connected;
 						}
 						Err(_) => {
 							send_ack = true;
@@ -359,6 +371,15 @@ fn main() {
 				match screen_connected.lock() {
 					Ok(mut connected) => {
 						*connected = context.screen_connected;
+					}
+					Err(_) => {
+						continue;
+					}
+				}
+
+				match bluetooth_connected.lock() {
+					Ok(mut connected) => {
+						*connected = context.bluetooth_connected;
 					}
 					Err(_) => {
 						continue;

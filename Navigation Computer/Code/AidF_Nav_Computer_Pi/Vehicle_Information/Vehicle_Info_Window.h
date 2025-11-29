@@ -17,6 +17,9 @@
 #define COLOR_ENG1 0xFF6B54FF
 #define COLOR_ENG2 0xDC2508FF
 
+#define COLOR_ASSIST1 0x5454FFFF
+#define COLOR_ASSIST2 0xA4A4FFFF
+
 enum info_active_menu : uint8_t {
 	INFO_ACTIVE_MENU_NONE,
 	INFO_ACTIVE_MENU_MAIN,
@@ -36,9 +39,16 @@ enum info_active_menu : uint8_t {
 
 #include "../Locale/Locale.h"
 
+#include "../Saved_Settings.h"
+
 #define PARAM_H 80
 
+#define CHARGE_ASSIST_W 400
+#define CHARGE_ASSIST_H 30
+
 #define INFO_SETTING_COUNT 9
+
+using namespace std;
 
 class VehicleInfoWindow : public NavWindow {
 public:
@@ -59,6 +69,7 @@ private:
 	TextBox* param_text[PARAM_COUNT];
 	info_param* param_index;
 
+	//Light display:
 	SDL_Texture* drl_texture = NULL,
 				*side_texture = NULL,
 				*lowbeam_texture = NULL,
@@ -66,6 +77,7 @@ private:
 				*frontfog_texture = NULL,
 				*rearfog_texture = NULL;
 
+	//Hybrid power flow:
 	SDL_Texture* electric_motor_texture = NULL,
 				*engine_texture = NULL;
 	
@@ -81,6 +93,8 @@ private:
 	
 	void createDefaultSettingsMenu();
 	void createParamSettingsMenu(const uint8_t active_param);
+
+	void saveParamSettings();
 };
 
 #endif

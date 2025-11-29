@@ -44,6 +44,7 @@ pub struct Context {
 	//Devices:
 	pub radio_connected: bool,
 	pub screen_connected: bool,
+	pub bluetooth_connected: bool,
 }
 
 impl Context {
@@ -91,6 +92,7 @@ impl Context {
 			
 			radio_connected: false,
 			screen_connected: false,
+			bluetooth_connected: false,
 		};
 	}
 }

@@ -573,6 +573,15 @@ void NavMenu::refreshItems() {
 		this->item_text_box[i].renderText();
 }
 
+//Get the position of the selected index.
+void NavMenu::getSelectedIndexPosition(int16_t* x_pos, int16_t* y_pos) {
+	if(selected <= 0)
+		return;
+
+	getIndexPosition(selected - 1, x_pos, y_pos);
+}
+
+//Get the position of the index.
 void NavMenu::getIndexPosition(uint16_t index, int16_t* x_pos, int16_t* y_pos) {
 	uint8_t title_height = 0;
 	if(this->title.compare("") != 0 && this->title.compare(" ") != 0)

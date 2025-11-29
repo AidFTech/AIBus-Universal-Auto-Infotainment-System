@@ -28,6 +28,11 @@ void PowerFlowArrow::drawOutline(const uint32_t fill_color, const uint32_t outli
 
 //Draw a filled arrow.
 void PowerFlowArrow::drawFilled(const uint32_t fill_color1, const uint32_t fill_color2, const uint32_t outline_color, const int frame, const uint8_t dir, const bool arrowhead) {
+	drawPartialFilled(fill_color1, fill_color2, outline_color, 0, frame, dir, 0xFF, arrowhead);
+}
+
+//Draw a partially filled arrow.
+void PowerFlowArrow::drawPartialFilled(const uint32_t fill_color1, const uint32_t fill_color2, const uint32_t outline_color, const uint32_t br_color, const int frame, const uint8_t dir, const uint8_t percent, const bool arrowhead) {
 	uint8_t last_r, last_g, last_b, last_a;
 	SDL_GetRenderDrawColor(renderer, &last_r, &last_g, &last_b, &last_a);
 
@@ -38,9 +43,9 @@ void PowerFlowArrow::drawFilled(const uint32_t fill_color1, const uint32_t fill_
 		line_count = w + h;
 	else {
 		if(vertical)
-			line_count = h;
+			line_count = h*percent/255;
 		else
-			line_count = w;
+			line_count = w*percent/255;
 	}
 
 	uint32_t lines[line_count];
@@ -60,15 +65,27 @@ void PowerFlowArrow::drawFilled(const uint32_t fill_color1, const uint32_t fill_
 			lines[i] = fill_color1;
 	}
 
+	//Background:
+	{
+		SDL_Rect flow_rect = {x, y, w, h};
+		SDL_SetRenderDrawColor(renderer, getRedComponent(br_color), getGreenComponent(br_color), getBlueComponent(br_color), getAlphaComponent(br_color));
+		SDL_RenderFillRect(renderer, &flow_rect);
+	}
+
 	const int adj_line_count = line_count - ((arrowhead) ? ((vertical) ? w : h) : 0);
 	const int start = (arrowhead && (dir == ARROW_DIR_LEFT || dir == ARROW_DIR_UP)) ? (vertical ? w : h) : 0;
 
 	for(int i=0;i<adj_line_count;i+=1) {
 		SDL_SetRenderDrawColor(renderer, getRedComponent(lines[i + start]), getGreenComponent(lines[i + start]), getBlueComponent(lines[i + start]), getAlphaComponent(lines[i + start]));
+
+		int start_offset = 0;
+		if(dir == ARROW_DIR_LEFT || dir == ARROW_DIR_UP)
+			start_offset = (vertical ? h : w) - (vertical ? h : w)*percent/255;
+
 		if(vertical)
-			SDL_RenderDrawLine(renderer, x, y + i, x + w - 1, y + i);
+			SDL_RenderDrawLine(renderer, x, y + start_offset + i, x + w - 1, y + start_offset + i);
 		else
-			SDL_RenderDrawLine(renderer, x + i, y, x + i, y + h - 1);
+			SDL_RenderDrawLine(renderer, x + start_offset + i, y, x + start_offset + i, y + h - 1);
 	}
 
 	SDL_Rect flow_rect = {x, y, w, h};

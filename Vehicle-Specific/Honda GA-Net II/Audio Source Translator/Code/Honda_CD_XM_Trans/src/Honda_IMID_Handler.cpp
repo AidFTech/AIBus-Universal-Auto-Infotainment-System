@@ -23,6 +23,8 @@ void HondaIMIDHandler::interpretIMIDMessage(IE_Message* the_message) {
 			ack = false;
 			sendIEAckMessage(IE_ID_IMID);
 
+			ie_driver->addID(ID_IMID_SCR);
+
 			if(!this->parameter_list->first_imid) {
 				this->parameter_list->first_imid = true;
 
@@ -51,6 +53,8 @@ void HondaIMIDHandler::interpretIMIDMessage(IE_Message* the_message) {
 					ping.refreshAIData(ping_data);
 
 					ai_driver->writeAIData(&ping, parameter_list->radio_connected);
+
+					ie_driver->addID(ID_IMID_SCR);
 					
 					writeScreenLayoutMessage();
 					if(parameter_list->radio_connected)
@@ -314,6 +318,9 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		ack = false;
 		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
 	} else if((the_message->sender == ID_PHONE || the_message->sender == ID_ANDROID_AUTO) && the_message->l >= 5 && the_message->data[0] == 0x3B) { //Bluetooth timer.
+		ack = false;
+		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+		
 		const long time = the_message->data[4] | (the_message->data[3]<<8);
 		setBTTimer(time);
 	} else if(the_message->sender == ID_PHONE && the_message->l >= 3 && the_message->data[0] == 0x23 && (the_message->data[1]&0xF0) == 0x60) { //Bluetooth text message.
