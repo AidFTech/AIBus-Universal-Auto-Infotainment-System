@@ -68,6 +68,11 @@ void ClientAIBusHandler::setTimer(unsigned long* timer) {
 	this->timer = timer;
 }
 
+//Return whether the RX cache vector can be read.
+bool ClientAIBusHandler::getCheckOK() {
+	return this->check_ok;
+}
+
 //Refresh the socket connection.
 void ClientAIBusHandler::refreshSocket(const char* socket_path) {
 	if(this->network_socket >= 0)
@@ -187,26 +192,53 @@ void ClientAIBusHandler::cacheAIData(uint8_t* data, const int l) {
 
 	const uint8_t s = data[0], r = data[2];
 
+	while(!cache_ok);
+	check_ok = false;
 	if((r==my_id || r==0xFF) && s != my_id) {
 		uint8_t ai_data[l - 4];
 		for(int i=3;i<l-1;i+=1)
 			ai_data[i-3] = data[i];
 
 		AIData new_msg(sizeof(ai_data), s, r, ai_data);
-		rx_cache.push_back(new_msg);
 
 		if(r == my_id && new_msg.l > 0 && new_msg[0] != 0x80)
 			sendAcknowledgement(r, s);
+
+		if(new_msg.l >= 3 && new_msg[0] == 0x91 && (new_msg.receiver == my_id || new_msg.receiver == 0xFF)) {
+			const int expected_size = new_msg[1];
+			multi_cache.push_back(new_msg);
+
+			if(multi_cache.size() >= expected_size) {
+				vector<uint8_t> full_data(0);
+				for(int m=0;m<expected_size;m+=1) {
+					for(int i=0;i<multi_cache[m].l-3;i+=1)
+						full_data.push_back(multi_cache[m][i+3]);
+				}
+
+				multi_cache.clear();
+
+				AIData final_message(full_data.size(), s, r, full_data.data());
+				rx_cache.push_back(final_message);
+			}
+		}
+		else
+			rx_cache.push_back(new_msg);
 	}
+	check_ok = true;
 }
 
 //Read AIBus data.
 bool ClientAIBusHandler::readAIData(AIData* ai_d) {
+	if(!check_ok)
+		return false;
+
 	if(rx_cache.empty())
 		return false;
 
+	check_ok = false;
 	ai_d->refreshAIData(rx_cache[0]);
 	rx_cache.erase(rx_cache.begin());
+	check_ok = true;
 	return true;
 }
 
@@ -217,6 +249,32 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d) {
 
 //Write an AIBus message.
 bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
+	if(ai_d->l > AIDATA_LIMIT + 3) {
+		const int count = ai_d->l/AIDATA_LIMIT, r = ai_d->l%AIDATA_LIMIT;
+		AIData ai_group[count + (r == 0 ? 0 : 1)];
+
+		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
+			const int l = i<sizeof(ai_group)/sizeof(AIData) - 1 || r == 0 ? AIDATA_LIMIT + 3 : r + 3;
+			uint8_t ai_data[l];
+			ai_data[0] = 0x91;
+			ai_data[1] = sizeof(ai_group)/sizeof(AIData);
+			ai_data[2] = i;
+			for(int d=0;d<l-3;d+=1)
+				ai_data[d+3] = ai_d->data[AIDATA_LIMIT*i + d];
+
+			ai_group[i] = AIData(l, ai_d->sender, ai_d->receiver, ai_data);
+		}
+
+		while(!check_ok);
+		bool rec_ack = false;
+		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
+			rec_ack = writeAIData(&ai_group[i], ack);
+			if(!rec_ack && ack)
+				return false;
+		}
+		return rec_ack;
+	}
+
 	uint8_t data[ai_d->l + 4];
 	ai_d->getBytes(data);
 
@@ -227,15 +285,19 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 	if(!ack || ai_d->receiver == 0xFF || (ai_d->l > 0 && ai_d->data[0] == 0x80) || timer == nullptr || timer == NULL)
 		return true;
 
+	while(!check_ok);
 	bool rec_ack = false;
 	int tries = 0;
 
 	unsigned long last_send = *timer;
-
+	
 	while(!rec_ack) {
 		vector<AIData> current_rx;
-		for(int i=0;i<rx_cache.size();i+=1)
-			current_rx.push_back(rx_cache[i]);
+		cache_ok = false;
+		for(int i=0;i<rx_cache.size();i+=1) {
+			if(i<rx_cache.size()) //This may have changed since the last check.
+				current_rx.push_back(rx_cache[i]);
+		}
 
 		for(int i=0;i<current_rx.size();i+=1) {
 			if(current_rx[i].sender == ai_d->receiver && current_rx[i].receiver == ai_d->sender && current_rx[i].l > 0 && current_rx[i][0] == 0x80) {
@@ -244,6 +306,7 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 				break;
 			}
 		}
+		cache_ok = true;
 
 		if(rec_ack)
 			break;

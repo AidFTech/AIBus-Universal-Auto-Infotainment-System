@@ -73,6 +73,16 @@ VehicleInfoWindow::VehicleInfoWindow(AttributeList *attribute_list, InfoParamete
 
 	SDL_FreeSurface(silhouette_surface);
 
+	const int16_t text_start_x = attribute_list->w/2 - CHARGE_ASSIST_W/2 - 100, text_start_y = attribute_list->h/2 - 240/2 + 250 - 30;
+	text_charge = new TextBox(renderer, text_start_x - 5, text_start_y, 100, CHARGE_ASSIST_H, ALIGN_H_R, ALIGN_V_M, 22, &attribute_list->color_profile->text);
+	text_assist = new TextBox(renderer, text_start_x + 105 + CHARGE_ASSIST_W, text_start_y, 100, CHARGE_ASSIST_H, ALIGN_H_L, ALIGN_V_M, 22, &attribute_list->color_profile->text);
+
+	text_charge->setText("Charge");
+	text_assist->setText("Assist");
+
+	text_charge->renderText();
+	text_assist->renderText();
+
 	for(int i=0;i<PARAM_COUNT;i+=1) {
 		refreshParam(param_titles[i], param_text[i], param_index[i]);
 
@@ -89,6 +99,9 @@ VehicleInfoWindow::~VehicleInfoWindow() {
 		delete param_text[i];
 		delete param_titles[i];
 	}
+
+	delete text_charge;
+	delete text_assist;
 
 	if(this->drl_texture != NULL)
 		SDL_DestroyTexture(this->drl_texture);
@@ -151,6 +164,9 @@ void VehicleInfoWindow::refreshWindow() {
 
 	SDL_FreeSurface(silhouette_surface);
 
+	text_charge->renderText();
+	text_assist->renderText();
+
 	for(int i=0;i<PARAM_COUNT;i+=1) {
 		refreshParam(param_titles[i], param_text[i], param_index[i]);
 
@@ -169,7 +185,7 @@ void VehicleInfoWindow::drawWindow() {
 		const int16_t silhouette_start_x = attribute_list->w/2 - 600/2;
 
 		int16_t silhouette_start_y = attribute_list->h/2 - 240/2;
-		if(info_parameters->charge_assist_meter)
+		if(info_parameters->charge_assist_meter && info_parameters->draw_charge_assist)
 			silhouette_start_y -= 30;
 		
 		this->title_box.drawText();
@@ -373,7 +389,7 @@ void VehicleInfoWindow::drawWindow() {
 				}
 			}
 
-			if(info_parameters->charge_assist_meter) {
+			if(info_parameters->charge_assist_meter && info_parameters->draw_charge_assist) {
 				PowerFlowArrow arrow_charge(renderer, w/2 - CHARGE_ASSIST_W/2, silhouette_start_y + 250, CHARGE_ASSIST_W/2, CHARGE_ASSIST_H);
 				PowerFlowArrow arrow_assist(renderer, w/2, silhouette_start_y + 250, CHARGE_ASSIST_W/2, CHARGE_ASSIST_H);
 				if(info_parameters->charge_assist_pos > 0x7F) { //Assist.
@@ -386,6 +402,9 @@ void VehicleInfoWindow::drawWindow() {
 					arrow_charge.drawOutline(dimmed_button, outline_color);
 					arrow_assist.drawOutline(dimmed_button, outline_color);
 				}
+
+				text_assist->drawText();
+				text_charge->drawText();
 			}
 		}
 	} else
@@ -454,12 +473,22 @@ void VehicleInfoWindow::handleEnterButton() {
 		case MENU_INDEX_INFORMATION_MAIN_DISP_4:
 			createParamSettingsMenu(uint8_t(selected));
 			break;
+		case MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST:
+			if(info_parameters->charge_assist_meter) {
+				info_parameters->draw_charge_assist = !info_parameters->draw_charge_assist;
+				if(info_parameters->draw_charge_assist)
+					this->settings_menu->setItem(std::string("#RON ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST), settings_menu_list.getLocalIndex(MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST));
+				else
+					this->settings_menu->setItem(std::string("#ROF ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST), settings_menu_list.getLocalIndex(MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST));
+				saveParamSettings();
+			}
+			break;
 		case MENU_INDEX_INFORMATION_MAIN_CRUISE:
 			info_parameters->display_cruise = !info_parameters->display_cruise;
 			if(info_parameters->display_cruise)
-				this->settings_menu->setItem(std::string("#RON ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CRUISE), 5);
+				this->settings_menu->setItem(std::string("#RON ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CRUISE), settings_menu_list.getLocalIndex(MENU_INDEX_INFORMATION_MAIN_CRUISE));
 			else
-				this->settings_menu->setItem(std::string("#ROF ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CRUISE), 5);
+				this->settings_menu->setItem(std::string("#ROF ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CRUISE), settings_menu_list.getLocalIndex(MENU_INDEX_INFORMATION_MAIN_CRUISE));
 			saveParamSettings();
 			break;
 		default:
@@ -679,6 +708,11 @@ void VehicleInfoWindow::createDefaultSettingsMenu() {
 		if(i == settings_menu_list.getLocalIndex(MENU_INDEX_INFORMATION_MAIN_CRUISE)) {
 			const std::string cruise_option = info_parameters->display_cruise ? "#RON " : "#ROF ";
 			this->settings_menu->setItem(cruise_option + settings_menu_list[i], i);
+		} else if(i == settings_menu_list.getLocalIndex(MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST)) {
+			if(info_parameters->charge_assist_meter) {
+				const std::string charge_assist_option = info_parameters->draw_charge_assist ? "#RON " : "#ROF ";
+				this->settings_menu->setItem(charge_assist_option + settings_menu_list[i], i);
+			}
 		} else //TODO: Print the Units option only if a Units menu exists.
 			this->settings_menu->setItem(settings_menu_list[i], i);
 	}
@@ -742,5 +776,5 @@ void VehicleInfoWindow::saveParamSettings() {
 	for(int i=0;i<PARAM_COUNT;i+=1)
 		params[i] = (uint8_t)this->info_parameters->param_index[i];
 
-	saveVehicleInfoParams(this->info_parameters->display_cruise, params, PARAM_COUNT);
+	saveVehicleInfoParams(this->info_parameters->display_cruise, this->info_parameters->draw_charge_assist, params, PARAM_COUNT);
 }

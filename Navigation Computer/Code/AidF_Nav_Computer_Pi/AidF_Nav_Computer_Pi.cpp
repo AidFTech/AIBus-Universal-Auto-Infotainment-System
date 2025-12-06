@@ -27,7 +27,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	int* socket_list[] = {&this->amirror_socket_parameters.client_socket, &this->abta_socket_parameters.client_socket};
 
 	#ifdef RPI_UART
-	this->aibus_handler = new AIBusHandler("/dev/ttyS0", socket_list, sizeof(socket_list)/sizeof(int*), &elapsed_millis.time);
+	this->aibus_handler = new AIBusHandler("/dev/ttyS0", socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
 
 	gpioSetMode(GPIO_I2S_MCLK, PI_OUTPUT);
 	gpioWrite(GPIO_I2S_MCLK, PI_LOW);
@@ -36,7 +36,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	gpioSetMode(GPIO_USB_PWR, PI_OUTPUT);
 	gpioWrite(GPIO_USB_PWR, PI_HIGH);
 	#else
-	this->aibus_handler = new AIBusHandler(socket_list, sizeof(socket_list)/sizeof(int*), &elapsed_millis.time);
+	this->aibus_handler = new AIBusHandler(socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
 	#endif
 
 	this->window_handler = new Window_Handler(this->renderer, this->br, this->lw, this->lh, &this->active_color_profile, this->aibus_handler);
@@ -47,7 +47,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 			info_parameters->param_index[i] = INFO_PARAM_NONE;
 
 		uint8_t displayed_params_int[sizeof(info_parameters->param_index)/sizeof(info_param)];
-		getVehicleInfoParams(&info_parameters->display_cruise, displayed_params_int, sizeof(displayed_params_int));
+		getVehicleInfoParams(&info_parameters->display_cruise, &info_parameters->draw_charge_assist, displayed_params_int, sizeof(displayed_params_int));
 
 		for(int i=0;i<sizeof(displayed_params_int);i+=1)
 			info_parameters->param_index[i] = (info_param)displayed_params_int[i];
@@ -80,10 +80,12 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->amirror_socket_parameters.running = &this->running;
 	this->amirror_socket_parameters.ai_serial = aibus_handler->getPortPointer();
 	this->amirror_socket_parameters.socket_path = AMIRROR_SOCKET_PATH;
+	this->amirror_socket_parameters.timer = &elapsed_millis.time;
 
 	this->abta_socket_parameters.running = &this->running;
 	this->abta_socket_parameters.ai_serial = aibus_handler->getPortPointer();
 	this->abta_socket_parameters.socket_path = BTA_SOCKET_PATH;
+	this->abta_socket_parameters.timer = &elapsed_millis.time;
 
 	this->frame_parameters.frame = &attribute_list->frame;
 	this->frame_parameters.run = &this->running;

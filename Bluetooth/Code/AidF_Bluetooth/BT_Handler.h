@@ -1,6 +1,7 @@
 #include <sdbus-c++/sdbus-c++.h>
 
 #include <iostream>
+#include <vector>
 
 #include "Parameter_List.h"
 #include "Text_Handler.h"
@@ -38,7 +39,16 @@ public:
 	void stopDiscovery();
 	bool getDiscoverable();
 
+	//Get the device.
+	BTADevice* getConnectedDevice();
+
+	//Getters.
 	void getObjectList();
+	unique_ptr<IProxy>* getMediaProxy();
+	map<string, Variant>* getChangedMediaProperties();
+
+	//Media control.
+	void sendMediaControl(const media_control_t cmd);
 private:
 	uint8_t* bt_mac;
 	BTADevice** connected_device;
@@ -47,12 +57,21 @@ private:
 	TextHandler* text_handler;
 
 	unique_ptr<IConnection> connection;
-	unique_ptr<IProxy> adapter_proxy;
+	unique_ptr<IProxy> adapter_proxy, media_proxy;
+
+	map<string, Variant> media_properties;
+	bool media_check_ok = true;
+
+	void connectKnownDevice();
+	void connectDevice(ObjectPath device_path);
 
 	void getPiMac();
 
 	void onInterfaceAdd(Message msg);
 	void onInterfaceRemove(Message msg);
+	void onMediaPropertyChange(string interface, map<string, Variant> changed_properties, vector<string> invalidated_properties);
+
+	void setMediaProxy(ObjectPath proxy_path);
 };
 
 #endif

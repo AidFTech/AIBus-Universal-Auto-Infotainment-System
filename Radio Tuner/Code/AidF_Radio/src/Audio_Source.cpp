@@ -428,8 +428,9 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			} else if(button == 0x53 && state == 2) { //Info button.
 				if(parameter_list->imid_char > 0 && parameter_list->imid_lines == 1 && getCurrentSourceID() == ID_RADIO)
 					parameter_list->info_mode = !parameter_list->info_mode;
-				else {
-					parameter_list->info_mode = false;
+				else if(getCurrentSourceID() == ID_RADIO) {
+					if(parameter_list->info_mode)
+						parameter_list->info_mode = false;
 					this->text_handler->setOverlayHeader(parameter_list->rds_program_name);
 				}
 			} else if(button == 0x36 && state == 0x2) { //AM/FM button.

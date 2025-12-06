@@ -92,6 +92,7 @@ enum nav_menu_index : menu_index_t {
 	MENU_INDEX_INFORMATION_MAIN_DISP_3,
 	MENU_INDEX_INFORMATION_MAIN_DISP_4,
 	MENU_INDEX_INFORMATION_MAIN_UNIT,
+	MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST,
 	MENU_INDEX_INFORMATION_MAIN_CRUISE,
 
 	//Information param menu.
@@ -201,6 +202,7 @@ static const char* MENUS_ENG[] = {
 	"Lower Display 3",
 	"Lower Display 4",
 	"Units",
+	"Display Charge/Assist",
 	"Display Cruise Speed",
 
 	//Information parameter menu.

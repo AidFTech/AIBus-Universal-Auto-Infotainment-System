@@ -22,6 +22,8 @@ struct ParameterList {
 
 	bool radio_connected = false, mirror_connected = false, screen_connected = false;
 
+	bool audio_selected = false, text_allowed = false;
+
 	bool imid_native_phone = false;
 	uint8_t imid_char = 0, imid_lines = 0;
 

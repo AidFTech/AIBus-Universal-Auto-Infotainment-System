@@ -66,6 +66,7 @@ struct SocketHandlerParameters {
 	string socket_path;
 
 	bool* running;
+	unsigned long* timer = nullptr;
 };
 
 void writeSocketMessage(SocketMessage* msg, const int socket);

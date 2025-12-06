@@ -88,11 +88,11 @@ private:
 
 	uint8_t text_mode = TEXT_MODE_BLANK; //Whether or not CD text is present.
 
-	char song_title[32];
-	char artist[32];
-	char album[32];
-	char filename[32];
-	char folder[32];
+	char song_title[33];
+	char artist[33];
+	char album[33];
+	char filename[33];
+	char folder[33];
 
 	uint8_t song_title_stage = 0, artist_stage = 0, album_stage = 0, folder_stage = 0, filename_stage = 0;
 	bool song_title_change = false, artist_change = false, album_change = false, folder_change = false, filename_change = false;

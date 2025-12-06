@@ -306,19 +306,19 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 						affected = this->album;
 						stage = &this->album_stage;
 						change = &this->album_change;
-						len = sizeof(this->album)/sizeof(char);
+						len = sizeof(this->album)/sizeof(char)-1;
 						break;
 					case 0x81:
 						affected = this->song_title;
 						stage = &this->song_title_stage;
 						change = &this->song_title_change;
-						len = sizeof(this->song_title)/sizeof(char);
+						len = sizeof(this->song_title)/sizeof(char)-1;
 						break;
 					case 0x82:
 						affected = this->artist;
 						stage = &this->artist_stage;
 						change = &this->artist_change;
-						len = sizeof(this->artist)/sizeof(char);
+						len = sizeof(this->artist)/sizeof(char)-1;
 						break;
 					default:
 						return;
@@ -329,31 +329,31 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 						affected = this->folder;
 						stage = &this->folder_stage;
 						change = &this->folder_change;
-						len = sizeof(this->folder)/sizeof(char);
+						len = sizeof(this->folder)/sizeof(char)-1;
 						break;
 					case 0x71:
 						affected = this->filename;
 						stage = &this->filename_stage;
 						change = &this->filename_change;
-						len = sizeof(this->filename)/sizeof(char);
+						len = sizeof(this->filename)/sizeof(char)-1;
 						break;
 					case 0x72:
 						affected = this->song_title;
 						stage = &this->song_title_stage;
 						change = &this->song_title_change;
-						len = sizeof(this->song_title)/sizeof(char);
+						len = sizeof(this->song_title)/sizeof(char)-1;
 						break;
 					case 0x73:
 						affected = this->album;
 						stage = &this->album_stage;
 						change = &this->album_change;
-						len = sizeof(this->album)/sizeof(char);
+						len = sizeof(this->album)/sizeof(char)-1;
 						break;
 					case 0x74:
 						affected = this->artist;
 						stage = &this->artist_stage;
 						change = &this->artist_change;
-						len = sizeof(this->artist)/sizeof(char);
+						len = sizeof(this->artist)/sizeof(char)-1;
 						break; 
 				}
 			}
@@ -1394,19 +1394,19 @@ void HondaCDHandler::incrementInfo() {
 		String nav_header = "";
 		switch(display_parameter) {
 		case TEXT_SONG:
-			nav_header = String("Track: ") + this->song_title;
+			nav_header = "Track: " + String(this->song_title);
 			break;
 		case TEXT_ARTIST:
-			nav_header = String("Artist: ") + this->artist;
+			nav_header = "Artist: " + String(this->artist);
 			break;
 		case TEXT_ALBUM:
-			nav_header = String("Album: ") + this->album;
+			nav_header = "Album: " + String(this->album);
 			break;
 		case TEXT_FOLDER:
-			nav_header = String("Folder: ") + this->folder;
+			nav_header = "Folder: " + String(this->folder);
 			break;
 		case TEXT_FILE:
-			nav_header = String("File: ") + this->filename;
+			nav_header = "File: " + String(this->filename);
 			break;
 		}
 

@@ -23,6 +23,9 @@ void CANslator::setup() {
 	pinMode(WASHER_SENSOR, INPUT_PULLUP);
 	pinMode(WASHER_IND, OUTPUT);
 
+	pinMode(AUX_LIGHT_CS, OUTPUT);
+	pinMode(MCP_RESET, OUTPUT);
+
 	pinMode(POWER_ON, OUTPUT);
 
 	digitalWrite(BCAN_CS, HIGH);
@@ -32,6 +35,7 @@ void CANslator::setup() {
 
 	digitalWrite(CAN_RESET, HIGH);
 	digitalWrite(WASHER_IND, LOW);
+	digitalWrite(MCP_RESET, HIGH);
 
 	digitalWrite(POWER_ON, LOW);
 
@@ -42,6 +46,19 @@ void CANslator::setup() {
 
 	bcan_handler.init();
 	bcan_handler.setWiperTimer(&wiper_timer);
+
+	delay(100);
+	aux_light_controller.begin();
+
+	aux_light_controller.pinModeIO(AUX_LIGHT_DRL_L, OUTPUT);
+	aux_light_controller.pinModeIO(AUX_LIGHT_DRL_R, OUTPUT);
+	aux_light_controller.pinModeIO(AUX_LIGHT_TURN_L, OUTPUT);
+	aux_light_controller.pinModeIO(AUX_LIGHT_TURN_R, OUTPUT);
+
+	aux_light_controller.digitalWriteIO(AUX_LIGHT_DRL_L, false);
+	aux_light_controller.digitalWriteIO(AUX_LIGHT_DRL_R, false);
+	aux_light_controller.digitalWriteIO(AUX_LIGHT_TURN_L, false);
+	aux_light_controller.digitalWriteIO(AUX_LIGHT_TURN_R, false);
 
 	getCanslatorSettings(&parameters);
 }

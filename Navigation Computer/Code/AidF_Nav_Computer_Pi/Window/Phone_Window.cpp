@@ -7,7 +7,7 @@ PhoneWindow::PhoneWindow(AttributeList *attribute_list) : NavWindow(attribute_li
 	
 	for(uint8_t i=0;i<2;i+=1)
 		subtitle_area_box[i] = new TextBox(this->renderer, this->w - title_area_x - SUB_AREA_WIDTH, title_area_y + area_h + sub_area_height*(1-i%2), SUB_AREA_WIDTH, sub_area_height, ALIGN_H_R, ALIGN_V_M, 26, &this->color_profile->text);
-	subtitle_area_box[2] = new TextBox(this->renderer, title_area_x + 64, title_area_y + area_h, half_area_w, sub_area_height, ALIGN_H_L, ALIGN_V_M, 29, &this->color_profile->text);
+	subtitle_area_box[2] = new TextBox(this->renderer, title_area_x + 71, title_area_y + area_h, half_area_w, sub_area_height, ALIGN_H_L, ALIGN_V_M, 29, &this->color_profile->text);
 
 	//Clear all the "changed" bools.
 	for(uint8_t i=0;i<6;i+=1)

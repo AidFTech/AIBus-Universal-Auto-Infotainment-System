@@ -1,6 +1,6 @@
 #include "En_AIBus_Handler.h"
 
-EnAIBusHandler::EnAIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int id_count, const unsigned int ai_cache_size) : AIBusHandler(serial, rx_pin, ai_cache_size) {
+EnAIBusHandler::EnAIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int id_count, const unsigned int ai_cache_size) : AIBusHandler(serial, rx_pin, 0, ai_cache_size) {
 	this->id_list = new uint8_t[id_count];
 
 	this->id_vec.setStorage(id_list, id_count, 0);
@@ -120,4 +120,13 @@ void EnAIBusHandler::waitForAIBus() {
 			ai_timer = 0;
 		}
 	}
+}
+
+//Get whether the specified ID is valid.
+bool EnAIBusHandler::getID(const uint8_t id) {
+	for(int i=0;i<this->id_vec.size();i+=1) {
+		if(id_vec[i] == id)
+			return true;
+	}
+	return false;
 }

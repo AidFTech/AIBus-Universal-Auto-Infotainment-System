@@ -131,6 +131,7 @@ struct InfoParameters {
 
 	//Hybrid:
 	bool hybrid_system_present = false; //True if a hybrid system exists.
+	bool draw_charge_assist = true; //True if we should draw the charge/assist meter.
 	
 	uint8_t hybrid_system_type = 0; //The type of hybrid system.
 	bool charge_assist_meter = false; //True if a charge/assist meter is provided.

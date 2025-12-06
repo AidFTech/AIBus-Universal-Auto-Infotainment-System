@@ -35,7 +35,7 @@ public:
 	void setup();
 	void loop();
 private:
-	AIBusHandler ai_handler = AIBusHandler(&AISerial, AI_RX);
+	AIBusHandler ai_handler = AIBusHandler(&AISerial, AI_RX, ID_COMPUTER_PROXY);
 
 	uint8_t key_position = 0, door_position = 0;
 	bool pi_on = false, shutdown = false;

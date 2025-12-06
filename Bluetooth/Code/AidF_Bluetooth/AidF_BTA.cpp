@@ -17,7 +17,10 @@ AidFBTA::AidFBTA() {
 
 	bt_handler.init();
 
-	radio_ping_timer = elapsed_millis.time + RADIO_PING_TIMER;
+	ping_timer = elapsed_millis.time + RADIO_PING_TIMER;
+	screen_ping_timer = elapsed_millis.time;
+
+	audio_handler.setTimer(&elapsed_millis.time);
 
 	createMenuNoPhone(true);
 }
@@ -33,7 +36,10 @@ AidFBTA::~AidFBTA() {
 
 //Main object loop.
 void AidFBTA::loop() {
+	const bool last_selected = parameter_list.audio_selected;
+
 	AIData ai_msg;
+	//while(!aibus_handler.getCheckOK());
 	while(aibus_handler.readAIData(&ai_msg)) {
 		#ifdef PRINT_AIBUS
 		cout<<"S: "<<hex<<int(ai_msg.sender)<<" R: "<<hex<<int(ai_msg.receiver)<<" D: ";
@@ -46,8 +52,17 @@ void AidFBTA::loop() {
 			audio_handler.radioInit();
 		}
 
-		handleAIBusMessage(&ai_msg);
+		if(!parameter_list.screen_connected && ai_msg.sender == ID_NAV_SCREEN && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg)) {
+			parameter_list.screen_connected = true;
+		}
+
+		bool answered = audio_handler.handleAIBusMessage(&ai_msg);
+		if(!answered)
+			handleAIBusMessage(&ai_msg);
 	}
+
+	if(!last_selected && parameter_list.audio_selected)
+		screen_ping_timer = elapsed_millis.time;
 
 	bt_handler.loop();
 	audio_handler.loop();
@@ -59,15 +74,39 @@ void AidFBTA::loop() {
 			createMenuPhone(true);
 			bt_handler.stopDiscovery();
 		}
+
+		audio_handler.refreshDeviceConnection();
 		parameter_list.connection_changed = false;
 	}
 
-	if(!parameter_list.radio_connected && elapsed_millis.time - radio_ping_timer > RADIO_PING_TIMER) {
-		radio_ping_timer = elapsed_millis.time;
+	if(elapsed_millis.time - ping_timer > RADIO_PING_TIMER) {
+		ping_timer = elapsed_millis.time;
 
-		uint8_t ping_data[] = {0x1};
-		AIData ping_msg(sizeof(ping_data), ID_PHONE, ID_RADIO, ping_data);
-		aibus_handler.writeAIData(&ping_msg, false);
+		if(!parameter_list.radio_connected) {
+			uint8_t ping_data[] = {0x1};
+			AIData ping_msg(sizeof(ping_data), ID_PHONE, ID_RADIO, ping_data);
+			aibus_handler.writeAIData(&ping_msg, false);
+		}
+
+		if(!parameter_list.screen_connected) {
+			uint8_t ping_data[] = {0x1};
+			AIData ping_msg(sizeof(ping_data), ID_PHONE, ID_NAV_SCREEN, ping_data);
+			aibus_handler.writeAIData(&ping_msg, false);
+		}
+
+		if(!parameter_list.imid_native_phone && parameter_list.imid_char <= 0 && parameter_list.imid_lines <= 0) {
+			uint8_t ping_data[] = {0x4, 0xE6, 0x3B};
+			AIData ping_msg(sizeof(ping_data), ID_PHONE, ID_IMID_SCR, ping_data);
+			aibus_handler.writeAIData(&ping_msg, false);
+		}
+	}
+
+	//Ping the screen.
+	if(parameter_list.audio_selected && elapsed_millis.time - screen_ping_timer > SCREEN_PING_TIMER) {
+		screen_ping_timer = elapsed_millis.time;
+		uint8_t screen_ping_data[] = {0x77, ID_PHONE, 0x80};
+		AIData screen_ping_msg(sizeof(screen_ping_data), ID_PHONE, ID_NAV_SCREEN, screen_ping_data);
+		aibus_handler.writeAIData(&screen_ping_msg, parameter_list.screen_connected);
 	}
 
 	usleep(1000);
@@ -111,6 +150,33 @@ void AidFBTA::handleAIBusMessage(AIData* ai_msg) {
 			
 			AIData mac_msg(sizeof(mac_data), ID_PHONE, ai_msg->sender, mac_data);
 			aibus_handler.writeAIData(&mac_msg);
+		}
+	} else if(ai_msg->l >= 3 && ai_msg->data[0] == 0x4 && ai_msg->data[1] == 0xE6 && ai_msg->data[2] == 0x10) { //Radio request.
+		audio_handler.radioInit();
+	} else if(ai_msg->l >= 2 && ai_msg->data[0] == 0x3B && (ai_msg->data[1] == 0x57 || ai_msg->data[1] == 0x23)) {
+		if(ai_msg->sender == ID_IMID_SCR && ai_msg->receiver != ID_PHONE) {
+			uint8_t imid_request_data[] = {0x4, 0xE6, 0x3B};
+			AIData imid_request_msg(sizeof(imid_request_data), ID_PHONE, ID_IMID_SCR, imid_request_data);
+			aibus_handler.writeAIData(&imid_request_msg);
+		}
+
+		if(ai_msg->data[1] == 0x23 && ai_msg->l >= 4) { //Generic string length and height.
+			parameter_list.imid_char = ai_msg->data[2];
+			parameter_list.imid_lines = ai_msg->data[3];
+
+			if(ai_msg->receiver == ID_PHONE && parameter_list.imid_char > 0 && parameter_list.imid_lines > 0)
+				audio_handler.refreshIMIDConnection();
+		} else if(ai_msg->data[1] == 0x57) {
+			parameter_list.imid_native_phone = false;
+			for(int i=2;i<ai_msg->l;i+=1) {
+				if(ai_msg->data[i] == ID_PHONE) {
+					parameter_list.imid_native_phone = true;
+					break;
+				}
+			}
+
+			if(ai_msg->receiver == ID_PHONE && parameter_list.imid_native_phone)
+				audio_handler.refreshIMIDConnection();
 		}
 	}
 }

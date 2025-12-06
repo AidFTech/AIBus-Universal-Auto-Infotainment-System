@@ -24,16 +24,18 @@
 #define AI_CACHE_SIZE 16
 #endif
 
+#define AIDATA_LIMIT 0x30 - 4
+
 class AIBusHandler {
 public:
-	AIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int ai_cache_size = AI_CACHE_SIZE);
+	AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size = AI_CACHE_SIZE);
 	~AIBusHandler();
 
 	virtual int dataAvailable();
 	virtual int dataAvailable(const bool cache);
 
 	virtual bool readAIData(AIData* ai_d);
-	virtual bool readAIData(AIData* ai_d, const bool cache);
+	virtual bool readAIData(AIData* ai_d, const bool cache, const bool multiple = true);
 	virtual bool readAIData(AIData* ai_d, uint8_t* data, const uint8_t d_l);
 	virtual bool writeAIData(AIData* ai_d);
 	virtual bool writeAIData(AIData* ai_d, const bool acknowledge);
@@ -50,8 +52,10 @@ protected:
 	Vector<AIData> cached_vec;
 
 	AIData cached_msg;
+	uint8_t id;
 
 	virtual bool awaitAcknowledgement(AIData* ai_d);
+	virtual bool getID(const uint8_t id);
 };
 
 bool getInitMessage(AIData* ai_d);

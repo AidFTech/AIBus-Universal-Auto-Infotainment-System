@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <mcp2515.h>
 #include <Vector.h>
+#include <MCP23S08.h>
 
 #include "AIBus.h"
 #include "En_AIBus_Handler.h"
@@ -14,6 +15,7 @@
 #define canslator_h
 
 #ifdef MEGACOREX
+#define MCP_RESET PIN_PA3
 #define AI_RX PIN_PA7
 #define BCAN_CS PIN_PC0
 #define BCAN_IMID_CS PIN_PC1
@@ -23,9 +25,12 @@
 #define CAN_RESET PIN_PD0
 #define WASHER_IND PIN_PD1
 
+#define AUX_LIGHT_CS PIN_PD4
+
 #define WASHER_SENSOR PIN_PF5
 #define POWER_ON PIN_PF6
 #else
+#define MCP_RESET 3
 #define AI_RX 4
 #define POWER_ON 5
 #define WASHER_SENSOR 6
@@ -36,8 +41,15 @@
 #define BCAN_RLS_CS 15
 #define FCAN_CS 16
 
+#define AUX_LIGHT_CS 18
+
 #define CAN_RESET 17
 #endif
+
+#define AUX_LIGHT_DRL_L 0
+#define AUX_LIGHT_DRL_R 1
+#define AUX_LIGHT_TURN_L 2
+#define AUX_LIGHT_TURN_R 3
 
 #define PARAM_TIMER 750
 
@@ -56,6 +68,8 @@ private:
 	ParameterList parameters;
 
 	BCAN_Handler bcan_handler = BCAN_Handler(&ai_handler, &parameters, BCAN_CS, BCAN_IMID_CS, BCAN_RLS_CS, FCAN_CS);
+
+	MCP23S08 aux_light_controller = MCP23S08(AUX_LIGHT_CS, 0);
 
 	bool param_timer_enabled = false;
 	elapsedMillis param_timer;

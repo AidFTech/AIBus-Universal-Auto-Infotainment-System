@@ -105,7 +105,7 @@ public:
 private:
 	ParameterList parameters;
 
-	AIBusHandler aibus_handler = AIBusHandler(&AISerial, AI_RX);
+	AIBusHandler aibus_handler = AIBusHandler(&AISerial, AI_RX, ID_RADIO);
 
 	TextHandler text_handler = TextHandler(&aibus_handler, &parameters);
 

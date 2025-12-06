@@ -25,19 +25,21 @@
 #define REPEAT_DELAY 100
 #define MAX_REPEAT 50
 
+#define AIDATA_LIMIT 0x30 - 4
+
 using namespace std;
 
 class AIBusHandler {
 public:
 	#ifdef RPI_UART
-	AIBusHandler(std::string port, int** socket_list, const int socket_l, unsigned long* timer);
+	AIBusHandler(std::string port, int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer);
 	#else
-	AIBusHandler(int** socket_list, const int socket_l, unsigned long* timer);
+	AIBusHandler(int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer);
 	#endif
 	~AIBusHandler();
 
 	bool readAIData(AIData* ai_d);
-	bool readAIData(AIData* ai_d, const bool cache);
+	bool readAIData(AIData* ai_d, const bool cache, const bool multiple = true);
 	
 	bool writeAIData(AIData* ai_d);
 	bool writeAIData(AIData* ai_d, const bool acknowledge);
@@ -65,6 +67,7 @@ private:
 	bool awaitAcknowledgement(AIData* ai_d);
 
 	void writeToSocket(AIData* ai_d);
+	bool getID(const uint8_t id);
 
 	int ai_port;
 	#ifdef RPI_UART
@@ -80,6 +83,7 @@ private:
 	int socket_l = 0;
 
 	unsigned long *timer;
+	uint8_t id;
 };
 
 #ifndef RPI_UART

@@ -10,6 +10,8 @@ pub const AIBUS_DEVICE_IMID: u8 = 0x11;
 pub const AIBUS_DEVICE_ANTENNA: u8 = 0x3B;
 pub const AIBUS_DEVICE_PHONE: u8 = 0xC8;
 
+pub const AIDATA_LIMIT: usize = 0x30 - 4;
+
 pub struct AIBusMessage {
 	pub sender: u8,
 	pub receiver: u8,

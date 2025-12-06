@@ -23,6 +23,8 @@
 
 #define DEFAULT_READ_LENGTH 1024
 
+#define AIDATA_LIMIT (0x30 - 4)
+
 using namespace std;
 
 struct SocketMessage {
@@ -49,6 +51,8 @@ public:
 
 	void setTimer(unsigned long* timer);
 
+	bool getCheckOK();
+
 	void refreshSocket(const char* socket_path);
 	void clearSocket();
 
@@ -66,9 +70,12 @@ public:
 	int getClient();
 private:
 	vector<AIData> rx_cache = vector<AIData>(0);
+	vector<AIData> multi_cache = vector<AIData>(0); //Cache for multi-block messages.
 	vector<SocketMessage> tx_cache = vector<SocketMessage>(0);
 
 	unsigned long* timer = nullptr;
+
+	bool check_ok = true, cache_ok = true;
 
 	int network_socket = -1;
 	uint8_t my_id = 0;

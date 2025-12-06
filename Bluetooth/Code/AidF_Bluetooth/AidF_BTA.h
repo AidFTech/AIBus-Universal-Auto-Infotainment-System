@@ -24,6 +24,7 @@
 #define BTA_SOCKET_PATH "/tmp/abta"
 
 #define RADIO_PING_TIMER 5000
+#define SCREEN_PING_TIMER 5000
 
 using namespace std;
 
@@ -58,13 +59,13 @@ private:
 
 	BTHandler bt_handler = BTHandler(&parameter_list, &connected_device, &text_handler, pi_mac);
 
-	BTAudioHandler audio_handler = BTAudioHandler(&aibus_handler, &bt_handler, &parameter_list);
+	BTAudioHandler audio_handler = BTAudioHandler(&aibus_handler, &bt_handler, &text_handler, &parameter_list);
 
 	//Threads
 	pthread_t aibus_thread, millis_thread;
 
 	//Timers
-	unsigned long radio_ping_timer = 0;
+	unsigned long ping_timer = 0, screen_ping_timer = 0;
 
 	void handleAIBusMessage(AIData* ai_msg);
 

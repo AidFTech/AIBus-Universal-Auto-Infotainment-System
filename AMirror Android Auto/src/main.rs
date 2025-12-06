@@ -43,6 +43,7 @@ fn main() {
 	let bluetooth_connected_aibus = Arc::clone(&bluetooth_connected);
 
 	let aibus_handle = thread::spawn( move || {
+		let mut multiple_cache = Vec::new();
 		let mut amirror_stream = match init_default_socket() {
 			Some(socket) => socket,
 			None => {
@@ -83,7 +84,46 @@ fn main() {
 					let ai_tx = aibus_thread.get_ai_tx();
 
 					for ai_data in &mut *ai_tx {
-						ai_tx_vec.push(ai_data.clone());
+						if ai_data.l() > AIDATA_LIMIT + 3 {
+							let count = ai_data.l() / AIDATA_LIMIT;
+							let r = ai_data.l() % AIDATA_LIMIT;
+
+							let total_count = if r > 0 {
+								count + 1
+							} else {
+								count
+							};
+
+							for m in 0..count {
+								let mut data = [0x91, (total_count&0xFF) as u8, (m&0xFF) as u8].to_vec();
+								for i in 0..AIDATA_LIMIT {
+									data.push(ai_data.data[i+m*AIDATA_LIMIT]);
+								}
+
+								let new_msg = AIBusMessage {
+									sender: ai_data.sender,
+									receiver: ai_data.receiver,
+									data: data,
+								};
+								ai_tx_vec.push(new_msg);
+							}
+
+							if r > 0 {
+								let mut data = [0x91, (total_count&0xFF) as u8, ((total_count-1)&0xFF) as u8].to_vec();
+								for i in 0..r {
+									data.push(ai_data.data[i+(total_count-1)*AIDATA_LIMIT]);
+								}
+
+								let new_msg = AIBusMessage {
+									sender: ai_data.sender,
+									receiver: ai_data.receiver,
+									data: data,
+								};
+								ai_tx_vec.push(new_msg);
+							}
+						} else {
+							ai_tx_vec.push(ai_data.clone());
+						}
 					}
 
 					ai_tx.clear();
@@ -212,12 +252,9 @@ fn main() {
 							println!("{:X?}", msg.data);
 				
 							let rx_msg = get_aibus_message(msg.data.clone());
-
-							//if rx_msg.receiver != AIBUS_DEVICE_AMIRROR && rx_msg.receiver != 0xFF {
-							//	continue;
-							//}
-
-							ai_rx.push(rx_msg.clone());
+							if rx_msg.sender == AIBUS_DEVICE_AMIRROR {
+								continue;
+							}
 
 							if rx_msg.receiver == AIBUS_DEVICE_AMIRROR && rx_msg.l() >= 1 && rx_msg.data[0] != 0x80 {
 								write_aibus_message(&mut amirror_stream, AIBusMessage {
@@ -225,6 +262,31 @@ fn main() {
 									receiver: rx_msg.sender,
 									data: [0x80].to_vec(),
 								});
+							}
+
+							if rx_msg.l() >= 3 && rx_msg.data[0] == 0x91 && (rx_msg.receiver == AIBUS_DEVICE_AMIRROR || rx_msg.receiver == 0xFF) {
+								let expected_len = rx_msg.data[1] as usize;
+								multiple_cache.push(rx_msg.clone());
+
+								if multiple_cache.len() >= expected_len {
+									let mut full_data = Vec::new();
+									for m in multiple_cache.clone() {
+										for d in m.data {
+											full_data.push(d);
+										}
+									}
+
+									let full_msg = AIBusMessage {
+										sender: rx_msg.sender,
+										receiver: rx_msg.receiver,
+										data: full_data,
+									};
+									ai_rx.push(full_msg);
+
+									multiple_cache.clear();
+								}
+							} else {
+								ai_rx.push(rx_msg.clone());
 							}
 						}
 					}

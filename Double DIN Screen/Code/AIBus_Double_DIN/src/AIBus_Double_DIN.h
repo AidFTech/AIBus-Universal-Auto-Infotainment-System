@@ -72,7 +72,7 @@ public:
 	void setup();
 	void loop();
 private:
-	AIBusHandler ai_handler = AIBusHandler(&AISerial, AI_RX);
+	AIBusHandler ai_handler = AIBusHandler(&AISerial, AI_RX, ID_NAV_SCREEN);
 	MCP4251 ill_mcp4251 = MCP4251(ILL_CS, 100000, 0, 100000, 0);
 	MCP23S08 nav_mcp = MCP23S08(NAV_CS);
 	MCP23S08 open_close_mcp = MCP23S08(OPEN_CLOSE_CS);

@@ -69,6 +69,8 @@ private:
 	TextBox* param_text[PARAM_COUNT];
 	info_param* param_index;
 
+	TextBox* text_charge, *text_assist;
+
 	//Light display:
 	SDL_Texture* drl_texture = NULL,
 				*side_texture = NULL,

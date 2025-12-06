@@ -2,6 +2,11 @@
 
 //Audio window constructor.
 Audio_Window::Audio_Window(AttributeList *attribute_list) : NavWindow(attribute_list) {
+	area_w = w/2;
+	full_area_w = w - title_area_x;
+	half_area_w = w/2 - title_area_x;
+	function_area_width = w/6;
+
 	main_area_box[0] = new TextBox(this->renderer, title_area_x, title_area_y, area_w, area_h, ALIGN_H_L, ALIGN_V_M, 65, &this->color_profile->text);
 	for(uint8_t i=1;i<6;i+=1)
 		main_area_box[i] = new TextBox(this->renderer, title_area_x, main_area_y + main_area_height*i, full_area_w, area_h, ALIGN_H_L, ALIGN_V_M, 36, &this->color_profile->text);

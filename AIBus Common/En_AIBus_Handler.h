@@ -26,6 +26,8 @@ public:
 private:
 	Vector<uint8_t> id_vec;
 	uint8_t* id_list;
+
+	bool getID(const uint8_t id);
 };
 
 #endif

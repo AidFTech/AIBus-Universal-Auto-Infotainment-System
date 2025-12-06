@@ -1,7 +1,7 @@
 #include "AIBus_Handler.h"
 
 #ifdef RPI_UART
-AIBusHandler::AIBusHandler(string port, int** socket_list, const int socket_l, unsigned long* timer) {
+AIBusHandler::AIBusHandler(string port, int** socket_list, const int socket_l, const uint8_t id,  unsigned long* timer) {
 	this->cached_vec = vector<AIData>(0);
 	gpioCfgSetInternals(1<<10);
 	gpioInitialise();
@@ -24,9 +24,10 @@ AIBusHandler::AIBusHandler(string port, int** socket_list, const int socket_l, u
 
 	this->socket_l = socket_l;
 	this->timer = timer;
+	this->id = id;
 }
 #else
-AIBusHandler::AIBusHandler(int** socket_list, const int socket_l, unsigned long* timer) {
+AIBusHandler::AIBusHandler(int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer) {
 	this->cached_vec = vector<AIData>(0);
 	cout<<"Ready!\nEnter the sender, receiver, and data. Separate all characters with a space. Do not include the checksum.\n";
 
@@ -36,6 +37,7 @@ AIBusHandler::AIBusHandler(int** socket_list, const int socket_l, unsigned long*
 
 	this->socket_l = socket_l;
 	this->timer = timer;
+	this->id = id;
 }
 #endif
 
@@ -70,34 +72,12 @@ bool AIBusHandler::readAIData(AIData* ai_d) {
 }
 
 //Read AIBus data.
-bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
+bool AIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool multiple) {
 	ai_d->refreshAIData(0, 0, 0);
 	if(port_connected) {
 		if(cache && cached_msg.l > 0) {
 			ai_d->refreshAIData(cached_msg);
 
-			/*if(cached_vec.size() > 4) {
-				const int l = cached_vec.at(1);
-				if(cached_vec.size() < l + 2) {
-					cached_vec.clear();
-					writeToSocket(ai_d);
-					return true;
-				}
-
-				uint8_t data[l+2];
-				for(int i=0;i<l+2;i+=1) {
-					data[i] = cached_vec.at(0);
-					cached_vec.erase(cached_vec.begin());
-				}
-
-				readAIByteData(&cached_msg, data, sizeof(data));
-
-			} else {
-				if(cached_vec.size() > 0)
-					cached_vec.clear();
-
-				cached_msg.refreshAIData(0,0,0);
-			}*/
 			if(cached_vec.size() > 0) {
 				cached_msg.refreshAIData(cached_vec.at(0));
 				cached_vec.erase(cached_vec.begin());
@@ -169,6 +149,63 @@ bool AIBusHandler::readAIData(AIData* ai_d, const bool cache) {
 			
 			for(uint8_t i=0;i<ai_d->l;i+=1)
 				ai_d->data[i] = d[i];
+
+			if(multiple && ai_d->l >= 3 && ai_d->data[0] == 0x91 && (getID(ai_d->receiver) || ai_d->receiver == 0xFF)) { //Multiple messages are on the way.
+				if(getID(ai_d->receiver))
+					sendAcknowledgement(ai_d->receiver, ai_d->sender);
+
+				if(ai_d->data[2] != 0)
+					return false;
+
+				const int msg_count = ai_d->data[1];
+				uint8_t full_data[msg_count*AIDATA_LIMIT];
+				int full_length = ai_d->l - 3;
+
+				if(msg_count <= 0)
+					return true;
+
+				writeToSocket(ai_d);
+
+				for(int i=0;i<ai_d->l - 3;i+=1)
+					full_data[i] = ai_d->data[i+3];
+				int m = 1;
+				unsigned long ai_timer = *timer;
+
+
+				AIData test_msg;
+				while(m < msg_count && *timer - ai_timer < 200) {
+					if(readAIData(&test_msg, true, false)) {
+						if(test_msg.l < 3 || test_msg.receiver != ai_d->receiver || test_msg.sender != ai_d->sender || test_msg.data[0] != 0x91 || test_msg.data[1] != msg_count) {
+							if((test_msg.receiver == ai_d->receiver || test_msg.receiver == 0xFF) && test_msg.l > 0 && test_msg.data[0] != 0x80)
+								cacheMessage(&test_msg); 
+							continue;
+						}
+
+						if(getID(test_msg.receiver))
+							sendAcknowledgement(test_msg.receiver, test_msg.sender);
+
+						for(int i=0;i<test_msg.l-3;i+=1)
+							full_data[(AIDATA_LIMIT)*m + i] = test_msg[i+3];
+
+						full_length += test_msg.l - 3;
+
+						m += 1;
+						ai_timer = *timer;
+					}
+
+					if(*timer - ai_timer > 200)
+						return false;
+				}
+
+				ai_d->refreshAIData(full_length, ai_d->sender, ai_d->receiver);
+				ai_d->refreshAIData(full_data);
+
+				#if !defined(RPI_UART) && defined(AIBUS_PRINT)
+				printBytes(ai_d);
+				#endif
+
+				return true;
+			}
 
 			#if !defined(RPI_UART) && defined(AIBUS_PRINT)
 			printBytes(ai_d);
@@ -255,6 +292,31 @@ bool AIBusHandler::writeAIData(AIData* ai_d) {
 bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 	bool sent = true;
 
+	if(ai_d->l > AIDATA_LIMIT + 3) {
+		const int count = ai_d->l/AIDATA_LIMIT, r = ai_d->l%AIDATA_LIMIT;
+		AIData ai_group[count + (r == 0 ? 0 : 1)];
+
+		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
+			const int l = i<sizeof(ai_group)/sizeof(AIData) - 1 || r == 0 ? AIDATA_LIMIT + 3 : r + 3;
+			uint8_t ai_data[l];
+			ai_data[0] = 0x91;
+			ai_data[1] = sizeof(ai_group)/sizeof(AIData);
+			ai_data[2] = i;
+			for(int d=0;d<l-3;d+=1)
+				ai_data[d+3] = ai_d->data[AIDATA_LIMIT*i + d];
+
+			ai_group[i] = AIData(l, ai_d->sender, ai_d->receiver, ai_data);
+		}
+
+		bool ack = false;
+		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
+			ack = writeAIData(&ai_group[i], acknowledge);
+			if(!ack && acknowledge)
+				return false;
+		}
+		return ack;
+	}
+
 	if(port_connected) {
 		uint8_t data[ai_d->l + 4];
 		ai_d->getBytes(data);
@@ -330,6 +392,11 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 		#endif
 	}
 	return sent;
+}
+
+//Determine whether the provided ID is valid.
+bool AIBusHandler::getID(const uint8_t id) {
+	return this->id == id;
 }
 
 //Send the acknowledgement message.
