@@ -19,6 +19,13 @@ BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler,
 	e_brake = false;
 	brightness_bar = false;
 	lights_on = false;
+
+	left_signal_on = false;
+	right_signal_on = false;
+	hazard_on = false;
+	brake_light_on = false;
+	left_signal_illum = false;
+	right_signal_illum = false;
 	
 	coolant_temp = 0x35;
 	eco_bar = 0x1C;
@@ -71,6 +78,21 @@ bool BCAN_Handler::handleAIBus(AIData* ai_msg) {
 	return false;
 }
 
+//Set the light controller.
+void BCAN_Handler::setLightController(AuxLightController* aux_light_controller) {
+	this->aux_light_controller = aux_light_controller;
+}
+
+//Get whether the left signal is on.
+bool BCAN_Handler::getLeftSignalOn() {
+	return this->left_signal_on;
+}
+
+//Get whether the right signal is on.
+bool BCAN_Handler::getRightSignalOn() {
+	return this->right_signal_on;
+}
+
 //Read a CAN frame.
 void BCAN_Handler::readCANMessage() {
 	struct can_frame can_msg;
@@ -87,7 +109,7 @@ void BCAN_Handler::readCANMessage() {
 				can_timer = 0;
 			}
 
-			if(can_msg.can_id == BCAN_ID_KEYPOS && can_msg.can_dlc == 5) { //Key position main.
+			if(can_msg.can_id == BCAN_ID_KEYPOS && can_msg.can_dlc == 5) { //Key position main, brake lights, signal lights.
 				const uint8_t last_key = key_pos;
 
 				if((can_msg.data[0]&0x28) != 0 && (can_msg.data[2]&0x80) != 0) { //ACC 2, not cranking.
@@ -104,6 +126,27 @@ void BCAN_Handler::readCANMessage() {
 					writeAIBusKeyMessage(0xFF);
 
 				parameter_list->power_on = key_pos != 0;
+
+				//Brake and signal lights.
+				const bool last_left_signal_illum = left_signal_illum, last_right_signal_illum = right_signal_illum, last_brake_lights = brake_light_on, last_hazard = hazard_on;
+
+				left_signal_illum = (can_msg.data[2]&0x10) != 0;
+				right_signal_illum = (can_msg.data[2]&0x8) != 0;
+				hazard_on = (can_msg.data[2]&0x20) != 0;
+				brake_light_on = (can_msg.data[0]&0x10) != 0;
+
+				if(last_left_signal_illum != left_signal_illum || last_right_signal_illum != right_signal_illum) {
+					light_state_a &= ~0x60;
+					light_state_a |= (left_signal_illum ? 0x20 : 0x0) | (right_signal_illum ? 0x40 : 0x0);
+					writeAIBusLightMessage(0xFF);
+
+					aux_light_controller->setLeftTurn(left_signal_illum);
+					aux_light_controller->setRightTurn(right_signal_illum);
+				}
+
+				if(last_brake_lights != brake_light_on || last_hazard != hazard_on)
+					writeAIBusSignalMessage();
+				
 			} else if(can_msg.can_id == BCAN_ID_GEAR && can_msg.can_dlc == 5) { //Engine running, e-brake and gear.
 				const uint16_t last_gear = honda_gear;
 				const uint8_t last_key = key_pos;
@@ -117,6 +160,9 @@ void BCAN_Handler::readCANMessage() {
 
 				if(key_pos != last_key)
 					writeAIBusKeyMessage(0xFF);
+
+				if(e_brake != last_ebrake)
+					writeAIBusSignalMessage();
 
 				parameter_list->power_on = key_pos != 0;
 			} else if(can_msg.can_id == BCAN_ID_LEFTDOORS && can_msg.can_dlc == 1) { //Left doors.
@@ -172,6 +218,8 @@ void BCAN_Handler::readCANMessage() {
 								(side ? 0x8 : 0x0) |
 								(low_beam ? 0x2 : 0x0) |
 								(front_fog ? 0x10 : 0x0) |
+								(left_signal_illum ? 0x20 : 0x0) |
+								(right_signal_illum ? 0x40 : 0x0) |
 								(high_beam ? 0x4 : 0x0);
 
 				light_state_b = (tail ? 0x20 : 0x0) |
@@ -181,12 +229,20 @@ void BCAN_Handler::readCANMessage() {
 					writeAIBusLightMessage(0xFF);
 
 				if(last_hood != hood) {
-					this->doors_open &= 0xDF;
+					this->doors_open &= ~0x20;
 					if(hood)
 						this->doors_open |= 0x20;
 
 					writeAIBusDoorMessage(0xFF);
 				}
+			} else if(can_msg.can_id == BCAN_ID_LIGHTSTALKPOS && can_msg.can_dlc == 2) { //Headlight stalk position.
+				const bool last_left_signal_on = left_signal_on, last_right_signal_on = right_signal_on;
+
+				left_signal_on = (can_msg.data[1]&0x80) != 0 && ((key_pos&0xF) == 0x2 || (key_pos&0xF) == 0x4);
+				right_signal_on = (can_msg.data[1]&0x40) != 0 && ((key_pos&0xF) == 0x2 || (key_pos&0xF) == 0x4);
+
+				if(last_left_signal_on != left_signal_on || last_right_signal_on != right_signal_on)
+					writeAIBusSignalMessage();
 			} else if(can_msg.can_id == BCAN_ID_WIPERSTALKPOS && can_msg.can_dlc == 3) { //Wiper stalk position.
 				const bool auto_wiper = parameter_list->auto_wiper, wiper_door_off = parameter_list->wiper_door_off;
 				const uint8_t last_wiper_pos = wiper_pos, last_delay_pos = wiper_delay_pos;
@@ -334,6 +390,20 @@ void BCAN_Handler::readCANMessage() {
 
 					if(hybrid_init && (hybrid_status != last_hybrid_status || hybrid_battery != last_hybrid_battery || charge_assist != last_charge_assist))
 						writeAIBusHybridStatusMessage();
+				}
+			} else if(can_msg.can_id == BCAN_ID_AVG_ECONOMY && can_msg.can_dlc == 8) { //Average economy.
+				const bool last_mpg = economy_mpg;
+				economy_mpg = (can_msg.data[0]&0x40) != 0; //TODO: Keep experimenting with this. It doesn't seem solid.
+
+				const int32_t last_current_economy = current_economy;
+
+				if((can_msg.data[0]&0x3F) == 0x3F && (can_msg.data[1]&0xF8) == 0xF8) //Last economy is undefined.
+					current_economy = -1;
+				else
+					current_economy = ((can_msg.data[0]&0x3F) << 5) | ((can_msg.data[1]&0xF8) >> 3);
+
+				if(last_current_economy != current_economy || last_mpg != economy_mpg) {
+					writeAIBusAverageEconomyMessage();
 				}
 			}
 
@@ -557,6 +627,21 @@ void BCAN_Handler::writeAIBusLightMessage(const uint8_t receiver) {
 	ai_handler->writeAIData(&light_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
 
+//Write the light signal message.
+void BCAN_Handler::writeAIBusSignalMessage() {
+	const uint8_t signal_byte = 0x0 |
+								(left_signal_on ? 0x1 : 0x0) |
+								(right_signal_on ? 0x2 : 0x0) |
+								(hazard_on ? 0x4 : 0x0) | 
+								(brake_light_on ? 0x8 : 0x0) |
+								(e_brake ? 0x10 : 0x0);
+
+
+	uint8_t signal_data[] = {0xA1, 0x13, signal_byte};
+	AIData signal_msg(sizeof(signal_data), ID_CANSLATOR, 0xFF, signal_data);
+	ai_handler->writeAIData(&signal_msg, false);
+}
+
 //Write the speed message.
 void BCAN_Handler::writeAIBusSpeedMessage(const uint8_t receiver) {
 	uint8_t speed_data[] = {0xA1, 0x1F, 0x4, 0x1, vehicle_speed};
@@ -613,6 +698,21 @@ void BCAN_Handler::writeAIBusRangeMessage() {
 
 	AIData range_msg(sizeof(range_data), ID_CANSLATOR, 0xFF, range_data);
 	ai_handler->writeAIData(&range_msg, false);
+}
+
+//Write the average fuel economy.
+void BCAN_Handler::writeAIBusAverageEconomyMessage() {
+	uint8_t econ_data[] = {0xA1,
+							0x1F,
+							0x9,
+							((economy_mpg ? 0b10 : 0b00) << 6) | (current_economy < 0 ? bit(5) : 0) | 0x1,
+							current_economy>>24,
+							(current_economy>>16)&0xFF,
+							(current_economy>>8)&0xFF,
+							current_economy&0xFF};
+
+	AIData econ_msg(sizeof(econ_data), ID_CANSLATOR, 0xFF, econ_data);
+	ai_handler->writeAIData(&econ_msg, false);
 }
 
 //Write the hybrid system handshake.

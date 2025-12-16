@@ -431,7 +431,17 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				else if(getCurrentSourceID() == ID_RADIO) {
 					if(parameter_list->info_mode)
 						parameter_list->info_mode = false;
-					this->text_handler->setOverlayHeader(parameter_list->rds_program_name);
+					String rds_header = parameter_list->rds_program_name;
+
+					for(int c=0;c<rds_header.length();c+=1) {
+						if(rds_header.charAt(c) < ' ') {
+							rds_header = rds_header.substring(0,c);
+							break;
+						}
+					}
+
+					rds_header.replace("#", "##  ");
+					this->text_handler->setOverlayHeader(rds_header);
 				}
 			} else if(button == 0x36 && state == 0x2) { //AM/FM button.
 				const uint8_t source_id = getCurrentSourceID();

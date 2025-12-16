@@ -22,6 +22,8 @@ public:
 	void writePhoneWindowText(string text, const uint8_t group, const uint8_t area);
 	void writeSideMenuText(string text, const uint8_t entry);
 
+	void writeNavHeaderText(string text);
+
 	void writeMetadata(string data, const uint8_t recipient, const uint8_t line);
 private:
 	ClientAIBusHandler* aibus_handler;

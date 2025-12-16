@@ -1,3 +1,5 @@
+pub const MAC_ADDR_LEN: usize = 6;
+
 pub struct Context {
 	pub audio_selected: bool, //True if the mirror is selected as the active audio device.
 	pub audio_text: bool, //True if audio text handling is allowed.
@@ -7,6 +9,9 @@ pub struct Context {
 
 	pub phone_type: u8, //The phone type, as defined by the dongle.
 	pub phone_name: String, //The name of the phone.
+
+	pub mac_addr: [u8;MAC_ADDR_LEN],
+	pub mac_set: bool,
 
 	pub song_title: String, //The song title.
 	pub artist: String, //The artist name.
@@ -56,6 +61,9 @@ impl Context {
 			phone_active: true,
 			//fullscreen: false,
 			playing: false,
+
+			mac_addr: [0;MAC_ADDR_LEN],
+			mac_set: false,
 
 			phone_type: 0,
 			phone_name: "".to_string(),

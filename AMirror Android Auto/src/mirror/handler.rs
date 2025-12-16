@@ -345,6 +345,18 @@ impl<'a> MirrorHandler<'a> {
 			startup_msg_meta.add_int(String::from("androidAutoSizeH"), self.h as i32);
 			self.dongle_usb_conn.write_dongle_message(startup_msg_meta.get_mirror_message());
 
+			match self.context.try_lock() {
+				Ok(context) => {
+					if context.mac_set {
+						let mac_msg = get_bluetooth_address(context.mac_addr);
+						self.dongle_usb_conn.write_dongle_message(mac_msg);
+					}
+				}
+				Err(_) => {
+					println!("Dongle init: context locked.");
+				}
+			}
+
 			let mut msg_91 = MirrorMessage::new(9);
 			msg_91.push_int(1);
 			self.dongle_usb_conn.write_dongle_message(msg_91);

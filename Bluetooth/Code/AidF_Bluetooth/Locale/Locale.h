@@ -7,12 +7,22 @@ enum bta_text_index : uint8_t {
 	//Header Messages
 	LOCALE_STRING_PHONE_NOT_CONNECTED,
 	LOCALE_STRING_PHONE_CONNECTED,
+
+	//IMID headers:
+	LOCALE_STRING_IMID_TRACK,
+	LOCALE_STRING_IMID_ARTIST,
+	LOCALE_STRING_IMID_ALBUM,
 };
 
 static const char* TEXT_ENG[] {
 	//Header Messages
 	"No Phone Connected",
 	"Phone",
+
+	//IMID headers:
+	"TRACK",
+	"ARTIST",
+	"ALBUM",
 };
 
 enum bta_menu_index : uint8_t {

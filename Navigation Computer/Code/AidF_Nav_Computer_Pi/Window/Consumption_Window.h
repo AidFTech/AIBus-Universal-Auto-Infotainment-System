@@ -4,7 +4,7 @@
 #include "Nav_Window.h"
 #include "../Menu/Nav_Menu.h"
 #include "../Text_Box.h"
-#include "../AIBus_Handler.h"
+#include "../Serial_AIBus_Handler.h"
 
 #include "../Locale/Locale.h"
 
@@ -36,7 +36,7 @@ private:
 	void handleBackButton();
 	void handleSettingsButton();
 
-	AIBusHandler* aibus_handler;
+	SerialAIBusHandler* aibus_handler;
 
 	TextBox title_box;
 	

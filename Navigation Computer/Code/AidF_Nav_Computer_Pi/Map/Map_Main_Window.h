@@ -14,7 +14,7 @@
 #include "../Window/Nav_Window.h"
 #include "../Menu/Nav_Menu.h"
 #include "../Text_Box.h"
-#include "../AIBus_Handler.h"
+#include "../Serial_AIBus_Handler.h"
 #include "../AidF_Color_Profile.h"
 #include "../Locale/Locale.h"
 

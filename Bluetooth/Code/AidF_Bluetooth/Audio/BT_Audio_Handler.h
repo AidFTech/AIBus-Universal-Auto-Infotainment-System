@@ -1,6 +1,8 @@
 #include "../AIBus/AIBus.h"
 #include "../AIBus/Client_AIBus_Handler.h"
 
+#include "../Locale/Locale.h"
+
 #include "../BT_Handler.h"
 #include "../Parameter_List.h"
 #include "../Text_Handler.h"
@@ -69,7 +71,7 @@ private:
 	string song_title = "", artist = "", album = "";
 	playback_status_t playback_status = PLAYBACK_STATUS_STOPPED, last_status = PLAYBACK_STATUS_STOPPED;
 	repeat_random_status_t repeat_random_status = RPTRND_NORMAL;
-	uint32_t position = 0;
+	uint32_t position = 0, track_number = 0;
 
 	string split_text[SPLIT_TEXT_COUNT];
 
@@ -81,7 +83,7 @@ private:
 	bool imid_split = true, imid_scroll_header = false, imid_scroll_wrap = false;
 	unsigned long scroll_timer;
 
-	bool display_header: 1, display_track: 1, display_artist: 1, display_album: 1;
+	bool display_header: 1, display_track: 1, display_artist: 1, display_album: 1, refresh_imid: 1;
 
 	void sendNameMessage();
 
@@ -91,14 +93,19 @@ private:
 	void writePhoneMetadata();
 	void writeAllMetadata();
 
+	void handleBTProperties(map<string, Variant> properties);
+
 	void writeIMIDTitle();
 	void writeIMIDArtist();
 	void writeIMIDAlbum();
 
 	void writeStatus();
+	void writeTrackNumber();
 	void writePosition();
 
 	void writeIMIDStatusandPosition();
+	
+	void incrementInfo();
 
 	void writeFunctionButtons();
 

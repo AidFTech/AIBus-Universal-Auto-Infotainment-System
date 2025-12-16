@@ -11,7 +11,7 @@
 
 #include "AidF_Color_Profile.h"
 #include "Window_Handler.h"
-#include "AIBus_Handler.h"
+#include "Serial_AIBus_Handler.h"
 #include "Ini_Context.h"
 #include "Ini_Color_Preset.h"
 #include "Saved_Settings.h"
@@ -109,7 +109,7 @@ private:
 	SDL_Renderer* renderer;
 	AidFColorProfile active_color_profile, day_profile, night_profile;
 
-	AIBusHandler* aibus_handler;
+	SerialAIBusHandler* aibus_handler;
 
 	Background* br;
 

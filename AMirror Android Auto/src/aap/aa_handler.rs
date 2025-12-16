@@ -1484,6 +1484,27 @@ impl<'a> AapHandler <'a> {
 		mic_source_wrapper.media_source_service = MessageField::some(mic_source);
 		response.services.push(mic_source_wrapper);
 
+		//Bluetooth:
+		if context.mac_set {
+			let mut bluetooth_service = BluetoothService::new();
+			let mut mac_str = "".to_string();
+
+			for d in context.mac_addr {
+				mac_str.push_str(&format!("{:02X}:", d));
+			}
+			mac_str.remove(mac_str.len()-1);
+			println!("MAC: {}", mac_str);
+
+			bluetooth_service.set_car_address(mac_str);
+			bluetooth_service.supported_pairing_methods.push(Into::into(BluetoothPairingMethod::BLUETOOTH_PAIRING_NUMERIC_COMPARISON));
+			bluetooth_service.supported_pairing_methods.push(Into::into(BluetoothPairingMethod::BLUETOOTH_PAIRING_PIN));
+
+			let mut bluetooth_wrapper = Service::new();
+			bluetooth_wrapper.set_id(ServiceChannels::BluetoothChannel as i32);
+			bluetooth_wrapper.bluetooth_service = MessageField::some(bluetooth_service);
+			response.services.push(bluetooth_wrapper);
+		}
+
 		//Media playback:
 		let media_playback_status_service = MediaPlaybackStatusService::new();
 		let mut media_status_service_wrapper = Service::new();

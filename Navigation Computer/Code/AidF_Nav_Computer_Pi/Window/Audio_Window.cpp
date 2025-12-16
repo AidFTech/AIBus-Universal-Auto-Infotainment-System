@@ -64,7 +64,7 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 	if(msg->receiver != ID_NAV_COMPUTER)
 		return false;
 	
-	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
+	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	if(msg->l >= 2 && (msg->data[0] == 0x20 || msg->data[0] == 0x23) && (msg->data[1]&0x60) == 0x60) {
 		aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
@@ -470,7 +470,7 @@ void Audio_Window::interpretMenuChange(AIData* ai_b) {
 }
 
 void Audio_Window::handleEnterButton() {
-	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
+	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ID_NAV_SCREEN);
 	if(this->settings_menu_active && this->settings_menu != NULL) {

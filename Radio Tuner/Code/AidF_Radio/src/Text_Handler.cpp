@@ -70,6 +70,9 @@ void TextHandler::sendSourceTextControl(const uint8_t recipient, const uint8_t s
 
 //Write text to the overlay header in the nav window.
 void TextHandler::setOverlayHeader(String text) {
+	if(text.length() > 64)
+		text = text.substring(0, 64);
+
 	AIData header_msg(2 + text.length(), ID_RADIO, ID_NAV_COMPUTER);
 	header_msg.data[0] = 0x22;
 	header_msg.data[1] = 0x61;
@@ -312,14 +315,16 @@ void TextHandler::sendIMIDFrequencyMessage(const uint16_t frequency, const uint8
 		} else {
 			freq_text += String(frequency);
 
-			if(parameter_list->imid_char >= 12)
+			if(parameter_list->imid_char >= 15)
 				freq_text += "kHz";
 		}
 
-		if(freq_text.length() + 4 < parameter_list->imid_char && parameter_list->fm_stereo)
-			freq_text += " St.";
-		else
-			freq_text += "    ";
+		if(freq_text.length() + 4 < parameter_list->imid_char) {
+			if(parameter_list->fm_stereo)
+				freq_text += " St.";
+			else
+				freq_text += "    ";
+		}
 		
 		int16_t imid_char = parameter_list->imid_char/2 - freq_text.length()/2;
 		if(imid_char < 0)

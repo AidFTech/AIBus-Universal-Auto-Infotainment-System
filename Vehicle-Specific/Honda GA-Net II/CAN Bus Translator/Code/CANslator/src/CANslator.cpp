@@ -26,6 +26,9 @@ void CANslator::setup() {
 	pinMode(AUX_LIGHT_CS, OUTPUT);
 	pinMode(MCP_RESET, OUTPUT);
 
+	pinMode(VIDEO_SELECT, OUTPUT);
+	pinMode(VIDEO_POWER, OUTPUT);
+
 	pinMode(POWER_ON, OUTPUT);
 
 	digitalWrite(BCAN_CS, HIGH);
@@ -38,6 +41,9 @@ void CANslator::setup() {
 	digitalWrite(MCP_RESET, HIGH);
 
 	digitalWrite(POWER_ON, LOW);
+	digitalWrite(VIDEO_POWER, LOW);
+
+	digitalWrite(VIDEO_SELECT, LOW);
 
 	AISerial.begin(AI_BAUD);
 
@@ -46,19 +52,10 @@ void CANslator::setup() {
 
 	bcan_handler.init();
 	bcan_handler.setWiperTimer(&wiper_timer);
+	bcan_handler.setLightController(&aux_light_controller);
 
 	delay(100);
-	aux_light_controller.begin();
-
-	aux_light_controller.pinModeIO(AUX_LIGHT_DRL_L, OUTPUT);
-	aux_light_controller.pinModeIO(AUX_LIGHT_DRL_R, OUTPUT);
-	aux_light_controller.pinModeIO(AUX_LIGHT_TURN_L, OUTPUT);
-	aux_light_controller.pinModeIO(AUX_LIGHT_TURN_R, OUTPUT);
-
-	aux_light_controller.digitalWriteIO(AUX_LIGHT_DRL_L, false);
-	aux_light_controller.digitalWriteIO(AUX_LIGHT_DRL_R, false);
-	aux_light_controller.digitalWriteIO(AUX_LIGHT_TURN_L, false);
-	aux_light_controller.digitalWriteIO(AUX_LIGHT_TURN_R, false);
+	aux_light_controller.init();
 
 	getCanslatorSettings(&parameters);
 }

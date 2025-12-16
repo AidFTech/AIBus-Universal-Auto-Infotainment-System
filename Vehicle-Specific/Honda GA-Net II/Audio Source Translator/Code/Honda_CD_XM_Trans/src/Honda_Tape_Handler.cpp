@@ -278,8 +278,11 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 				sendButtonMessage(HONDA_BUTTON_SKIPREV, 1);
 			else if(button == 0x25 && state == 0x2) //FWD search.
 				sendButtonMessage(HONDA_BUTTON_SKIPFWD, 1);
-			else if(button == 0x53 && state == 0x2) //Info.
+			else if(button == 0x53 && state == 0x2) { //Info.
+				ack = false;
+				sendAIAckMessage(sender);
 				sendFullTapeNavOverlay();
+			}
 		}
 	} else if(the_message->l >= 2 && the_message->data[0] == 0x2B && source_sel) {
 		ack = false;

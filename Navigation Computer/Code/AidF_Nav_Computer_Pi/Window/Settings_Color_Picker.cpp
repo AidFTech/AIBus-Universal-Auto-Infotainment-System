@@ -96,7 +96,7 @@ bool Color_Picker_Window::handleAIBus(AIData* ai_d) {
 	if(!this->active)
 		return false;
 
-	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
+	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	if(ai_d->sender == ID_NAV_SCREEN) {
 		if(ai_d->l >= 3 && ai_d->data[0] == 0x32) { //Knob turn.

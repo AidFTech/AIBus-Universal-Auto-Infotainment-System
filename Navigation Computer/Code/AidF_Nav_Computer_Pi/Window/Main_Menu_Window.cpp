@@ -35,7 +35,7 @@ bool Main_Menu_Window::handleAIBus(AIData* msg) {
 	if(!this->active)
 		return false;
 
-	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
+	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	if(msg->sender == ID_NAV_SCREEN) { //From the screen.
 		if(msg->data[0] == 0x32 && msg->data[1] == 0x7) { //Knob turn.

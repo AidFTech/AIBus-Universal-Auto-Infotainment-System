@@ -4,7 +4,7 @@
 #include "Nav_Window.h"
 #include "../Menu/Nav_Menu.h"
 #include "../Text_Box.h"
-#include "../AIBus_Handler.h"
+#include "../Serial_AIBus_Handler.h"
 
 #ifndef settings_window_h
 #define settings_window_h

@@ -41,6 +41,18 @@ void TextHandler::writePhoneWindowText(string text, const uint8_t group, const u
 	aibus_handler->writeAIData(&text_msg);
 }
 
+//Write the given text to the nav computer header.
+void TextHandler::writeNavHeaderText(string text) {
+	uint8_t header_data[text.length() + 2];
+	header_data[0] = 0x22;
+	header_data[1] = 0x61;
+	for(int i=0;i<text.length();i+=1)
+		header_data[i+2] = uint8_t(text[i]);
+
+	AIData header_msg(sizeof(header_data), ID_PHONE, ID_NAV_COMPUTER, header_data);
+	aibus_handler->writeAIData(&header_msg);
+}
+
 //Write the given text to the side menu in the phone window.
 void TextHandler::writeSideMenuText(string text, const uint8_t entry) {
 	writePhoneWindowText(text, 0xB, entry);

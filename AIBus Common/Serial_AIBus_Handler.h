@@ -8,7 +8,10 @@
 #include "AIBus/AIBus.h"
 #include "AIBus/AIBus_Serial.h"
 
+#if __has_include("Socket/AIBus_Socket.h")
 #include "Socket/AIBus_Socket.h"
+#define SOCKET_SERVER
+#endif
 
 #include <string>
 #include <stdint.h>
@@ -25,18 +28,26 @@
 #define REPEAT_DELAY 100
 #define MAX_REPEAT 50
 
-#define AIDATA_LIMIT 0x30 - 4
+#define AIDATA_LIMIT (0x30 - 4)
 
 using namespace std;
 
-class AIBusHandler {
+class SerialAIBusHandler {
 public:
 	#ifdef RPI_UART
-	AIBusHandler(std::string port, int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer);
+	#ifdef SOCKET_SERVER
+	SerialAIBusHandler(std::string port, int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer);
 	#else
-	AIBusHandler(int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer);
+	SerialAIBusHandler(std::string port, const uint8_t id, unsigned long* timer);
 	#endif
-	~AIBusHandler();
+	#else
+	#ifdef SOCKET_SERVER
+	SerialAIBusHandler(int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer);
+	#else
+	SerialAIBusHandler(const uint8_t id, unsigned long* timer);
+	#endif
+	#endif
+	~SerialAIBusHandler();
 
 	bool readAIData(AIData* ai_d);
 	bool readAIData(AIData* ai_d, const bool cache, const bool multiple = true);
@@ -79,8 +90,10 @@ private:
 	vector<AIData> cached_vec;
 	AIData cached_msg, cached_tx;
 
+	#ifdef SOCKET_SERVER
 	int** socket_list;
 	int socket_l = 0;
+	#endif
 
 	unsigned long *timer;
 	uint8_t id;

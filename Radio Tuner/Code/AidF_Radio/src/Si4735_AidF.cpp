@@ -283,6 +283,9 @@ bool Si4735Controller::getRdsInfo(String* rds, const bool init) {
 		}
 
 		*rds = text.substring(0, last_space);
+		if(rds->length() > 63)
+			*rds = rds->substring(0, 63);
+
 		return true;
 	}
 	return false;

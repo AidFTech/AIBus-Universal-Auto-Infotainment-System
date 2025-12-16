@@ -1,7 +1,11 @@
-#include "AIBus_Handler.h"
+#include "Serial_AIBus_Handler.h"
 
 #ifdef RPI_UART
-AIBusHandler::AIBusHandler(string port, int** socket_list, const int socket_l, const uint8_t id,  unsigned long* timer) {
+#ifdef SOCKET_SERVER
+SerialAIBusHandler::SerialAIBusHandler(string port, int** socket_list, const int socket_l, const uint8_t id,  unsigned long* timer) {
+#else
+SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned long* timer) {
+#endif
 	this->cached_vec = vector<AIData>(0);
 	gpioCfgSetInternals(1<<10);
 	gpioInitialise();
@@ -18,41 +22,52 @@ AIBusHandler::AIBusHandler(string port, int** socket_list, const int socket_l, c
 	gpioSetMode(AI_RX, PI_INPUT);
 	gpioSetPullUpDown(AI_RX, PI_PUD_UP);
 
+	#ifdef SOCKET_SERVER
 	this->socket_list = new int*[socket_l];
 	for(int i=0;i<socket_l;i+=1)
 		this->socket_list[i] = socket_list[i];
 
 	this->socket_l = socket_l;
+	#endif
+
 	this->timer = timer;
 	this->id = id;
 }
 #else
-AIBusHandler::AIBusHandler(int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer) {
+#ifdef SOCKET_SERVER
+SerialAIBusHandler::SerialAIBusHandler(int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer) {
+#else
+SerialAIBusHandler::SerialAIBusHandler(const uint8_t id, unsigned long* timer) {
+#endif
 	this->cached_vec = vector<AIData>(0);
 	cout<<"Ready!\nEnter the sender, receiver, and data. Separate all characters with a space. Do not include the checksum.\n";
 
+	#ifdef SOCKET_SERVER
 	this->socket_list = new int*[socket_l];
 	for(int i=0;i<socket_l;i+=1)
 		this->socket_list[i] = socket_list[i];
 
 	this->socket_l = socket_l;
+	#endif
 	this->timer = timer;
 	this->id = id;
 }
 #endif
 
-AIBusHandler::~AIBusHandler() {
+SerialAIBusHandler::~SerialAIBusHandler() {
 	if(this->ai_port >= 0)
 		aiserialClose(this->ai_port);
 	#ifdef RPI_UART
 	gpioTerminate();
 	#endif
 
+	#ifdef SOCKET_SERVER
 	delete[] this->socket_list;
+	#endif
 }
 
 #ifndef RPI_UART
-int AIBusHandler::connectAIPort(string port) {
+int SerialAIBusHandler::connectAIPort(string port) {
 	const char* c_port = port.c_str();
 	
 	const int test_port = aiserialOpen(c_port);
@@ -67,12 +82,12 @@ int AIBusHandler::connectAIPort(string port) {
 #endif
 
 //Read AIBus data.
-bool AIBusHandler::readAIData(AIData* ai_d) {
+bool SerialAIBusHandler::readAIData(AIData* ai_d) {
 	return readAIData(ai_d, true);
 }
 
 //Read AIBus data.
-bool AIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool multiple) {
+bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool multiple) {
 	ai_d->refreshAIData(0, 0, 0);
 	if(port_connected) {
 		if(cache && cached_msg.l > 0) {
@@ -284,12 +299,12 @@ bool readAIByteData(AIData* ai_d, uint8_t* data, const uint8_t d_l) {
 }
 
 //Write AIBus data.
-bool AIBusHandler::writeAIData(AIData* ai_d) {
+bool SerialAIBusHandler::writeAIData(AIData* ai_d) {
 	return writeAIData(ai_d, ai_d->receiver != 0xFF && ai_d->data[0] != 0x80);
 }
 
 //Write AIBus data. Wait for an acknowledgement message if acknowledge is true.
-bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
+bool SerialAIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 	bool sent = true;
 
 	if(ai_d->l > AIDATA_LIMIT + 3) {
@@ -395,12 +410,12 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 }
 
 //Determine whether the provided ID is valid.
-bool AIBusHandler::getID(const uint8_t id) {
+bool SerialAIBusHandler::getID(const uint8_t id) {
 	return this->id == id;
 }
 
 //Send the acknowledgement message.
-void AIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t receiver) {
+void SerialAIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t receiver) {
 	AIData ack_msg(1, sender, receiver);
 	ack_msg.data[0] = 0x80;
 
@@ -408,7 +423,7 @@ void AIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t recei
 }
 
 //Wait for the acknowledgement message.
-bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
+bool SerialAIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 	unsigned long repeat_time = *this->timer;
 	bool acknowledge = false;
 	uint8_t tries = 0;
@@ -452,12 +467,12 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 }
 
 //Get the number of available bytes.
-int AIBusHandler::getAvailableBytes() {
+int SerialAIBusHandler::getAvailableBytes() {
 	return getAvailableBytes(true);
 }
 
 //Get the number of available bytes.
-int AIBusHandler::getAvailableBytes(const bool cache) {
+int SerialAIBusHandler::getAvailableBytes(const bool cache) {
 	if(port_connected) {
 		if(!cache || cached_msg.l <= 0)
 			return aiserialBytesAvailable(this->ai_port);
@@ -468,25 +483,25 @@ int AIBusHandler::getAvailableBytes(const bool cache) {
 }
 
 //Get a pointer to the port.
-int* AIBusHandler::getPortPointer() {
+int* SerialAIBusHandler::getPortPointer() {
 	return &this->ai_port;
 }
 
 //Get whether the port is connected.
-bool AIBusHandler::getConnected() {
+bool SerialAIBusHandler::getConnected() {
 	return port_connected;
 }
 
 //Cache any pending messages.
-bool AIBusHandler::cachePending() {
+bool SerialAIBusHandler::cachePending() {
 	if(!port_connected)
 		return false;
 
 	if(aiserialBytesAvailable(ai_port) > 0) {
 		AIData ai_msg;
 		if(readAIData(&ai_msg)) {
-			if(ai_msg.receiver == ID_NAV_COMPUTER || ai_msg.receiver == 0xFF) {
-				if(ai_msg.sender != ID_NAV_COMPUTER && ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
+			if(ai_msg.receiver == this->id || ai_msg.receiver == 0xFF) {
+				if(ai_msg.sender != this->id && ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
 					sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
 
 					if(cached_msg.l <= 0)
@@ -509,9 +524,9 @@ bool AIBusHandler::cachePending() {
 }
 
 //Cache a message.
-void AIBusHandler::cacheMessage(AIData* ai_msg) {
-	if(ai_msg->receiver == ID_NAV_COMPUTER || ai_msg->receiver == 0xFF) {
-		if(ai_msg->sender != ID_NAV_COMPUTER && ai_msg->l >= 1 && ai_msg->data[0] != 0x80) {
+void SerialAIBusHandler::cacheMessage(AIData* ai_msg) {
+	if(ai_msg->receiver == this->id || ai_msg->receiver == 0xFF) {
+		if(ai_msg->sender != this->id && ai_msg->l >= 1 && ai_msg->data[0] != 0x80) {
 			sendAcknowledgement(ai_msg->receiver, ai_msg->sender);
 
 			if(cached_msg.l <= 0)
@@ -529,13 +544,13 @@ void AIBusHandler::cacheMessage(AIData* ai_msg) {
 }
 
 //Cache a message to be sent later.
-void AIBusHandler::cacheTxMessage(AIData* ai_msg) {
+void SerialAIBusHandler::cacheTxMessage(AIData* ai_msg) {
 	if(this->cached_tx.l == 0)
 		this->cached_tx.refreshAIData(*ai_msg);
 }
 
 //Send a cached message. Return whether successful.
-bool AIBusHandler::flushCached() {
+bool SerialAIBusHandler::flushCached() {
 	if(this->cached_tx. l <= 0)
 		return true;
 	
@@ -548,7 +563,8 @@ bool AIBusHandler::flushCached() {
 }
 
 //Write a message to a socket.
-void AIBusHandler::writeToSocket(AIData* ai_d) {
+void SerialAIBusHandler::writeToSocket(AIData* ai_d) {
+	#ifdef SOCKET_SERVER
 	for(int i=0;i<this->socket_l;i+=1) {
 		if(*this->socket_list[i] >= 0) {
 			uint8_t ai_bytes[ai_d->l + 4];
@@ -559,6 +575,7 @@ void AIBusHandler::writeToSocket(AIData* ai_d) {
 			writeSocketMessage(&ai_sock_msg, *this->socket_list[i]);
 		}
 	}
+	#endif
 }
 
 #ifndef RPI_UART

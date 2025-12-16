@@ -131,7 +131,7 @@ void Settings_Clock_Window::handleEnterButton() {
 			break;
 		}
 	} else if(this->settings_clock_menu == SETTINGS_CLOCK_MENU_FORMAT) {
-		AIBusHandler* ai_handler = attribute_list->aibus_handler;
+		SerialAIBusHandler* ai_handler = attribute_list->aibus_handler;
 		uint8_t time_set_byte = 0x0;
 
 		if(attribute_list->auto_clock)
@@ -202,7 +202,7 @@ void Settings_Clock_Window::handleEnterButton() {
 			return;
 		}
 
-		AIBusHandler* ai_handler = attribute_list->aibus_handler;
+		SerialAIBusHandler* ai_handler = attribute_list->aibus_handler;
 
 		if(new_timekeeper != last_timekeeper) {
 			uint8_t cancel_data[] = {0x1D, 0x0};

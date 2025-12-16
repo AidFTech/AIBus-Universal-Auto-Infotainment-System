@@ -75,7 +75,7 @@ bool SettingsClockSetWindow::handleAIBus(AIData* ai_d) {
 	if(ai_d->sender == ID_NAV_COMPUTER)
 		return false;
 
-	AIBusHandler* ai_handler = attribute_list->aibus_handler;
+	SerialAIBusHandler* ai_handler = attribute_list->aibus_handler;
 
 	if(this->selected == TIME_ITEM_NONE && this->time_set_menu->handleAIBus(ai_d)) {
 		attribute_list->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);

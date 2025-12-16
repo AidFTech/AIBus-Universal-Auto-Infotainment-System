@@ -149,7 +149,7 @@ bool MapMainWindow::handleAIBus(AIData* msg) {
 
 	const int last_offset_v = this->offset_v, last_offset_h = this->offset_h;
 	
-	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
+	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 	if(msg->sender == ID_NAV_SCREEN) {
 		if(msg->l >= 3 && msg->data[0] == 0x30) { //Button press.
 			const uint8_t button = msg->data[1], state = msg->data[2]>>6;

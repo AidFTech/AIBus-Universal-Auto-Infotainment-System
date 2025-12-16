@@ -24,7 +24,7 @@
 #define AI_CACHE_SIZE 16
 #endif
 
-#define AIDATA_LIMIT 0x30 - 4
+#define AIDATA_LIMIT (0x30 - 4)
 
 class AIBusHandler {
 public:

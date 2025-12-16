@@ -278,6 +278,11 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 	uint8_t data[ai_d->l + 4];
 	ai_d->getBytes(data);
 
+	cout<<"Sent: ";
+	for(int i=0;i<sizeof(data);i+=1)
+		cout<<hex<<int(data[i])<<' ';
+	cout<<endl;
+
 	SocketMessage ai_socket_msg(OPCODE_AIBUS_SEND, sizeof(data));
 	ai_socket_msg.refreshSocketData(data);
 
@@ -293,10 +298,11 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 	
 	while(!rec_ack) {
 		vector<AIData> current_rx;
+		while(!check_ok);
 		cache_ok = false;
 		for(int i=0;i<rx_cache.size();i+=1) {
-			if(i<rx_cache.size()) //This may have changed since the last check.
-				current_rx.push_back(rx_cache[i]);
+			AIData check_msg = rx_cache[i];
+			current_rx.push_back(check_msg);
 		}
 
 		for(int i=0;i<current_rx.size();i+=1) {

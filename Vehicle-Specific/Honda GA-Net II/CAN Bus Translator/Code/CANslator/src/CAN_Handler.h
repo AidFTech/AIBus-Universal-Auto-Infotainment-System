@@ -9,6 +9,7 @@
 #include "CAN_Menu_Handler.h"
 #include "Locale.h"
 #include "CANslator_EEPROM.h"
+#include "Aux_Light_Control.h"
 
 #ifndef can_handler_h
 #define can_handler_h
@@ -25,8 +26,10 @@
 #define BCAN_ID_TEMP_RANGE 0x92F96250
 #define BCAN_ID_AC_AUTOSTOP 0x92F86150
 #define BCAN_ID_COOLANT 0x92F85250
+#define BCAN_ID_AVG_ECONOMY 0x92F96B50
 
-#define BCAN_ID_WIPERSTALKPOS 0x0AF87110
+#define BCAN_ID_LIGHTSTALKPOS 0x8AF87010
+#define BCAN_ID_WIPERSTALKPOS 0x8AF87110
 #define BCAN_ID_LIGHTSENSOR 0x8EF87372
 #define BCAN_ID_RAINSENSOR 0x8AF87274
 
@@ -62,6 +65,11 @@ public:
 
 	bool handleAIBus(AIData* ai_msg);
 
+	void setLightController(AuxLightController* aux_light_controller);
+
+	bool getLeftSignalOn();
+	bool getRightSignalOn();
+
 	void setWiperTimer(elapsedMillis* wiper_timer);
 	bool getWiperIntActive();
 	bool runWiper();
@@ -76,14 +84,20 @@ private:
 	AIBusHandler* ai_handler;
 	ParameterList* parameter_list;
 
+	AuxLightController* aux_light_controller = nullptr;
+
 	CANMenuHandler menu_handler;
 	
 	//BCAN-derived variables:
 	bool auto_stop :1, econ_mode :1, e_brake :1, brightness_bar :1, lights_on:1, night_mode :1;
+	bool left_signal_on :1, right_signal_on :1, hazard_on :1, brake_light_on :1, left_signal_illum : 1, right_signal_illum: 1;
 	uint8_t coolant_temp, eco_bar, doors_open, brightness, vehicle_speed, wiper_pos, wiper_delay_pos;
 	uint16_t electric_ac_power, eco_leaf_meter, honda_gear;
 	int16_t outside_temp; //Last digit is tenths place.
 	uint32_t odo_km;
+
+	bool economy_mpg = false; //True if fuel economy is in MPG.
+	int32_t current_economy = -1, last_economy = -1;
 
 	uint8_t honda_temp = 0x28; //Temp byte sent by the cluster.
 	bool honda_fahrenheit = false; //True if the temp byte above is in Fahrenheit.
@@ -115,11 +129,13 @@ private:
 	void writeAIBusBrightnessMessage(const uint8_t receiver);
 	void writeAIBusTempMessage(const uint8_t receiver);
 	void writeAIBusLightMessage(const uint8_t receiver);
+	void writeAIBusSignalMessage();
 	void writeAIBusSpeedMessage(const uint8_t receiver);
 	
 	void writeAIBusCoolantTempMessage(const uint8_t receiver);
 	void writeAIBusVoltageMessage();
 	void writeAIBusRangeMessage();
+	void writeAIBusAverageEconomyMessage();
 
 	void writeAIBusHybridHandshake();
 	void writeAIBusHybridStatusMessage();

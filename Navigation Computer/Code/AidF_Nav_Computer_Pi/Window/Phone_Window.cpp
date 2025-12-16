@@ -102,7 +102,7 @@ void PhoneWindow::refreshWindow() {
 
 //Handle an AIBus message. Return true if the message is meant for the phone screen.
 bool PhoneWindow::handleAIBus(AIData* msg) {
-	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
+	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	if(msg->data[0] == 0x21 && msg->data[1] == 0xA5) { //Write data.
 		aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
@@ -327,7 +327,7 @@ void PhoneWindow::interpretMenuChange(AIData* ai_b) {
 }
 
 void PhoneWindow::handleEnterButton() {
-	AIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
+	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ID_NAV_SCREEN);
 	if(this->settings_menu_active && this->settings_menu != NULL) {

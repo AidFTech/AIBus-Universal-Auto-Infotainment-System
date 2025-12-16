@@ -27,7 +27,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	int* socket_list[] = {&this->amirror_socket_parameters.client_socket, &this->abta_socket_parameters.client_socket};
 
 	#ifdef RPI_UART
-	this->aibus_handler = new AIBusHandler("/dev/ttyS0", socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
+	this->aibus_handler = new SerialAIBusHandler("/dev/ttyS0", socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
 
 	gpioSetMode(GPIO_I2S_MCLK, PI_OUTPUT);
 	gpioWrite(GPIO_I2S_MCLK, PI_LOW);
@@ -36,7 +36,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	gpioSetMode(GPIO_USB_PWR, PI_OUTPUT);
 	gpioWrite(GPIO_USB_PWR, PI_HIGH);
 	#else
-	this->aibus_handler = new AIBusHandler(socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
+	this->aibus_handler = new SerialAIBusHandler(socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
 	#endif
 
 	this->window_handler = new Window_Handler(this->renderer, this->br, this->lw, this->lh, &this->active_color_profile, this->aibus_handler);

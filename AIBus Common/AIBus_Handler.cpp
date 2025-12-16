@@ -232,7 +232,7 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 		AIData ai_group[count + (r == 0 ? 0 : 1)];
 
 		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
-			const int l = i<sizeof(ai_group)/sizeof(AIData) - 1 || r == 0 ? AIDATA_LIMIT + 3 : r + 3;
+			const int l = (i<sizeof(ai_group)/sizeof(AIData) - 1 || r == 0) ? AIDATA_LIMIT + 3 : r + 3;
 			uint8_t ai_data[l];
 			ai_data[0] = 0x91;
 			ai_data[1] = sizeof(ai_group)/sizeof(AIData);

@@ -10,7 +10,7 @@ use crate::aibus_handler::AIBusHandler;
 use crate::mirror::messages::*;
 use crate::mirror::mpv::{MpvVideo, RdAudio};
 use crate::aibus::*;
-use crate::context::Context;
+use crate::context::{Context, MAC_ADDR_LEN};
 use crate::mirror::handler::*;
 
 use crate::text_split::split_text;
@@ -1053,7 +1053,15 @@ impl <'a> AMirror<'a> {
 
 		if ai_msg.sender == AIBUS_DEVICE_PHONE && !context.bluetooth_connected && !get_init_message(&ai_msg) && !get_poweroff_message(&ai_msg) && self.powered_on {
 			context.bluetooth_connected = true;
-			//TODO: Ping for address.
+
+			//Get the MAC address.
+			let addr_request = AIBusMessage{
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_PHONE,
+				data: [0x12].to_vec(),
+			};
+
+			self.write_aibus_message(addr_request);
 		}
 
 		if get_init_message(&ai_msg) || get_poweroff_message(&ai_msg) {
@@ -1086,6 +1094,8 @@ impl <'a> AMirror<'a> {
 				context.radio_connected = false;
 			} else if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN {
 				context.screen_connected = false;
+			} else if ai_msg.sender == AIBUS_DEVICE_PHONE {
+				context.bluetooth_connected = false;
 			}
 		}
 
@@ -1718,6 +1728,13 @@ impl <'a> AMirror<'a> {
 				context.longitude = longitude;
 
 				context.altitude = ((ai_msg.data[12] as i32) << 8) | (ai_msg.data[13] as i32);
+			}
+		} else if ai_msg.sender == AIBUS_DEVICE_PHONE {
+			if ai_msg.l() >= 7 && ai_msg.data[0] == 0x12 { //MAC address.
+				for i in 0..MAC_ADDR_LEN {
+					context.mac_addr[i] = ai_msg.data[i+1];
+				}
+				context.mac_set = true;
 			}
 		}
 

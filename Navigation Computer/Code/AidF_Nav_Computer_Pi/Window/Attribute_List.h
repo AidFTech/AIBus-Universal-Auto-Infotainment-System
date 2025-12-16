@@ -3,7 +3,7 @@
 
 #include "../AidF_Color_Profile.h"
 #include "../Background/Nav_Background.h"
-#include "../AIBus_Handler.h"
+#include "../Serial_AIBus_Handler.h"
 
 #ifndef attribute_list_h
 #define attribute_list_h
@@ -72,7 +72,7 @@ struct AttributeList {
 	
 	unsigned long* timer = nullptr;
 
-	AIBusHandler* aibus_handler;
+	SerialAIBusHandler* aibus_handler;
 };
 
 #endif

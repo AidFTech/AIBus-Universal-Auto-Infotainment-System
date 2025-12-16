@@ -10,6 +10,7 @@ BTAudioHandler::BTAudioHandler(ClientAIBusHandler* aibus_handler, BTHandler* blu
 	display_track = true;
 	display_artist = true;
 	display_album = true;
+	refresh_imid = false;
 }
 
 //Initialize the radio communication.
@@ -23,16 +24,8 @@ void BTAudioHandler::radioInit() {
 
 //Audio handler loop function.
 void BTAudioHandler::loop() {
+	//Check for any property changes.
 	if(bluetooth_handler->getChangedMediaProperties()->size() > 0) {
-		const string last_title = song_title;
-		const string last_artist = artist;
-		const string last_album = album;
-
-		const playback_status_t last_status = playback_status;
-		const repeat_random_status_t last_repeat = repeat_random_status;
-
-		const uint32_t last_position = position;
-
 		map<string, Variant> changed_properties;
 		map<string, Variant>* bt_properties = bluetooth_handler->getChangedMediaProperties();
 
@@ -40,72 +33,11 @@ void BTAudioHandler::loop() {
 			changed_properties.emplace(property);
 
 		bt_properties->clear();
-
-		for(auto property : changed_properties) {
-			if(property.first.compare("Track") == 0 && property.second.containsValueOfType<map<string, Variant>>()) { //Track info.
-				for(auto element : property.second.get<map<string, Variant>>()) {
-					if(element.first.compare("Title") == 0 && element.second.containsValueOfType<string>())
-						this->song_title = element.second.get<string>();
-					else if(element.first.compare("Artist") == 0 && element.second.containsValueOfType<string>())
-						this->artist = element.second.get<string>();
-					else if(element.first.compare("Album") == 0 && element.second.containsValueOfType<string>())
-						this->album = element.second.get<string>();
-				}
-			} else if(property.first.compare("Status") == 0 && property.second.containsValueOfType<string>()) { //Playback status.
-				const string status = property.second.get<string>();
-				if(status.compare("paused") == 0)
-					this->playback_status = PLAYBACK_STATUS_PAUSED;
-				else if(status.compare("playing") == 0)
-					this->playback_status = PLAYBACK_STATUS_PLAYING;
-				else if(status.compare("forward-seek") == 0)
-					this->playback_status = PLAYBACK_STATUS_FF;
-				else if(status.compare("reverse-seek") == 0)
-					this->playback_status = PLAYBACK_STATUS_FR;
-				else
-				 	this->playback_status = PLAYBACK_STATUS_STOPPED;
-
-				last_position_change = *timer;
-			} else if(property.first.compare("Position") == 0 && property.second.containsValueOfType<uint32_t>()) { //Position.
-				this->position = property.second.get<uint32_t>();
-				if(timer != nullptr && timer != NULL)
-					last_position_change = *timer + this->position%1000;
-			} else if(property.first.compare("Repeat") == 0 && property.second.containsValueOfType<string>()) { //Repeat.
-				const string status = property.second.get<string>();
-				if(status.compare("singletrack") == 0)
-					this->repeat_random_status = RPTRND_REPEAT_T;
-				else if(status.compare("alltracks") == 0)
-					this->repeat_random_status = RPTRND_REPEAT_A;
-				else if(status.compare("group") == 0)
-					this->repeat_random_status = RPTRND_REPEAT_G;
-				else if(this->repeat_random_status != RPTRND_RANDOM_A && this->repeat_random_status != RPTRND_RANDOM_G)
-					this->repeat_random_status = RPTRND_NORMAL;
-			} else if(property.first.compare("Shuffle") == 0 && property.second.containsValueOfType<string>()) { //Random.
-				const string status = property.second.get<string>();
-				if(status.compare("alltracks") == 0)
-					this->repeat_random_status = RPTRND_RANDOM_A;
-				else if(status.compare("group") == 0)
-					this->repeat_random_status = RPTRND_RANDOM_G;
-				else if(this->repeat_random_status != RPTRND_REPEAT_A && this->repeat_random_status != RPTRND_REPEAT_G && this->repeat_random_status != RPTRND_REPEAT_T)
-					this->repeat_random_status = RPTRND_NORMAL;
-			}
-		}
-
-		if(last_title.compare(song_title) != 0)
-			writeTitleMetadata();
-		if(last_artist.compare(artist) != 0)
-			writeArtistMetadata();
-		if(last_album.compare(album) != 0)
-			writeAlbumMetadata();
-
-		if(last_status != this->playback_status || last_repeat != this->repeat_random_status)
-			writeStatus();
-
-		if(last_position/1000 != this->position/1000)
-			writePosition();
+		handleBTProperties(changed_properties);
 	}
 
+	//Scroll the IMID as required.
 	if(timer != nullptr && timer != NULL && parameter_list->audio_selected && parameter_list->text_allowed) {
-		//Scroll the IMID as required.
 		unsigned long scroll_limit = 300;
 		if(imid_scroll_wrap || imid_scroll_header)
 			scroll_limit = 1000;
@@ -114,13 +46,20 @@ void BTAudioHandler::loop() {
 		else if(imid_scroll_position == 0)
 			scroll_limit = 750;
 
-		if((imid_scroll >= 0 || imid_scroll_header) && parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && *timer - scroll_timer > scroll_limit) {
-			scroll_timer = *timer;
+		if((imid_scroll >= 0 || imid_scroll_header) && parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && (*timer - scroll_timer > scroll_limit || refresh_imid)) {
+			if(!refresh_imid) {
+				scroll_timer = *timer;
+				imid_scroll_position += 1;
+			}
+			refresh_imid = false;
+
 			string scroll_param = "";
-			imid_scroll_position += 1;
 
 			if(imid_scroll_wrap || imid_scroll_header)
 				imid_scroll_position = 0;
+
+			if(imid_scroll_header)
+				imid_scroll_header = false;
 
 			if(imid_split) {
 				if(imid_scroll_position >= SPLIT_TEXT_COUNT || split_text[imid_scroll_position].empty()) //Reset.
@@ -156,10 +95,38 @@ void BTAudioHandler::loop() {
 		
 	}
 
-	if(timer != nullptr && timer != NULL && parameter_list->audio_selected && playback_status == PLAYBACK_STATUS_PLAYING && *timer - last_position_change > 1000) {
+	//Increment the timer as needed.
+	if(timer != nullptr && timer != NULL &&
+			bluetooth_handler->getConnectedDevice() != NULL &&
+			bluetooth_handler->getConnectedDevice() != nullptr &&
+			parameter_list->audio_selected &&
+			*timer - last_position_change > 1000) {
 		last_position_change = *timer;
-		position += 1000;
-		writePosition();
+		const uint32_t last_position = position;
+
+		if(playback_status == PLAYBACK_STATUS_PLAYING)
+			position += 1000;
+		
+		auto media_proxy = bluetooth_handler->getMediaProxy();
+
+		if(media_proxy != NULL && media_proxy != nullptr) {
+			try {
+				auto properties = (*media_proxy)->getAllProperties().onInterface("org.bluez.MediaPlayer1");
+
+				map<string, Variant> checked_properties;
+				checked_properties.clear();
+
+				for(auto property : properties)
+					checked_properties.emplace(pair<string, Variant>(property.first, property.second));
+
+				handleBTProperties(checked_properties);
+			} catch(Error err) {
+				//Device not connected. Continue.
+			}
+		}
+		
+		if(last_position != position)
+			writePosition();
 	}
 }
 
@@ -250,6 +217,8 @@ bool BTAudioHandler::handleAIBusMessage(AIData* ai_msg) {
 						break;
 					}
 				}
+			} else if(button == 0x53 && state == 2) { //Info.
+				incrementInfo();
 			}
 			
 			return true;
@@ -385,8 +354,93 @@ void BTAudioHandler::writePhoneMetadata() {
 		text_handler->writeMetadata(bluetooth_handler->getConnectedDevice()->getDeviceName(), ID_IMID_SCR, 4);
 }
 
+//Handle metadata sent over SD-Bus.
+void BTAudioHandler::handleBTProperties(map<string, Variant> properties) {
+	const string last_title = song_title;
+	const string last_artist = artist;
+	const string last_album = album;
+
+	const playback_status_t last_status = playback_status;
+	const repeat_random_status_t last_repeat = repeat_random_status;
+
+	const uint32_t last_position = position, last_track = track_number;
+
+	for(auto property : properties) {
+		if(property.first.compare("Track") == 0 && property.second.containsValueOfType<map<string, Variant>>()) { //Track info.
+			for(auto element : property.second.get<map<string, Variant>>()) {
+				if(element.first.compare("Title") == 0 && element.second.containsValueOfType<string>())
+					this->song_title = element.second.get<string>();
+				else if(element.first.compare("Artist") == 0 && element.second.containsValueOfType<string>())
+					this->artist = element.second.get<string>();
+				else if(element.first.compare("Album") == 0 && element.second.containsValueOfType<string>())
+					this->album = element.second.get<string>();
+				else if(element.first.compare("TrackNumber") == 0 && element.second.containsValueOfType<uint32_t>())
+					this->track_number = element.second.get<uint32_t>();
+			}
+		} else if(property.first.compare("Status") == 0 && property.second.containsValueOfType<string>()) { //Playback status.
+			const string status = property.second.get<string>();
+			if(status.compare("paused") == 0)
+				this->playback_status = PLAYBACK_STATUS_PAUSED;
+			else if(status.compare("playing") == 0)
+				this->playback_status = PLAYBACK_STATUS_PLAYING;
+			else if(status.compare("forward-seek") == 0)
+				this->playback_status = PLAYBACK_STATUS_FF;
+			else if(status.compare("reverse-seek") == 0)
+				this->playback_status = PLAYBACK_STATUS_FR;
+			else
+				this->playback_status = PLAYBACK_STATUS_STOPPED;
+
+			last_position_change = *timer;
+		} else if(property.first.compare("Position") == 0 && property.second.containsValueOfType<uint32_t>()) { //Position.
+			this->position = property.second.get<uint32_t>();
+			if(timer != nullptr && timer != NULL)
+				last_position_change = *timer + this->position%1000;
+		} else if(property.first.compare("Repeat") == 0 && property.second.containsValueOfType<string>()) { //Repeat.
+			const string status = property.second.get<string>();
+			if(status.compare("singletrack") == 0)
+				this->repeat_random_status = RPTRND_REPEAT_T;
+			else if(status.compare("alltracks") == 0)
+				this->repeat_random_status = RPTRND_REPEAT_A;
+			else if(status.compare("group") == 0)
+				this->repeat_random_status = RPTRND_REPEAT_G;
+			else if(this->repeat_random_status != RPTRND_RANDOM_A && this->repeat_random_status != RPTRND_RANDOM_G)
+				this->repeat_random_status = RPTRND_NORMAL;
+		} else if(property.first.compare("Shuffle") == 0 && property.second.containsValueOfType<string>()) { //Random.
+			const string status = property.second.get<string>();
+			if(status.compare("alltracks") == 0)
+				this->repeat_random_status = RPTRND_RANDOM_A;
+			else if(status.compare("group") == 0)
+				this->repeat_random_status = RPTRND_RANDOM_G;
+			else if(this->repeat_random_status != RPTRND_REPEAT_A && this->repeat_random_status != RPTRND_REPEAT_G && this->repeat_random_status != RPTRND_REPEAT_T)
+				this->repeat_random_status = RPTRND_NORMAL;
+		}
+	}
+
+	if(last_title.compare(song_title) != 0)
+		writeTitleMetadata();
+	if(last_artist.compare(artist) != 0)
+		writeArtistMetadata();
+	if(last_album.compare(album) != 0)
+		writeAlbumMetadata();
+
+	if(last_status != this->playback_status || last_repeat != this->repeat_random_status)
+		writeStatus();
+
+	if(last_track != track_number)
+		writeTrackNumber();
+
+	if(last_position/1000 != this->position/1000)
+		writePosition();
+}
+
 //Write the song title to the IMID.
 void BTAudioHandler::writeIMIDTitle() {
+	if(!parameter_list->audio_selected || !parameter_list->text_allowed)
+		return;
+
+	if(parameter_list->imid_lines < 1 && !parameter_list->imid_native_phone)
+		return;
+
 	if(parameter_list->imid_native_phone && imid_scroll < 0)
 		text_handler->writeMetadata(song_title, ID_IMID_SCR, 1);
 	else if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && imid_scroll < 0 && display_track) {
@@ -426,11 +480,20 @@ void BTAudioHandler::writeIMIDTitle() {
 		}
 		imid_scroll_position = 0;
 		scroll_timer = *timer;
+
+		if(!imid_scroll_header)
+			refresh_imid = true;
 	}
 }
 
 //Write the artist to the IMID.
 void BTAudioHandler::writeIMIDArtist() {
+	if(!parameter_list->audio_selected || !parameter_list->text_allowed)
+		return;
+
+	if(parameter_list->imid_lines < 1 && !parameter_list->imid_native_phone)
+		return;
+
 	if(parameter_list->imid_native_phone && imid_scroll < 0)
 		text_handler->writeMetadata(artist, ID_IMID_SCR, 2);
 	else if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && imid_scroll < 0 && display_artist) {
@@ -461,11 +524,31 @@ void BTAudioHandler::writeIMIDArtist() {
 			AIData imid_msg(sizeof(imid_data), ID_PHONE, ID_IMID_SCR, imid_data);
 			aibus_handler->writeAIData(&imid_msg);
 		}
+	} else if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && imid_scroll == BTA_IMID_SCROLL_ARTIST) {
+		for(int i=0;i<SPLIT_TEXT_COUNT;i+=1)
+			split_text[i] = "";
+
+		if(imid_split) {
+			splitText(parameter_list->imid_char, artist, split_text, SPLIT_TEXT_COUNT);
+		} else {
+			split_text[0] = artist;
+		}
+		imid_scroll_position = 0;
+		scroll_timer = *timer;
+
+		if(!imid_scroll_header)
+			refresh_imid = true;
 	}
 }
 
 //Write the album to the IMID.
 void BTAudioHandler::writeIMIDAlbum() {
+	if(!parameter_list->audio_selected || !parameter_list->text_allowed)
+		return;
+
+	if(parameter_list->imid_lines < 1 && !parameter_list->imid_native_phone)
+		return;
+	
 	if(parameter_list->imid_native_phone && imid_scroll < 0)
 		text_handler->writeMetadata(album, ID_IMID_SCR, 3);
 	else if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && imid_scroll < 0 && display_album) {
@@ -498,6 +581,105 @@ void BTAudioHandler::writeIMIDAlbum() {
 			AIData imid_msg(sizeof(imid_data), ID_PHONE, ID_IMID_SCR, imid_data);
 			aibus_handler->writeAIData(&imid_msg);
 		}
+	} else if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && imid_scroll == BTA_IMID_SCROLL_ALBUM) {
+		for(int i=0;i<SPLIT_TEXT_COUNT;i+=1)
+			split_text[i] = "";
+
+		if(imid_split) {
+			splitText(parameter_list->imid_char, album, split_text, SPLIT_TEXT_COUNT);
+		} else {
+			split_text[0] = album;
+		}
+		imid_scroll_position = 0;
+		scroll_timer = *timer;
+
+		if(!imid_scroll_header)
+			refresh_imid = true;
+	}
+}
+
+//Increment the info display.
+void BTAudioHandler::incrementInfo() {
+	if(!parameter_list->audio_selected || !parameter_list->text_allowed || parameter_list->imid_char <= 0 || parameter_list->imid_lines <= 0)
+		return;
+ 
+	for(int i=1;i<=parameter_list->imid_lines;i+=1) {
+		if(i==parameter_list->imid_lines/2 || i == parameter_list->imid_lines/2+1)
+			continue;
+
+		uint8_t clear_data[] = {0x23, 0x60, 0x0, uint8_t(i&0xFF)};
+		AIData clear_msg(sizeof(clear_data), ID_PHONE, ID_IMID_SCR, clear_data);
+		aibus_handler->writeAIData(&clear_msg);
+	}
+
+	string info_param = "";
+
+	switch(imid_scroll) {
+	case BTA_IMID_SCROLL_TRACK:
+		imid_scroll = BTA_IMID_SCROLL_ARTIST;
+		info_param = getString(LOCALE_STRING_IMID_ARTIST, parameter_list->locale);
+		text_handler->writeNavHeaderText("Artist: " + artist);
+		break;
+	case BTA_IMID_SCROLL_ARTIST:
+		imid_scroll = BTA_IMID_SCROLL_ALBUM;
+		info_param = getString(LOCALE_STRING_IMID_ALBUM, parameter_list->locale);
+		text_handler->writeNavHeaderText("Album: " + album);
+		break;
+	case BTA_IMID_SCROLL_ALBUM:
+		imid_scroll = BTA_IMID_SCROLL_NONE;
+		writeStatus();
+		writePosition();
+		writeIMIDTitle();
+		writeIMIDArtist();
+		writeIMIDAlbum();
+		break;
+	default:
+		imid_scroll = BTA_IMID_SCROLL_TRACK;
+		info_param = getString(LOCALE_STRING_IMID_TRACK, parameter_list->locale);
+		text_handler->writeNavHeaderText("Track: " + song_title);
+		break;
+	}
+
+	scroll_timer = *timer;
+
+	if(info_param.length() > 0) {
+		uint8_t header_data[4+info_param.length()];
+		header_data[0] = 0x23;
+		header_data[1] = 0x60;
+
+		int imid_x = parameter_list->imid_char/2 - info_param.length()/2;
+		if(imid_x < 0 || imid_x > parameter_list->imid_char)
+			imid_x = 0;
+
+		header_data[2] = uint8_t(imid_x&0xFF);
+
+		if(parameter_list->imid_lines > 1)
+			header_data[3] = parameter_list->imid_lines/2;
+		else {
+			header_data[3] = 1;
+			imid_scroll_header = true;
+		}
+
+		for(int i=0;i<info_param.length(); i+=1)
+			header_data[i+4] = uint8_t(info_param[i]);
+
+		AIData header_msg(sizeof(header_data), ID_PHONE, ID_IMID_SCR, header_data);
+		aibus_handler->writeAIData(&header_msg);
+	}
+
+	switch(imid_scroll) {
+	case BTA_IMID_SCROLL_TRACK:
+		writeIMIDTitle();
+		break;
+	case BTA_IMID_SCROLL_ARTIST:
+		writeIMIDArtist();
+		break;
+	case BTA_IMID_SCROLL_ALBUM:
+		writeIMIDAlbum();
+		break;
+	default:
+		imid_scroll_header = false;
+		break;
 	}
 }
 
@@ -553,6 +735,16 @@ void BTAudioHandler::writeStatus() {
 	}
 }
 
+//Write the track number.
+void BTAudioHandler::writeTrackNumber() {
+	if(imid_scroll < 0) { 
+		if(parameter_list->imid_native_phone) {
+			//TODO: Something.
+		} else if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0)
+			writeIMIDStatusandPosition();
+	}
+}
+
 //Write time code.
 void BTAudioHandler::writePosition() {
 	if(!parameter_list->audio_selected)
@@ -587,33 +779,18 @@ void BTAudioHandler::writeIMIDStatusandPosition() {
 	if(!display_header || parameter_list->imid_lines < 1)
 		return;
 
-	string status_text = "";
-	switch(playback_status) {
-	case PLAYBACK_STATUS_PLAYING:
-		status_text = "#FWD";
-		break;
-	case PLAYBACK_STATUS_PAUSED:
-		status_text = "||";
-		break;
-	case PLAYBACK_STATUS_FF:
-		status_text = "#FF ";
-		break;
-	case PLAYBACK_STATUS_FR:
-		status_text = "#REW";
-		break;
-	default:
-		break;
-	}
+	string imid_text = "";
+	if(parameter_list->imid_char > 8)
+		imid_text = "BTA ";
+	else if(track_number < 10)
+		imid_text = "0";
 
-	string imid_text = "BTA ";
-
-	if(parameter_list->imid_char > 8) {
-		imid_text += status_text;
-		for(int p = imid_text.length();p<parameter_list->imid_char - 5 && p < 16;p+=1)
-			imid_text += ' ';
-	}
+	imid_text += to_string(track_number);
 
 	const uint32_t position = this->position/1000;
+	for(int p = imid_text.length();p<parameter_list->imid_char - (position/60 >= 10 ? 5 : 4) && p < 16;p+=1)
+		imid_text += ' ';
+
 	imid_text += to_string(position/60) + ':' + (position%60 >= 10 ? to_string(position%60) : '0' + to_string(position%60));
 
 	int imid_x = parameter_list->imid_char/2 - imid_text.length()/2;

@@ -267,6 +267,22 @@ pub fn get_manufacturer_info(mn_a: u32, mn_b: u32) -> MirrorMessage {
 	return manufacturer_message;
 }
 
+///Get a Bluetooth address message.
+pub fn get_bluetooth_address(mac_addr: [u8;6]) -> MirrorMessage {
+	let mut mac_str = String::new();
+	for d in mac_addr {
+		mac_str.push_str(&format!("{:02X}:", d));
+	}
+	mac_str.remove(mac_str.len()-1);
+
+	let mac_message = MirrorMessage {
+		message_type: 10,
+		data: mac_str.as_bytes().to_vec(),
+	};
+
+	return mac_message;
+}
+
 pub struct SendFileMessage {
 	file_name: String,
 	file_data: Vec<u8>,

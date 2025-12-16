@@ -16,7 +16,7 @@ AIBusDoubleDin aibus_double_din;
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xBA
 };*/
 
-const volatile uint8_t aibt_edid[] = {
+static const volatile uint8_t aibt_edid[] = {
 	0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x04, 0x81, 0x04, 0x00,
 	0x01, 0x00, 0x00, 0x00, 0x01, 0x11, 0x01, 0x03, 0x80, 0x0F, 0x0A, 0x00,
 	0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -283,6 +283,25 @@ void AIBusDoubleDin::loop() {
 					const bool logo_on = msg.data[1] != 0;
 					nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, logo_on);
 					audio_on = logo_on;
+				} else if(msg.l >= 2 && msg.data[0] == 0x3E && msg.data[1] == 0xF0) { //EDID request.
+					ack = false;
+					ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
+
+					uint8_t edid_data[sizeof(aibt_edid) + 1];
+					edid_data[0] = 0x3E;
+					for(int i=0;i<sizeof(aibt_edid);i+=1)
+						edid_data[i+1] = aibt_edid[i];
+
+					AIData edid_msg(sizeof(edid_data), ID_NAV_SCREEN, msg.sender, edid_data);
+					ai_handler.writeAIData(&edid_msg);
+				} else if(msg.l >= 2 && msg.data[0] == 0x2C && msg.data[1] == 0xF0) { //Screen resolution request.
+					ack = false;
+					ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
+				
+					const uint16_t w = 800, h = 480;
+					uint8_t resolution_data[] = {0x2C, w>>8, w&0xFF, h>>8, h&0xFF};
+					AIData resolution_msg(sizeof(resolution_data), ID_NAV_SCREEN, msg.sender, resolution_data);
+					ai_handler.writeAIData(&resolution_msg);
 				}
 
 				if(ack)

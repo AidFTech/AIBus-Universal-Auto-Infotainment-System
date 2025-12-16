@@ -7,7 +7,7 @@
 #include "AIBus/AIBus.h"
 #include "Window/Nav_Window.h"
 #include "Window/Attribute_List.h"
-#include "AIBus_Handler.h"
+#include "Serial_AIBus_Handler.h"
 
 #include "Window/Consumption_Window.h"
 #include "Window/Settings_Main_Window.h"
@@ -35,7 +35,7 @@
 
 class Window_Handler {
 public:
-	Window_Handler(SDL_Renderer* renderer, Background* br, const uint16_t lw, const uint16_t lh, AidFColorProfile* active_profile, AIBusHandler* aibus_handler);
+	Window_Handler(SDL_Renderer* renderer, Background* br, const uint16_t lw, const uint16_t lh, AidFColorProfile* active_profile, SerialAIBusHandler* aibus_handler);
 	~Window_Handler();
 
 	void drawWindow();
@@ -57,7 +57,7 @@ public:
 	InfoParameters* getVehicleInfo();
 	NavParameters* getNavParameters();
 
-	AIBusHandler* getAIBusHandler();
+	SerialAIBusHandler* getSerialAIBusHandler();
 	
 	NavWindow* getLastWindow();
 	NavWindow* getActiveWindow();
@@ -86,7 +86,7 @@ private:
 	InfoParameters vehicle_info_paramters;
 	NavParameters nav_parameters;
 
-	AIBusHandler* aibus_handler;
+	SerialAIBusHandler* aibus_handler;
 };
 
 #endif

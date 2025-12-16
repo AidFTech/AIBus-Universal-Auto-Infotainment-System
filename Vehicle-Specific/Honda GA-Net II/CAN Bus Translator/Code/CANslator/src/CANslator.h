@@ -10,6 +10,7 @@
 #include "CAN_Menu_Handler.h"
 #include "Parameter_List.h"
 #include "CANslator_EEPROM.h"
+#include "Aux_Light_Control.h"
 
 #ifndef canslator_h
 #define canslator_h
@@ -27,6 +28,9 @@
 
 #define AUX_LIGHT_CS PIN_PD4
 
+#define VIDEO_SELECT PIN_PD5
+#define VIDEO_POWER PIN_PD6
+
 #define WASHER_SENSOR PIN_PF5
 #define POWER_ON PIN_PF6
 #else
@@ -42,14 +46,11 @@
 #define FCAN_CS 16
 
 #define AUX_LIGHT_CS 18
+#define VIDEO_SELECT 19
+#define VIDEO_POWER 20
 
 #define CAN_RESET 17
 #endif
-
-#define AUX_LIGHT_DRL_L 0
-#define AUX_LIGHT_DRL_R 1
-#define AUX_LIGHT_TURN_L 2
-#define AUX_LIGHT_TURN_R 3
 
 #define PARAM_TIMER 750
 
@@ -69,7 +70,7 @@ private:
 
 	BCAN_Handler bcan_handler = BCAN_Handler(&ai_handler, &parameters, BCAN_CS, BCAN_IMID_CS, BCAN_RLS_CS, FCAN_CS);
 
-	MCP23S08 aux_light_controller = MCP23S08(AUX_LIGHT_CS, 0);
+	AuxLightController aux_light_controller = AuxLightController(AUX_LIGHT_CS, 0);
 
 	bool param_timer_enabled = false;
 	elapsedMillis param_timer;

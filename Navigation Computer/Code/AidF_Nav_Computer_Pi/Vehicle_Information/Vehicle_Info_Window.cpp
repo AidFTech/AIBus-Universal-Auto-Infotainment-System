@@ -394,9 +394,9 @@ void VehicleInfoWindow::drawWindow() {
 				PowerFlowArrow arrow_assist(renderer, w/2, silhouette_start_y + 250, CHARGE_ASSIST_W/2, CHARGE_ASSIST_H);
 				if(info_parameters->charge_assist_pos > 0x7F) { //Assist.
 					arrow_charge.drawOutline(dimmed_button, outline_color);
-					arrow_assist.drawPartialFilled(COLOR_ASSIST1, COLOR_ASSIST2, outline_color, dimmed_button, frame, ARROW_DIR_RIGHT, uint8_t((int(info_parameters->charge_assist_pos)-0x7F)*2), false);
+					arrow_assist.drawPartialFilled(COLOR_EV1, COLOR_EV2, outline_color, dimmed_button, frame, ARROW_DIR_RIGHT, uint8_t((int(info_parameters->charge_assist_pos)-0x7F)*2), false);
 				} else if(info_parameters->charge_assist_pos < 0x7F) { //Charge.
-					arrow_charge.drawPartialFilled(COLOR_REG1, COLOR_REG2, outline_color, dimmed_button, frame, ARROW_DIR_LEFT, uint8_t((0x7F-int(info_parameters->charge_assist_pos))*2), false);
+					arrow_charge.drawPartialFilled(((hybrid_status&0x4) != 0) ? COLOR_REG1 : COLOR_EV1, ((hybrid_status&0x4) != 0) ? COLOR_REG2 : COLOR_EV2, outline_color, dimmed_button, frame, ARROW_DIR_LEFT, uint8_t((0x7F-int(info_parameters->charge_assist_pos))*2), false);
 					arrow_assist.drawOutline(dimmed_button, outline_color);
 				} else {
 					arrow_charge.drawOutline(dimmed_button, outline_color);
