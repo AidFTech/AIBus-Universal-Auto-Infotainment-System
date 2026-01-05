@@ -10,6 +10,7 @@
 #define MENU_RADIO 0x10
 
 #define SCREEN_REQUEST_TIMER 5000
+#define RADIO_PING_WAIT 7500
 
 struct ParameterList {
 	bool power_on = true;
@@ -41,6 +42,8 @@ struct ParameterList {
 	elapsedMillis *screen_request_timer;
 	
 	elapsedMillis last_iebus_msg = 0;
+
+	elapsedMillis radio_ping_timer = 0; //To keep track of when the last 40 or 70 message was.
 };
 
 #endif

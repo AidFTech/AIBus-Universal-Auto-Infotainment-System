@@ -75,20 +75,7 @@ void AidFRadio::setup() {
 	parameters.am_tune = parameters.am_start;
 
 	getEEPROMPresets(&parameters);
-	for(int i=0;i<sizeof(parameters.fm1_presets)/sizeof(uint16_t);i+=1) { 
-		if(parameters.fm1_presets[i] < parameters.fm_lower_limit || parameters.fm1_presets[i] > parameters.fm_upper_limit)
-			parameters.fm1_presets[i] = parameters.fm1_tune;
-	}
-
-	for(int i=0;i<sizeof(parameters.fm2_presets)/sizeof(uint16_t);i+=1) {
-		if(parameters.fm2_presets[i] < parameters.fm_lower_limit || parameters.fm2_presets[i] > parameters.fm_upper_limit)
-			parameters.fm2_presets[i] = parameters.fm2_tune;
-	}
-
-	for(int i=0;i<sizeof(parameters.am_presets)/sizeof(uint16_t);i+=1) {
-		if(parameters.am_presets[i] < parameters.am_lower_limit || parameters.am_presets[i] > parameters.am_upper_limit)
-			parameters.am_presets[i] = parameters.am_tune;
-	}
+	normalizePresets();
 	setEEPROMPresets(&parameters);
 
 	parameters.handshake_sources.setStorage(parameters.handshake_source_list, 0);
@@ -130,6 +117,9 @@ void AidFRadio::setup() {
 		StartParams start_params;
 		sram_handler.getStartParams(&start_params);
 		sram_handler.getFrequencies(&background_tuner);
+		sram_handler.getRAMPresets(&parameters);
+		normalizePresets();
+		setEEPROMPresets(&parameters);
 
 		const uint8_t source_count = sram_handler.getSourceCount();
 		AudioSource source_list[source_count];
@@ -292,7 +282,7 @@ void AidFRadio::loop() {
 	const bool last_send_time = parameters.send_time, last_12h = parameters.send_12h, last_auto_clock = parameters.auto_clock;
 
 	const bool last_phone = parameters.phone_active;
-	const bool last_computer_connected = parameters.computer_connected;
+	const bool last_computer_connected = parameters.computer_connected, last_mirror_connected = parameters.mirror_connected;
 
 	bool last_queued = tuner.getQueued();
 
@@ -339,12 +329,13 @@ void AidFRadio::loop() {
 
 	//Source changed.
 	if(power_switched ||
-			source_handler.getCurrentSourceID() != last_active_source_id ||
-			source_handler.getCurrentSource() != last_active_source ||
-			force_source_changed ||
-			(source_change_timer_enable && source_change_timer > SOURCE_CHANGE_TIMER) ||
-			parameters.phone_active != last_phone ||
-			parameters.computer_connected != last_computer_connected) {
+			source_handler.getCurrentSourceID() != last_active_source_id || //Source changed.
+			source_handler.getCurrentSource() != last_active_source || //Source changed.
+			force_source_changed || //Source changed from menu.
+			(source_change_timer_enable && source_change_timer > SOURCE_CHANGE_TIMER) || //Source activation time has elapsed.
+			parameters.phone_active != last_phone || //Phone picked up/hung up.
+			parameters.computer_connected != last_computer_connected || //Computer connected.
+			parameters.mirror_connected != last_mirror_connected) { //Mirror connected.
 		src_ping_timer = 0;
 		parameters.info_mode = false;
 		parameters.current_preset = 0;
@@ -360,7 +351,7 @@ void AidFRadio::loop() {
 		else if(source_change_timer_enable && source_change_timer > SOURCE_CHANGE_TIMER) {
 			source_change_timer_enable = false;
 			source_changed = true;
-		} else if(current_source_id != ID_RADIO && current_source_id != 0x0) {
+		} else if(current_source_id != 0x0) {
 			source_change_timer_enable = true;
 			source_change_timer = 0;
 		}
@@ -386,34 +377,39 @@ void AidFRadio::loop() {
 			//Clear the text fields.
 			if(force_source_changed || !source_changed)
 				setSourceName();
-			if(current_source_id != ID_RADIO) {
-				for(int i=1;i<5;i+=1)
-					text_handler.sendMirrorMessage("", i, false);
-			}
+			if(current_source_id != ID_RADIO)
+				text_handler.sendMirrorClearMessage(0xE, false);
 
 			parameters.audio_on = current_source_id != 0;
-			
-			//Enable the current source.
-			if(current_source_id != 0 && current_source_id != ID_RADIO && source_changed) {
-				function_msg.receiver = current_source_id;
-				aibus_handler.writeAIData(&function_msg, function_msg.receiver != 0 && function_msg.receiver != ID_RADIO && current_source.connected);
 
-				if(current_source.connected) {
-					source_text_timer_enabled = true;
-					source_text_timer = 0;
+			//Enable screen text.
+			text_handler.sendSourceTextControl(ID_NAV_COMPUTER, uint8_t((current_source_id != 0) ? current_source_id : ID_RADIO), parameters.computer_connected);
+			if(parameters.mirror_connected && current_source_id != ID_ANDROID_AUTO)
+				text_handler.sendSourceTextControl(ID_ANDROID_AUTO, uint8_t((current_source_id != 0) ? current_source_id : ID_RADIO));
+			
+			//Enable the selected source if appropriate.
+			if(source_changed) {
+				if(current_source_id != 0 && current_source_id != ID_RADIO) {
+					function_msg.receiver = current_source_id;
+					aibus_handler.writeAIData(&function_msg, function_msg.receiver != 0 && function_msg.receiver != ID_RADIO && current_source.connected);
+
+					if(current_source.connected) {
+						source_text_timer_enabled = true;
+						source_text_timer = 0;
+					}
+				} else if(current_source_id == ID_RADIO) {
+					const uint8_t sub_id = source_handler.source_list[current_source_index].sub_id;
+					setTunerFrequency(sub_id);
+					sendTunedFrequencyMessage(sub_id);
+					clearFMData();
+					text_handler.createRadioMenu(sub_id);
+					if(sub_id <= SUB_AM)
+						parameters.tune_changed = true;
 				}
-			} else if(current_source_id == ID_RADIO) {
-				const uint8_t sub_id = source_handler.source_list[current_source_index].sub_id;
-				setTunerFrequency(sub_id);
-				sendTunedFrequencyMessage(sub_id);
-				clearFMData();
-				text_handler.createRadioMenu(sub_id);
-				if(sub_id <= SUB_AM)
-					parameters.tune_changed = true;
 			}
 		
 			//Set audio switch.
-			if(current_source_id == 0) { //Audio off.
+			if(current_source_id == 0 || source_change_timer_enable) { //Audio off or waiting.
 				digitalWrite(AUDIO_ON_SW, HIGH);
 				digitalWrite(AUDIO_SW, LOW);
 				digitalWrite(DAC_MUTE, LOW);
@@ -467,13 +463,14 @@ void AidFRadio::loop() {
 		source_text_timer_enabled = false;
 		const uint8_t current_source_id = source_handler.getCurrentSourceID();
 		if(current_source_id != ID_RADIO && current_source_id != 0) {
+			text_handler.clearNavText();
 			if(current_source_id != ID_ANDROID_AUTO)
 				text_handler.clearAllSubtext();
 
-			bool source_connected = true;
+			bool source_connected = false;
 			for(int i=0;i<source_handler.source_count;i+=1) {
-				if(source_handler.source_list[i].source_id == current_source_id && !source_handler.source_list[i].connected) {
-					source_connected = false;
+				if(source_handler.source_list[i].source_id == current_source_id && source_handler.source_list[i].connected) {
+					source_connected = true;
 					break;
 				}
 			}
@@ -496,7 +493,9 @@ void AidFRadio::loop() {
 			text_handler.sendIMIDSourceMessage(current_source, sub_id);
 			sendTunedFrequencyMessage(sub_id);
 		} else if(current_source != 0) {
-			text_handler.sendSourceTextControl(current_source, current_source);
+			const uint16_t current_source_num = source_handler.getCurrentSource();
+			const bool connected = source_handler.source_list[current_source_num].connected;
+			text_handler.sendSourceTextControl(current_source, current_source, connected);
 		}
 	}
 
@@ -518,7 +517,7 @@ void AidFRadio::loop() {
 	}
 
 	do {
-		if(source_handler.getCurrentSourceID() == ID_RADIO) {
+		if(source_handler.getCurrentSourceID() == ID_RADIO && !source_change_timer_enable) {
 			const bool last_queued = tuner.getQueued();
 
 			aibus_handler.cachePending(ID_RADIO);
@@ -609,7 +608,9 @@ void AidFRadio::loop() {
 				text_handler.sendTunedFrequencyMessage(parameters.current_preset, *current_frequency, sub_id != SUB_AM, true);
 
 				text_handler.sendLongRDSMessage(current_rds);
-				text_handler.sendIMIDRDSMessage(rds_program_split[rds_imid_index]);
+
+				if((current_rds.length() > 0 && rds_program_split[rds_imid_index].length() > 0) || !parameters.imid_radio)
+					text_handler.sendIMIDRDSMessage(rds_program_split[rds_imid_index]);
 
 				String overlay_msg = "";
 				if(sub_id == SUB_FM1)
@@ -881,8 +882,9 @@ void AidFRadio::handleAIBus(AIData* msg) {
 		}
 	}
 
-	if(!parameters.mirror_connected && msg->sender == ID_ANDROID_AUTO && !getInitMessage(msg) && !getPoweroffMessage(msg))
+	if(!parameters.mirror_connected && msg->sender == ID_ANDROID_AUTO && !getInitMessage(msg) && !getPoweroffMessage(msg)) {
 		parameters.mirror_connected = true;
+	}
 
 	if(msg->receiver != ID_RADIO && msg->receiver != 0xFF)
 		return;
@@ -899,28 +901,6 @@ void AidFRadio::handleAIBus(AIData* msg) {
 			parameters.auto_clock = false;
 
 		parameters.send_12h = (msg->data[1]&0x80) != 0;
-	} else if(msg->receiver == ID_RADIO) { //Radio message.
-		bool answered = false;
-		answered = volume_handler.handleAIBus(msg);
-		if(!answered)
-			answered = source_handler.handleAIBus(msg);
-
-		if(parameters.tune_changed && source_handler.getCurrentSourceID() == ID_RADIO) {
-			uint16_t current_frequency = parameters.fm1_tune;
-			const uint8_t sub_id = source_handler.source_list[source_handler.getCurrentSource()].sub_id;
-
-			if(sub_id <= SUB_AM) {
-				switch(sub_id) {
-				case SUB_FM2:
-					current_frequency = parameters.fm2_tune;
-					break;
-				case SUB_AM:
-					current_frequency = parameters.am_tune;
-				}
-
-				text_handler.sendTunedFrequencyMessage(current_frequency, sub_id != SUB_AM, true);
-			}
-		}
 	} else if(msg->receiver == ID_RADIO && msg->sender == ID_PHONE && msg->l >= 3) { //Phone message.
 		if(msg->data[1] == 0x6) {
 			parameters.phone_active = msg->data[2] != 0x0;
@@ -1017,6 +997,28 @@ void AidFRadio::handleAIBus(AIData* msg) {
 		if(msg->receiver == 0xFF) {
 			imid_timer = 0;
 			imid_timer_enabled = true;
+		}
+	} else if(msg->receiver == ID_RADIO) { //Other radio message.
+		bool answered = false;
+		answered = volume_handler.handleAIBus(msg);
+		if(!answered)
+			answered = source_handler.handleAIBus(msg);
+
+		if(parameters.tune_changed && source_handler.getCurrentSourceID() == ID_RADIO) {
+			uint16_t current_frequency = parameters.fm1_tune;
+			const uint8_t sub_id = source_handler.source_list[source_handler.getCurrentSource()].sub_id;
+
+			if(sub_id <= SUB_AM) {
+				switch(sub_id) {
+				case SUB_FM2:
+					current_frequency = parameters.fm2_tune;
+					break;
+				case SUB_AM:
+					current_frequency = parameters.am_tune;
+				}
+
+				text_handler.sendTunedFrequencyMessage(current_frequency, sub_id != SUB_AM, true);
+			}
 		}
 	}
 
@@ -1122,8 +1124,11 @@ void AidFRadio::screenInit() {
 	
 	setSourceName();
 	const uint8_t current_source = source_handler.getCurrentSourceID();
-	if(current_source != 0 && current_source != ID_RADIO)
-		text_handler.sendSourceTextControl(current_source, current_source);
+	if(current_source != 0 && current_source != ID_RADIO) {
+		const uint16_t current_source_num = source_handler.getCurrentSource();
+		const bool connected = source_handler.source_list[current_source_num].connected;
+		text_handler.sendSourceTextControl(current_source, current_source, connected);
+	}
 }
 
 //Send the active source name to the nav computer.
@@ -1406,6 +1411,24 @@ void AidFRadio::sendAudioLightMessage(const bool audio_on) {
 	#endif
 }*/
 
+//Set all presets to be within the min/max range.
+void AidFRadio::normalizePresets() {
+	for(int i=0;i<sizeof(parameters.fm1_presets)/sizeof(uint16_t);i+=1) { 
+		if(parameters.fm1_presets[i] < parameters.fm_lower_limit || parameters.fm1_presets[i] > parameters.fm_upper_limit)
+			parameters.fm1_presets[i] = parameters.fm1_tune;
+	}
+
+	for(int i=0;i<sizeof(parameters.fm2_presets)/sizeof(uint16_t);i+=1) {
+		if(parameters.fm2_presets[i] < parameters.fm_lower_limit || parameters.fm2_presets[i] > parameters.fm_upper_limit)
+			parameters.fm2_presets[i] = parameters.fm2_tune;
+	}
+
+	for(int i=0;i<sizeof(parameters.am_presets)/sizeof(uint16_t);i+=1) {
+		if(parameters.am_presets[i] < parameters.am_lower_limit || parameters.am_presets[i] > parameters.am_upper_limit)
+			parameters.am_presets[i] = parameters.am_tune;
+	}
+}
+
 //Turn the full radio power on.
 void AidFRadio::fullPowerOn() {
 
@@ -1464,6 +1487,7 @@ void AidFRadio::powerOff() {
 
 	sram_handler.begin();
 	sram_handler.setStartParams(&start_params);
+	sram_handler.setRAMPresets(&parameters);
 
 	if(key_on) {
 		const uint16_t source_count = source_handler.getFilledSourceCount();

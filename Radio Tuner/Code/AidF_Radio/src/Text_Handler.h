@@ -26,6 +26,8 @@ public:
 	void clearAllSubtext();
 	void clearAllSubtext(const bool refresh);
 	void clearAllText(const bool refresh);
+
+	void clearNavText(const bool refresh = false);
 	
 	void setBlankHeader(String header);
 	void sendSourceTextControl(const uint8_t recipient, const uint8_t source, bool ack = true);
@@ -48,6 +50,7 @@ public:
 	void sendIMIDInfoMessage(String text);
 	void sendIMIDCallsignMessage(String text);
 
+	void sendMirrorClearMessage(const uint8_t index, const bool refresh);
 	void sendMirrorMessage(String text, const uint8_t index, const bool refresh);
 
 	void sendTime();

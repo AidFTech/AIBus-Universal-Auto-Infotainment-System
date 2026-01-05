@@ -10,6 +10,8 @@
 #define AUX_LIGHT_TURN_R 3
 #define AUX_LIGHT_REAR_FOG_L 4
 #define AUX_LIGHT_REAR_FOG_R 5
+#define AUX_LIGHT_AUX_TAIL 6
+#define AUX_LIGHT_AUX_PROJECTOR 7
 
 class AuxLightController {
 public:
@@ -24,6 +26,9 @@ public:
 
 	void setLeftRFog(const bool state);
 	void setRightRFog(const bool state);
+
+	void setTail(const bool state);
+	void setProjector(const bool state);
 private:
 	MCP23S08 light_controller;
 };

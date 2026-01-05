@@ -216,7 +216,12 @@ fn main() {
 		
 						if !ack && Instant::now() - last_try > Duration::from_millis(100) {
 							last_try = Instant::now();
-							let resend = msg_copy.clone();
+							let mut resend = msg_copy.clone();
+							
+							if resend.l() == 2 && resend.data[0] != 0xA1 {
+								resend.data.push(0x0);
+							}
+
 							write_aibus_message(&mut amirror_stream, resend);
 							num_tries += 1;
 						}

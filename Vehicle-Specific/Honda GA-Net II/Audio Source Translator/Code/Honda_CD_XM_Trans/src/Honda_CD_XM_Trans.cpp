@@ -15,6 +15,8 @@ void loop() {
 //Main class setup.
 void HondaCDXMTrans::setup() {
 	AISerial.begin(AI_BAUD);
+	ai_handler.setCacheAck(true);
+
 	pinMode(GA_ON, OUTPUT);
 	digitalWrite(GA_ON, LOW);
 
@@ -58,7 +60,7 @@ void HondaCDXMTrans::setup() {
 	digitalWrite(GAH_COUNT_CLEAR, HIGH);
 	digitalWrite(GAH_COUNT_CLEAR, LOW);
 
-	digitalWrite(GAH_COUNT_ENABLE, LOW);
+	digitalWrite(GAH_COUNT_ENABLE, HIGH);
 	
 	digitalWrite(SPDIF_RESET, HIGH);
 	delay(100);
@@ -115,9 +117,18 @@ void HondaCDXMTrans::loop() {
 
 	IE_Message ie_msg;
 
-	if (parameters.power_on) { // Don't check IEBus if the car isn't on.
+	const bool ie_ready = !(imid_handler.getEstablished() &&
+							imid_handler.getIMIDChangeTimer() < IMID_CHANGE_TIMER &&
+							!cd_handler.getSelected() &&
+							!tape_handler.getSelected() &&
+							!xm_handler.getSelected());
+
+	if (parameters.power_on && ie_ready) { // Don't check IEBus if the car isn't on or the IMID needs to change.
 		elapsedMillis ie_timer;
 		bool first_ie = false;
+
+		if (ai_handler.dataAvailable(false) > 0)
+			ai_handler.cacheAllPending();
 
 		while (ie_timer < 50) {
 			const bool was_first_ie = first_ie;
@@ -142,9 +153,25 @@ void HondaCDXMTrans::loop() {
 					}
 				} else if(message_value > 0 || message_value < -1)
 					ie_timer = 0;
-				if(!first_ie || (first_ie && !was_first_ie))
-					ai_handler.cacheAllPending();
+
+				digitalWrite(REC_CLEAR, LOW);
+				digitalWrite(REC_CLEAR, HIGH);
 			}
+
+			if(!first_ie || (first_ie && !was_first_ie))
+				ai_handler.cacheAllPending();
+		}
+
+		if(digitalRead(REC_SET) == HIGH) { //Possible miss.
+			digitalWrite(REC_CLEAR, LOW);
+			digitalWrite(REC_CLEAR, HIGH);
+
+			if(cd_handler.getSelected())
+				cd_handler.refreshSource();
+			else if(tape_handler.getSelected())
+				tape_handler.refreshSource();
+			else if(xm_handler.getSelected())
+				xm_handler.refreshSource();
 		}
 	}
 
@@ -152,14 +179,27 @@ void HondaCDXMTrans::loop() {
 
 	do {
 		bool ai_received = false;
-		if (ai_handler.dataAvailable() > 0) {
-			if (ai_handler.readAIData(&ai_msg)) {
+		const unsigned int avail = ai_handler.dataAvailable();
+		if (avail > 0) {
+			const aibus_read_result_t ai_result = ai_handler.readAIDataErr(&ai_msg);
+			if (getPositiveResult(ai_result) && (ai_handler.getValidMessage(&ai_msg) || 
+				(!parameters.computer_connected && ai_msg.sender == ID_NAV_COMPUTER) ||
+				(!parameters.screen_connected && ai_msg.sender == ID_NAV_SCREEN) ||
+				(!parameters.mirror_connected && ai_msg.sender == ID_ANDROID_AUTO) ||
+				(!parameters.radio_connected && ai_msg.sender == ID_RADIO)
+			)) {
 				ai_received = true;
+			} else if(ai_result == AIBUS_READ_TIMEOUT ||
+						ai_result == AIBUS_READ_INVALID_CHECKSUM ||
+						ai_result == AIBUS_READ_INCOMPLETE) {
+				//Set the timer to ping the CANslator just in case we missed something.
+				power_ping_timer = POWER_PING_TIMER - 200;
 			}
 		}
 
 		if (ai_received) {
-			ai_timer = 0;
+			if(!cd_handler.getSelected() && !tape_handler.getSelected() && !xm_handler.getSelected())
+				ai_timer = 0;
 
 			if ((ai_msg.sender == ID_IMID_SCR && imid_handler.getEstablished()) ||
 				(ai_msg.sender == ID_TAPE && tape_handler.getEstablished()) ||
@@ -167,8 +207,10 @@ void HondaCDXMTrans::loop() {
 				(ai_msg.sender == ID_XM && xm_handler.getEstablished()))
 				continue;
 
-			if (!parameters.computer_connected && ai_msg.sender == ID_NAV_COMPUTER && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg))
+			if (!parameters.computer_connected && ai_msg.sender == ID_NAV_COMPUTER && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg)) {
 				parameters.computer_connected = true;
+				ai_handler.setCacheAck(false);
+			}
 
 			if (!parameters.screen_connected && ai_msg.sender == ID_NAV_SCREEN && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg))
 				parameters.screen_connected = true;
@@ -197,9 +239,10 @@ void HondaCDXMTrans::loop() {
 			if(getInitMessage(&ai_msg) || getPoweroffMessage(&ai_msg)) {
 				if(ai_msg.sender == ID_RADIO)
 					parameters.radio_connected = false;
-				else if(ai_msg.sender == ID_NAV_COMPUTER)
+				else if(ai_msg.sender == ID_NAV_COMPUTER) {
 					parameters.computer_connected = false;
-				else if(ai_msg.sender == ID_NAV_SCREEN)
+					ai_handler.setCacheAck(true);
+				} else if(ai_msg.sender == ID_NAV_SCREEN)
 					parameters.screen_connected = false;
 				else if(ai_msg.sender == ID_ANDROID_AUTO)
 					parameters.mirror_connected = false;
@@ -220,6 +263,44 @@ void HondaCDXMTrans::loop() {
 								parameters.external_imid_xm = true;
 						}
 					}
+				}
+			} else if(ai_msg.sender == ID_RADIO && ai_msg.l >= 3 && ai_msg[0] == 0x40 && ai_msg[1] == 0x10) {
+				parameters.radio_ping_timer = 0;
+			} else if(ai_msg.sender == ID_RADIO && ai_msg.l >= 3 && ai_msg[0] == 0x70 && ai_msg[1] == 0x10) {
+				parameters.radio_ping_timer = 0;
+				
+				const uint8_t selected = ai_msg[2];
+				uint8_t request_data[] = {0x60, 0x10};
+
+				if((selected == ID_CDC || selected == ID_CD || selected == ID_TAPE || selected == ID_XM) &&
+				ai_handler.getValidMessage(&ai_msg) && !cd_handler.getSelected() && !tape_handler.getSelected() && !xm_handler.getSelected()) {
+					if(ai_msg.receiver != 0xFF)
+						ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
+
+					AIData request_msg(sizeof(request_data), selected, ID_RADIO, request_data);
+					ai_handler.writeAIData(&request_msg);
+
+					uint8_t text_request_data[] = {0x60, 0x11};
+					AIData text_request_msg(sizeof(text_request_data), selected, ID_RADIO, text_request_data);
+					ai_handler.writeAIData(&text_request_msg);
+				} else if(selected != ID_CDC && selected != ID_CD && cd_handler.getSelected()) {
+					if(ai_msg.receiver != 0xFF && ai_handler.getValidMessage(&ai_msg))
+						ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
+
+					AIData request_msg(sizeof(request_data), ID_CDC, ID_RADIO, request_data);
+					ai_handler.writeAIData(&request_msg);
+				} else if(selected != ID_TAPE && tape_handler.getSelected()) {
+					if(ai_msg.receiver != 0xFF && ai_handler.getValidMessage(&ai_msg))
+						ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
+
+					AIData request_msg(sizeof(request_data), ID_TAPE, ID_RADIO, request_data);
+					ai_handler.writeAIData(&request_msg);
+				} else if(selected != ID_XM && xm_handler.getSelected()) {
+					if(ai_msg.receiver != 0xFF && ai_handler.getValidMessage(&ai_msg))
+						ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
+
+					AIData request_msg(sizeof(request_data), ID_XM, ID_RADIO, request_data);
+					ai_handler.writeAIData(&request_msg);
 				}
 			}
 
@@ -329,6 +410,7 @@ void HondaCDXMTrans::loop() {
 			} else if (tape_handler.getSelected()) {
 				uint8_t tape_function[] = {0x13, 0x0, 0x1};
 				sendFunctionMessage(&ie_handler, false, IE_ID_TAPE, tape_function, sizeof(tape_function));
+				sendFunctionMessage(&ie_handler, true, IE_ID_TAPE, tape_function, sizeof(tape_function));
 			} else if (xm_handler.getSelected()) {
 				uint8_t xm_function[] = {0x19, 0x0, 0x1};
 				if (xm_handler.getXM2())
@@ -391,7 +473,29 @@ void HondaCDXMTrans::loop() {
 				}
 			}
 		}
+
+		if(power_ping_timer > POWER_PING_TIMER) {
+			power_ping_timer = 0;
+
+			uint8_t ping_src = ID_CDC;
+
+			if(!cd_handler.getEstablished()) {
+				if(tape_handler.getEstablished())
+					ping_src = ID_TAPE;
+				else if(xm_handler.getEstablished())
+					ping_src = ID_XM;
+				else if(imid_handler.getEstablished())
+					ping_src = ID_IMID_SCR;
+			}
+
+			uint8_t power_ping_data[] = {0x4A, 0x1E};
+			AIData power_ping_msg(sizeof(power_ping_data), ping_src, ID_CANSLATOR, power_ping_data);
+			ai_handler.writeAIData(&power_ping_msg, false);
+		}
 	}
+
+	//if (ai_handler.dataAvailable(false) > 0)
+	//	ai_handler.cacheAllPending();
 	
 	if(parameters.key_position == 0 && door_timer_enabled && door_timer > DOOR_TIMER) {
 		door_timer_enabled = false;
@@ -441,7 +545,7 @@ void HondaCDXMTrans::sendIMIDRequest() {
 	while (response_timer < 100) {
 		AIData reply;
 		if (ai_handler.dataAvailable() > 0) {
-			if (ai_handler.readAIData(&reply)) {
+			if (ai_handler.readAIData(&reply, false)) {
 				if (reply.sender != ID_IMID_SCR || (reply.l >= 1 && reply.data[0] == 0x80))
 					continue;
 

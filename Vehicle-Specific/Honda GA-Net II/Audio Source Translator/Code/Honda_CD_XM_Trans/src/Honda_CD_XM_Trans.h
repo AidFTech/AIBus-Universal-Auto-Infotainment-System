@@ -68,6 +68,8 @@
 #define FUNCTION_DELAY 5000
 #define SOURCE_DELAY 5000
 
+#define POWER_PING_TIMER 45250
+
 #define DOOR_TIMER 30000
 
 #define CACHE_SIZE 32
@@ -91,7 +93,7 @@ private:
 
 	BrightnessHandler brightness_handler = BrightnessHandler(ILL_CS, ILL_ANODE);
 
-	elapsedMillis function_timer, ai_timer, screen_request_timer, ping_timer;
+	elapsedMillis function_timer, ai_timer, screen_request_timer, ping_timer, power_ping_timer;
 
 	elapsedMillis door_timer;
 	bool door_timer_enabled = false;

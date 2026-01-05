@@ -9,6 +9,7 @@
 #define en_aibus_handler
 
 #define EN_AI_CACHE_SIZE AI_CACHE_SIZE*4
+#define ACK_CACHE_SIZE 32
 
 //An enhanced AIBus handler capable of caching messages from multiple IDs.
 class EnAIBusHandler : public AIBusHandler { //Enhanced AIBus handler.
@@ -18,6 +19,10 @@ public:
 
 	void addID(const uint8_t id);
 
+	void setCacheAck(const bool cache_ack);
+
+	bool getValidMessage(AIData* ai_d);
+
 	bool cachePending(const uint8_t id);
 	bool cacheAllPending();
 
@@ -26,6 +31,8 @@ public:
 private:
 	Vector<uint8_t> id_vec;
 	uint8_t* id_list;
+
+	bool cache_ack = false;
 
 	bool getID(const uint8_t id);
 };

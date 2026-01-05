@@ -44,14 +44,17 @@ private:
 	std::string main_area_text[6];
 	TextBox* main_area_box[6];
 	bool main_area_change[6];
+	uint8_t main_area_id[6];
 
 	std::string subtitle_area_text[3];
 	TextBox* subtitle_area_box[3];
 	bool subtitle_area_change[3];
+	uint8_t subtitle_area_id[3];
 
 	std::string function_area_text[6];
 	TextBox* function_area_box[6];
 	bool function_area_change[6];
+	uint8_t function_area_id[6];
 
 	NavMenu* audio_menu, *settings_menu = NULL;
 	uint8_t settings_menu_sender = ID_RADIO;

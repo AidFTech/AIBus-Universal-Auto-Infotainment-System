@@ -21,14 +21,20 @@ Audio_Window::Audio_Window(AttributeList *attribute_list) : NavWindow(attribute_
 	this->audio_menu = new NavMenu(this->attribute_list, this->w/2, main_area_y + main_area_height, this->w/2, main_area_height, 5, ALIGN_H_R, 36, 5, false, "");
 	
 	//Clear all the "changed" bools.
-	for(uint8_t i=0;i<6;i+=1)
+	for(uint8_t i=0;i<6;i+=1) {
 		main_area_change[i] = false;
+		main_area_id[i] = ID_RADIO;
+	}
 	
-	for(uint8_t i=0;i<3;i+=1)
+	for(uint8_t i=0;i<3;i+=1) {
 		subtitle_area_change[i] = false;
+		subtitle_area_id[i] = ID_RADIO;
+	}
 		
-	for(uint8_t i=0;i<6;i+=1)
+	for(uint8_t i=0;i<6;i+=1) {
 		function_area_change[i] = false;
+		function_area_id[i] = ID_RADIO;
+	}
 }
 
 //Audio window destructor.
@@ -68,7 +74,10 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 
 	if(msg->l >= 2 && (msg->data[0] == 0x20 || msg->data[0] == 0x23) && (msg->data[1]&0x60) == 0x60) {
 		aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
-		this->interpretAudioScreenChange(msg);
+
+		if(msg->sender == attribute_list->active_audio_device || msg->sender == ID_RADIO)
+			this->interpretAudioScreenChange(msg);
+		
 		return true;
 	} else if (msg->data[0] == 0x2B) { //Menu-related commands.
 		bool ack = true;

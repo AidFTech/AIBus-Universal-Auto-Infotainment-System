@@ -20,6 +20,8 @@ void NavAVRController::setup() {
 	pinMode(PI_BOOT, INPUT); //High if the Pi is starting to boot.
 	pinMode(PI_OFF_HARDWARE, OUTPUT); //Drive low to power Pi off.
 	pinMode(PI_OFF_SOFT, OUTPUT); //Drive high to power Pi off when it is on.
+	pinMode(PROG, INPUT);
+	pinMode( UART_DTR, INPUT);
 
 	pinMode(AI_RX, INPUT_PULLUP);
 

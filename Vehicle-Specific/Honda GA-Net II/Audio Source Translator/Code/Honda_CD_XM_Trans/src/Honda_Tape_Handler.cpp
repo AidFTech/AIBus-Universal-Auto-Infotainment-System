@@ -21,6 +21,16 @@ void HondaTapeHandler::loop() {
 
 			this->sendTapeTextMessage();
 		}
+
+		if(parameter_list->radio_ping_timer > RADIO_PING_WAIT) {
+			parameter_list->radio_ping_timer = 0;
+			uint8_t src_request_data[] = {0x60, 0x10};
+			AIData src_request_msg(sizeof(src_request_data), this->device_ai_id, ID_RADIO, src_request_data);
+			const bool ack = ai_driver->writeAIData(&src_request_msg, parameter_list->radio_connected);
+			
+			if(!ack)
+				parameter_list->radio_connected = false;
+		}
 	}
 }
 
@@ -227,6 +237,8 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 
 			if(parameter_list->audio_pin >= 0)
 				digitalWrite(parameter_list->audio_pin, HIGH);
+
+			sendStatusRequest();
 		} else {
 			if(source_sel) {
 				source_sel = false;
@@ -255,6 +267,16 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 
 			sendStatusRequest();
 		}
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x70 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function heartbeat.
+		if(source_sel && !text_control) {
+			ack = false;
+			sendAIAckMessage(sender);
+
+			uint8_t text_request_data[] = {0x60, 0x11};
+			AIData text_request_msg(sizeof(text_request_data), ID_TAPE, ID_RADIO, text_request_data);
+			ai_driver->writeAIData(&text_request_msg);
+		}
+	
 	} else if(sender == ID_NAV_SCREEN) {
 		if(!this->source_sel) {
 			ack = false;
@@ -274,7 +296,10 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 				sendButtonMessage(HONDA_BUTTON_FF);
 			else if(button == 0x15 && state == 0x2) //Preset 5. NR.
 				sendButtonMessage(HONDA_BUTTON_NR);
-			else if(button == 0x24 && state == 0x2) //Reverse search. // @TODO: Skip multiple tracks.
+			else if(button == 0x16 && state == 0x2) { //Refresh.
+				uint8_t function[] = {0x13, 0x0};
+				sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function, sizeof(function));
+			} else if(button == 0x24 && state == 0x2) //Reverse search. // @TODO: Skip multiple tracks.
 				sendButtonMessage(HONDA_BUTTON_SKIPREV, 1);
 			else if(button == 0x25 && state == 0x2) //FWD search.
 				sendButtonMessage(HONDA_BUTTON_SKIPFWD, 1);
@@ -322,6 +347,11 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 	
 	if(ack)
 		sendAIAckMessage(sender);
+}
+
+//Refresh the source.
+void HondaTapeHandler::refreshSource() {
+	this->sendStatusRequest();
 }
 
 //Send the AIBus handshake message to the radio.
@@ -376,6 +406,8 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button) {
 	
 	ie_driver->sendMessage(&button_message, true, true);
 	getIEAckMessage(device_ie_id);
+
+	sendStatusRequest();
 }
 
 //Send the previous track IEBus message.
@@ -387,6 +419,8 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button, const uint8_t tra
 	
 	ie_driver->sendMessage(&button_message, true, true);
 	getIEAckMessage(device_ie_id);
+
+	sendStatusRequest();
 }
 
 //Send the IEBus status request message.
@@ -650,7 +684,7 @@ void HondaTapeHandler::sendFunctionTextMessage() {
 	ai_driver->writeAIData(&function3, parameter_list->computer_connected);
 	ai_driver->writeAIData(&function4, parameter_list->computer_connected);
 	ai_driver->writeAIData(&function5, parameter_list->computer_connected);
-	this->sendMirrorMessage(F("Tape"), 0, true);
+	this->sendMirrorMessage("Tape", 0, true);
 }
 
 //Send a tape status AIBus message.
@@ -720,8 +754,8 @@ void HondaTapeHandler::createTapeMenu() {
 	elapsedMillis cancel_wait;
 	while(cancel_wait < 20) {
 		AIData ai_msg;
-		if(ai_driver->dataAvailable() > 0) {
-			if(ai_driver->readAIData(&ai_msg)) {
+		if(ai_driver->dataAvailable(false) > 0) {
+			if(ai_driver->readAIData(&ai_msg, false)) {
 				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //No menu available.
 					sendAIAckMessage(ai_msg.sender);
 					return;

@@ -15,6 +15,8 @@
 #define PI_OFF_HARDWARE PIN_PA6
 #define PI_OFF_SOFT PIN_PA7
 #define AI_RX PIN_PC0
+#define PROG PIN_PC1
+#define UART_DTR PIN_PC2
 #else
 #define PI_POWER 2
 #define POWER_ON 3
@@ -23,6 +25,8 @@
 #define PI_OFF_HARDWARE 6
 #define PI_OFF_SOFT 7
 #define AI_RX 8
+#define PROG 9
+#define UART_DTR 10
 #endif
 
 #define DOOR_TIMER 30000

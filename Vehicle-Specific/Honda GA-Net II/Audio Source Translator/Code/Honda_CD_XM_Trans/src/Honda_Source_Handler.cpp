@@ -90,6 +90,19 @@ bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 	return ack;
 }
 
+bool HondaSourceHandler::getIEAckMessage(IE_Message* msg, const uint16_t sender) {
+	int tries = 0;
+	bool ack = false;
+
+	while(!ack && tries < IE_TRIES) {
+		ack = getIEAckMessage(sender);
+		if(!ack)
+			ie_driver->sendMessage(msg, true, true);
+	}
+
+	return ack;
+}
+
 bool HondaSourceHandler::getIEAckMessageStrict(const uint16_t sender) {
 	bool ack = false;
 

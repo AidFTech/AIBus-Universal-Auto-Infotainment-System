@@ -26,10 +26,11 @@ BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler,
 	brake_light_on = false;
 	left_signal_illum = false;
 	right_signal_illum = false;
+	high_beam_full = false;
 	
 	coolant_temp = 0x35;
 	eco_bar = 0x1C;
-	doors_open = 0x00;
+	parameter_list->doors_open = 0x00;
 	brightness = 0x16;
 	vehicle_speed = 0;
 	wiper_pos = 0;
@@ -42,7 +43,7 @@ BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler,
 	
 	odo_km = 0;
 
-	key_pos = 0;
+	parameter_list->key_pos = 0;
 }
 
 //Initialize the MCP2515.
@@ -78,9 +79,24 @@ bool BCAN_Handler::handleAIBus(AIData* ai_msg) {
 	return false;
 }
 
-//Set the light controller.
-void BCAN_Handler::setLightController(AuxLightController* aux_light_controller) {
+//Set the auxiliary light controller.
+void BCAN_Handler::setAuxLightController(AuxLightController* aux_light_controller) {
 	this->aux_light_controller = aux_light_controller;
+}
+
+//Set the interior light controller MCP4251.
+void BCAN_Handler::setIntLightController(MCP4251* int_light_controller) {
+	this->int_light_controller = int_light_controller;
+}
+
+//Return whether the interior lights are on.
+bool BCAN_Handler::getInteriorLightsOn() {
+	return this->lights_on;
+}
+
+//Get the ambient light brightness.
+uint8_t BCAN_Handler::getBrightness() {
+	return brightness >= 0x16 ? 255 : brightness*11;
 }
 
 //Get whether the left signal is on.
@@ -110,22 +126,25 @@ void BCAN_Handler::readCANMessage() {
 			}
 
 			if(can_msg.can_id == BCAN_ID_KEYPOS && can_msg.can_dlc == 5) { //Key position main, brake lights, signal lights.
-				const uint8_t last_key = key_pos;
+				const uint8_t last_key = parameter_list->key_pos;
 
 				if((can_msg.data[0]&0x28) != 0 && (can_msg.data[2]&0x80) != 0) { //ACC 2, not cranking.
-					if(key_pos != 4)
-						key_pos = 2;
+					if(parameter_list->key_pos != 4)
+						parameter_list->key_pos = 2;
 				} else if((can_msg.data[0]&0x28) != 0 && (can_msg.data[2]&0x80) == 0) //Cranking.
-					key_pos = 3;
-				else if((can_msg.data[0]&0x20) != 0 && (can_msg.data[2])&0x80 != 0) //ACC 1.
-					key_pos = 1;
+					parameter_list->key_pos = 3;
+				else if((can_msg.data[0]&0x20) != 0 && (can_msg.data[2]&0x80) != 0) //ACC 1.
+					parameter_list->key_pos = 1;
 				else //Key off.
-					key_pos = 0;
+					parameter_list->key_pos = 0;
 
-				if(key_pos != last_key)
+				if(parameter_list->key_pos != last_key)
 					writeAIBusKeyMessage(0xFF);
 
-				parameter_list->power_on = key_pos != 0;
+				parameter_list->power_on = parameter_list->key_pos != 0;
+				
+				if(parameter_list->key_pos != 0)
+					parameter_list->switched_on = true;
 
 				//Brake and signal lights.
 				const bool last_left_signal_illum = left_signal_illum, last_right_signal_illum = right_signal_illum, last_brake_lights = brake_light_on, last_hazard = hazard_on;
@@ -149,45 +168,57 @@ void BCAN_Handler::readCANMessage() {
 				
 			} else if(can_msg.can_id == BCAN_ID_GEAR && can_msg.can_dlc == 5) { //Engine running, e-brake and gear.
 				const uint16_t last_gear = honda_gear;
-				const uint8_t last_key = key_pos;
+				const uint8_t last_key = parameter_list->key_pos;
 				const bool last_ebrake = e_brake;
 
 				honda_gear = ((can_msg.data[0]<<8) | can_msg.data[1])&0x5005;
 				e_brake = (can_msg.data[1]&0x2) != 0;
 
 				if(can_msg.data[2] == 0x0) //Engine on.
-					key_pos = 4;
+					parameter_list->key_pos = 4;
 
-				if(key_pos != last_key)
+				if(parameter_list->key_pos != last_key)
 					writeAIBusKeyMessage(0xFF);
 
-				if(e_brake != last_ebrake)
+				if(e_brake != last_ebrake) {
 					writeAIBusSignalMessage();
 
-				parameter_list->power_on = key_pos != 0;
+					if(!e_brake && (light_state_a&0x8) == 0 && parameter_list->drl_setting != DRL_SETTING_OFF) {
+						ext_drl_on = true;
+						setDRLs(ext_drl_on);
+
+						light_state_a |= 0x1;
+						writeAIBusLightMessage(0xFF);
+					}
+				}
+
+				parameter_list->power_on = parameter_list->key_pos != 0;
+
+				if(parameter_list->key_pos != 0)
+					parameter_list->switched_on = true;
 			} else if(can_msg.can_id == BCAN_ID_LEFTDOORS && can_msg.can_dlc == 1) { //Left doors.
-				const uint8_t last_door = doors_open;
+				const uint8_t last_door = parameter_list->doors_open;
 
-				doors_open &= 0xF5;
-				doors_open |= (can_msg.data[0]&0xA0)>>4;
+				parameter_list->doors_open &= 0xF5;
+				parameter_list->doors_open |= (can_msg.data[0]&0xA0)>>4;
 
-				if(doors_open != last_door)
+				if(parameter_list->doors_open != last_door)
 					writeAIBusDoorMessage(0xFF);
 			} else if(can_msg.can_id == BCAN_ID_RIGHTDOORS && can_msg.can_dlc == 1) { //Right doors.
-				const uint8_t last_door = doors_open;
+				const uint8_t last_door = parameter_list->doors_open;
 
-				doors_open &= 0xFA;
-				doors_open |= (can_msg.data[0]&0x50)>>4;
+				parameter_list->doors_open &= 0xFA;
+				parameter_list->doors_open |= (can_msg.data[0]&0x50)>>4;
 
-				if(doors_open != last_door)
+				if(parameter_list->doors_open != last_door)
 					writeAIBusDoorMessage(0xFF);
 			} else if(can_msg.can_id == BCAN_ID_TRUNK && can_msg.can_dlc == 1) { //Trunk.
-				const uint8_t last_door = doors_open;
+				const uint8_t last_door = parameter_list->doors_open;
 
-				doors_open &= 0xEF;
-				doors_open |= (can_msg.data[0]&0x80)>>3;
+				parameter_list->doors_open &= 0xEF;
+				parameter_list->doors_open |= (can_msg.data[0]&0x80)>>3;
 
-				if(doors_open != last_door)
+				if(parameter_list->doors_open != last_door)
 					writeAIBusDoorMessage(0xFF);
 			} else if(can_msg.can_id == BCAN_ID_BRIGHTNESS && can_msg.can_dlc == 8) { //Brightness.
 				const uint8_t last_brightness = brightness;
@@ -197,17 +228,41 @@ void BCAN_Handler::readCANMessage() {
 				lights_on = (can_msg.data[0]&0x40) != 0;
 				night_mode = (can_msg.data[5]&0x40)	!= 0;
 
-				if(last_brightness != brightness || lights_on != last_light || night_mode != last_night)
+				if(last_brightness != brightness || lights_on != last_light || night_mode != last_night) {
 					writeAIBusBrightnessMessage(0xFF);
+					
+					if(int_light_controller != nullptr) {
+						const uint8_t abs_brightness = brightness >= 0x16 ? 255 : brightness*11;
+						int_light_controller->DigitalPotSetWiperPosition(0, abs_brightness);
+						int_light_controller->DigitalPotSetWiperPosition(1, abs_brightness*parameter_list->ambient_light_brightness/255);
+					}
+				}
+
+				if(lights_on != last_light) {
+					if((parameter_list->doors_open&0xF) == 0 && parameter_list->ambient_light_enable_int)
+						parameter_list->ambient_state = lights_on ? AMBIENT_LIGHTS_DIMMED : AMBIENT_LIGHTS_OFF;
+					else if((parameter_list->doors_open&0xF) != 0 && parameter_list->ambient_light_enable_door)
+						parameter_list->ambient_state = AMBIENT_LIGHTS_FULL;
+					else
+						parameter_list->ambient_state = AMBIENT_LIGHTS_OFF;
+				}
 			} else if(can_msg.can_id == BCAN_ID_LIGHTS && can_msg.can_dlc == 2) { //Light state and hood.
 				const uint8_t last_state_a = light_state_a, last_state_b = light_state_b;
-				const bool last_hood = (this->doors_open&0x20) != 0;
+				const bool last_hood = (this->parameter_list->doors_open&0x20) != 0, last_tail = (light_state_b&0x20) != 0, last_low_beam = (light_state_a&0x2) != 0;
 
-				const bool drl = (can_msg.data[0]&0x8) != 0;
 				const bool side = (can_msg.data[0]&0x40) != 0;
 				const bool low_beam = (can_msg.data[0]&0x2) != 0;
 				const bool front_fog = (can_msg.data[1]&0x80) != 0;
 				const bool high_beam = (can_msg.data[0]&0x1) != 0;
+
+				if(low_beam)
+					ext_drl_on = false;
+				else if(parameter_list->parking_light_drl && !side)
+					ext_drl_on = false;
+				else if((!e_brake && (parameter_list->key_pos == 0x2 || parameter_list->key_pos == 0x4)) || (parameter_list->parking_light_drl && side))
+					ext_drl_on = true;
+
+				const bool drl = (can_msg.data[0]&0x8) != 0 || (ext_drl_on && parameter_list->drl_setting != DRL_SETTING_OFF);
 
 				const bool tail = (can_msg.data[1]&0x40) != 0;
 				const bool license = (can_msg.data[1]&0x8) != 0; //TODO: Check this?
@@ -228,21 +283,51 @@ void BCAN_Handler::readCANMessage() {
 				if(light_state_a != last_state_a || light_state_b != last_state_b)
 					writeAIBusLightMessage(0xFF);
 
+				if(last_tail != tail)
+					aux_light_controller->setTail(tail);
+
+				if(last_low_beam != low_beam) {
+					if(low_beam)
+						aux_light_controller->setProjector(high_beam_full);
+					else
+						aux_light_controller->setProjector(false);
+				}
+
 				if(last_hood != hood) {
-					this->doors_open &= ~0x20;
+					this->parameter_list->doors_open &= ~0x20;
 					if(hood)
-						this->doors_open |= 0x20;
+						this->parameter_list->doors_open |= 0x20;
 
 					writeAIBusDoorMessage(0xFF);
 				}
+
+				if(drl != ((last_state_a&0x1) != 0))
+					setDRLs(drl);
+
+				if(parameter_list->parking_light_drl && side != ((last_state_a&0x2) != 0))
+					setDRLs(drl || side);
 			} else if(can_msg.can_id == BCAN_ID_LIGHTSTALKPOS && can_msg.can_dlc == 2) { //Headlight stalk position.
-				const bool last_left_signal_on = left_signal_on, last_right_signal_on = right_signal_on;
+				const bool last_left_signal_on = left_signal_on, last_right_signal_on = right_signal_on, last_highbeam_on = high_beam_full;
 
-				left_signal_on = (can_msg.data[1]&0x80) != 0 && ((key_pos&0xF) == 0x2 || (key_pos&0xF) == 0x4);
-				right_signal_on = (can_msg.data[1]&0x40) != 0 && ((key_pos&0xF) == 0x2 || (key_pos&0xF) == 0x4);
+				left_signal_on = (can_msg.data[1]&0x80) != 0 && ((parameter_list->key_pos&0xF) == 0x2 || (parameter_list->key_pos&0xF) == 0x4);
+				right_signal_on = (can_msg.data[1]&0x40) != 0 && ((parameter_list->key_pos&0xF) == 0x2 || (parameter_list->key_pos&0xF) == 0x4);
+				high_beam_full = (can_msg.data[0]&0x40) != 0;
 
-				if(last_left_signal_on != left_signal_on || last_right_signal_on != right_signal_on)
+				if(last_left_signal_on != left_signal_on || last_right_signal_on != right_signal_on) {
 					writeAIBusSignalMessage();
+
+					if(parameter_list->drl_setting == DRL_SETTING_WINK && ((light_state_a&(parameter_list->parking_light_drl ? 0xA : 0x2)) == 0)) {
+						parameter_list->left_drl_on = !left_signal_on;
+						parameter_list->right_drl_on = !right_signal_on;
+					}
+				}
+
+				if(high_beam_full != last_highbeam_on) {
+					if((light_state_a&0x2) != 0)
+						aux_light_controller->setProjector(high_beam_full);
+					else
+						aux_light_controller->setProjector(false);
+				}
 			} else if(can_msg.can_id == BCAN_ID_WIPERSTALKPOS && can_msg.can_dlc == 3) { //Wiper stalk position.
 				const bool auto_wiper = parameter_list->auto_wiper, wiper_door_off = parameter_list->wiper_door_off;
 				const uint8_t last_wiper_pos = wiper_pos, last_delay_pos = wiper_delay_pos;
@@ -257,7 +342,7 @@ void BCAN_Handler::readCANMessage() {
 				}
 
 				if((can_msg.data[0]&0x40) != 0) {
-					if(!auto_wiper || (wiper_door_off && (doors_open&0xC) != 0))
+					if(!auto_wiper || (wiper_door_off && (parameter_list->doors_open&0xC) != 0))
 						can_msg.data[0] &= ~0x40;
 				}
 
@@ -446,7 +531,7 @@ bool BCAN_Handler::getWiperIntActive() {
 
 //Run the wipers if in manual mode or wipers on. Return whether the wipe was successful.
 bool BCAN_Handler::runWiper() {
-	if(parameter_list->auto_wiper || (parameter_list->wiper_door_off && (doors_open&0xC) != 0))
+	if(parameter_list->auto_wiper || (parameter_list->wiper_door_off && (parameter_list->doors_open&0xC) != 0))
 		return false;
 
 	if(!rain_sensor_connected)
@@ -542,6 +627,13 @@ void BCAN_Handler::broadcastBCAN(can_frame* can_msg) {
 	rls_2515.sendMessage(can_msg);
 }
 
+//Write the battery voltage message.
+void BCAN_Handler::sendBatteryVoltage(const uint16_t voltage) {
+	uint8_t bv_data[] = {0xA1, 0x1F, 0x6, 0x22, (voltage>>8)&0xFF, voltage&0xFF};
+	AIData bv_msg(sizeof(bv_data), ID_CANSLATOR, 0xFF, bv_data);
+	ai_handler->writeAIData(&bv_msg, false);
+}
+
 //Write all common CAN-derived parameters.
 void BCAN_Handler::sendCommonParameters() {
 	writeAIBusKeyMessage(0xFF);
@@ -570,10 +662,10 @@ void BCAN_Handler::writeAIBusKeyMessage(const uint8_t receiver) {
 	if(receiver == 0xFF) {
 		key_data[0] = 0xA1;
 		key_data[1] = 0x2;
-		key_data[2] = key_pos;
+		key_data[2] = parameter_list->key_pos;
 	} else {
 		key_data[0] = 0x2;
-		key_data[1] = key_pos;
+		key_data[1] = parameter_list->key_pos;
 	}
 
 	AIData key_msg(sizeof(key_data), ID_CANSLATOR, receiver, key_data);
@@ -587,10 +679,10 @@ void BCAN_Handler::writeAIBusDoorMessage(const uint8_t receiver) {
 	if(receiver == 0xFF) {
 		door_data[0] = 0xA1;
 		door_data[1] = 0x43;
-		door_data[2] = doors_open;
+		door_data[2] = parameter_list->doors_open;
 	} else {
 		door_data[0] = 0x43;
-		door_data[1] = doors_open;
+		door_data[1] = parameter_list->doors_open;
 	}
 
 	AIData door_msg(sizeof(door_data), ID_CANSLATOR, receiver, door_data);
@@ -756,7 +848,7 @@ void BCAN_Handler::forwardRLSMessage() {
 
 	if((can_msg.can_id&0xFFFFFF00) == (BCAN_ID_RAINSENSOR&0xFFFFFF00)) { //Rain sensor function.
 		if(can_msg.can_dlc >= 1 && (can_msg.data[0]&0xE0) != 0) {
-			if((doors_open&0xC) != 0 && parameter_list->wiper_door_off) //Doors are open, do not wipe.
+			if((parameter_list->doors_open&0xC) != 0 && parameter_list->wiper_door_off) //Doors are open, do not wipe.
 				can_msg.data[0] &= ~0xE0;
 			else if(!parameter_list->auto_wiper) //Intermittent mode.
 				can_msg.data[0] &= ~0xE0;
@@ -807,6 +899,21 @@ void BCAN_Handler::calculateHeadlightTemperature() {
 
 	if(headlight_on_temp)
 		headlight_temp_limit += HEADLIGHT_TEMP_BUFFER;
+}
+
+//Set the DRLs.
+void BCAN_Handler::setDRLs(const bool drl) {
+	const drl_setting_t drl_setting = parameter_list->drl_setting;
+	if(drl_setting == DRL_SETTING_OFF) {
+		parameter_list->left_drl_on = false;
+		parameter_list->right_drl_on = false;
+	} else if(drl_setting == DRL_SETTING_WINK) {
+		parameter_list->left_drl_on = (drl & !left_signal_on) || (parameter_list->parking_light_drl && (light_state_a&0x2) != 0);
+		parameter_list->right_drl_on = (drl & !right_signal_on) || (parameter_list->parking_light_drl && (light_state_a&0x2) != 0);
+	} else if(drl_setting == DRL_SETTING_FULL) {
+		parameter_list->left_drl_on = drl;
+		parameter_list->right_drl_on = drl;
+	}
 }
 
 //Get the Honda CAN bus checksum.

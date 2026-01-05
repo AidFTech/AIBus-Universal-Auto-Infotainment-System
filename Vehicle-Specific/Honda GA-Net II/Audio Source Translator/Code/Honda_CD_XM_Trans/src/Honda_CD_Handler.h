@@ -75,6 +75,8 @@ public:
 	
 	void sendSourceNameMessage();
 
+	void refreshSource();
+
 	void sendNextTrackMessage();
 	void sendPrevTrackMessage();
 	void sendPauseMessage();
@@ -126,6 +128,9 @@ private:
 	//Timer to display repeat/random/scan.
 	bool mode_timer_enabled = false;
 	elapsedMillis mode_timer;
+
+	//Manual refresh timer.
+	//elapsedMillis refresh_timer;
 
 	HondaIMIDHandler* imid_handler;
 

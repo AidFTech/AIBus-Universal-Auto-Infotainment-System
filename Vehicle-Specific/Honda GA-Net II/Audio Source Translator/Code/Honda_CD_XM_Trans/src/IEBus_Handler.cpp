@@ -24,7 +24,7 @@ IEBusHandler::IEBusHandler(const int8_t rx_pin, const int8_t tx_pin) {
 	this->rx_portregister = portInputRegister(rx_port);
 }
 
-void IEBusHandler::sendBit(const bool data) volatile {
+void IEBusHandler::sendBit(const bool data) {
 	TIMER = 0;
 
 	*tx_portregister |= this->tx_bitmask;
@@ -41,7 +41,7 @@ void IEBusHandler::sendBit(const bool data) volatile {
 
 }
 
-void IEBusHandler::sendAckBit() volatile {
+void IEBusHandler::sendAckBit() {
 	TIMER = 0;
 
 	*tx_portregister |= this->tx_bitmask;
@@ -50,7 +50,7 @@ void IEBusHandler::sendAckBit() volatile {
 	while(TIMER < IE_NORMAL_BIT_1_LENGTH);
 }
 
-void IEBusHandler::sendStartBit() volatile {
+void IEBusHandler::sendStartBit() {
 	TIMER_SCALER = 3;
 	TIMER = 0;
 	*tx_portregister |= this->tx_bitmask;
@@ -62,11 +62,11 @@ void IEBusHandler::sendStartBit() volatile {
 	while(TIMER < START_END_LENGTH);
 }
 
-void IEBusHandler::sendBits(const uint16_t data, const uint8_t size) volatile {
+void IEBusHandler::sendBits(const uint16_t data, const uint8_t size) {
 	this->sendBits(data, size, true, true);
 }
 
-void IEBusHandler::sendBits(const uint16_t data, const uint8_t size, const bool send_parity, const bool ack) volatile {
+void IEBusHandler::sendBits(const uint16_t data, const uint8_t size, const bool send_parity, const bool ack) {
 	bool parity = false;
 	for(uint8_t i=0;i<size;i+=1) {
 		const bool data_bit = data & bit((size-1) - i);
@@ -83,7 +83,7 @@ void IEBusHandler::sendBits(const uint16_t data, const uint8_t size, const bool 
 	}
 }
 
-int8_t IEBusHandler::readBit() volatile {
+int8_t IEBusHandler::readBit() {
 	TIMER = 0;
 	while((*rx_portregister&rx_bitmask) == 0) {
 		if(TIMER > IE_NORMAL_BIT_0_LENGTH)
@@ -112,7 +112,7 @@ int8_t IEBusHandler::readBit() volatile {
 		return 0;
 }
 
-int IEBusHandler::readBits(const uint8_t length, const bool with_parity, const bool with_ack, bool send_ack) volatile {
+int IEBusHandler::readBits(const uint8_t length, const bool with_parity, const bool with_ack, bool send_ack) {
 	int value = 0;
 	bool parity = false;
 
@@ -152,7 +152,7 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 	sendMessage(ie_d, ack_response, checksum, true);
 }
 
-void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) volatile {
+void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) {
 	noInterrupts();
 	
 	if(wait) {
@@ -191,7 +191,7 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 	interrupts();
 }
 
-int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id) volatile {
+int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id) {
 	noInterrupts();
 
 	if((*rx_portregister&rx_bitmask) == 0) {
@@ -331,7 +331,7 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 	return 0;
 }
 
-void IEBusHandler::sendAcknowledgement(const uint16_t sender, const uint16_t receiver) volatile {
+void IEBusHandler::sendAcknowledgement(const uint16_t sender, const uint16_t receiver) {
 	uint8_t ack_data[] = {0x80};
 	IE_Message ack_msg(sizeof(ack_data), sender, receiver, 0xF, true);
 	ack_msg.refreshIEData(ack_data);

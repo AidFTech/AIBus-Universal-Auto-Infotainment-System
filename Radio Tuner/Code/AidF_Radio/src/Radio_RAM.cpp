@@ -72,6 +72,28 @@ void SRAMHandler::getStartParams(StartParams* start_params) {
 	start_params->fader = readInt16(FADER);
 }
 
+//Save presets to RAM.
+void SRAMHandler::setRAMPresets(ParameterList* parameter_list) {
+	for(int i=0;i<PRESET_COUNT;i+=1)
+		writeUint16(FM1_PRESETS + i*sizeof(uint16_t), parameter_list->fm1_presets[i]);
+
+	for(int i=0;i<PRESET_COUNT;i+=1)
+		writeUint16(FM2_PRESETS + i*sizeof(uint16_t), parameter_list->fm2_presets[i]);
+
+	for(int i=0;i<PRESET_COUNT;i+=1)
+		writeUint16(AM_PRESETS + i*sizeof(uint16_t), parameter_list->am_presets[i]);
+}
+
+//Load presets from RAM.
+void SRAMHandler::getRAMPresets(ParameterList* parameter_list) {
+	for(int i=0;i<PRESET_COUNT;i+=1)
+		parameter_list->fm1_presets[i] = readUint16(FM1_PRESETS + i*sizeof(uint16_t));
+	for(int i=0;i<PRESET_COUNT;i+=1)
+		parameter_list->fm2_presets[i] = readUint16(FM2_PRESETS + i*sizeof(uint16_t));
+	for(int i=0;i<PRESET_COUNT;i+=1)
+		parameter_list->am_presets[i] = readUint16(AM_PRESETS + i*sizeof(uint16_t));
+}
+
 //Get the number of sources stored in RAM.
 uint8_t SRAMHandler::getSourceCount() {
 	if(!getValid())

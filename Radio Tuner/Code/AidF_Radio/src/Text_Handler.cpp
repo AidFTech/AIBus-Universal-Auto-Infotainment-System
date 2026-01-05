@@ -20,8 +20,18 @@ void TextHandler::clearAllText(const bool refresh) {
 
 	ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
 	
-	for(int i=0;i<5;i+=1)
-		this->sendMirrorMessage("", i, false);
+	this->sendMirrorClearMessage(0xF, false);
+}
+
+//Clear all text in the audio window.
+void TextHandler::clearNavText(const bool refresh) {
+	uint8_t data[] = {0x20, 0x6F};
+	if(refresh)
+		data[1] |= 0x10;
+
+	AIData clear_msg(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
+
+	ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
 }
 
 //Clear all text in the audio winodw but the title.
@@ -39,8 +49,7 @@ void TextHandler::clearAllSubtext(const bool refresh) {
 
 	ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
 	
-	for(int i=1;i<5;i+=1)
-		this->sendMirrorMessage("", i, false);
+	this->sendMirrorClearMessage(0xE, false);
 }
 
 //Set a preliminary header.
@@ -352,6 +361,9 @@ void TextHandler::sendIMIDRDSMessage(const uint16_t frequency, String text) {
 	if(!parameter_list->imid_connected || parameter_list->info_mode)
 		return;
 
+	//if(text.length() <= 0)
+	//	text = " ";
+
 	if(parameter_list->imid_radio) {
 		AIData rds_msg(2 + text.length(), ID_RADIO, ID_IMID_SCR);
 
@@ -422,6 +434,20 @@ void TextHandler::sendIMIDCallsignMessage(String text) {
 
 		ai_handler->writeAIData(&cs_msg);
 	} 
+}
+
+//Send a "clear" message to the mirror.
+void TextHandler::sendMirrorClearMessage(const uint8_t index, const bool refresh) {
+	if(!parameter_list->mirror_connected)
+		return;
+	
+	uint8_t mirror_data[] = {0x20, uint8_t(0x60|(index&0xF))};
+
+	if(refresh)
+		mirror_data[1] |= 0x10;
+
+	AIData mirror_msg(sizeof(mirror_data), ID_RADIO, ID_ANDROID_AUTO, mirror_data);
+	parameter_list->mirror_connected = ai_handler->writeAIData(&mirror_msg, parameter_list->mirror_connected);
 }
 
 //Send a text message to the mirror.

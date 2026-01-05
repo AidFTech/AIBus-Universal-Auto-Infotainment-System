@@ -98,6 +98,7 @@ struct InfoParameters {
 
 	//Battery voltage:
 	uint16_t battery_voltage = 0;
+	uint8_t battery_voltage_precision = 0;
 
 	//Temperatures:
 	int16_t outside_temp = 250, coolant_temp = 250;

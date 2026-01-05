@@ -29,6 +29,20 @@ IE_Message::~IE_Message() {
 	delete[] this->data;
 }
 
+IE_Message IE_Message::operator=(const IE_Message &copy) {
+	this->l = copy.l;
+	this->data = new uint8_t[this->l];
+	this->sender = copy.sender;
+	this->receiver = copy.receiver;
+	this->control = copy.control;
+	this->direct = copy.direct;
+	
+	for(uint16_t i = 0;i<this->l;i+=1)
+		this->data[i] = copy.data[i];
+
+	return *this;
+}
+
 void IE_Message::refreshIEData(const uint16_t newl) volatile {
 	this->l = newl;
 	delete[] this->data;

@@ -16,7 +16,7 @@ bool checkForMessages(IEBusHandler* driver, IE_Message* the_message) {
 		return false;
 }
 
-void sendFunctionMessage(IEBusHandler* driver, const bool change, const uint16_t recipient, uint8_t* data, uint16_t data_l) {
+IE_Message getFunctionMessage(const bool change, const uint16_t recipient, uint8_t* data, uint16_t data_l) {
 	IE_Message function_message(4+data_l, IE_ID_RADIO, recipient, 0xF, true);
 
 	if(change)
@@ -28,6 +28,12 @@ void sendFunctionMessage(IEBusHandler* driver, const bool change, const uint16_t
 	function_message.data[3] = 0x2;
 	for(uint8_t i=0;i<data_l;i+=1)
 		function_message.data[4+i] = data[i];
+
+	return function_message;
+}
+
+void sendFunctionMessage(IEBusHandler* driver, const bool change, const uint16_t recipient, uint8_t* data, uint16_t data_l) {
+	IE_Message function_message = getFunctionMessage(change, recipient, data, data_l);
 	
 	driver->sendMessage(&function_message, true, true);
 }

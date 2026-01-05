@@ -279,7 +279,7 @@ void AidF_Nav_Computer::loop() {
 						if(ai_msg.receiver == ID_NAV_COMPUTER)
 							this->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_msg.sender);
 
-						if(ai_msg.l >= 2 && ai_msg.data[0] == 0x22 && ai_msg.data[1] == 0x61) { //Headerbar.
+						if(ai_msg.l >= 2 && ai_msg.data[0] == 0x22 && ai_msg.data[1] == 0x61 && (ai_msg.sender == ID_RADIO || ai_msg.sender == attribute_list->active_audio_device)) { //Headerbar.
 							if(!audio_window->getActive()) {
 								std::string header_text = "";
 
@@ -291,6 +291,7 @@ void AidF_Nav_Computer::loop() {
 								this->header_timer_enabled = true;
 								this->header_timer = elapsed_millis.time;
 							}
+							answered = true;
 						} else if(ai_msg.sender == ID_RADIO && ai_msg.l >= 3 && ai_msg.data[0] == 0x26) { //Volume bar.
 							const uint8_t vol = ai_msg.data[1];
 							std::string vol_text = "Vol: " + std::to_string(vol);
@@ -300,6 +301,9 @@ void AidF_Nav_Computer::loop() {
 							this->vol_timer_enabled = true;
 							this->vol_timer = elapsed_millis.time;
 							
+							answered = true;
+						} else if(ai_msg.sender == ID_RADIO && ai_msg.l >= 3 && ai_msg.data[0] == 0x40 && ai_msg.data[1] == 0x1) { //Active audio device.
+							attribute_list->active_audio_device = ai_msg[2];
 							answered = true;
 						} else if(ai_msg.sender == ID_NAV_SCREEN && ai_msg.l >= 3 && ai_msg.data[0] == 0x30) { //Button press.
 							const uint8_t button = ai_msg.data[1], state = ai_msg.data[2]>>6;
@@ -577,6 +581,7 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 				return true;
 			} else if(ai_d->data[2] == 0x6 && ai_d->l >= 5) { //Battery voltage.
 				const uint8_t decimal_count = (ai_d->data[3]&0xF0) >> 4;
+				info_parameters->battery_voltage_precision = decimal_count <= 2 ? decimal_count : 2;
 
 				unsigned long read_vbat = 0;
 				for(int i=4;i<ai_d->l;i+=1) {

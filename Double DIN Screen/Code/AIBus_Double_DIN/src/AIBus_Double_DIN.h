@@ -67,7 +67,7 @@
 #define DOOR_TIMER 30000
 #define CONTROL_TIMER 7000
 
-class AIBusDoubleDin {
+class AIBusDoubleDIN {
 public:
 	void setup();
 	void loop();

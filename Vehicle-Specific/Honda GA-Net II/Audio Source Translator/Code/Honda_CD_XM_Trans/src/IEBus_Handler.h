@@ -53,22 +53,22 @@ public:
 	IEBusHandler(const int8_t rx_pin, const int8_t tx_pin);
 
 	virtual void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum);
-	virtual void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) volatile;
-	virtual int readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id) volatile;
+	virtual void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait);
+	virtual int readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id);
 
-	virtual void sendAcknowledgement(const uint16_t sender, const uint16_t receiver) volatile;
+	virtual void sendAcknowledgement(const uint16_t sender, const uint16_t receiver);
 	
 	virtual inline bool getInputOn();
 
 protected:
-	inline void sendBit(const bool data) volatile;
-	inline void sendAckBit() volatile;
-	inline void sendStartBit() volatile;
-	inline void sendBits(const uint16_t data, const uint8_t size) volatile;
-	inline void sendBits(const uint16_t data, const uint8_t size, const bool send_parity, const bool ack) volatile;
+	inline void sendBit(const bool data);
+	inline void sendAckBit();
+	inline void sendStartBit();
+	inline void sendBits(const uint16_t data, const uint8_t size);
+	inline void sendBits(const uint16_t data, const uint8_t size, const bool send_parity, const bool ack);
 
-	inline int8_t readBit() volatile;
-	inline int readBits(const uint8_t length, const bool with_parity, const bool with_ack, bool send_ack) volatile;
+	inline int8_t readBit();
+	inline int readBits(const uint8_t length, const bool with_parity, const bool with_ack, bool send_ack);
 
 	int8_t rx_pin = -1, tx_pin = -1;
 	

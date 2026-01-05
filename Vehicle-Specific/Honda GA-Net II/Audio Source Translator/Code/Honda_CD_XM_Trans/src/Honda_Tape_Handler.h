@@ -40,6 +40,8 @@ public:
 	
 	void interpretTapeMessage(IE_Message* the_message);
 	void readAIBusMessage(AIData* the_message);
+
+	void refreshSource();
 	
 	void sendSourceNameMessage();
 	

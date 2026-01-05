@@ -457,7 +457,13 @@ bool SerialAIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 		}
 
 		if((*this->timer-repeat_time) > REPEAT_DELAY && !acknowledge) {
-			writeAIData(ai_d, false);
+			if(ai_d->l == 2 && ai_d->data[0] != 0xA1) {
+				AIData padded_msg(ai_d->l + 1, ai_d->sender, ai_d->receiver, ai_d->data);
+				padded_msg[padded_msg.l-1] = 0x0;
+				writeAIData(&padded_msg, false);
+			} else
+				writeAIData(ai_d, false);
+				
 			repeat_time = *this->timer;
 			tries += 1;
 		}

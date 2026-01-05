@@ -18,6 +18,9 @@
 #define LINES 1
 #define VOL_LIMIT 40
 
+#define IMID_CHANGE_TIMER 300
+#define FREQUENCY_CHANGE_TIMER 400
+
 #define TEXT_MODE_BLANK 0 //No CD text.
 #define TEXT_MODE_WITH_TEXT 1 //CD text present.
 #define TEXT_MODE_MP3 2 //MP3 ID3 text present.
@@ -31,6 +34,8 @@ public:
 	void interpretIMIDMessage(IE_Message* the_message);
 	void readAIBusMessage(AIData* the_message);
 
+	unsigned long getIMIDChangeTimer();
+
 	void writeScreenLayoutMessage();
 	void writeVolumeLimitMessage();
 
@@ -39,7 +44,7 @@ public:
 	bool writeIMIDTextMessage(String text);
 	bool setIMIDSource(const uint8_t source, const uint8_t subsource);
 
-	void writeIMIDRadioMessage(const uint16_t frequency, const int8_t decimal, const uint8_t preset, const uint8_t stereo_mode);
+	void writeIMIDRadioMessage(const uint16_t frequency, const int8_t decimal, const uint8_t preset, const uint8_t stereo_mode, const bool acknowledge = true);
 	void writeIMIDRDSMessage(String msg);
 	void writeIMIDCallsignMessage(String msg);
 	void writeIMIDVolumeMessage(const uint8_t volume);
@@ -56,6 +61,8 @@ private:
 	uint16_t imid_mode = 0;
 	uint8_t max_char = EXT_CHAR_LIMIT;
 
+	elapsedMillis imid_change_timer = IMID_CHANGE_TIMER;
+
 	uint8_t button_held = 0;
 	
 	//Radio paremeters:
@@ -63,6 +70,8 @@ private:
 	int8_t decimal = 0;
 	uint8_t preset = 0, stereo_mode = 0;
 	bool rds = false, display_rds = true;
+	bool frequency_change_timer_enabled = false;
+	elapsedMillis frequency_change_timer;
 
 	//CD parameters:
 	uint8_t track = 0, disc = 0, track_count = 0;

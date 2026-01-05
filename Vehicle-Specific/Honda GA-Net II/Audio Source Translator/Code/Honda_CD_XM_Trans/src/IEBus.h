@@ -20,6 +20,8 @@ struct IE_Message {
 	IE_Message(const uint16_t newl, const uint16_t sender, const uint16_t receiver, const uint8_t control, const bool direct);
 	IE_Message(const IE_Message &copy);
 	~IE_Message();
+
+	IE_Message operator=(const IE_Message &copy);
 	
 	void refreshIEData(const uint16_t newl) volatile;
 	void refreshIEData(const uint16_t newl, const uint16_t sender, const uint16_t receiver, const uint8_t control, const bool direct) volatile;

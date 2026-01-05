@@ -16,11 +16,13 @@
 #ifndef audio_source_h
 #define audio_source_h
 
-#define NO_MENU 0
-#define SOURCE_MENU 1
-#define PRESET_MENU 2
-#define STATION_MENU 3
-#define TONE_MENU 4
+enum radio_menu_t : uint8_t {
+	NO_MENU,
+	SOURCE_MENU,
+	PRESET_MENU,
+	STATION_MENU,
+	TONE_MENU
+};
 
 #define TONE_OPTION_BASS 0
 #define TONE_OPTION_TREBLE 1
@@ -72,7 +74,7 @@ public:
 
 private:
 	bool audio_on = false;
-	uint8_t menu_open = NO_MENU;
+	radio_menu_t menu_open = NO_MENU;
 
 	bool force_source_changed = false;
 

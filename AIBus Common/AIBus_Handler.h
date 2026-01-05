@@ -26,6 +26,18 @@
 
 #define AIDATA_LIMIT (0x30 - 4)
 
+enum aibus_read_result_t : int8_t {
+	AIBUS_READ_OK_SERIAL,
+	AIBUS_READ_OK_CACHED,
+	AIBUS_READ_OK_MULTIPLE,
+	AIBUS_READ_NODATA,
+	AIBUS_READ_INCOMPLETE,
+	AIBUS_READ_TIMEOUT,
+	AIBUS_READ_INVALID_CHECKSUM,
+	AIBUS_READ_MULTIPLE_TIMEOUT,
+	AIBUS_READ_INVALID_MULTIPLE,
+};
+
 class AIBusHandler {
 public:
 	AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size = AI_CACHE_SIZE);
@@ -36,7 +48,12 @@ public:
 
 	virtual bool readAIData(AIData* ai_d);
 	virtual bool readAIData(AIData* ai_d, const bool cache, const bool multiple = true);
+
+	virtual aibus_read_result_t readAIDataErr(AIData* ai_d);
+	virtual aibus_read_result_t readAIDataErr(AIData* ai_d, const bool cache, const bool multiple = true);
+
 	virtual bool readAIData(AIData* ai_d, uint8_t* data, const uint8_t d_l);
+
 	virtual bool writeAIData(AIData* ai_d);
 	virtual bool writeAIData(AIData* ai_d, const bool acknowledge);
 	virtual void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
@@ -50,8 +67,7 @@ protected:
 
 	AIData* cached_byte;
 	Vector<AIData> cached_vec;
-
-	AIData cached_msg;
+	
 	uint8_t id;
 
 	virtual bool awaitAcknowledgement(AIData* ai_d);
@@ -60,5 +76,7 @@ protected:
 
 bool getInitMessage(AIData* ai_d);
 bool getPoweroffMessage(AIData* ai_d);
+
+bool getPositiveResult(const aibus_read_result_t result);
 
 #endif

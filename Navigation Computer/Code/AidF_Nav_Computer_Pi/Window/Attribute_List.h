@@ -68,6 +68,8 @@ struct AttributeList {
 
 	int8_t hour = -1, minute = -1; //Hour and minute.
 
+	uint8_t active_audio_device = 0;
+
 	uint16_t vehicle_speed = 0;
 	
 	unsigned long* timer = nullptr;

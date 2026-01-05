@@ -9,6 +9,7 @@
 void sendWideHandshake(IEBusHandler* driver); //Send the introductory handshake to all devices.
 bool checkForMessages(IEBusHandler* driver, IE_Message* the_message);
 
+IE_Message getFunctionMessage(const bool change, const uint16_t recipient, uint8_t* data, uint16_t data_l);
 void sendFunctionMessage(IEBusHandler* driver, const bool change, const uint16_t recipient, uint8_t* data, uint16_t data_l);
 
 void sendPingHandshake(IEBusHandler* driver, const uint16_t id);

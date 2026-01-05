@@ -13,6 +13,8 @@
 #define TIMEOUT_DEL 2000
 #define IE_WAIT 10
 
+#define IE_TRIES 25
+
 #define HANDSHAKE_WAIT 500
 
 #define MODE_FLASH_TIMER 1500
@@ -44,6 +46,7 @@ protected:
 	bool sendHandshakeAckMessage();
 	void sendIEAckMessage(const uint16_t recipient);
 	bool getIEAckMessage(const uint16_t sender);
+	bool getIEAckMessage(IE_Message* msg, const uint16_t sender);
 	bool getIEAckMessageStrict(const uint16_t sender);
 
 	void sendAIAckMessage(const uint8_t receiver);

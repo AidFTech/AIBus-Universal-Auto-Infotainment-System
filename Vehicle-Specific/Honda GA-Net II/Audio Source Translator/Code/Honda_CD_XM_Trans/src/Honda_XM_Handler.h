@@ -34,6 +34,7 @@
 
 #define XM_STATE_NORMAL 0x1
 #define XM_STATE_ANTENNA 0xF0
+#define XM_STATE_UNAUTHORIZED 0xF1
 #define XM_STATE_NOSIGNAL 0xFF
 
 #define XM_TEXT_REFRESH_TIMER 100
@@ -59,6 +60,8 @@ public:
 	void loop();
 
 	bool getXM2();
+
+	void refreshSource();
 	
 	void sendSourceNameMessage();
 	void requestControl();
@@ -109,13 +112,13 @@ private:
 	//Timer to request preset data.
 	elapsedMillis preset_request_timer = 0;
 	uint8_t preset_request_increment = 1;
-	unsigned int preset_request_wait = XM_QUERY_TIMER;
+	unsigned long preset_request_wait = XM_QUERY_TIMER;
 	bool preset_received = false;
 	
 	//Timer to request station data.
 	elapsedMillis station_request_timer = 0;
 	uint8_t station_request_increment = 0;
-	unsigned int station_request_wait = XM_STATION_TIMER;
+	unsigned long station_request_wait = XM_STATION_TIMER;
 	bool station_received = false;
 
 	void sendAINumberMessage(const uint8_t receiver);

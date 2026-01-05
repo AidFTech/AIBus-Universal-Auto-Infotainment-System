@@ -314,6 +314,41 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 		
 		return true;
 		
+	} else if(ai_d->l >= 1 && (ai_d->data[0] == 0x3B || ai_d->data[0] == 0x39 || ai_d->data[0] == 0x31)) { //Status message.
+		ack = false;
+		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+		
+		const uint8_t src = getCurrentSourceID();
+		if(ai_d->sender != src) {
+			uint8_t function_data[] = {0x40, 0x10, src};
+			AIData function_msg(sizeof(function_data), ID_RADIO, ai_d->sender, function_data);
+			ai_handler->writeAIData(&function_msg);
+		}
+	} else if(ai_d->l >= 2 && ai_d->data[0] == 0x60 && ai_d->data[1] == 0x10) { //Current source request.
+		ack = false;
+		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+		
+		const uint8_t src = getCurrentSourceID();
+		if(ai_d->sender == src || ai_d->sender == ID_IMID_SCR || ai_d->sender == ID_NAV_COMPUTER) {
+			const uint8_t sub_id = getCurrentSourceSubID();
+
+			uint8_t function_data[] = {0x40, 0x10, src, sub_id};
+			AIData function_msg(sizeof(function_data), ID_RADIO, ai_d->sender, function_data);
+			ai_handler->writeAIData(&function_msg);
+		} else {
+			uint8_t function_data[] = {0x40, 0x10, src};
+			AIData function_msg(sizeof(function_data), ID_RADIO, ai_d->sender, function_data);
+			ai_handler->writeAIData(&function_msg);
+		}
+	} else if(ai_d->l >= 2 && ai_d->data[0] == 0x60 && ai_d->data[1] == 0x11) { //Text control request.
+		ack = false;
+		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
+		
+		const uint8_t src = getCurrentSourceID();
+
+		uint8_t function_data[] = {0x40, 0x1, src};
+		AIData function_msg(sizeof(function_data), ID_RADIO, ai_d->sender, function_data);
+		ai_handler->writeAIData(&function_msg);
 	} else if(ai_d->l >= 3 && ai_d->data[0] == 0x10 && ai_d->data[1] == 0x10) { //Source request control.
 		ack = false;
 		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
@@ -397,7 +432,10 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				audio_on = !audio_on;
 			else if(button == 0x23 && state == 2) { //Source button.
 				if(parameter_list->vehicle_speed <= 5 && parameter_list->computer_connected) { //Car is stopped.
-					createSourceMenu();
+					if(menu_open != SOURCE_MENU)
+						createSourceMenu();
+					else
+						clearMenu();
 				} else if(audio_on) {
 					incrementSource();
 				}
@@ -575,8 +613,12 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				if(new_src > 0 && new_src < source_count && new_src != current_source)
 					setCurrentSource(source_list[new_src].source_id, source_list[new_src].sub_id);
 			} else if(button == 0x52 && state == 2) { //Tone button.
-				if(!parameter_list->digital_amp)
-					this->createToneMenu();
+				if(!parameter_list->digital_amp) {
+					if(menu_open != TONE_MENU)
+						this->createToneMenu();
+					else
+						clearMenu();
+				}
 				//TODO: For a digital amp, ask the amp to create the tone menu.
 			} else if(button >= 0x11 && button <= 0x16) { //Presets.
 				const uint8_t preset = (button&0xF) - 1;
@@ -646,7 +688,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				menu_open = NO_MENU;
 				tuner_background->setSeekMode(true);
 				return true;
-			} if(ai_d->l >= 3 && ai_d->data[1] == 0x6A) { //Audio menu item selected.
+			} else if(ai_d->l >= 3 && ai_d->data[1] == 0x6A) { //Audio menu item selected.
 				const uint8_t item = ai_d->data[2], source_id = this->getCurrentSourceID();
 				if(source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
 					switch(item) {
@@ -865,8 +907,8 @@ void SourceHandler::manualTuneIncrement(const bool up, const uint8_t steps) {
 		ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
 	}
 
-	this->tuner_main->queueFrequency(*current_frequency);
 	text_handler->sendTunedFrequencyMessage(*current_frequency, source_list[current_source].sub_id != SUB_AM, true);
+	this->tuner_main->queueFrequency(*current_frequency);
 }
 
 //Increment source up.
@@ -1374,7 +1416,7 @@ void SourceHandler::handleSteeringControl(const uint8_t command, const uint8_t s
 			volume_handler->setVolume(volume + 1);
 		else if(knob_state == 0x2 && volume > 0)
 			volume_handler->setVolume(volume - 1);
-	} else if(command == 0x23 && button_state == 0x0) { //Source button.
+	} else if(command == 0x23 && button_state == 0x0 && parameter_list->audio_on) { //Source button.
 		incrementSource();
 	} else if((command == 0x25 || command == 0x24) && button_state == 0x0) { //Increment/decrement.
 		const uint8_t source = getCurrentSourceID();

@@ -1,5 +1,4 @@
 #include "AIBus_Socket.h"
-#include "AIBus_Serial.h"
 
 SocketMessage::SocketMessage(const uint8_t opcode, const uint16_t l) {
 	this->opcode = opcode;
@@ -169,11 +168,16 @@ void *socketThread(void* parameters_v) {
 
 			if(socket_byte_count > 0) {
 				if(rx_msg.opcode == OPCODE_AIBUS_RECEIVE) {
+					bool is_ack = false;
+
+					if(rx_msg.l == 5 && rx_msg.data[4] == 0x80)
+						is_ack = true;
+
 					char rx_buf[rx_msg.l];
 					for(int i=0;i<rx_msg.l;i+=1)
 						rx_buf[i] = char(rx_msg.data[i]);
 
-					if(parameters->timer != nullptr) {
+					if(parameters->timer != nullptr && !is_ack) {
 						unsigned long start = *parameters->timer;
 						int current_cached_bytes = aiserialBytesAvailable(*parameters->ai_serial);
 						while(*parameters->timer - start < 2) {

@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <Arduino.h>
 #include <mcp2515.h>
+#include <MCP4251.h>
 #include <elapsedMillis.h>
 
 #include "AIBus_Handler.h"
@@ -65,15 +66,20 @@ public:
 
 	bool handleAIBus(AIData* ai_msg);
 
-	void setLightController(AuxLightController* aux_light_controller);
+	void setAuxLightController(AuxLightController* aux_light_controller);
+	void setIntLightController(MCP4251* int_light_controller);
 
 	bool getLeftSignalOn();
 	bool getRightSignalOn();
+
+	bool getInteriorLightsOn();
+	uint8_t getBrightness();
 
 	void setWiperTimer(elapsedMillis* wiper_timer);
 	bool getWiperIntActive();
 	bool runWiper();
 	
+	void sendBatteryVoltage(const uint16_t voltage);
 	void sendCommonParameters();
 	void sendInfoParameters();
 
@@ -85,13 +91,14 @@ private:
 	ParameterList* parameter_list;
 
 	AuxLightController* aux_light_controller = nullptr;
+	MCP4251* int_light_controller = nullptr;
 
 	CANMenuHandler menu_handler;
 	
 	//BCAN-derived variables:
 	bool auto_stop :1, econ_mode :1, e_brake :1, brightness_bar :1, lights_on:1, night_mode :1;
-	bool left_signal_on :1, right_signal_on :1, hazard_on :1, brake_light_on :1, left_signal_illum : 1, right_signal_illum: 1;
-	uint8_t coolant_temp, eco_bar, doors_open, brightness, vehicle_speed, wiper_pos, wiper_delay_pos;
+	bool left_signal_on :1, right_signal_on :1, hazard_on :1, brake_light_on :1, left_signal_illum : 1, right_signal_illum: 1, high_beam_full: 1;
+	uint8_t coolant_temp, eco_bar, brightness, vehicle_speed, wiper_pos, wiper_delay_pos;
 	uint16_t electric_ac_power, eco_leaf_meter, honda_gear;
 	int16_t outside_temp; //Last digit is tenths place.
 	uint32_t odo_km;
@@ -102,9 +109,8 @@ private:
 	uint8_t honda_temp = 0x28; //Temp byte sent by the cluster.
 	bool honda_fahrenheit = false; //True if the temp byte above is in Fahrenheit.
 
-	uint8_t key_pos = 0;
-
 	uint8_t light_state_a = 0, light_state_b = 0;
+	bool ext_drl_on = false; //True if an external DRL is in use.
 
 	//Range:
 	uint16_t range = 0;
@@ -133,7 +139,6 @@ private:
 	void writeAIBusSpeedMessage(const uint8_t receiver);
 	
 	void writeAIBusCoolantTempMessage(const uint8_t receiver);
-	void writeAIBusVoltageMessage();
 	void writeAIBusRangeMessage();
 	void writeAIBusAverageEconomyMessage();
 
@@ -146,6 +151,7 @@ private:
 
 	//Misc:
 	void calculateHeadlightTemperature();
+	void setDRLs(const bool drl);
 
 	//Menus:
 	void handleSelection(const uint8_t selection);

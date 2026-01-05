@@ -84,10 +84,20 @@ void HondaXMHandler::loop() {
 		}
 
 		if(request_timer > XM_QUERY_TIMER
-		&& (xm_state != XM_STATE_NOSIGNAL && xm_state != XM_STATE_ANTENNA)
+		&& (xm_state != XM_STATE_NOSIGNAL && xm_state != XM_STATE_ANTENNA && xm_state != XM_STATE_UNAUTHORIZED)
 		&& (song.length() <= 0 || artist.length() <= 0 || channel_name.length() <= 0 || genre.length() <= 0)) {
 			request_timer = 0;
 			sendTextRequest();
+		}
+
+		if(parameter_list->radio_ping_timer > RADIO_PING_WAIT) {
+			parameter_list->radio_ping_timer = 0;
+			uint8_t src_request_data[] = {0x60, 0x10};
+			AIData src_request_msg(sizeof(src_request_data), this->device_ai_id, ID_RADIO, src_request_data);
+			const bool ack = ai_driver->writeAIData(&src_request_msg, parameter_list->radio_connected);
+			
+			if(!ack)
+				parameter_list->radio_connected = false;
 		}
 	}
 
@@ -171,6 +181,8 @@ void HondaXMHandler::interpretSiriusMessage(IE_Message* the_message) {
 	} else if(the_message->data[0] == 0x10 && the_message->data[1] == 0x19 && the_message->l >= 6) { //No signal?
 		if(the_message->data[4] == 0xD)
 			xm_state = XM_STATE_NOSIGNAL;
+		else if(the_message->data[4] == 0xC) //TODO: Double check.
+			xm_state = XM_STATE_UNAUTHORIZED;
 		else
 			xm_state = 0; //Decide state with next 60 message.
 	} else if(the_message->data[0] == 0x60 && the_message->data[1] == 0x19 && the_message->l > 5) { //Screen change message.
@@ -729,6 +741,15 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 			for(uint8_t i=0;i<=3;i+=1)
 				setTextDisplay(i);
 		}
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x70 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function heartbeat.
+		if(source_sel && !text_control) {
+			ack = false;
+			sendAIAckMessage(sender);
+
+			uint8_t text_request_data[] = {0x60, 0x11};
+			AIData text_request_msg(sizeof(text_request_data), ID_XM, ID_RADIO, text_request_data);
+			ai_driver->writeAIData(&text_request_msg);
+		}
 	} else if(the_message->l >= 2 && the_message->data[0] == 0x2B && source_sel) {
 		ack = false;
 		sendAIAckMessage(sender);
@@ -807,6 +828,14 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 	
 	if(ack)
 		sendAIAckMessage(sender);
+}
+
+//Refresh the source.
+void HondaXMHandler::refreshSource() {
+	if(imid_handler->getEstablished() && display_parameter != N_TEXT_NONE)
+		return;
+
+	this->sendTextRequest();
 }
 
 //Send the AIBus handshake message to the radio.
@@ -1638,7 +1667,7 @@ void HondaXMHandler::createXMPresetMenu() {
 	ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
 	
 	elapsedMillis cancel_wait;
-	while(cancel_wait < 20) {
+	while(cancel_wait < 20 && !clear) {
 		AIData ai_msg;
 		if(ai_driver->dataAvailable() > 0) {
 			if(ai_driver->readAIData(&ai_msg)) {
@@ -1693,7 +1722,7 @@ void HondaXMHandler::createXMDirectMenu() {
 	ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
 	
 	elapsedMillis cancel_wait;
-	while(cancel_wait < 20) {
+	while(cancel_wait < 20 && !clear) {
 		AIData ai_msg;
 		if(ai_driver->dataAvailable() > 0) {
 			if(ai_driver->readAIData(&ai_msg)) {
@@ -1822,7 +1851,7 @@ void HondaXMHandler::createXMChannelMenu() {
 	ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
 	
 	elapsedMillis cancel_wait;
-	while(cancel_wait < 20) {
+	while(cancel_wait < 20 && !clear) {
 		AIData ai_msg;
 		if(ai_driver->dataAvailable() > 0) {
 			if(ai_driver->readAIData(&ai_msg)) {

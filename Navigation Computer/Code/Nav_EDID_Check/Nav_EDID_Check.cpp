@@ -34,6 +34,10 @@ int main() {
 	SerialAIBusHandler ai_handler(ID_COMPUTER_PROXY, &elapsed_millis.time);
 	#endif
 
+	uint8_t poweroff_data[] = {0xA0};
+	AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_COMPUTER, 0xFF, poweroff_data);
+	ai_handler.writeAIData(&poweroff_msg, false);
+
 	bool received_edid = false;
 	unsigned long start_time = elapsed_millis.time, last_send = elapsed_millis.time + 100;
 
@@ -64,6 +68,25 @@ int main() {
 				for(int i=1;i<rec.l;i+=1)
 					edid_bin.push_back(rec[i]);
 
+				uint8_t edid_size_data[] = {0xA1, 0x3E, uint8_t(edid_bin.size()&0xFF)};
+				AIData edid_size_msg(sizeof(edid_size_data), ID_COMPUTER_PROXY, 0xFF, edid_size_data);
+				//ai_handler.writeAIData(&edid_size_msg, false);
+
+				if(edid_bin.size() < 128) {
+					edid_bin.clear();
+					continue;
+				}
+
+				long chx = 0;
+				for(int i=0;i<edid_bin.size()-1;i+=1)
+					chx += edid_bin[i];
+				chx = (~(chx&0xFF) + 1)&0xFF;
+
+				if(chx != edid_bin[edid_bin.size()-1]) {
+					edid_bin.clear();
+					continue;
+				}
+
 				received_edid = true;
 			}
 		}
@@ -75,7 +98,7 @@ int main() {
 		ifstream edid_file(edid_path, ios::in | ios::binary);
 
 		if(edid_file.fail()) {
-			edid_match = false;
+			//edid_match = false;
 			goto final_edid;
 		} else {
 			vector<char> edid_bin_from_file(istreambuf_iterator<char>(edid_file), {});
@@ -167,6 +190,12 @@ int main() {
 
 			saveIniFile(res_path.c_str(), vector<IniList>({res_file}));
 		}
+	}
+
+	if(!edid_match) {
+		uint8_t poweroff_data[] = {0xA0};
+		AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_COMPUTER, 0xFF, poweroff_data);
+		ai_handler.writeAIData(&poweroff_msg, false);
 	}
 
 	run = false;

@@ -17,11 +17,14 @@
 #define ID_XM 0x19
 #define ID_GPS_ANTENNA 0x3B
 #define ID_CANSLATOR 0x57
+#define ID_PARKING_SENSOR 0x60
+#define ID_CAMERA 0x61
 #define ID_AMPLIFIER 0x6A
 #define ID_STEERING_CTRL 0x6F
 #define ID_ANDROID_AUTO 0x8E
 #define ID_PHONE 0xC8
 #define ID_USB_MEDIA 0xC9
+#define ID_LIGHT_CONTROL 0xD0
 
 #define WAIT_TIME 500
 

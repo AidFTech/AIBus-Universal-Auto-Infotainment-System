@@ -138,6 +138,16 @@ void HondaCDHandler::loop() {
 			text_timer_artist = true;
 			text_timer_album = true;
 		}
+
+		if(parameter_list->radio_ping_timer > RADIO_PING_WAIT) {
+			parameter_list->radio_ping_timer = 0;
+			uint8_t src_request_data[] = {0x60, 0x10};
+			AIData src_request_msg(sizeof(src_request_data), this->device_ai_id, ID_RADIO, src_request_data);
+			const bool ack = ai_driver->writeAIData(&src_request_msg, parameter_list->radio_connected);
+			
+			if(!ack)
+				parameter_list->radio_connected = false;
+		}
 	
 		if(setting_changed) {
 			setting_changed = false;
@@ -402,6 +412,14 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 		ie_driver->sendAcknowledgement(the_message->receiver, the_message->sender);
 }
 
+//Refresh the source.
+void HondaCDHandler::refreshSource() {
+	if((imid_handler->getEstablished() && display_parameter != TEXT_NONE) || ff || fr)
+		return;
+
+	this->sendTextRequest();
+}
+
 //Interpret a CDC AIBus message.
 void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 	if(the_message->receiver != ID_CDC)
@@ -420,7 +438,7 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 		ack = false;
 		sendAIAckMessage(sender);
 		sendSourceNameMessage(the_message->sender);
-	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO && the_message->l >= 3) { //Function change.
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function change.
 		const uint8_t active_source = the_message->data[2];
 
 		ack = false;
@@ -512,6 +530,15 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 				function_timer = 0;
 				function_timer_enabled = true;
 			}
+		}
+	} else if(the_message->l >= 3 && the_message->data[0] == 0x70 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function heartbeat.
+		if(source_sel && !text_control) {
+			ack = false;
+			sendAIAckMessage(sender);
+
+			uint8_t text_request_data[] = {0x60, 0x11};
+			AIData text_request_msg(sizeof(text_request_data), ID_CDC, ID_RADIO, text_request_data);
+			ai_driver->writeAIData(&text_request_msg);
 		}
 	} else if(sender == ID_NAV_SCREEN) {
 		if(!this->source_sel) {
@@ -1864,8 +1891,8 @@ void HondaCDHandler::createCDMainMenu() {
 	elapsedMillis cancel_wait;
 	while(cancel_wait < 20) {
 		AIData ai_msg;
-		if(ai_driver->dataAvailable() > 0) {
-			if(ai_driver->readAIData(&ai_msg)) {
+		if(ai_driver->dataAvailable(false) > 0) {
+			if(ai_driver->readAIData(&ai_msg, false)) {
 				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //No menu available.
 					sendAIAckMessage(ai_msg.sender);
 					return;
@@ -1941,10 +1968,10 @@ void HondaCDHandler::createCDChangeDiscMenu() {
 
 	bool canceled = false;
 	elapsedMillis cancel_wait;
-	while(cancel_wait < 20) {
+	while(cancel_wait < 20 && !canceled) {
 		AIData ai_msg;
-		if(ai_driver->dataAvailable() > 0) {
-			if(ai_driver->readAIData(&ai_msg)) {
+		if(ai_driver->dataAvailable(false) > 0) {
+			if(ai_driver->readAIData(&ai_msg, false)) {
 				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //Menu cleared.
 					sendAIAckMessage(ai_msg.sender);
 					canceled = true;

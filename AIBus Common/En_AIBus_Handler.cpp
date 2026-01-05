@@ -23,6 +23,11 @@ void EnAIBusHandler::addID(const uint8_t id) {
 	id_vec.push_back(id);
 }
 
+//Set whether acknowledgment messages should be cached, e.g. if "pinging" another device.
+void EnAIBusHandler::setCacheAck(const bool cache_ack) {
+	this->cache_ack = cache_ack;
+}
+
 //Cache pending messages for all IDs and the provided ID.
 bool EnAIBusHandler::cachePending(const uint8_t cache_id) {
 	if(ai_serial->available() > 0) {
@@ -53,14 +58,12 @@ bool EnAIBusHandler::cachePending(const uint8_t cache_id) {
 
 			if(id) {
 				if(ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
-					if(ai_msg.receiver != 0xFF)
+					if(ai_msg.receiver != 0xFF && cached_vec.size() < cached_vec.max_size())
 						sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
+				}
 					
-					if(cached_msg.l <= 0)
-						cached_msg.refreshAIData(ai_msg);
-					else if(cached_vec.size() < cached_vec.max_size()) {
-						cached_vec.push_back(ai_msg);
-					}
+				if(cached_vec.size() < cached_vec.max_size() && ((ai_msg.l >= 1 && ai_msg.data[0] != 0x80) || cache_ack)) {
+					cached_vec.push_back(ai_msg);
 				}
 				return true;
 			}
@@ -96,16 +99,17 @@ bool EnAIBusHandler::cacheAllPending() {
 
 			if(id) {
 				if(ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
-					if(ai_msg.receiver != 0xFF)
+					if(ai_msg.receiver != 0xFF && cached_vec.size() < cached_vec.max_size())
 						sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-					
-					if(cached_msg.l <= 0)
-						cached_msg.refreshAIData(ai_msg);
-					else {
+				}
+
+				if((ai_msg.l >= 1 && ai_msg.data[0] != 0x80) || cache_ack) {			
+					if(cached_vec.size() < cached_vec.max_size()) {
 						cached_vec.push_back(ai_msg);
 					}
 				}
-			return true;
+				
+				return true;
 			}
 		}
 	}
@@ -120,6 +124,11 @@ void EnAIBusHandler::waitForAIBus() {
 			ai_timer = 0;
 		}
 	}
+}
+
+//Return whether a message is valid for this device.
+bool EnAIBusHandler::getValidMessage(AIData* ai_d) {
+	return ai_d->receiver == 0xFF || getID(ai_d->receiver);
 }
 
 //Get whether the specified ID is valid.

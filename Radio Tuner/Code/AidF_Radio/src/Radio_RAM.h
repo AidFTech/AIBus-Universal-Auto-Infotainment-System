@@ -5,6 +5,7 @@
 #include "Audio_Source.h"
 #include "Volume_Handler.h"
 #include "Background_Tune_Handler.h"
+#include "Parameter_List.h"
 
 #ifndef radio_ram_h
 #define radio_ram_h
@@ -35,6 +36,9 @@ enum ADDR {
 	FADER = BALANCE + sizeof(int16_t),
 	SOURCE_COUNT = FADER + sizeof(int16_t),
 	FM_STATION_COUNT,
+	FM1_PRESETS,
+	FM2_PRESETS = FM1_PRESETS + sizeof(uint16_t)*PRESET_COUNT,
+	AM_PRESETS = FM2_PRESETS + sizeof(uint16_t)*PRESET_COUNT,
 
 	SOURCE_START = 0x100,
 	FM_STATION_START = 0x400,
@@ -72,6 +76,9 @@ public:
 
 	void setStartParams(StartParams* start_params);
 	void getStartParams(StartParams* start_params);
+
+	void setRAMPresets(ParameterList* parameter_list);
+	void getRAMPresets(ParameterList* parameter_list);
 
 	uint8_t getSourceCount();
 	void setSources(const uint16_t l, AudioSource* source_list);

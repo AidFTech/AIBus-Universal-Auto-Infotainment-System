@@ -24,6 +24,8 @@ const MENU_NONE: u8 = 0;
 const MENU_SETTINGS: u8 = 1;
 const MENU_DISPLAY: u8 = 2;
 
+const RADIO_PING_WAIT: u64 = 7250;
+
 const SETTING_PATH: &str = "./AidF_Mirror_Settings.ini";
 const SETTING_SECTION: &str = "Mirror_Options";
 
@@ -68,11 +70,14 @@ pub struct AMirror<'a> {
 	local_imid_text_len: u8,
 	local_imid_rows: u8,
 
+	overlay_device: u8,
+
 	menu_open: u8,
 
 	w: u16,
 
 	source_request_timer: Instant,
+	radio_ping_timer: Instant,
 	scroll_timer: Instant,
 
 	overlay_timer: Instant,
@@ -186,8 +191,8 @@ impl <'a> AMirror<'a> {
 			display_app,
 			display_phone,
 
-			auto_music_start, //TODO: Load this in from an external file.
-			auto_mirror_start, //TODO: Ditto.
+			auto_music_start,
+			auto_mirror_start,
 
 			imid_scroll,
 			imid_split,
@@ -196,6 +201,8 @@ impl <'a> AMirror<'a> {
 			imid_scroll_header: false,
 			
 			imid_refresh: false,
+
+			overlay_device: AIBUS_DEVICE_RADIO,
 
 			local_radio_connected: false,
 			local_imid_native: false,
@@ -207,6 +214,7 @@ impl <'a> AMirror<'a> {
 			w,
 
 			source_request_timer: Instant::now(),
+			radio_ping_timer: Instant::now(),
 			scroll_timer: Instant::now(),
 
 			overlay_timer: Instant::now(),
@@ -387,6 +395,14 @@ impl <'a> AMirror<'a> {
 						receiver: AIBUS_DEVICE_NAV_COMPUTER,
 						data: [0x48, AIBUS_DEVICE_AMIRROR, 0x1].to_vec(),
 					});
+
+					if self.auto_music_start {
+						self.write_aibus_message(AIBusMessage {
+							sender: AIBUS_DEVICE_AMIRROR,
+							receiver: AIBUS_DEVICE_RADIO,
+							data: [0x10, 0x10, AIBUS_DEVICE_AMIRROR, 0x0].to_vec(),
+						});
+					}
 				}
 			}
 
@@ -967,6 +983,17 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
+		//Radio ping timeout.
+		if Instant::now() - self.radio_ping_timer > Duration::from_millis(RADIO_PING_WAIT) && context.audio_selected {
+			self.radio_ping_timer = Instant::now();
+
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_RADIO,
+				data: [0x60, 0x10].to_vec(),
+			});
+		}
+
 		//Position.
 		let latitude = context.latitude;
 		let longitude = context.longitude;
@@ -1031,6 +1058,12 @@ impl <'a> AMirror<'a> {
 			std::mem::drop(context);
 
 			self.write_radio_handshake();
+
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_RADIO,
+				data: [0x60, 0x11].to_vec(),
+			});
 
 			context = match self.context.try_lock() {
 				Ok(context) => context,
@@ -1099,38 +1132,92 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
-		if ai_msg.l() >= 2 && ai_msg.data[0] == 0x23 { //Overlay.
-			let set_overlay = (ai_msg.data[1]&0x10) != 0;
+		if ai_msg.l() >= 2 && ai_msg.data[0] == 0x20 { //Clear overlay.
+			if ai_msg.sender == self.overlay_device || ai_msg.sender == AIBUS_DEVICE_RADIO {
+				let set_overlay = (ai_msg.data[1]&0x10) != 0;
 
-			let text;
-			if ai_msg.l() >= 3 {
-				text = match std::str::from_utf8(&ai_msg.data[2..]) {
-					Ok(text) => text,
-					Err(e) => {
-						println!("Error: {}", e);
-						return;
+				let index = (ai_msg.data[1]&0xF) as usize;
+
+				if index < 5 {
+					match self.mpv_video.try_lock() {
+						Ok(mut mpv) => {		
+							mpv.set_overlay_text("".to_string(), index);
+
+							if set_overlay && !self.vol_overlay {
+								self.overlay_on = true;
+								self.overlay_timer = Instant::now();
+								mpv.show_overlay();
+							} else if self.overlay_on && !self.vol_overlay {
+								mpv.show_overlay();
+							}
+						}
+						Err(_) => {
+							println!("Overlay: MPV handler locked.");
+						}
 					}
-				};
-			} else {
-				text = "";
-			}
+				} else if index == 0xE || index == 0xF {
+					match self.mpv_video.try_lock() {
+						Ok(mut mpv) => {		
+							for i in if index == 0xF {
+								0
+							} else {
+								1
+							}..5 {
+								mpv.set_overlay_text("".to_string(), i);
 
-			let index = (ai_msg.data[1]&0xF) as usize;
-
-			match self.mpv_video.try_lock() {
-				Ok(mut mpv) => {		
-					mpv.set_overlay_text(text.to_string(), index);
-
-					if set_overlay && !self.vol_overlay {
-						self.overlay_on = true;
-						self.overlay_timer = Instant::now();
-						mpv.show_overlay();
-					} else if self.overlay_on && !self.vol_overlay {
-						mpv.show_overlay();
+								if set_overlay && !self.vol_overlay {
+									self.overlay_on = true;
+									self.overlay_timer = Instant::now();
+									mpv.show_overlay();
+								} else if self.overlay_on && !self.vol_overlay {
+									mpv.show_overlay();
+								}
+							}
+						}
+						Err(_) => {
+							println!("Overlay: MPV handler locked.");
+						}
 					}
 				}
-				Err(_) => {
-					println!("Overlay: MPV handler locked.");
+			}
+		} else if ai_msg.l() >= 2 && ai_msg.data[0] == 0x23 { //Overlay.
+			if ai_msg.sender == self.overlay_device || ai_msg.sender == AIBUS_DEVICE_RADIO {
+				let set_overlay = (ai_msg.data[1]&0x10) != 0;
+
+				let text;
+				if ai_msg.l() == 3 && ai_msg.data[2] == 0x0 {
+					text = "";
+				} else if ai_msg.l() >= 3 {
+					text = match std::str::from_utf8(&ai_msg.data[2..]) {
+						Ok(text) => text,
+						Err(e) => {
+							println!("Error: {}", e);
+							return;
+						}
+					};
+
+					
+				} else {
+					text = "";
+				}
+
+				let index = (ai_msg.data[1]&0xF) as usize;
+
+				match self.mpv_video.try_lock() {
+					Ok(mut mpv) => {		
+						mpv.set_overlay_text(text.to_string(), index);
+
+						if set_overlay && !self.vol_overlay {
+							self.overlay_on = true;
+							self.overlay_timer = Instant::now();
+							mpv.show_overlay();
+						} else if self.overlay_on && !self.vol_overlay {
+							mpv.show_overlay();
+						}
+					}
+					Err(_) => {
+						println!("Overlay: MPV handler locked.");
+					}
 				}
 			}
 		} else if ai_msg.l() >= 5 && ai_msg.data[0] == 0x60 { //Color change.
@@ -1167,6 +1254,8 @@ impl <'a> AMirror<'a> {
 					}
 				};
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x40 && ai_msg.data[1] == 0x10 { //Source change.
+				self.radio_ping_timer = Instant::now();
+				
 				let new_device = ai_msg.data[2];
 				if new_device == AIBUS_DEVICE_AMIRROR { //Selected!
 					if context.imid_row_count != 1 || context.imid_native_mirror {
@@ -1228,6 +1317,7 @@ impl <'a> AMirror<'a> {
 				}
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x40 && ai_msg.data[1] == 0x1 { //Text control change.
 				let new_device = ai_msg.data[2];
+				self.overlay_device = new_device;
 				if new_device == AIBUS_DEVICE_AMIRROR { //Text control!
 					context.audio_text = true;
 					
@@ -1243,6 +1333,25 @@ impl <'a> AMirror<'a> {
 					};
 				} else {
 					context.audio_text = false;
+				}
+			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x70 && ai_msg.data[1] == 0x10 { //Source ping.
+				self.radio_ping_timer = Instant::now();
+				
+				let selected = ai_msg.data[2];
+				if (selected != AIBUS_DEVICE_AMIRROR && context.audio_selected) || (selected == AIBUS_DEVICE_AMIRROR && !context.audio_selected) {
+					self.write_aibus_message(AIBusMessage {
+						sender: AIBUS_DEVICE_AMIRROR,
+						receiver: AIBUS_DEVICE_RADIO,
+						data: [0x60, 0x10].to_vec()
+					});
+
+					if selected == AIBUS_DEVICE_AMIRROR && !context.audio_selected {
+						self.write_aibus_message(AIBusMessage {
+							sender: AIBUS_DEVICE_AMIRROR,
+							receiver: AIBUS_DEVICE_RADIO,
+							data: [0x60, 0x11].to_vec()
+						});
+					}
 				}
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x30 { //Control.
 				if ai_msg.data[1] == 0x0 { //Status query.
@@ -1334,6 +1443,8 @@ impl <'a> AMirror<'a> {
 						} else if option == 2 {
 							self.auto_music_start = !self.auto_music_start;
 							self.write_settings_menu_option(1);
+
+							self.save_settings();
 						}
 
 						context = match self.context.try_lock() {
@@ -1762,7 +1873,7 @@ impl <'a> AMirror<'a> {
 	}
 
 	///Save the settings file.
-	pub fn save_settings(self) {
+	pub fn save_settings(&self) {
 		let mut settings = Ini::new();
 		settings.with_section(Some(SETTING_SECTION)).set(SETTING_DISPLAY_TITLE, bool::to_string(&self.display_title));
 		settings.with_section(Some(SETTING_SECTION)).set(SETTING_DISPLAY_ARTIST, bool::to_string(&self.display_artist));

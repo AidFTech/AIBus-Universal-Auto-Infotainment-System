@@ -66,6 +66,13 @@ bool EnIEBusHandler::cacheAIBus() {
 		return false;
 }
 
+void EnIEBusHandler::sendMessageStrict(IE_Message* ie_d, const bool ack_response, const bool checksum) {
+	IEBusHandler::sendMessage(ie_d, ack_response, checksum);
+
+	*rec_clear_register &= ~rec_clear_bitmask;
+	*rec_clear_register |= rec_clear_bitmask;
+}
+
 void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum) {
 	ai_handler->cacheAllPending();
 	IEBusHandler::sendMessage(ie_d, ack_response, checksum);
@@ -74,7 +81,7 @@ void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, cons
 	*rec_clear_register |= rec_clear_bitmask;
 }
 
-void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) volatile {
+void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) {
 	ai_handler->cacheAllPending();
 	IEBusHandler::sendMessage(ie_d, ack_response, checksum, wait);
 
@@ -97,16 +104,25 @@ int EnIEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint1
 	ai_handler->cacheAllPending();
 	const int result = IEBusHandler::readMessage(ie_d, ack_response, id);
 	
-	*rec_clear_register &= ~rec_clear_bitmask;
-	*rec_clear_register |= rec_clear_bitmask;
+	if(result == 0) {
+		*rec_clear_register &= ~rec_clear_bitmask;
+		*rec_clear_register |= rec_clear_bitmask;
+	}
 	/*ai_handler->waitForAIBus();
 	ai_handler->cacheAllPending();*/
 
 	return result;
 }
 
-int EnIEBusHandler::readMessageStrict(IE_Message* ie_d, bool ack_response, const uint16_t id) volatile {
-	return IEBusHandler::readMessage(ie_d, ack_response, id);
+int EnIEBusHandler::readMessageStrict(IE_Message* ie_d, bool ack_response, const uint16_t id) {
+	const int result = IEBusHandler::readMessage(ie_d, ack_response, id);
+
+	if(result == 0) {
+		*rec_clear_register &= ~rec_clear_bitmask;
+		*rec_clear_register |= rec_clear_bitmask;
+	}
+
+	return result;
 }
 
 //Add an AIBus ID.

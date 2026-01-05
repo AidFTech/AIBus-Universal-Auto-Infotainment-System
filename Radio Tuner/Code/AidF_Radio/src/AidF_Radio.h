@@ -171,6 +171,7 @@ private:
 	void getScreenControlRequest(const bool all);
 	void sendIMIDPing();
 	void sendIMIDRequest();
+	void normalizePresets();
 	void sendAudioLightMessage(const bool audio_on);
 
 	void fullPowerOn();

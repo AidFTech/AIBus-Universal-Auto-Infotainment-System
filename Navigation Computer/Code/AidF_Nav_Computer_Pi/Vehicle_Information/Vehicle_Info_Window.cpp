@@ -508,11 +508,20 @@ void VehicleInfoWindow::refreshParam(TextBox* title, TextBox* text, const info_p
 		title->setText("Vbat");
 
 		if(info_parameters->battery_voltage > 100) {
-			std::string batt_text = std::to_string(info_parameters->battery_voltage/100) + ".";
-			if(info_parameters->battery_voltage%100 >= 10)
-				batt_text += std::to_string(info_parameters->battery_voltage%100);
-			else
-				batt_text += "0" + std::to_string(info_parameters->battery_voltage%100);
+			std::string batt_text = "";
+			if(info_parameters->battery_voltage_precision >= 1) {
+				batt_text = std::to_string(info_parameters->battery_voltage/100) + ".";
+				
+				if(info_parameters->battery_voltage_precision >= 2) {
+					if(info_parameters->battery_voltage%100 >= 10)
+						batt_text += std::to_string(info_parameters->battery_voltage%100);
+					else
+						batt_text += "0" + std::to_string(info_parameters->battery_voltage%100);
+				} else { //One decimal point.
+					batt_text += std::to_string((info_parameters->battery_voltage%100)/10);
+				}
+			} else
+				batt_text = std::to_string(info_parameters->battery_voltage/100);
 
 			batt_text += "V";
 

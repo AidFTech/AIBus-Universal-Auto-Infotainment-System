@@ -15,6 +15,7 @@ void AuxLightController::init() {
 	light_controller.pinModeIO(AUX_LIGHT_TURN_R, OUTPUT);
 	light_controller.pinModeIO(AUX_LIGHT_REAR_FOG_L, OUTPUT);
 	light_controller.pinModeIO(AUX_LIGHT_REAR_FOG_R, OUTPUT);
+	light_controller.pinModeIO(AUX_LIGHT_AUX_PROJECTOR, OUTPUT);
 
 	light_controller.digitalWriteIO(AUX_LIGHT_DRL_L, false);
 	light_controller.digitalWriteIO(AUX_LIGHT_DRL_R, false);
@@ -22,6 +23,7 @@ void AuxLightController::init() {
 	light_controller.digitalWriteIO(AUX_LIGHT_TURN_R, false);
 	light_controller.digitalWriteIO(AUX_LIGHT_REAR_FOG_L, false);
 	light_controller.digitalWriteIO(AUX_LIGHT_REAR_FOG_R, false);
+	light_controller.digitalWriteIO(AUX_LIGHT_AUX_PROJECTOR, false);
 }
 
 //Set the left DRL.
@@ -52,4 +54,14 @@ void AuxLightController::setLeftRFog(const bool state) {
 //Set the right rear foglight.
 void AuxLightController::setRightRFog(const bool state) {
 	light_controller.digitalWriteIO(AUX_LIGHT_REAR_FOG_R, state);
+}
+
+//Set the tail.
+void AuxLightController::setTail(const bool state) {
+	light_controller.digitalWriteIO(AUX_LIGHT_AUX_TAIL, state);
+}
+
+//Set the projector.
+void AuxLightController::setProjector(const bool state) {
+	light_controller.digitalWriteIO(AUX_LIGHT_AUX_PROJECTOR, state);
 }

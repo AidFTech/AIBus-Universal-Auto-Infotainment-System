@@ -20,10 +20,11 @@ public:
 
 	bool cacheAIBus();
 
+	void sendMessageStrict(IE_Message* ie_d, const bool ack_response, const bool checksum);
 	void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum);
-	void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) volatile;
+	void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait);
 	int readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id);
-	int readMessageStrict(IE_Message* ie_d, bool ack_response, const uint16_t id) volatile;
+	int readMessageStrict(IE_Message* ie_d, bool ack_response, const uint16_t id);
 
 	void addID(const uint8_t id);
 private:
