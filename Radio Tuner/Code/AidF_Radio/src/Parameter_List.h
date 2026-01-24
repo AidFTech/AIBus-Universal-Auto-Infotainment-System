@@ -11,6 +11,12 @@
 #define PRESET_COUNT 6
 #define MINUTE_TIMER 60000
 
+enum header_rds_setting_t {
+	HEADER_RDS_OFF,
+	HEADER_RDS_INFO_MODE,
+	HEADER_RDS_ALWAYS,
+};
+
 struct ParameterList {
 	bool power_on = false, audio_on = false;
 	uint8_t key_position = 0, door_position = 0;
@@ -50,6 +56,8 @@ struct ParameterList {
 
 	int8_t rds_index = -1;
 	String rds_station_name, rds_program_name;
+
+	header_rds_setting_t header_rds_setting = HEADER_RDS_INFO_MODE;
 
 	uint8_t last_sub = 0;
 

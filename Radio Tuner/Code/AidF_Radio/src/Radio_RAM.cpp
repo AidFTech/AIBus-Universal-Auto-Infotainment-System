@@ -43,6 +43,8 @@ void SRAMHandler::setStartParams(StartParams* start_params) {
 
 	sram.writeByte(CLOCK_MODE, start_params->clock_mode);
 
+	sram.writeByte(RDS_DISPLAY_MODE, start_params->rds_setting);
+
 	writeUint16(VOL, start_params->vol);
 	writeUint16(MAX_VOL, start_params->max_vol);
 	writeUint16(TREBLE, start_params->treble);
@@ -63,6 +65,8 @@ void SRAMHandler::getStartParams(StartParams* start_params) {
 	start_params->clock_mode = sram.readByte(CLOCK_MODE);
 
 	start_params->audio_on = sram.readByte(AUDIO_ON) != 0;
+
+	start_params->rds_setting = (header_rds_setting_t)sram.readByte(RDS_DISPLAY_MODE);
 	
 	start_params->vol = readUint16(VOL);
 	start_params->max_vol = readUint16(MAX_VOL);

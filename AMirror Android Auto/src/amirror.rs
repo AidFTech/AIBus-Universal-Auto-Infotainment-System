@@ -83,6 +83,7 @@ pub struct AMirror<'a> {
 	overlay_timer: Instant,
 	overlay_on: bool,
 	vol_overlay: bool,
+	header_overlay: bool,
 
 	audio_held: bool,
 
@@ -220,6 +221,7 @@ impl <'a> AMirror<'a> {
 			overlay_timer: Instant::now(),
 			overlay_on: false,
 			vol_overlay: false,
+			header_overlay: false,
 
 			audio_held: false,
 
@@ -970,9 +972,10 @@ impl <'a> AMirror<'a> {
 		}
 
 		//Overlay timeout.
-		if Instant::now() - self.overlay_timer > Duration::from_millis(overlay_limit) && self.overlay_on {
+		if Instant::now() - self.overlay_timer > Duration::from_millis(overlay_limit) && (self.overlay_on || self.header_overlay) {
 			self.overlay_on = false;
 			self.vol_overlay = false;
+			self.header_overlay = false;
 			match self.mpv_video.try_lock() {
 				Ok(mut mpv_video) => {
 					mpv_video.clear_overlay();
@@ -1179,6 +1182,42 @@ impl <'a> AMirror<'a> {
 						}
 					}
 				}
+			} else {
+				self.write_aibus_message(AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_RADIO,
+					data: [0x60, 0x11].to_vec(),
+				});
+			}
+		} else if ai_msg.l() >= 2 && ai_msg.data[0] == 0x22 && ai_msg.data[1] == 0x61 { //Header overlay.
+			let text;
+			if ai_msg.l() == 3 && ai_msg.data[2] == 0x0 {
+				text = "".to_string();
+			} else if ai_msg.l() >= 3 {
+				let text_bytes = ai_msg.data[2..].to_vec();
+				let utf8_bytes = get_utf8_from_ascii(text_bytes);
+				text = match std::str::from_utf8(&utf8_bytes) {
+					Ok(text) => text.to_string(),
+					Err(e) => {
+						println!("Error: {}", e);
+						return;
+					}
+				};
+			} else {
+				text = "".to_string();
+			}
+
+			if !self.vol_overlay && !self.overlay_on {
+				match self.mpv_video.try_lock() {
+					Ok(mut mpv) => {
+						mpv.set_header_overlay(text);
+						self.header_overlay = true;
+						self.overlay_timer = Instant::now();
+					}
+					Err(_) => {
+						println!("Header Overlay: MPV handler locked.");
+					}
+				}
 			}
 		} else if ai_msg.l() >= 2 && ai_msg.data[0] == 0x23 { //Overlay.
 			if ai_msg.sender == self.overlay_device || ai_msg.sender == AIBUS_DEVICE_RADIO {
@@ -1186,10 +1225,12 @@ impl <'a> AMirror<'a> {
 
 				let text;
 				if ai_msg.l() == 3 && ai_msg.data[2] == 0x0 {
-					text = "";
+					text = "".to_string();
 				} else if ai_msg.l() >= 3 {
-					text = match std::str::from_utf8(&ai_msg.data[2..]) {
-						Ok(text) => text,
+					let text_bytes = ai_msg.data[2..].to_vec();
+					let utf8_bytes = get_utf8_from_ascii(text_bytes);
+					text = match std::str::from_utf8(&utf8_bytes) {
+						Ok(text) => text.to_string(),
 						Err(e) => {
 							println!("Error: {}", e);
 							return;
@@ -1198,20 +1239,20 @@ impl <'a> AMirror<'a> {
 
 					
 				} else {
-					text = "";
+					text = "".to_string();
 				}
 
 				let index = (ai_msg.data[1]&0xF) as usize;
 
 				match self.mpv_video.try_lock() {
-					Ok(mut mpv) => {		
-						mpv.set_overlay_text(text.to_string(), index);
+					Ok(mut mpv) => {
+						mpv.set_overlay_text(text, index);
 
 						if set_overlay && !self.vol_overlay {
 							self.overlay_on = true;
 							self.overlay_timer = Instant::now();
 							mpv.show_overlay();
-						} else if self.overlay_on && !self.vol_overlay {
+						} else if self.overlay_on && !self.header_overlay && !self.vol_overlay {
 							mpv.show_overlay();
 						}
 					}
@@ -1219,6 +1260,12 @@ impl <'a> AMirror<'a> {
 						println!("Overlay: MPV handler locked.");
 					}
 				}
+			} else {
+				self.write_aibus_message(AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_RADIO,
+					data: [0x60, 0x11].to_vec(),
+				});
 			}
 		} else if ai_msg.l() >= 5 && ai_msg.data[0] == 0x60 { //Color change.
 			self.color_acknowledged = true;
@@ -1659,7 +1706,7 @@ impl <'a> AMirror<'a> {
 					}
 				} else if ai_msg.l() >= 3 && ai_msg.data[1] == 0x43 { //Door position.
 					self.door_state = ai_msg.data[2];
-					if self.power_state == 0x0 && (self.door_state&0xC) != 0 {
+					if self.power_state == 0x0 && (self.door_state&0xC) != 0 && (self.powered_on || (self.door_state&0x80) != 0) {
 						self.run = false;
 
 						match self.mpv_video.try_lock() {
@@ -1841,7 +1888,7 @@ impl <'a> AMirror<'a> {
 				context.altitude = ((ai_msg.data[12] as i32) << 8) | (ai_msg.data[13] as i32);
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_PHONE {
-			if ai_msg.l() >= 7 && ai_msg.data[0] == 0x12 { //MAC address.
+			if ai_msg.l() >= MAC_ADDR_LEN + 1 && ai_msg.data[0] == 0x12 { //MAC address.
 				for i in 0..MAC_ADDR_LEN {
 					context.mac_addr[i] = ai_msg.data[i+1];
 				}
@@ -2743,4 +2790,34 @@ impl <'a> AMirror<'a> {
 			});
 		}
 	}
+}
+
+///Get a UTF8 string from ASCII.
+fn get_utf8_from_ascii(text: Vec<u8>) -> Vec<u8> {
+	let mut ret_text = text.clone();
+
+	for i in 0..ret_text.len() {
+		let c = ret_text[i];
+		//Check whether this is already UTF-8 formatted. Following character should have the same condition.
+		if (c&0x80) != 0 {
+			let mut is_utf8 = false;
+			if i <= ret_text.len() - 2 && (ret_text[i+1]&0x80) != 0 {
+				is_utf8 = true;
+			} else if i > 0 && (ret_text[i-1]&0x80 != 0) {
+				is_utf8 = true;
+			}
+
+			//If there weren't any flags to indicate UTF8, correct it.
+			if !is_utf8 {
+				if (ret_text[i]&0x40) == 0 {
+					ret_text.insert(i, 0xC2);
+				} else {
+					ret_text[i] &= !(0x40 as u8);
+					ret_text.insert(i, 0xC3);
+				}
+			}
+		}
+	}
+
+	return ret_text;
 }

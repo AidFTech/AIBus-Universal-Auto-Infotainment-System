@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <Arduino.h>
+#include <Vector.h>
 
 #ifndef honda_tape_handler_h
 #define honda_tape_handler_h
@@ -23,6 +24,8 @@
 #define TAPE_MODE_LOAD 0x10
 #define TAPE_MODE_EJECT 0x11
 #define TAPE_MODE_IDLE 0
+
+#define TAPE_IE_CACHE_LEN 8
 
 #define HONDA_BUTTON_DIR 0x20
 #define HONDA_BUTTON_FF 0x21
@@ -38,7 +41,7 @@ public:
 
 	void loop();
 	
-	void interpretTapeMessage(IE_Message* the_message);
+	void interpretTapeMessage(IE_Message* the_message, const bool listen = true);
 	void readAIBusMessage(AIData* the_message);
 
 	void refreshSource();
@@ -59,6 +62,9 @@ private:
 
 	int8_t desired_track_count = 0;
 
+	IE_Message ie_cache[TAPE_IE_CACHE_LEN];
+	Vector<IE_Message> ie_vec;
+
 	HondaIMIDHandler* imid_handler;
 	
 	uint8_t getDirectionByte(const bool rev, const bool repeat, const bool nr, const bool cr_o2);
@@ -70,7 +76,7 @@ private:
 	void sendButtonMessage(const uint8_t button);
 	void sendButtonMessage(const uint8_t button, const uint8_t tracks);
 
-	void sendStatusRequest();
+	inline void listenForIEBus();
 
 	void sendTapeUpdateMessage(const uint8_t receiver);
 	void sendTapeTextMessage();

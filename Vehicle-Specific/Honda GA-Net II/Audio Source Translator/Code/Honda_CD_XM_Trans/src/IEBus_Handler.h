@@ -58,7 +58,7 @@ public:
 
 	virtual void sendAcknowledgement(const uint16_t sender, const uint16_t receiver);
 	
-	virtual inline bool getInputOn();
+	bool getInputOn();
 
 protected:
 	inline void sendBit(const bool data);

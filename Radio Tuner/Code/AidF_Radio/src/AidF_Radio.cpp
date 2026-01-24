@@ -180,6 +180,8 @@ void AidFRadio::setup() {
 
 		if((start_params.clock_mode&CLOCK_MODE_12H) != 0)
 			parameters.send_12h = true;
+
+		parameters.header_rds_setting = start_params.rds_setting;
 		
 		volume_handler.setVolume(start_params.vol);
 		volume_handler.setVolRange(start_params.max_vol);
@@ -409,7 +411,7 @@ void AidFRadio::loop() {
 			}
 		
 			//Set audio switch.
-			if(current_source_id == 0 || source_change_timer_enable) { //Audio off or waiting.
+			if(current_source_id == 0 || (source_change_timer_enable && (source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source))) { //Audio off or waiting.
 				digitalWrite(AUDIO_ON_SW, HIGH);
 				digitalWrite(AUDIO_SW, LOW);
 				digitalWrite(DAC_MUTE, LOW);
@@ -598,7 +600,10 @@ void AidFRadio::loop() {
 				info_timer = 0;
 				text_handler.sendIMIDInfoMessage("RDS");
 
-				text_handler.setOverlayHeader(parameters.rds_program_name);
+				String normalized_program_name = trimText(parameters.rds_program_name);
+				normalized_program_name.replace("#", "##  ");
+				normalized_program_name.trim();
+				text_handler.setOverlayHeader(normalized_program_name);
 			} else if(!parameters.info_mode && last_info) {
 				String current_rds = parameters.rds_program_name;
 
@@ -672,6 +677,7 @@ void AidFRadio::loop() {
 						}
 
 						text_handler.sendLongRDSMessage(current_rds);
+						text_handler.sendIMIDFullRDSMessage(current_rds);
 						
 						uint8_t rds_char = parameters.imid_char;
 						if(parameters.imid_radio)
@@ -902,9 +908,19 @@ void AidFRadio::handleAIBus(AIData* msg) {
 
 		parameters.send_12h = (msg->data[1]&0x80) != 0;
 	} else if(msg->receiver == ID_RADIO && msg->sender == ID_PHONE && msg->l >= 3) { //Phone message.
+		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
 		if(msg->data[1] == 0x6) {
 			parameters.phone_active = msg->data[2] != 0x0;
 		}
+	} else if(msg->sender == ID_NAV_SCREEN && msg->l >= 2 && msg->data[0] == 0x31 && msg->data[1] == 0x30) { //Supported buttons.
+		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
+		//TODO: This.
+	} else if(msg->sender == ID_NAV_COMPUTER && msg->l >= 5 && msg->data[0] == 0x2C) { //Dimensions.
+		if(msg->receiver == ID_RADIO)
+			aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
+
+		parameters.screen_w = (msg->data[1]<<8) | msg->data[2];
+		parameters.screen_h = (msg->data[3]<<8) | msg->data[4];
 	} else if(msg->receiver == 0xFF && msg->l >= 1 && msg->data[0] == 0xA1 && msg->sender != ID_RADIO) {
 		if(msg->l >= 3 && msg->data[1] == 0x2) { //Key position.
 			const uint8_t pos = msg->data[2]&0xF;
@@ -1022,7 +1038,7 @@ void AidFRadio::handleAIBus(AIData* msg) {
 		}
 	}
 
-	if(!parameters.computer_connected && msg->sender == ID_NAV_COMPUTER && !getInitMessage(msg) && !getPoweroffMessage(msg)) {
+	if(*power_on && !parameters.computer_connected && msg->sender == ID_NAV_COMPUTER && !getInitMessage(msg) && !getPoweroffMessage(msg)) {
 		parameters.computer_connected = true;
 		screenInit();
 		
@@ -1032,18 +1048,28 @@ void AidFRadio::handleAIBus(AIData* msg) {
 			AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
 			aibus_handler.writeAIData(&screen_msg, parameters.screen_connected);
 		}
+
+		{
+			uint8_t data[] = {0x2C, 0xF0};
+			AIData res_request(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
+			aibus_handler.writeAIData(&res_request, parameters.screen_connected);
+		}
 	}
 
-	if(!parameters.imid_connected && msg->sender == ID_IMID_SCR && !getInitMessage(msg) && !getPoweroffMessage(msg)) {
+	if(*power_on && !parameters.imid_connected && msg->sender == ID_IMID_SCR && !getInitMessage(msg) && !getPoweroffMessage(msg)) {
 		parameters.imid_connected = true;
 		
 		if(parameters.min >= 0 && parameters.hour >= 0)
 			text_handler.sendTime();
 	}
 
-	if(!parameters.screen_connected && msg->sender == ID_NAV_SCREEN && !getInitMessage(msg) && !getPoweroffMessage(msg)) {
+	if(*power_on && !parameters.screen_connected && msg->sender == ID_NAV_SCREEN && !getInitMessage(msg) && !getPoweroffMessage(msg)) {
 		parameters.screen_connected = true;
 		sendAudioLightMessage(parameters.audio_on);
+
+		uint8_t button_request_data[] = {0x31, 0x30};
+		AIData button_request_msg(sizeof(button_request_data), ID_RADIO, ID_NAV_SCREEN, button_request_data);
+		aibus_handler.writeAIData(&button_request_msg);
 	}
 
 	if(getInitMessage(msg) || getPoweroffMessage(msg)) {
@@ -1257,7 +1283,9 @@ void AidFRadio::getScreenControlRequest(const bool all) {
 		data[2] |= 0x10;
 
 	AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
-	aibus_handler.writeAIData(&screen_msg, parameters.screen_connected);
+	const bool ack = aibus_handler.writeAIData(&screen_msg, parameters.screen_connected);
+	if(parameters.screen_connected && !ack)
+		parameters.screen_connected = false;
 }
 
 //Send a ping to the IMID.
@@ -1484,6 +1512,8 @@ void AidFRadio::powerOff() {
 	start_params.bass = volume_handler.getBass();
 	start_params.balance = volume_handler.getBalance();
 	start_params.fader = volume_handler.getFader();
+
+	start_params.rds_setting = parameters.header_rds_setting;
 
 	sram_handler.begin();
 	sram_handler.setStartParams(&start_params);

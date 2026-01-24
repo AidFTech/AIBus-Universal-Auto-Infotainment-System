@@ -105,8 +105,7 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 					}
 				}
 
-				uint8_t db[ai_serial->available()];
-				ai_serial->readBytes(db, ai_serial->available());
+				clearSerial();
 				return AIBUS_READ_TIMEOUT;
 			}
 		}
@@ -146,8 +145,7 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 					}
 				}
 
-				uint8_t db[ai_serial->available()];
-				ai_serial->readBytes(db, ai_serial->available());
+				clearSerial();
 				return AIBUS_READ_INVALID_CHECKSUM;
 			}
 		}
@@ -256,11 +254,38 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			ai_group[i] = AIData(l, ai_d->sender, ai_d->receiver, ai_data);
 		}
 
+		elapsedMillis timer;
+		int byte_count = ai_serial->available();
+
+		//Wait for bus to be clear...
+		while(timer < AI_DELAY_M) {
+			if(this->rx_pin >= 0) {
+				int8_t rx = digitalRead(this->rx_pin);
+				elapsedMillis rx_timer;
+				if(rx == LOW)
+					timer = 0;
+				while(rx == LOW) {
+					if(rx_timer > 10) { //Problem.
+						/*uint8_t ping[] = {0xF, 0xF0};
+						ai_serial->write(ping, sizeof(ping));*/
+						break;
+					}
+				}
+			} else {
+				const int new_byte_count = ai_serial->available();
+				if(new_byte_count > byte_count) {
+					byte_count = new_byte_count;
+					timer = 0;
+				}
+			}
+		}
+
 		bool ack = false;
 		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
 			ack = writeAIData(&ai_group[i], acknowledge);
 			if(!ack && acknowledge)
 				return false;
+			delay(5);
 		}
 		return ack;
 	}
@@ -279,8 +304,8 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 				timer = 0;
 			while(rx == LOW) {
 				if(rx_timer > 10) { //Problem.
-					uint8_t ping[] = {0xF, 0xF0};
-					ai_serial->write(ping, sizeof(ping));
+					/*uint8_t ping[] = {0xF, 0xF0};
+					ai_serial->write(ping, sizeof(ping));*/
 					break;
 				}
 			}
@@ -405,6 +430,21 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 		}
 	}
 	return false;
+}
+
+//Clear any pending data in the serial port.
+void AIBusHandler::clearSerial() {
+	elapsedMillis clear_timer;
+	while(ai_serial->available() > 0) {
+		const int avail = ai_serial->available() < AIDATA_LIMIT + 3 ? ai_serial->available() : AIDATA_LIMIT + 3;
+		uint8_t db[avail];
+		ai_serial->readBytes(db, avail);
+
+		if(clear_timer > 10) {
+			ai_serial->clearWriteError();
+			break;
+		}
+	}
 }
 
 //Determine whether a message is the initialization message.

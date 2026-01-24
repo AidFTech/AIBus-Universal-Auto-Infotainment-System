@@ -290,7 +290,21 @@ void AidF_Nav_Computer::loop() {
 
 								this->header_timer_enabled = true;
 								this->header_timer = elapsed_millis.time;
+
+								if(attribute_list->mirror_connected && ai_msg.sender != ID_ANDROID_AUTO) {
+									AIData header_fwd(ai_msg.l, ID_NAV_COMPUTER, ID_ANDROID_AUTO, ai_msg.data);
+									aibus_handler->writeAIData(&header_fwd);
+								}
 							}
+							answered = true;
+						} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x2C && ai_msg.data[1] == 0xF0) { //Screen size request.
+							const uint16_t w = window_handler->getWidth(), h = window_handler->getHeight();
+
+							uint8_t res_resp_data[] = {0x2C, uint8_t(w>>8), uint8_t(w&0xFF), uint8_t(h>>8), uint8_t(h&0xFF)};
+							AIData res_resp_msg(sizeof(res_resp_data), ID_NAV_COMPUTER, ai_msg.sender);
+							res_resp_msg.refreshAIData(res_resp_data);
+
+							aibus_handler->writeAIData(&res_resp_msg);
 							answered = true;
 						} else if(ai_msg.sender == ID_RADIO && ai_msg.l >= 3 && ai_msg.data[0] == 0x26) { //Volume bar.
 							const uint8_t vol = ai_msg.data[1];
@@ -366,14 +380,6 @@ void AidF_Nav_Computer::loop() {
 
 								//TODO: Only if the window is the mirror window.
 								window_handler->getActiveWindow()->refreshWindow();
-							} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x2C && ai_msg.data[1] == 0xF0) { //Screen size request.
-								const uint16_t w = window_handler->getWidth(), h = window_handler->getHeight();
-
-								uint8_t res_resp_data[] = {0x2C, uint8_t(w>>8), uint8_t(w&0xFF), uint8_t(h>>8), uint8_t(h&0xFF)};
-								AIData res_resp_msg(sizeof(res_resp_data), ID_NAV_COMPUTER, ai_msg.sender);
-								res_resp_msg.refreshAIData(res_resp_data);
-
-								aibus_handler->writeAIData(&res_resp_msg);
 							} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x60 && ai_msg.data[1] == 0x20) { //Color request.
 								this->setMirrorColors();
 							}
@@ -417,7 +423,7 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 		this->door_position = ai_d->data[2];
 
 		if(this->key_position == 0x0 && (this->door_position&0xC) != 0) {
-			if(this->key_switched_on) {
+			if(this->key_switched_on || (this->door_position&0x80) != 0) {
 				this->sendPowerOffMessage();
 				this->running = false;
 			}
@@ -442,7 +448,7 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 				if(!attribute_list->display_12h) //Use 24hr time.
 					hour_str = std::to_string(int(hour));
 				else {
-					if(hour >= 0 && hour < 13)
+					if(hour > 0 && hour < 13)
 						hour_str = std::to_string(int(hour));
 					else if(hour == 0)
 						hour_str = "12";
@@ -844,13 +850,14 @@ void loop(AidF_Nav_Computer* nav_computer) {
 
 int main(int argc, char* args[]) {
 	SDL_Init(SDL_INIT_VIDEO);
+	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
 
 	TTF_Init();
 	int screen_w = DEFAULT_W, screen_h = DEFAULT_H;
 	getResolution(&screen_w, &screen_h);
 
 	#ifdef RPI_UART
-	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_FULLSCREEN);
+	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_FULLSCREEN | SDL_WINDOW_OPENGL);
 	#else
 	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_SHOWN);
 	#endif

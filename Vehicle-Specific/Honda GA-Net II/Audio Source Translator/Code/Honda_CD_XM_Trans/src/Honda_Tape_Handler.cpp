@@ -6,6 +6,8 @@ HondaTapeHandler::HondaTapeHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_d
 	this->imid_handler = imid_handler;
 
 	getTapeSettings(&this->autostart, &this->fwd_start);
+
+	ie_vec.setStorage(ie_cache, 0);
 }
 
 //Tape handler loop function.
@@ -31,11 +33,30 @@ void HondaTapeHandler::loop() {
 			if(!ack)
 				parameter_list->radio_connected = false;
 		}
+
+		if(text_ping_timer_enabled && text_ping_timer > TEXT_PING_TIMER) {
+			text_ping_timer = 0;
+			uint8_t text_request_data[] = {0x60, 0x11};
+			AIData text_request_msg(sizeof(text_request_data), this->device_ai_id, ID_RADIO, text_request_data);
+			const bool ack = ai_driver->writeAIData(&text_request_msg, parameter_list->radio_connected);
+			
+			if(!ack)
+				parameter_list->radio_connected = false;
+		}
+
+		//if(ie_driver->getInputOn())
+		//	this->listenForIEBus();
+
+		while(ie_vec.size() > 0) {
+			interpretTapeMessage(&ie_vec[0], false);
+			ie_vec.remove(0);
+		}
+		ie_vec.clear();
 	}
 }
 
 //Interpret a tape IEBus message.
-void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message) {
+void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message, const bool listen) {
 	if(the_message->receiver != IE_ID_RADIO || the_message->sender != IE_ID_TAPE)
 		return;
 
@@ -66,6 +87,8 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message) {
 				delay(2);
 
 				ie_driver->sendMessage(&handshake_msg, false, false);
+				if(listen)
+					listenForIEBus();
 			}
 		} else if(the_message->data[0] == 0x5 && the_message->data[2] == 0x2) {
 			ack = false;
@@ -92,8 +115,11 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message) {
 		uint8_t tape_state = the_message->data[4];
 		if(tape_state == 0x12)
 			tape_state = 0;
+
+		if(listen && (tape_state == TAPE_MODE_LOAD || tape_state == TAPE_MODE_EJECT))
+			listenForIEBus();
 		
-		const uint8_t direction_state = the_message->data[7], track_state = the_message->data[6];
+		const uint8_t direction_state = the_message->data[7]&(~8), track_state = the_message->data[6];
 		const uint8_t last_mode = tape_mode, last_dir = getDirectionByte(!fwd, repeat_on, nr_on, cro2), last_track = track_count;
 		
 		if(tape_state != last_mode || direction_state != last_dir || track_state != last_track) {
@@ -220,11 +246,15 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 		sendAIAckMessage(sender);
 
 		if(active_source == ID_TAPE) {
+			text_ping_timer = 0;
+			text_ping_timer_enabled = true;
+
 			uint8_t function[] = {0x13, 0x0};
 			source_sel = true;
 			sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function, sizeof(function));
 			sendFunctionMessage(ie_driver, false, IE_ID_TAPE, function, sizeof(function));
-			getIEAckMessage(device_ie_id);
+			//getIEAckMessage(device_ie_id);
+			listenForIEBus();
 			
 			sendTapeUpdateMessage(ID_RADIO);
 			*parameter_list->screen_request_timer = SCREEN_REQUEST_TIMER;
@@ -238,7 +268,6 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			if(parameter_list->audio_pin >= 0)
 				digitalWrite(parameter_list->audio_pin, HIGH);
 
-			sendStatusRequest();
 		} else {
 			if(source_sel) {
 				source_sel = false;
@@ -257,6 +286,8 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO) {
 		ack = false;
 		sendAIAckMessage(sender);
+
+		text_ping_timer_enabled = false;
 		
 		this->text_control = the_message->data[2] == device_ai_id;
 		if(this->text_control) {
@@ -264,8 +295,6 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			//	clearExternalIMID();
 			sendTapeTextMessage();
 			sendFunctionTextMessage();
-
-			sendStatusRequest();
 		}
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x70 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function heartbeat.
 		if(source_sel && !text_control) {
@@ -296,10 +325,7 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 				sendButtonMessage(HONDA_BUTTON_FF);
 			else if(button == 0x15 && state == 0x2) //Preset 5. NR.
 				sendButtonMessage(HONDA_BUTTON_NR);
-			else if(button == 0x16 && state == 0x2) { //Refresh.
-				uint8_t function[] = {0x13, 0x0};
-				sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function, sizeof(function));
-			} else if(button == 0x24 && state == 0x2) //Reverse search. // @TODO: Skip multiple tracks.
+			else if(button == 0x24 && state == 0x2) //Reverse search. // @TODO: Skip multiple tracks.
 				sendButtonMessage(HONDA_BUTTON_SKIPREV, 1);
 			else if(button == 0x25 && state == 0x2) //FWD search.
 				sendButtonMessage(HONDA_BUTTON_SKIPFWD, 1);
@@ -351,7 +377,8 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 
 //Refresh the source.
 void HondaTapeHandler::refreshSource() {
-	this->sendStatusRequest();
+	if(ie_driver->getInputOn())
+		this->listenForIEBus();
 }
 
 //Send the AIBus handshake message to the radio.
@@ -397,7 +424,7 @@ uint8_t HondaTapeHandler::getDirectionByte(const bool rev, const bool repeat, co
 	return the_return;
 }
 
-//Send the next track IEBus message.
+//Send a button IEBus message.
 void HondaTapeHandler::sendButtonMessage(const uint8_t button) {
 	uint8_t button_data[] = {0x30, 0x0, 0x13, 0x2, 0x13, button};
 	IE_Message button_message(sizeof(button_data), IE_ID_RADIO, IE_ID_TAPE, 0xF, true);
@@ -407,10 +434,10 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button) {
 	ie_driver->sendMessage(&button_message, true, true);
 	getIEAckMessage(device_ie_id);
 
-	sendStatusRequest();
+	listenForIEBus();
 }
 
-//Send the previous track IEBus message.
+//Send a button IEBus message with a track count.
 void HondaTapeHandler::sendButtonMessage(const uint8_t button, const uint8_t tracks) {
 	uint8_t button_data[] = {0x30, 0x0, 0x13, 0x2, 0x13, button, tracks};
 	IE_Message button_message(sizeof(button_data), IE_ID_RADIO, IE_ID_TAPE, 0xF, true);
@@ -420,16 +447,36 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button, const uint8_t tra
 	ie_driver->sendMessage(&button_message, true, true);
 	getIEAckMessage(device_ie_id);
 
-	sendStatusRequest();
+	listenForIEBus();
 }
 
-//Send the IEBus status request message.
-void HondaTapeHandler::sendStatusRequest() {
+//Listen for IEBus data.
+inline void HondaTapeHandler::listenForIEBus() {
 	if(!source_sel)
 		return;
 
-	uint8_t function_data[] = {0x13, 0x0};
-	sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function_data, sizeof(function_data));
+	elapsedMillis ie_timer;
+
+	while(ie_timer < 500) {
+		if(ie_driver->getInputOn()) {
+			IE_Message new_msg;
+			const int res = ie_driver->readMessage(&new_msg, true, IE_ID_RADIO);
+			if(res == 0) {
+				if(new_msg.sender != device_ie_id || new_msg.receiver != IE_ID_RADIO)
+					continue;
+
+				if(ie_vec.size() < ie_vec.max_size()) {
+					ie_driver->sendAcknowledgement(IE_ID_RADIO, new_msg.sender);
+					ie_vec.push_back(new_msg);
+
+					if(new_msg.direct && new_msg.control == 0xF && new_msg.l > 0 && new_msg.data[0] == 0x60)
+						break;
+				}
+			}
+		}
+
+		ie_driver->cacheAIBus();
+	}
 }
 
 //Determine whether the up/down symbol should be shown.

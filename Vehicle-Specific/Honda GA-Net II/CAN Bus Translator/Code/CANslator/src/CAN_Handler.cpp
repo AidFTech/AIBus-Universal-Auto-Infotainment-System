@@ -44,6 +44,8 @@ BCAN_Handler::BCAN_Handler(AIBusHandler* ai_handler,
 	odo_km = 0;
 
 	parameter_list->key_pos = 0;
+	
+	rec_device_vec.setStorage(rec_device_list, 0);
 }
 
 //Initialize the MCP2515.
@@ -73,6 +75,19 @@ bool BCAN_Handler::handleAIBus(AIData* ai_msg) {
 		return true;
 	} else if(ai_msg->l >= 3 && ai_msg->data[0] == 0x2B && ai_msg->data[1] == 0x60) { //Option selected.
 		handleSelection((*ai_msg)[2]);
+		return true;
+	} else if(ai_msg->l >= 2 && ai_msg->data[0] == 0x4A && ai_msg->data[1] == 0x18) { //Add this device to the broadcast list.
+		bool device_exists = false;
+		for(int i=0;i<rec_device_vec.size();i+=1) {
+			if(rec_device_vec[i] == ai_msg->sender) {
+				device_exists = true;
+				break;
+			}
+		}
+
+		if(!device_exists)
+			rec_device_vec.push_back(ai_msg->sender);
+
 		return true;
 	}
 
@@ -125,6 +140,8 @@ void BCAN_Handler::readCANMessage() {
 				can_timer = 0;
 			}
 
+			last_can_msg = 0;
+
 			if(can_msg.can_id == BCAN_ID_KEYPOS && can_msg.can_dlc == 5) { //Key position main, brake lights, signal lights.
 				const uint8_t last_key = parameter_list->key_pos;
 
@@ -138,10 +155,13 @@ void BCAN_Handler::readCANMessage() {
 				else //Key off.
 					parameter_list->key_pos = 0;
 
-				if(parameter_list->key_pos != last_key)
-					writeAIBusKeyMessage(0xFF);
+				if(parameter_list->key_pos != last_key) {
+					writeAIBusKeyMessage();
+					if(parameter_list->key_pos == 0 && parameter_list->switched_on)
+						writeAIBusDoorMessage();
+				}
 
-				parameter_list->power_on = parameter_list->key_pos != 0;
+				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;
 				
 				if(parameter_list->key_pos != 0)
 					parameter_list->switched_on = true;
@@ -178,7 +198,7 @@ void BCAN_Handler::readCANMessage() {
 					parameter_list->key_pos = 4;
 
 				if(parameter_list->key_pos != last_key)
-					writeAIBusKeyMessage(0xFF);
+					writeAIBusKeyMessage();
 
 				if(e_brake != last_ebrake) {
 					writeAIBusSignalMessage();
@@ -192,7 +212,7 @@ void BCAN_Handler::readCANMessage() {
 					}
 				}
 
-				parameter_list->power_on = parameter_list->key_pos != 0;
+				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;;
 
 				if(parameter_list->key_pos != 0)
 					parameter_list->switched_on = true;
@@ -202,24 +222,30 @@ void BCAN_Handler::readCANMessage() {
 				parameter_list->doors_open &= 0xF5;
 				parameter_list->doors_open |= (can_msg.data[0]&0xA0)>>4;
 
+				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;;
+
 				if(parameter_list->doors_open != last_door)
-					writeAIBusDoorMessage(0xFF);
+					writeAIBusDoorMessage();
 			} else if(can_msg.can_id == BCAN_ID_RIGHTDOORS && can_msg.can_dlc == 1) { //Right doors.
 				const uint8_t last_door = parameter_list->doors_open;
 
 				parameter_list->doors_open &= 0xFA;
 				parameter_list->doors_open |= (can_msg.data[0]&0x50)>>4;
 
+				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;;
+
 				if(parameter_list->doors_open != last_door)
-					writeAIBusDoorMessage(0xFF);
+					writeAIBusDoorMessage();
 			} else if(can_msg.can_id == BCAN_ID_TRUNK && can_msg.can_dlc == 1) { //Trunk.
 				const uint8_t last_door = parameter_list->doors_open;
 
 				parameter_list->doors_open &= 0xEF;
 				parameter_list->doors_open |= (can_msg.data[0]&0x80)>>3;
 
+				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;;
+
 				if(parameter_list->doors_open != last_door)
-					writeAIBusDoorMessage(0xFF);
+					writeAIBusDoorMessage();
 			} else if(can_msg.can_id == BCAN_ID_BRIGHTNESS && can_msg.can_dlc == 8) { //Brightness.
 				const uint8_t last_brightness = brightness;
 				const bool last_night = night_mode, last_light = lights_on;
@@ -229,7 +255,7 @@ void BCAN_Handler::readCANMessage() {
 				night_mode = (can_msg.data[5]&0x40)	!= 0;
 
 				if(last_brightness != brightness || lights_on != last_light || night_mode != last_night) {
-					writeAIBusBrightnessMessage(0xFF);
+					writeAIBusBrightnessMessage();
 					
 					if(int_light_controller != nullptr) {
 						const uint8_t abs_brightness = brightness >= 0x16 ? 255 : brightness*11;
@@ -298,7 +324,7 @@ void BCAN_Handler::readCANMessage() {
 					if(hood)
 						this->parameter_list->doors_open |= 0x20;
 
-					writeAIBusDoorMessage(0xFF);
+					writeAIBusDoorMessage();
 				}
 
 				if(drl != ((last_state_a&0x1) != 0))
@@ -510,7 +536,8 @@ void BCAN_Handler::readCANMessage() {
 
 			imid_2515.sendMessage(&can_msg);
 			rls_2515.sendMessage(&can_msg);
-		}
+		} else if(last_can_msg >= CAN_TIMER && parameter_list->key_pos == 0 && (parameter_list->doors_open&0xC) == 0)
+			parameter_list->power_on = false;
 
 		forwardIMIDMessage();
 		forwardRLSMessage();
@@ -656,10 +683,31 @@ void BCAN_Handler::sendInfoParameters() {
 	writeAIBusRangeMessage();
 }
 
+//Write the key state message to all requesting devices.
+void BCAN_Handler::writeAIBusKeyMessage() {
+	writeAIBusKeyMessage(0xFF);
+	for(int i=0;i<rec_device_vec.size();i+=1)
+		writeAIBusKeyMessage(rec_device_vec[i]);
+}
+
+//Write the door state message to all requesting devices.
+void BCAN_Handler::writeAIBusDoorMessage() {
+	writeAIBusDoorMessage(0xFF);
+	for(int i=0;i<rec_device_vec.size();i+=1)
+		writeAIBusDoorMessage(rec_device_vec[i]);
+}
+
+//Write the brightness message to all requesting devices.
+void BCAN_Handler::writeAIBusBrightnessMessage() {
+	writeAIBusBrightnessMessage(0xFF);
+	for(int i=0;i<rec_device_vec.size();i+=1)
+		writeAIBusBrightnessMessage(rec_device_vec[i]);
+}
+
 //Write the key state message.
 void BCAN_Handler::writeAIBusKeyMessage(const uint8_t receiver) {
-	uint8_t key_data[receiver == 0xFF ? 3 : 2];
-	if(receiver == 0xFF) {
+	uint8_t key_data[receiver != ID_NAV_COMPUTER ? 3 : 2];
+	if(receiver != ID_NAV_COMPUTER) {
 		key_data[0] = 0xA1;
 		key_data[1] = 0x2;
 		key_data[2] = parameter_list->key_pos;
@@ -675,14 +723,14 @@ void BCAN_Handler::writeAIBusKeyMessage(const uint8_t receiver) {
 
 //Write the door state message.
 void BCAN_Handler::writeAIBusDoorMessage(const uint8_t receiver) {
-	uint8_t door_data[receiver == 0xFF ? 3: 2];
-	if(receiver == 0xFF) {
+	uint8_t door_data[receiver != ID_NAV_COMPUTER ? 3: 2];
+	if(receiver != ID_NAV_COMPUTER) {
 		door_data[0] = 0xA1;
 		door_data[1] = 0x43;
-		door_data[2] = parameter_list->doors_open;
+		door_data[2] = parameter_list->doors_open | (parameter_list->key_pos == 0 && parameter_list->switched_on ? 0x80 : 0);
 	} else {
 		door_data[0] = 0x43;
-		door_data[1] = parameter_list->doors_open;
+		door_data[1] = parameter_list->doors_open | (parameter_list->key_pos == 0 && parameter_list->switched_on ? 0x80 : 0);
 	}
 
 	AIData door_msg(sizeof(door_data), ID_CANSLATOR, receiver, door_data);
@@ -832,6 +880,8 @@ void BCAN_Handler::forwardIMIDMessage() {
 	if(imid_2515.readMessage(&can_msg) == MCP2515::ERROR_OK) {
 		bcan_2515.sendMessage(&can_msg);
 		rls_2515.sendMessage(&can_msg);
+		
+		last_can_msg = 0;
 	}
 }
 
@@ -878,6 +928,8 @@ void BCAN_Handler::forwardRLSMessage() {
 
 	bcan_2515.sendMessage(&can_msg);
 	imid_2515.sendMessage(&can_msg);
+
+	last_can_msg = 0;
 }
 
 //Get the headlight-temperature integration limit temp.

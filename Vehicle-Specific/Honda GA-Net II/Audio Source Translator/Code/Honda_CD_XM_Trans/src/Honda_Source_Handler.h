@@ -15,6 +15,7 @@
 
 #define IE_TRIES 25
 
+#define TEXT_PING_TIMER 500
 #define HANDSHAKE_WAIT 500
 
 #define MODE_FLASH_TIMER 1500
@@ -37,6 +38,9 @@ protected:
 	ParameterList* parameter_list;
 
 	bool source_established = false, source_sel = false, text_control = false;
+
+	bool text_ping_timer_enabled = false;
+	elapsedMillis text_ping_timer;
 
 	uint16_t device_ie_id = 0xFF;
 	uint8_t device_ai_id = 0x00;

@@ -80,7 +80,7 @@ void NavAVRController::loop() {
 
 						if(key_position == 0 && front_door_position != (last_door_position&0xC)) { //Power is off, door state changed.
 							if(front_door_position != 0) { //Front door open.
-								if(key_on) {
+								if(key_on || (door_position&0x80) != 0) {
 									if(pi_on)
 										powerOff();
 									else {
@@ -97,6 +97,9 @@ void NavAVRController::loop() {
 						}
 					}
 				} else if(ai_msg.receiver == ID_COMPUTER_PROXY) {
+					if(ai_msg.sender != ID_COMPUTER_PROXY)
+						ai_handler.sendAcknowledgement(ID_COMPUTER_PROXY, ai_msg.sender);
+
 					if(ai_msg.sender != ID_CANSLATOR)
 						continue;
 

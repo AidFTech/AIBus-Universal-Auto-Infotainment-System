@@ -323,11 +323,34 @@ bool SerialAIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			ai_group[i] = AIData(l, ai_d->sender, ai_d->receiver, ai_data);
 		}
 
+		{
+			unsigned long start = *this->timer;
+			#ifndef RPI_UART
+			int current_cached_bytes = aiserialBytesAvailable(this->ai_port);
+			#endif
+			while((*this->timer - start) < 1) {
+				#ifdef RPI_UART
+				if(gpioRead(AI_RX) == 0)
+					start = *this->timer;
+				#else
+				if(current_cached_bytes != aiserialBytesAvailable(this->ai_port)) {
+					current_cached_bytes = aiserialBytesAvailable(this->ai_port);
+					start = *this->timer;
+				}
+				#endif
+			}
+			start = *this->timer;
+			while((*this->timer - start) < 1);
+		}
+
 		bool ack = false;
 		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
 			ack = writeAIData(&ai_group[i], acknowledge);
 			if(!ack && acknowledge)
 				return false;
+
+			const unsigned long start = *timer;
+			while(*timer - start < 5);
 		}
 		return ack;
 	}
@@ -356,7 +379,7 @@ bool SerialAIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			}
 		}
 
-		if(ai_d->l >= 1 && ai_d->data[0] != 0x80) {
+		{
 			unsigned long start = *this->timer;
 			#ifndef RPI_UART
 			int current_cached_bytes = aiserialBytesAvailable(this->ai_port);

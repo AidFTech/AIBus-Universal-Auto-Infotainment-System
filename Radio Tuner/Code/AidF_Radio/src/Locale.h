@@ -33,6 +33,16 @@ enum radio_menu_index : menu_index_t {
 	MENU_INDEX_TONE_FADER,
 	MENU_INDEX_TONE_SVC,
 
+	//Radio settings menu:
+	MENU_INDEX_RADIO_SETTINGS,
+	MENU_INDEX_RADIO_SETTINGS_RDS_FLASH,
+
+	//RDS flash menu:
+	MENU_INDEX_RDS_FLASH_SETTINGS,
+	MENU_INDEX_RDS_FLASH_SETTINGS_OFF,
+	MENU_INDEX_RDS_FLASH_SETTINGS_INFO_MODE,
+	MENU_INDEX_RDS_FLASH_SETTINGS_ALWAYS,
+
 	MENU_INDEX_LEN
 };
 
@@ -40,7 +50,10 @@ static const radio_menu_index MENU_START_INDEX[] = {
 	MENU_INDEX_RADIO_MAIN_MENU,
 	MENU_INDEX_SOURCES,
 	MENU_INDEX_TONE,
-	MENU_INDEX_LEN,
+	MENU_INDEX_RADIO_SETTINGS,
+	MENU_INDEX_RDS_FLASH_SETTINGS,
+
+	MENU_INDEX_LEN
 };
 
 static const char* MENUS_ENG[] = {
@@ -62,6 +75,17 @@ static const char* MENUS_ENG[] = {
 	"Balance",
 	"Fader",
 	"SVC",
+
+	//Radio settings menu:
+	"Radio Settings",
+	"Flash RDS on Change",
+
+	//RDS flash menu:
+	"Flash RDS on Change",
+	"Off",
+	"With Info Display Active",
+	"Always",
+
 };
 
 const char* getString(const radio_text_index index, const uint8_t locale);

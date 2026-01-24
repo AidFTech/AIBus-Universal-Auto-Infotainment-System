@@ -304,15 +304,10 @@ void HondaCDXMTrans::loop() {
 				}
 			}
 
-			if (ai_msg.receiver == ID_CDC && cd_handler.getEstablished())
-				cd_handler.readAIBusMessage(&ai_msg);
-			else if (ai_msg.receiver == ID_TAPE && tape_handler.getEstablished())
-				tape_handler.readAIBusMessage(&ai_msg);
-			else if (ai_msg.receiver == ID_IMID_SCR && imid_handler.getEstablished())
-				imid_handler.readAIBusMessage(&ai_msg);
-			else if (ai_msg.receiver == ID_XM && xm_handler.getEstablished())
-				xm_handler.readAIBusMessage(&ai_msg);
-			else if (ai_msg.receiver == 0xFF && ai_msg.l >= 2 && ai_msg.data[0] == 0xA1) { // Broadcast message.
+			if (ai_handler.getValidMessage(&ai_msg) && ai_msg.l >= 2 && ai_msg.data[0] == 0xA1) { // Broadcast message.
+				if(ai_msg.receiver != 0xFF)
+					ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
+
 				if (ai_msg.l >= 3 && ai_msg.data[1] == 0x1F) {
 					if (ai_msg.data[2] == 0x1 && ai_msg.l >= 5) { // Time.
 						parameters.hour = ai_msg.data[3]&0x1F;
@@ -391,7 +386,14 @@ void HondaCDXMTrans::loop() {
 					if (imid_handler.getEstablished())
 						imid_handler.writeScreenLayoutMessage();
 				}
-			}
+			} else if (ai_msg.receiver == ID_CDC && cd_handler.getEstablished())
+				cd_handler.readAIBusMessage(&ai_msg);
+			else if (ai_msg.receiver == ID_TAPE && tape_handler.getEstablished())
+				tape_handler.readAIBusMessage(&ai_msg);
+			else if (ai_msg.receiver == ID_IMID_SCR && imid_handler.getEstablished())
+				imid_handler.readAIBusMessage(&ai_msg);
+			else if (ai_msg.receiver == ID_XM && xm_handler.getEstablished())
+				xm_handler.readAIBusMessage(&ai_msg);
 		}
 	} while (ai_timer < 50);
 
@@ -410,7 +412,7 @@ void HondaCDXMTrans::loop() {
 			} else if (tape_handler.getSelected()) {
 				uint8_t tape_function[] = {0x13, 0x0, 0x1};
 				sendFunctionMessage(&ie_handler, false, IE_ID_TAPE, tape_function, sizeof(tape_function));
-				sendFunctionMessage(&ie_handler, true, IE_ID_TAPE, tape_function, sizeof(tape_function));
+				tape_handler.refreshSource();
 			} else if (xm_handler.getSelected()) {
 				uint8_t xm_function[] = {0x19, 0x0, 0x1};
 				if (xm_handler.getXM2())

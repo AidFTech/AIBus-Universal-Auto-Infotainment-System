@@ -2,20 +2,6 @@
 
 AIBusDoubleDIN aibus_double_din;
 
-/*const volatile uint8_t aibt_edid[] = {
-	0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x05, 0x24, 0x00, 0x01,
-	0x01, 0x00, 0x00, 0x00, 0x01, 0x11, 0x01, 0x03, 0x81, 0x0E, 0x08, 0x78,
-	0x2E, 0x35, 0x85, 0xA6, 0x56, 0x48, 0x9A, 0x24, 0x12, 0x50, 0x54, 0xAF,
-	0xEF, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-	0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x3E, 0x0D, 0x20, 0x00, 0x31, 0xE0,
-	0x37, 0x10, 0x2C, 0x58, 0x36, 0x00, 0xDC, 0x0C, 0x11, 0x00, 0x00, 0x1E,
-	0x00, 0x00, 0x00, 0xFC, 0x00, 0x41, 0x69, 0x64, 0x46, 0x20, 0x41, 0x49,
-	0x42, 0x54, 0x0A, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xBA
-};*/
-
 static const volatile uint8_t aibt_edid[] = {
 	0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x05, 0x24, 0x00, 0x01,
 	0x01, 0x00, 0x00, 0x00, 0x01, 0x11, 0x01, 0x03, 0x81, 0x0E, 0x08, 0x78,
@@ -129,13 +115,17 @@ void AIBusDoubleDIN::setup() {
 	AIData init_msg(sizeof(init_data), ID_NAV_SCREEN, ID_CANSLATOR, init_data);
 	ai_handler.writeAIData(&init_msg, false);
 
-	Wire.begin(0x50);
+	/*Wire.begin(0x50);
 
 	Wire.onReceive(receiveI2C);
 	Wire.onRequest(handleEDID);
 	
 	for(int i=0;i<sizeof(aibt_edid);i+=1)
-		Wire.write(aibt_edid[i]);
+		Wire.write(aibt_edid[i]);*/
+
+	uint8_t poweroff_data[] = {0xA0};
+	AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_SCREEN, 0xFF, poweroff_data);
+	ai_handler.writeAIData(&poweroff_msg, false);
 
 	digitalWrite(FULL_POWER_ON, LOW);
 }
@@ -183,6 +173,11 @@ void AIBusDoubleDIN::loop() {
 							} else {
 								if((parameters.door_position&0xC) != 0) {
 									nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, false);
+
+									uint8_t poweroff_data[] = {0xA0};
+									AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_SCREEN, 0xFF, poweroff_data);
+									ai_handler.writeAIData(&poweroff_msg, false);
+
 									digitalWrite(FULL_POWER_ON, LOW);
 								} else {
 									door_timer_enabled = true;
@@ -199,9 +194,14 @@ void AIBusDoubleDIN::loop() {
 							const bool power_on = digitalRead(FULL_POWER_ON) != LOW;
 
 							if(front_door_position != 0) {
-								if(power_on) {
-									if(key_on) {
+								if(power_on || (parameters.door_position&0x80) != 0) {
+									if(key_on || (parameters.door_position&0x80) != 0) {
 										nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, false);
+
+										uint8_t poweroff_data[] = {0xA0};
+										AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_SCREEN, 0xFF, poweroff_data);
+										ai_handler.writeAIData(&poweroff_msg, false);
+
 										digitalWrite(FULL_POWER_ON, LOW);
 									}
 								} else {
@@ -284,15 +284,14 @@ void AIBusDoubleDIN::loop() {
 					nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, logo_on);
 					audio_on = logo_on;
 				} else if(msg.l >= 2 && msg.data[0] == 0x3E && msg.data[1] == 0xF0) { //EDID request.
+					AIData edid_msg(sizeof(aibt_edid) + 1, ID_NAV_SCREEN, msg.sender);
+					edid_msg[0] = 0x3E;
+					for(int i=0;i<sizeof(aibt_edid);i+=1)
+						edid_msg[i+1] = aibt_edid[i];
+					
 					ack = false;
 					ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
-
-					uint8_t edid_data[sizeof(aibt_edid) + 1];
-					edid_data[0] = 0x3E;
-					for(int i=0;i<sizeof(aibt_edid);i+=1)
-						edid_data[i+1] = aibt_edid[i];
-
-					AIData edid_msg(sizeof(edid_data), ID_NAV_SCREEN, msg.sender, edid_data);
+					
 					ai_handler.writeAIData(&edid_msg);
 				} else if(msg.l >= 2 && msg.data[0] == 0x2C && msg.data[1] == 0xF0) { //Screen resolution request.
 					ack = false;
@@ -341,6 +340,11 @@ void AIBusDoubleDIN::loop() {
 	if(door_timer_enabled && door_timer > DOOR_TIMER && parameters.key_position == 0) {
 		door_timer_enabled = false;
 		nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, false);
+
+		uint8_t poweroff_data[] = {0xA0};
+		AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_SCREEN, 0xFF, poweroff_data);
+		ai_handler.writeAIData(&poweroff_msg, false);
+
 		digitalWrite(FULL_POWER_ON, LOW);
 	}
 
@@ -372,7 +376,7 @@ void AIBusDoubleDIN::loop() {
 
 //Respond to a button query.
 void AIBusDoubleDIN::sendButtonsPresent(const uint8_t receiver) {
-	uint8_t button_data[] = {0x31, 0x30, 0x6, 0x6, 0x7, 0x23, 0x26, 0x36, 0x38, 0x25, 0x24, 0x53, 0x52, 0x20, 0x51, 0x27, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x28, 0x29, 0x2A, 0x2B};
+	uint8_t button_data[] = {0x31, 0x30, 0x16, 0x6, 0x7, 0x23, 0x26, 0x36, 0x38, 0x25, 0x24, 0x53, 0x52, 0x20, 0x51, 0x27, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x28, 0x29, 0x2A, 0x2B};
 	AIData button_msg(sizeof(button_data), ID_NAV_SCREEN, receiver, button_data);
 
 	ai_handler.writeAIData(&button_msg);

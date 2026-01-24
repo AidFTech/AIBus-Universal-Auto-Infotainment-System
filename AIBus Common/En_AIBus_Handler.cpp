@@ -74,9 +74,10 @@ bool EnAIBusHandler::cachePending(const uint8_t cache_id) {
 
 //Cache all pending AIBus messages for all IDs.
 bool EnAIBusHandler::cacheAllPending() {
-	if(ai_serial->available() > 0) {
+	if(ai_serial->available() >= 2) {
 		AIData ai_msg;
-		if(readAIData(&ai_msg, false)) {
+		const aibus_read_result_t ai_err = readAIDataErr(&ai_msg, false);
+		if(ai_err == AIBUS_READ_OK_SERIAL || ai_err == AIBUS_READ_OK_MULTIPLE) {
 			bool id = false;
 
 			if(ai_msg.receiver == 0xFF)
@@ -111,6 +112,8 @@ bool EnAIBusHandler::cacheAllPending() {
 				
 				return true;
 			}
+		} else if(ai_err != AIBUS_READ_NODATA) {
+			delay(5);
 		}
 	}
 	return false;

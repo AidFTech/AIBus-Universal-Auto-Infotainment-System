@@ -45,8 +45,8 @@ int main() {
 
 	vector<uint8_t> edid_bin(0);
 
-	while(!received_edid && elapsed_millis.time - start_time < 750) {
-		if(elapsed_millis.time - last_send > 100) {
+	while(!received_edid && elapsed_millis.time - start_time < 1500) {
+		if(elapsed_millis.time - last_send > 250) {
 			last_send = elapsed_millis.time;
 
 			uint8_t edid_request_data[] = {0x3E, 0xF0};
@@ -145,10 +145,10 @@ int main() {
 	}
 
 	start_time = elapsed_millis.time;
-	last_send = elapsed_millis.time + 100;
+	last_send = elapsed_millis.time + 250;
 
-	while(!received_res && elapsed_millis.time - start_time < 750) {
-		if(elapsed_millis.time - last_send > 100) {
+	while(!received_res && elapsed_millis.time - start_time < 1500) {
+		if(elapsed_millis.time - last_send > 250) {
 			last_send = elapsed_millis.time;
 
 			uint8_t res_request_data[] = {0x2C, 0xF0};

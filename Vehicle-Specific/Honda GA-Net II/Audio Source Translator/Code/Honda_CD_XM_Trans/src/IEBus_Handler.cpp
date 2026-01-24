@@ -165,9 +165,9 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 		TIMER_SCALER = 2;
 	}
 	
-	uint8_t direct = 0;
+	/*uint8_t direct = 0;
 	if(ie_d->direct)
-		direct = 1;
+		direct = 1;*/
 		
 	const uint8_t cx = ie_d->getChecksum();
 
@@ -203,6 +203,7 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 	TIMER = 0;
 	while((*rx_portregister&rx_bitmask) != 0) {
 		if(TIMER > 200) {
+			TIMER_SCALER = 2;
 			interrupts();
 			return -2;
 		}
@@ -339,6 +340,6 @@ void IEBusHandler::sendAcknowledgement(const uint16_t sender, const uint16_t rec
 	this->sendMessage(&ack_msg, true, true, false);
 }
 
-inline bool IEBusHandler::getInputOn() {
+bool IEBusHandler::getInputOn() {
 	return((*rx_portregister&rx_bitmask) != 0);
 }

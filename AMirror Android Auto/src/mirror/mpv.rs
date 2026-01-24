@@ -139,6 +139,33 @@ impl MpvVideo {
 		self.save_volume_image();
 	}
 
+	///Set a single-entry header overlay.
+	pub fn set_header_overlay(&mut self, text: String) {
+		self.save_header_image(text);
+
+		let mut mpv_ipc = match &self.mpv_ipc {
+			Some(mpv_ipc) => mpv_ipc,
+			None => return,
+		};
+
+		let overlay_height = self.h/10;
+		let file_size = self.w*4;
+
+		let overlay_str = "overlay-add 0 0 0 \"/tmp/overlay_header.bmp\" 122 bgra ".to_string() +
+			&self.w.to_string() + &" ".to_string() + 
+			&overlay_height.to_string() + &" ".to_string() +
+			&file_size.to_string() + &" \n".to_string();
+			
+		match mpv_ipc.write(overlay_str.as_bytes()) {
+			Ok(_) => {
+				
+			}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
+	}
+
 	///Show the overlay.
 	pub fn show_overlay(&mut self) {
 		let mut mpv_ipc = match &self.mpv_ipc {
@@ -387,6 +414,62 @@ impl MpvVideo {
 		}
 
 		return total_w;
+	}
+
+
+	///Save the overlay header image.
+	fn save_header_image(&self, text: String) {
+		let overlay_h = self.h/10;
+		let mut overlay_image = RgbaImage::new(self.w as u32, overlay_h as u32);
+
+		overlay_image = draw_filled_rect(&mut overlay_image, Rect::at(0, 0).of_size(self.w as u32, overlay_h as u32), self.header_color);
+
+		let font = match FontRef::try_from_slice(include_bytes!("AidF Font.ttf")) {
+			Ok(font) => font,
+			Err(e) => {
+				println!("Error: {}", e);
+				return;
+			}
+		};
+
+		let height = (overlay_h) as f32*3.0/5.0;
+		let scale = PxScale {
+			x: height,
+			y: height,
+		};
+
+		let overlay_text: Vec<char> = Self::get_symbol(text.clone()).chars().collect();
+
+		let mut displayed_text = "".to_string();
+		let mut str_x = (self.w as i32)/2 - (Self::get_text_width(text, font.clone(), height) as i32)/2;
+	
+		for j in 0..overlay_text.len() {
+			let c = overlay_text[j];
+			if c != '\u{25B2}' && c != '\u{25BC}' && c != '\u{25BA}' && c != '\u{25C4}' {
+				displayed_text += &c.to_string();
+			} else {
+				draw_text_mut(&mut overlay_image, self.text_color, str_x, (overlay_h/2 - (height as u16)/2) as i32, scale, &font, &displayed_text);
+				str_x += Self::get_text_width(displayed_text.clone(), font.clone(), height) as i32;
+				displayed_text = "".to_string();
+				
+				let triangle_height = height*0.8;
+
+				Self::draw_triangle(&mut overlay_image, c, &mut str_x, (overlay_h/2 - (triangle_height as u16)/2) as i32, triangle_height as i32, self.text_color);
+			}
+
+			if j >= overlay_text.len() - 1 {
+				draw_text_mut(&mut overlay_image, self.text_color, str_x, (overlay_h/2 - (height as u16)/2) as i32, scale, &font, &displayed_text);
+			}
+		}
+
+		overlay_image = flip_vertical(&mut overlay_image);
+
+		match overlay_image.save("/tmp/overlay_header.bmp") {
+			Ok(_) => {}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
 	}
 
 	///Save the overlay image for volume.

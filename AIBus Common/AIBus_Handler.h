@@ -9,6 +9,7 @@
 #define aibus_handler_h
 
 #define AI_DELAY_U 20
+#define AI_DELAY_M 2
 #define L_WAIT 20
 #define AI_WAIT 5
 #define RX_TIMER 200
@@ -72,6 +73,8 @@ protected:
 
 	virtual bool awaitAcknowledgement(AIData* ai_d);
 	virtual bool getID(const uint8_t id);
+
+	inline void clearSerial();
 };
 
 bool getInitMessage(AIData* ai_d);

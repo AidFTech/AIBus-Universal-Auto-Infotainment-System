@@ -71,7 +71,8 @@ bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 	bool ack = false;
 
 	elapsedMillis delay_timer = 0;
-	while(!ack && delay_timer < 20) {
+	int tries = 0;
+	while(!ack && delay_timer < 20 && tries < IE_TRIES) {
 		IE_Message ie_d;
 		const int message_result = ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO);
 		if(message_result == 0) {
@@ -80,8 +81,11 @@ bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 				break;
 			}
 		} else if(message_result < -1 || message_result > 0) {
-			delay_timer = 0;
-			ie_driver->cacheAIBus();
+			if(tries < 0) {
+				delay_timer = 0;
+				ie_driver->cacheAIBus();
+			}
+			tries += 1;
 		}
 	}
 
@@ -94,10 +98,14 @@ bool HondaSourceHandler::getIEAckMessage(IE_Message* msg, const uint16_t sender)
 	int tries = 0;
 	bool ack = false;
 
-	while(!ack && tries < IE_TRIES) {
+	elapsedMillis delay_timer = 0;
+
+	while(!ack && tries < IE_TRIES && delay_timer < 500) {
 		ack = getIEAckMessage(sender);
 		if(!ack)
 			ie_driver->sendMessage(msg, true, true);
+		
+		tries += 1;
 	}
 
 	return ack;
@@ -255,7 +263,9 @@ void HondaSourceHandler::requestControl(const uint8_t id) {
 	AIData request_msg(sizeof(request_data), this->device_ai_id, ID_NAV_SCREEN);
 	request_msg.refreshAIData(request_data);
 
-	ai_driver->writeAIData(&request_msg, parameter_list->screen_connected);
+	const bool ack = ai_driver->writeAIData(&request_msg, parameter_list->screen_connected);
+	if(parameter_list->screen_connected && !ack)
+		parameter_list->screen_connected = false;
 }
 
 //Send an overlay message to the phone mirror.

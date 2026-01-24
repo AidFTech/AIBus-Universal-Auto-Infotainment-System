@@ -622,7 +622,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				//TODO: For a digital amp, ask the amp to create the tone menu.
 			} else if(button >= 0x11 && button <= 0x16) { //Presets.
 				const uint8_t preset = (button&0xF) - 1;
-				if(source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
+				if(audio_on && source_list[current_source].source_id == ID_RADIO && source_list[current_source].sub_id <= 2) {
 					const uint8_t group = source_list[current_source].sub_id;
 					if(state == 2) { //Recall preset.
 						uint16_t freq = tuner_main->getFrequency();
@@ -685,8 +685,14 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 		ai_handler->sendAcknowledgement(ID_RADIO, ai_d->sender);
 		if(ai_d->l >= 2 && ai_d->data[0] == 0x2B) { //Menu related message.
 			if(ai_d->data[1] == 0x40) { //A menu was cleared.
+				const radio_menu_t last_menu = menu_open;
+				
 				menu_open = NO_MENU;
 				tuner_background->setSeekMode(true);
+
+				if(last_menu == RDS_FLASH_MENU)
+					createRadioSettingsMenu();
+
 				return true;
 			} else if(ai_d->l >= 3 && ai_d->data[1] == 0x6A) { //Audio menu item selected.
 				const uint8_t item = ai_d->data[2], source_id = this->getCurrentSourceID();
@@ -809,6 +815,41 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 							ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
 						}
 					}
+				} else if(menu_open == RADIO_SETTINGS_MENU) {
+					const int selection = ai_d->data[2]-1;
+					const MenuList settings_menu = getMenu(MENU_INDEX_RADIO_SETTINGS, parameter_list->locale);
+					
+					switch(settings_menu.getGlobalIndex(selection)) {
+					case MENU_INDEX_RADIO_SETTINGS_RDS_FLASH:
+						if(parameter_list->imid_char <= 0 || parameter_list->imid_lines != 1) { //Checkbox.
+							if(parameter_list->header_rds_setting == HEADER_RDS_OFF)
+								parameter_list->header_rds_setting = HEADER_RDS_ALWAYS;
+							else
+								parameter_list->header_rds_setting = HEADER_RDS_OFF;
+
+							createRadioSettingsMenuItem(settings_menu.getLocalIndex(MENU_INDEX_RADIO_SETTINGS_RDS_FLASH));
+						} else
+							createRDSFlashMenu();
+						break;
+					}
+				} else if(menu_open == RDS_FLASH_MENU) {
+					const int selection = ai_d->data[2]-1;
+					const MenuList rds_menu = getMenu(MENU_INDEX_RDS_FLASH_SETTINGS, parameter_list->locale);
+
+					switch(rds_menu.getGlobalIndex(selection)) {
+					case MENU_INDEX_RDS_FLASH_SETTINGS_OFF:
+						parameter_list->header_rds_setting = HEADER_RDS_OFF;
+						break;
+					case MENU_INDEX_RDS_FLASH_SETTINGS_INFO_MODE:
+						parameter_list->header_rds_setting = HEADER_RDS_INFO_MODE;
+						break;
+					case MENU_INDEX_RDS_FLASH_SETTINGS_ALWAYS:
+						parameter_list->header_rds_setting = HEADER_RDS_ALWAYS;
+						break;
+					}
+
+					clearMenu();
+					createRadioSettingsMenu();
 				}
 				return true;
 			} else if(ai_d->l >= 2 && ai_d->data[1] == 0x4A) {
@@ -824,6 +865,10 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					AIData request_msg(sizeof(request_data), ID_RADIO, src, request_data);
 					
 					ai_handler->writeAIData(&request_msg);
+					return true;
+				} else {
+					createRadioSettingsMenu();
+					return true;
 				}
 			}
 		}
@@ -1084,13 +1129,13 @@ bool SourceHandler::sendSourceQuery(const uint8_t source) {
 }
 
 //Clear any open audio menu.
-void SourceHandler::clearMenu() {
+bool SourceHandler::clearMenu() {
 	uint8_t data[] = {0x2B, 0x4A};
 	AIData clear_msg(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
 
 	const bool ack = ai_handler->writeAIData(&clear_msg);
 	if(!ack)
-		return;
+		return false;
 
 	elapsedMillis clear_wait;
 	while(clear_wait < 50) {
@@ -1098,14 +1143,16 @@ void SourceHandler::clearMenu() {
 		if(ai_handler->readAIData(&clear_msg)) {
 			if(clear_msg.receiver == ID_RADIO && clear_msg.sender == ID_NAV_COMPUTER &&
 											clear_msg.l >= 2 &&
-											clear_msg.data[0] == 0x2B && clear_msg.data[1] == 0x40) { //Clear message.
+											clear_msg[0] == 0x2B && clear_msg[1] == 0x40) { //Clear message.
 				ai_handler->sendAcknowledgement(ID_RADIO, ID_NAV_COMPUTER);
 				menu_open = NO_MENU;
 				tuner_background->setSeekMode(true);
-				break;
+				return true;
 			}
 		}
 	}
+
+	return false;
 }
 
 //Send the initial request to create a menu. Return whether creation is allowed.
@@ -1130,7 +1177,7 @@ bool SourceHandler::createMenu(const String title, const int items) {
 		menu_header_data[i+12] = uint8_t(title.charAt(i));
 
 	AIData menu_header(sizeof(menu_header_data), ID_RADIO, ID_NAV_COMPUTER, menu_header_data);
-	bool ack = ai_handler->writeAIData(&menu_header);
+	bool ack = ai_handler->writeAIData(&menu_header, parameter_list->computer_connected);
 
 	if(!ack)
 		return false;
@@ -1160,6 +1207,11 @@ void SourceHandler::createSourceMenu() {
 	AudioSource active_list[source_count];
 	const uint16_t active_count = getFilledSources(active_list);
 	
+	if(menu_open != NO_MENU) {
+		if(!clearMenu())
+			return;
+	}
+
 	if(!createMenu(getMenu(MENU_INDEX_SOURCES, parameter_list->locale).title, active_count))
 		return;
 	
@@ -1195,6 +1247,11 @@ void SourceHandler::createPresetMenu(const uint8_t group) {
 		preset_list = parameter_list->am_presets;
 	else
 		return;
+
+	if(menu_open != NO_MENU) {
+		if(!clearMenu())
+			return;
+	}
 
 	if(!createMenu(getMenu(MENU_INDEX_RADIO_MAIN_MENU, parameter_list->locale).getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_PRESETS), 6))
 		return;
@@ -1236,6 +1293,11 @@ void SourceHandler::createStationListMenu() {
 	if(station_count <= 0)
 		return;
 
+	if(menu_open != NO_MENU) {
+		if(!clearMenu())
+			return;
+	}
+
 	if(!createMenu(getMenu(MENU_INDEX_RADIO_MAIN_MENU, parameter_list->locale).getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_STATION_LIST), station_count))
 		return;
 
@@ -1264,6 +1326,11 @@ void SourceHandler::createStationListMenu() {
 
 //Create the tone menu.
 void SourceHandler::createToneMenu() {
+	if(menu_open != NO_MENU) {
+		if(!clearMenu())
+			return;
+	}
+
 	if(!createMenu(getMenu(MENU_INDEX_TONE, parameter_list->locale).title, 5))
 		return;
 	
@@ -1386,6 +1453,101 @@ void SourceHandler::createToneMenuItem(const int item) {
 
 		ai_handler->writeAIData(&slider_msg, parameter_list->computer_connected);
 	}
+}
+
+//Create the radio settings menu.
+void SourceHandler::createRadioSettingsMenu() {
+	if(menu_open != NO_MENU) {
+		if(!clearMenu())
+			return;
+	}
+	
+	const MenuList settings_menu = getMenu(MENU_INDEX_RADIO_SETTINGS, parameter_list->locale);
+	if(!createMenu(settings_menu.title, settings_menu.size()))
+		return;
+
+	for(int i=0;i<settings_menu.size();i+=1)
+		createRadioSettingsMenuItem(i);
+
+	uint8_t display_data[] = {0x2B, 0x52, 0x1};
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER, display_data);
+	bool ack = ai_handler->writeAIData(&display_msg);
+	if(ack)
+		menu_open = RADIO_SETTINGS_MENU;
+}
+
+//Create an item in the radio settings menu.
+void SourceHandler::createRadioSettingsMenuItem(const int item) {
+	const MenuList settings_menu = getMenu(MENU_INDEX_RADIO_SETTINGS, parameter_list->locale);
+	String setting = settings_menu[item];
+	if(item==settings_menu.getLocalIndex(MENU_INDEX_RADIO_SETTINGS_RDS_FLASH)) {
+		if(parameter_list->imid_char <= 0 || parameter_list->imid_lines != 1)
+			setting = parameter_list->header_rds_setting != HEADER_RDS_OFF ? "#ROF" : "#RON" + (" " + setting);
+	}
+
+	uint8_t setting_data[3+setting.length()];
+	setting_data[0] = 0x2B;
+	setting_data[1] = 0x51;
+	setting_data[2] = uint8_t(item);
+	for(int i=0;i<setting.length();i+=1)
+		setting_data[i+3] = uint8_t(setting[i]);
+
+	AIData setting_msg(sizeof(setting_data), ID_RADIO, ID_NAV_COMPUTER, setting_data);
+	ai_handler->writeAIData(&setting_msg, parameter_list->computer_connected);
+}
+
+//Create the RDS flash settings menu.
+void SourceHandler::createRDSFlashMenu() {
+	if(menu_open != NO_MENU) {
+		if(!clearMenu())
+			return;
+	}
+	
+	if(!clearMenu())
+		return;
+
+	const MenuList rds_flash_menu = getMenu(MENU_INDEX_RDS_FLASH_SETTINGS, parameter_list->locale);
+	if(!createMenu(rds_flash_menu.title, rds_flash_menu.size()))
+		return;
+
+	for(int i=0;i<rds_flash_menu.size();i+=1) {
+		String setting = rds_flash_menu[i];
+		bool setting_sel = false;
+		switch(rds_flash_menu.getGlobalIndex(i)) {
+		case MENU_INDEX_RDS_FLASH_SETTINGS_OFF:
+			if(parameter_list->header_rds_setting == HEADER_RDS_OFF)
+				setting_sel = true;
+			break;
+		case MENU_INDEX_RDS_FLASH_SETTINGS_INFO_MODE:
+			if(parameter_list->header_rds_setting == HEADER_RDS_INFO_MODE)
+				setting_sel = true;
+			break;
+		case MENU_INDEX_RDS_FLASH_SETTINGS_ALWAYS:
+			if(parameter_list->header_rds_setting == HEADER_RDS_ALWAYS)
+				setting_sel = true;
+			break;
+		}
+
+		if(setting_sel)
+			setting = "#CON " + setting;
+		else
+			setting = "#COF " + setting;
+
+		AIData setting_msg(setting.length() + 3, ID_RADIO, ID_NAV_COMPUTER);
+		setting_msg[0] = 0x2B;
+		setting_msg[1] = 0x51;
+		setting_msg[2] = uint8_t(i);
+		for(int d=0;d<setting.length();d+=1)
+			setting_msg[d+3] = uint8_t(setting[d]);
+
+		ai_handler->writeAIData(&setting_msg, parameter_list->computer_connected);
+	}
+
+	uint8_t display_data[] = {0x2B, 0x52, 0x1};
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER, display_data);
+	bool ack = ai_handler->writeAIData(&display_msg);
+	if(ack)
+		menu_open = RDS_FLASH_MENU;
 }
 
 //Set the current source to the desired ID and sub ID.

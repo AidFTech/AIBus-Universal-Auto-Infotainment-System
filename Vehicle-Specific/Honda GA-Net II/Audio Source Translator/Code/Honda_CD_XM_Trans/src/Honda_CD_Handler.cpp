@@ -148,6 +148,16 @@ void HondaCDHandler::loop() {
 			if(!ack)
 				parameter_list->radio_connected = false;
 		}
+
+		if(text_ping_timer_enabled && text_ping_timer > TEXT_PING_TIMER) {
+			text_ping_timer = 0;
+			uint8_t text_request_data[] = {0x60, 0x11};
+			AIData text_request_msg(sizeof(text_request_data), this->device_ai_id, ID_RADIO, text_request_data);
+			const bool ack = ai_driver->writeAIData(&text_request_msg, parameter_list->radio_connected);
+			
+			if(!ack)
+				parameter_list->radio_connected = false;
+		}
 	
 		if(setting_changed) {
 			setting_changed = false;
@@ -167,6 +177,16 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 		if(parameter_list->radio_connected)
 			sendSourceNameMessage();
 	}
+
+	/*{
+		AIData test_msg(the_message->l + 2, ID_CDC, 0xFF);
+		test_msg[0] = 0xA1;
+		test_msg[1] = 0xFF;
+		for(int i=0;i<the_message->l;i+=1)
+			test_msg[i+2] = the_message->data[i];
+
+		ai_driver->writeAIData(&test_msg, false);
+	}*/
 
 	bool ack = true;
 	
@@ -372,15 +392,17 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 			if(increment > 2)
 				increment = 1;
 			
+			const unsigned int olen = len;
+			
 			unsigned int start = 0;
 			if(msg_stage > 0)
 				start = 16;
-			else
+			else if(len > 16)
 				len = 16;
 
-			for(unsigned int i=start;i<len;i+=1) {
-				const unsigned int d = (i-start)*increment + (increment-1) + 8;
-				if(d > the_message->l - 1)
+			for(unsigned int i=start;i<len && i<olen;i+=1) {
+				const int d = (i-start)*increment + (increment-1) + 8;
+				if(d >= int(the_message->l) || d < 0)
 					break;
 
 				if(the_message->data[d] != 0xFF) {
@@ -445,20 +467,21 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 		sendAIAckMessage(sender);
 
 		if(active_source == ID_CDC) {
+			text_ping_timer = 0;
+			text_ping_timer_enabled = true;
 
 			uint8_t function[] = {0x6, 0x0, 0x1};
 			source_sel = true;
 			sendFunctionMessage(ie_driver, true, IE_ID_CDC, function, sizeof(function));
 			
-			elapsedMillis function_timer;
-			while(!getIEAckMessage(device_ie_id) && function_timer < 200)
-				sendFunctionMessage(ie_driver, true, IE_ID_CDC, function, sizeof(function));
+			IE_Message function_message = getFunctionMessage(true, IE_ID_CDC, function, sizeof(function));
+			ie_driver->sendMessage(&function_message, true, true);
+			getIEAckMessage(&function_message, device_ie_id);
 
-			sendFunctionMessage(ie_driver, false, IE_ID_CDC, function, sizeof(function));
 
-			function_timer = 0;
-			while(!getIEAckMessage(device_ie_id) && function_timer < 200)
-				sendFunctionMessage(ie_driver, false, IE_ID_CDC, function, sizeof(function));
+			function_message = getFunctionMessage(false, IE_ID_CDC, function, sizeof(function));
+			ie_driver->sendMessage(&function_message, true, true);
+			getIEAckMessage(&function_message, device_ie_id);
 			
 			*parameter_list->screen_request_timer = SCREEN_REQUEST_TIMER;
 			sendAICDStatusMessage(ID_RADIO);
@@ -507,6 +530,8 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 	} else if (the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO) {
 		ack = false;
 		sendAIAckMessage(sender);
+
+		text_ping_timer_enabled = false;
 	
 		this->text_control = the_message->data[2] == device_ai_id;
 		if(this->text_control) {
@@ -1003,17 +1028,17 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 		switch(field) {
 			case TEXT_SONG:
 				affected = song_title;
-				len = sizeof(song_title)/sizeof(char);
+				len = sizeof(song_title)/sizeof(char)-1;
 				ai_field = 1;
 				break;
 			case TEXT_ARTIST:
 				affected = artist;
-				len = sizeof(artist)/sizeof(char);
+				len = sizeof(artist)/sizeof(char)-1;
 				ai_field = 2;
 				break;
 			case TEXT_ALBUM:
 				affected = album;
-				len = sizeof(album)/sizeof(char);
+				len = sizeof(album)/sizeof(char)-1;
 				ai_field = 3;
 				break;
 			default:
@@ -1023,27 +1048,27 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 		switch(field) {
 			case 0:
 				affected = folder;
-				len = sizeof(folder)/sizeof(char);
+				len = sizeof(folder)/sizeof(char)-1;
 				ai_field = 4;
 				break;
 			case 1:
 				affected = filename;
-				len = sizeof(filename)/sizeof(char);
+				len = sizeof(filename)/sizeof(char)-1;
 				ai_field = 5;
 				break;
 			case 2:
 				affected = song_title;
-				len = sizeof(song_title)/sizeof(char);
+				len = sizeof(song_title)/sizeof(char)-1;
 				ai_field = 1;
 				break;
 			case 3:
 				affected = album;
-				len = sizeof(album)/sizeof(char);
+				len = sizeof(album)/sizeof(char)-1;
 				ai_field = 3;
 				break;
 			case 4:
 				affected = artist;
-				len = sizeof(artist)/sizeof(char);
+				len = sizeof(artist)/sizeof(char)-1;
 				ai_field = 2;
 				break;
 		}
@@ -1068,8 +1093,8 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 		if(this->track > 0)
 			nav_header += '-' + String(int(this->track));
 
-		if(meta_text.length() > 20)
-			meta_text = meta_text.substring(0,20);
+		/*if(meta_text.length() > 20)
+			meta_text = meta_text.substring(0,20);*/
 
 		nav_header += "  " + meta_text;
 		setNavHeader(nav_header);
@@ -1232,36 +1257,9 @@ void HondaCDHandler::sendTextRequest() {
 		return;
 
 	uint8_t function_data[] = {0x6, 0x0};
-	sendFunctionMessage(ie_driver, true, IE_ID_CDC, function_data, sizeof(function_data));
-	
-	/*elapsedMillis ie_timer;
-
-	IE_Message msg_cache[5];
-	int current_msg = 0;
-
-	while(ie_timer < 50 && current_msg < sizeof(msg_cache)/sizeof(IE_Message)) {
-		if(ie_driver->getInputOn()) {
-			//ie_timer = 0;
-
-			IE_Message ie_msg;
-			if(ie_driver->readMessage(&ie_msg, true, IE_ID_RADIO) == 0) {
-				IE_Message check_msg(ie_msg.l-1, ie_msg.sender, ie_msg.receiver, ie_msg.control, ie_msg.direct);
-				for(int i=0;i<ie_msg.l-1;i+=1)
-					check_msg.data[i] = ie_msg.data[i];
-
-				if(ie_msg.checkVaildity()) {
-					if(ie_msg.receiver == IE_ID_RADIO && ie_msg.sender == IE_ID_CDC && ie_msg.l >= 1 && ie_msg.data[0] != 0x80) {
-						ie_driver->sendAcknowledgement(ie_msg.receiver, ie_msg.sender);
-						msg_cache->refreshIEData(ie_msg);
-						current_msg += 1;
-					}
-				}
-			}
-		}
-	}
-
-	for(int i=0;i<current_msg;i+=1)
-		this->interpretCDMessage(&msg_cache[i]);*/
+	IE_Message function_msg = getFunctionMessage(true, IE_ID_CDC, function_data, sizeof(function_data));
+	ie_driver->sendMessage(&function_msg, true, true);
+	getIEAckMessage(&function_msg, device_ie_id);
 }
 
 //Send text to the IMID.

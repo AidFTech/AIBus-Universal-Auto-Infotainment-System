@@ -163,24 +163,19 @@ void TextHandler::sendShortRDSMessage(String text) {
 //Send the full RDS message to the screen.
 void TextHandler::sendLongRDSMessage(String text) {
 	if(text.length() > 0) {
-		for(int c=0;c<text.length();c+=1) {
-			if(text.charAt(c) < ' ') {
-				text = text.substring(0,c);
-				break;
-			}
-		}
+		text = trimText(text);
 
 		if(text.length() <= 0)
 			return;
 
 		String sub_text[5] = {"","","","",""};
 		
-		splitText(14, text, sub_text, 5);
+		splitText((parameter_list->screen_w/2)/28, text, sub_text, 5);
 		
 		for(int i=0;i<5;i+=1) {
 			AIData rds_message;
 			if(sub_text[i].length() > 0) {
-				rds_message.refreshAIData(getTextMessage(sub_text[i], 0, uint8_t(i+1)));
+				rds_message = getTextMessage(sub_text[i], 0, uint8_t(i+1));
 			} else {
 				uint8_t clear_data[] = {0x20, 0x60, uint8_t(i+1)};
 				rds_message.refreshAIData(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER);
@@ -191,6 +186,12 @@ void TextHandler::sendLongRDSMessage(String text) {
 				rds_message.data[1] |= 0x10;
 			
 			ai_handler->writeAIData(&rds_message, parameter_list->computer_connected);
+		}
+
+		if(parameter_list->header_rds_setting == HEADER_RDS_ALWAYS || (parameter_list->info_mode && parameter_list->header_rds_setting == HEADER_RDS_INFO_MODE)) { //TODO: And this feature is active.
+			text.replace("#", "##  ");
+			text.trim();
+			setOverlayHeader(text);
 		}
 	} else {
 		for(int i=0;i<5;i+=1) {
@@ -393,6 +394,22 @@ void TextHandler::sendIMIDRDSMessage(const uint16_t frequency, String text) {
 	}
 }
 
+//Send the full RDS message to a radio-supporting IMID.
+void TextHandler::sendIMIDFullRDSMessage(String text) {
+	if(!parameter_list->imid_connected || !parameter_list->imid_radio)
+		return;
+
+	AIData rds_msg(2 + text.length(), ID_RADIO, ID_IMID_SCR);
+
+	rds_msg.data[0] = 0x63;
+	rds_msg.data[1] = 0x62;
+
+	for(int i=0;i<text.length();i+=1)
+		rds_msg.data[i+2] = uint8_t(text.charAt(i));
+
+	ai_handler->writeAIData(&rds_msg);
+}
+
 //Send an info message.
 void TextHandler::sendIMIDInfoMessage(String text) {
 	if(!parameter_list->info_mode)
@@ -522,4 +539,14 @@ AIData getTextMessage(String text, const uint8_t group, const uint8_t area) {
 	
 	return text_message;
 	
+}
+
+//Trim non-printing characters from a string.
+String trimText(String text) {
+	for(int c=0;c<text.length();c+=1) {
+		if(text.charAt(c) < ' ') {
+			return text.substring(0,c);
+		}
+	}
+	return text;
 }

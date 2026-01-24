@@ -47,6 +47,7 @@ public:
 	void sendIMIDSourceMessage(const uint8_t source, const uint8_t subsource);
 	void sendIMIDRDSMessage(String text);
 	void sendIMIDRDSMessage(const uint16_t frequency, String text);
+	void sendIMIDFullRDSMessage(String text);
 	void sendIMIDInfoMessage(String text);
 	void sendIMIDCallsignMessage(String text);
 
@@ -65,5 +66,6 @@ private:
 };
 
 AIData getTextMessage(String text, const uint8_t group, const uint8_t area);
+String trimText(String text);
 
 #endif

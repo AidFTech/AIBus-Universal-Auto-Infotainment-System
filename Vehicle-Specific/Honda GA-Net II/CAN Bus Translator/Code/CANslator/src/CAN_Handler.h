@@ -3,6 +3,7 @@
 #include <mcp2515.h>
 #include <MCP4251.h>
 #include <elapsedMillis.h>
+#include <Vector.h>
 
 #include "AIBus_Handler.h"
 #include "AIBus.h"
@@ -41,6 +42,9 @@
 #define BCAN_ID_NAV_NEXT_TURN 0x92F95C55
 
 #define HEADLIGHT_TEMP_BUFFER 20 //Buffer for headlight temp hysteresis.
+
+#define REC_DEVICE_COUNT 16 //The number of devices that can query for status messages.
+#define CAN_TIMER 5000 //The amount of time to wait for new CAN messages before powering off.
 
 enum aidf_nav_special_t : uint8_t {
 	AIDF_NAV_SPECIAL_NORMAL,
@@ -94,6 +98,9 @@ private:
 	MCP4251* int_light_controller = nullptr;
 
 	CANMenuHandler menu_handler;
+
+	uint8_t rec_device_list[REC_DEVICE_COUNT];
+	Vector<uint8_t> rec_device_vec;
 	
 	//BCAN-derived variables:
 	bool auto_stop :1, econ_mode :1, e_brake :1, brightness_bar :1, lights_on:1, night_mode :1;
@@ -112,6 +119,8 @@ private:
 	uint8_t light_state_a = 0, light_state_b = 0;
 	bool ext_drl_on = false; //True if an external DRL is in use.
 
+	elapsedMillis last_can_msg; //Duration since the last CAN message was sent.
+
 	//Range:
 	uint16_t range = 0;
 	bool range_miles = false;
@@ -128,6 +137,11 @@ private:
 	bool headlight_on_temp = false; //True if the headlights have come on due to temperature.
 	int16_t headlight_temp_limit = 100; //The temperature at which headlights need to come on.
 	elapsedMillis* wiper_timer = nullptr; //External wiper timer.
+
+	//Combined AIBus:
+	void writeAIBusKeyMessage();
+	void writeAIBusDoorMessage();
+	void writeAIBusBrightnessMessage();
 
 	//AIBus:
 	void writeAIBusKeyMessage(const uint8_t receiver);

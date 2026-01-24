@@ -133,7 +133,17 @@ fn main() {
 				}
 			}
 
+			let mut multi_ack = true;
+
 			for ai_msg in ai_tx_vec {
+				if !multi_ack && ai_msg.l() > 0 && ai_msg.data[0] == 0x91 {
+					continue;
+				}
+
+				if ai_msg.l() > 0 && ai_msg.data[0] != 0x91 {
+					multi_ack = true;
+				}
+
 				write_aibus_message(&mut amirror_stream, ai_msg.clone());
 
 				let msg_copy = ai_msg.clone();
@@ -227,6 +237,51 @@ fn main() {
 						}
 					}
 
+					//If the acknowledgment failed.
+					if !ack {
+						if ai_msg.receiver == AIBUS_DEVICE_RADIO {
+							match radio_connected_aibus.try_lock() {
+								Ok(mut radio_connected) => {
+									*radio_connected = false;
+								}
+								Err(_) => {
+									
+								}
+							}
+						} else if ai_msg.receiver == AIBUS_DEVICE_NAV_SCREEN {
+							match screen_connected_aibus.try_lock() {
+								Ok(mut screen_connected) => {
+									*screen_connected = false;
+								}
+								Err(_) => {
+									
+								}
+							}
+						} else if ai_msg.receiver == AIBUS_DEVICE_PHONE {
+							match bluetooth_connected_aibus.try_lock() {
+								Ok(mut bluetooth_connected) => {
+									*bluetooth_connected = false;
+								}
+								Err(_) => {
+									
+								}
+							}
+						} else if ai_msg.receiver == AIBUS_DEVICE_IMID {
+							match imid_connected_aibus.try_lock() {
+								Ok(mut imid_connected) => {
+									*imid_connected = false;
+								}
+								Err(_) => {
+									
+								}
+							}
+						}
+					
+						if ai_msg.l() > 0 && ai_msg.data[0] == 0x91 {
+							multi_ack = false;
+						}
+					}
+
 					match aibus_thread.try_lock() {
 						Ok(mut aibus_thread) => {
 							let thread_cache = aibus_thread.get_ai_rx();
@@ -238,6 +293,11 @@ fn main() {
 							//Continue.
 						}
 					}
+				}
+			
+				//Determine whether to wait a bit for multi-messages.
+				if msg_copy.l() > 0 && msg_copy.data[0] == 0x91 {
+					thread::sleep(Duration::from_millis(5));
 				}
 			}
 		
@@ -274,19 +334,38 @@ fn main() {
 								multiple_cache.push(rx_msg.clone());
 
 								if multiple_cache.len() >= expected_len {
+									println!("91 message complete!");
+									let mut pos = 0;
+
 									let mut full_data = Vec::new();
-									for m in multiple_cache.clone() {
-										for d in m.data {
-											full_data.push(d);
+
+									while pos < expected_len {
+										let mut found = false;
+										for m in multiple_cache.clone() {
+											if m.l() > 3 && m.data[2] == pos as u8 {
+												for i in 3..m.l() {
+													full_data.push(m.data[i]);
+												}
+												found = true;
+												pos += 1;
+											}
+										}
+
+										if !found {
+											break;
 										}
 									}
 
-									let full_msg = AIBusMessage {
-										sender: rx_msg.sender,
-										receiver: rx_msg.receiver,
-										data: full_data,
-									};
-									ai_rx.push(full_msg);
+									println!("91 data: {:X?}", full_data);
+
+									if pos >= expected_len {
+										let full_msg = AIBusMessage {
+											sender: rx_msg.sender,
+											receiver: rx_msg.receiver,
+											data: full_data,
+										};
+										ai_rx.push(full_msg);
+									}
 
 									multiple_cache.clear();
 								}

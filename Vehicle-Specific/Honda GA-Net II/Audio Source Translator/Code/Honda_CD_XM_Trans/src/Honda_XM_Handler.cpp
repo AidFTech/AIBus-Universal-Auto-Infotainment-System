@@ -99,6 +99,16 @@ void HondaXMHandler::loop() {
 			if(!ack)
 				parameter_list->radio_connected = false;
 		}
+
+		if(text_ping_timer_enabled && text_ping_timer > TEXT_PING_TIMER) {
+			text_ping_timer = 0;
+			uint8_t text_request_data[] = {0x60, 0x11};
+			AIData text_request_msg(sizeof(text_request_data), this->device_ai_id, ID_RADIO, text_request_data);
+			const bool ack = ai_driver->writeAIData(&text_request_msg, parameter_list->radio_connected);
+			
+			if(!ack)
+				parameter_list->radio_connected = false;
+		}
 	}
 
 	if(source_established && preset_request_timer > preset_request_wait) {
@@ -623,6 +633,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		
 		const uint8_t active_source = the_message->data[2];
 		if(active_source == ID_XM) {
+			text_ping_timer = 0;
+			text_ping_timer_enabled = true;
+
 			uint8_t function[] = {0x19, 0x0, 0x41};
 
 			if(the_message->l >= 4) {
@@ -727,6 +740,8 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO) {
 		ack = false;
 		sendAIAckMessage(sender);
+
+		text_ping_timer_enabled = false;
 
 		this->text_control = the_message->data[2] == device_ai_id;
 		if(this->text_control) {
@@ -999,8 +1014,9 @@ void HondaXMHandler::sendTextRequest() {
 	else if(full_xm)
 		function_data[2] = 0x41;
 
-	sendFunctionMessage(ie_driver, true, IE_ID_SIRIUS, function_data, sizeof(function_data));
-	getIEAckMessage(device_ie_id);
+	IE_Message function_msg = getFunctionMessage(true, IE_ID_SIRIUS, function_data, sizeof(function_data));
+	ie_driver->sendMessage(&function_msg, true, true);
+	getIEAckMessage(&function_msg, device_ie_id);
 }
 
 //Set text on the IMID.

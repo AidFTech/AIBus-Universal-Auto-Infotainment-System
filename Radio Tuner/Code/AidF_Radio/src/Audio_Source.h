@@ -21,7 +21,9 @@ enum radio_menu_t : uint8_t {
 	SOURCE_MENU,
 	PRESET_MENU,
 	STATION_MENU,
-	TONE_MENU
+	TONE_MENU,
+	RADIO_SETTINGS_MENU,
+	RDS_FLASH_MENU,
 };
 
 #define TONE_OPTION_BASS 0
@@ -105,7 +107,7 @@ private:
 
 	bool sendSourceQuery(const uint8_t source);
 
-	void clearMenu();
+	bool clearMenu();
 	bool createMenu(const String title, const int items);
 
 	void createSourceMenu();
@@ -114,6 +116,11 @@ private:
 
 	void createToneMenu();
 	void createToneMenuItem(const int item);
+
+	void createRadioSettingsMenu();
+	void createRadioSettingsMenuItem(const int item);
+
+	void createRDSFlashMenu();
 
 	void sendManualTuneMessage();
 	

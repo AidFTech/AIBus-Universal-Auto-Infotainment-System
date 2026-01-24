@@ -161,27 +161,10 @@ void CANslator::loop() {
 
 	if(parameters.power_on != last_power) {
 		peripheral_mcp.digitalWriteIO(PERIPHERAL_IGNITION, parameters.power_on);
-
-		if(parameters.power_on)
-			digitalWrite(POWER_ON, HIGH);
-		else {
-			if((parameters.doors_open&0xC) != 0)
-				digitalWrite(POWER_ON, LOW);
-			//TODO: Door timer.
-		}
+		digitalWrite(POWER_ON, parameters.power_on ? HIGH : LOW);
 	}
 
 	if(parameters.doors_open != last_door) {
-		if(!parameters.power_on) {
-			if(!parameters.switched_on)
-				digitalWrite(POWER_ON, HIGH);
-			else {
-				if((parameters.doors_open&0xC) != 0)
-					digitalWrite(POWER_ON, LOW);
-				//TODO: Door timer.
-			}
-		}
-
 		if((parameters.doors_open&0xF) != 0 && parameters.ambient_light_enable_door)
 			parameters.ambient_state = AMBIENT_LIGHTS_FULL;
 		else if((parameters.doors_open&0xF) == 0) {
