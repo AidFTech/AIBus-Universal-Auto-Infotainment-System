@@ -33,6 +33,7 @@ enum info_active_menu : uint8_t {
 #include "FrontFog_Img.h"
 #include "RearFog_Img.h"
 #include "Silhouette_Img.h"
+#include "Auto Stop_Img.h"
 
 #include "Hybrid_Img.h"
 #include "Power_Flow_Arrow.h"
@@ -78,6 +79,8 @@ private:
 				*highbeam_texture = NULL,
 				*frontfog_texture = NULL,
 				*rearfog_texture = NULL;
+
+	SDL_Texture* auto_stop_texture = NULL;
 
 	//Hybrid power flow:
 	SDL_Texture* electric_motor_texture = NULL,

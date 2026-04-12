@@ -171,6 +171,9 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 	} else if(next_window == NEXT_WINDOW_SETTINGS_DISPLAY) {
 		misc_window = new Settings_Display_Window(&attribute_list);
 		this->setActiveWindow(misc_window, delete_last);
+	} else if(next_window == NEXT_WINDOW_SETTINGS_INFO) {
+		misc_window = new Settings_Info_Window(&attribute_list, &vehicle_info_paramters);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_SETTINGS_COLOR) {
 		misc_window = new Settings_Color_Window(&attribute_list);
 		this->setActiveWindow(misc_window, delete_last);

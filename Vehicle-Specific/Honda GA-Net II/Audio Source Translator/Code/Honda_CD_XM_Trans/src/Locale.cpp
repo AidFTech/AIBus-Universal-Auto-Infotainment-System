@@ -1,5 +1,16 @@
 #include "Locale.h"
 
+//Get a string with the defined locale.
+const char* getString(const translator_text_index index, const uint8_t locale) {
+	switch(locale) {
+	case 0: //English
+		return TEXT_ENG[index];
+	default:
+		return TEXT_ENG[index];
+	}
+}
+
+
 //Get the menu with defined locale.
 MenuList getMenu(const translator_menu_index index, const uint8_t locale) {
 	int menu_index = -1;

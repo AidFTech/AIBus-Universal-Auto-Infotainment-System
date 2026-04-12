@@ -36,6 +36,11 @@ void SettingsClockSetWindow::refreshWindow() {
 
 //Draw the window.
 void SettingsClockSetWindow::drawWindow() {
+	if(exited) {
+		attribute_list->next_window = NEXT_WINDOW_SETTINGS_CLOCK;
+		return;
+	}
+
 	if(selected == TIME_ITEM_NONE && (hour != attribute_list->hour || minute != attribute_list->minute)) {
 		hour = attribute_list->hour;
 		minute = attribute_list->minute;
@@ -67,6 +72,12 @@ void SettingsClockSetWindow::drawWindow() {
 	}
 }
 
+//Exit the window.
+void SettingsClockSetWindow::exitWindow() {
+	exited = true;
+	NavWindow::exitWindow();
+}
+
 //Handle an AIBus message.
 bool SettingsClockSetWindow::handleAIBus(AIData* ai_d) {
 	if(!this->active)
@@ -78,7 +89,6 @@ bool SettingsClockSetWindow::handleAIBus(AIData* ai_d) {
 	SerialAIBusHandler* ai_handler = attribute_list->aibus_handler;
 
 	if(this->selected == TIME_ITEM_NONE && this->time_set_menu->handleAIBus(ai_d)) {
-		attribute_list->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 		return true;
 	} else if(ai_d->receiver == ID_NAV_COMPUTER) {
 		if(ai_d->sender == ID_NAV_SCREEN) {
@@ -87,7 +97,6 @@ bool SettingsClockSetWindow::handleAIBus(AIData* ai_d) {
 				if(control == 0x7 && state == 2) {
 					const int selected = time_set_menu->getSelected() - 1;
 					if(selected < 0) {
-						ai_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 						return true;
 					}
 
@@ -104,8 +113,6 @@ bool SettingsClockSetWindow::handleAIBus(AIData* ai_d) {
 						this->selected = TIME_ITEM_NONE;
 						setTime();
 					}
-
-					ai_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 					return true;
 				} else if((control == 0x28 || control == 0x29 || control == 0x2A || control == 0x2B) && state == 2) { //Directional buttons.
 					if(auto_set || selected == TIME_ITEM_NONE)
@@ -126,7 +133,6 @@ bool SettingsClockSetWindow::handleAIBus(AIData* ai_d) {
 						break;
 					}
 
-					ai_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 					return true;
 				} else if((control == 0x27 || control == 0x51) && state == 2) { //Back button.
 					if(this->selected == TIME_ITEM_NONE)
@@ -136,7 +142,6 @@ bool SettingsClockSetWindow::handleAIBus(AIData* ai_d) {
 						setTime();
 					}
 
-					ai_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 					return true;
 				} else if(control == 0x20 && state == 2) { //Home button.
 					this->selected = TIME_ITEM_NONE;
@@ -144,16 +149,12 @@ bool SettingsClockSetWindow::handleAIBus(AIData* ai_d) {
 
 					attribute_list->next_window = NEXT_WINDOW_MAIN;
 
-					ai_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 					return true;
 				} else if(control == 0x26 && selected != TIME_ITEM_NONE) { //Audio button.
-					ai_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 					return true;
 				} else if (selected != TIME_ITEM_NONE && state == 2){
 					this->selected = TIME_ITEM_NONE;
 					setTime();
-
-					ai_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 					return true;
 				}
 			} else if(ai_d->l >= 3 && ai_d->data[0] == 0x32 && ai_d->data[1] == 0x7) { //Knob turn.
@@ -165,7 +166,6 @@ bool SettingsClockSetWindow::handleAIBus(AIData* ai_d) {
 				
 				incrementTime(steps, cw);
 
-				ai_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				return true;
 			}
 		}

@@ -30,6 +30,8 @@ public:
 	void setPower(const bool power);
 	void setPower(const bool power, const uint8_t function);
 
+	void setLimits();
+
 	uint16_t incrementFrequency(const uint8_t count = 1);
 	uint16_t decrementFrequency(const uint8_t count = 1);
 
@@ -45,6 +47,7 @@ public:
 	uint8_t getRSSI();
 
 	void startSeek(const bool seek_up);
+	void startScan();
 	bool getSeeking(uint16_t* frequency);
 
 	ParameterList* getParameterList();

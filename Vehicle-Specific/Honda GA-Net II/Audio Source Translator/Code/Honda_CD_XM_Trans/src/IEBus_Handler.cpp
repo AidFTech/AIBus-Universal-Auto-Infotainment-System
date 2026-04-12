@@ -45,9 +45,9 @@ void IEBusHandler::sendAckBit() {
 	TIMER = 0;
 
 	*tx_portregister |= this->tx_bitmask;
-	while(TIMER < IE_BIT_0_HOLD_ON_LENGTH);
+	while(TIMER < IE_BIT_A_HOLD_ON_LENGTH);
 	*tx_portregister &= ~this->tx_bitmask;
-	while(TIMER < IE_NORMAL_BIT_1_LENGTH);
+	while(TIMER < IE_NORMAL_BIT_A_LENGTH);
 }
 
 void IEBusHandler::sendStartBit() {
@@ -62,13 +62,16 @@ void IEBusHandler::sendStartBit() {
 	while(TIMER < START_END_LENGTH);
 }
 
-void IEBusHandler::sendBits(const uint16_t data, const uint8_t size) {
+void IEBusHandler::sendBits(const int16_t data, const uint8_t size) {
 	this->sendBits(data, size, true, true);
 }
 
-void IEBusHandler::sendBits(const uint16_t data, const uint8_t size, const bool send_parity, const bool ack) {
+void IEBusHandler::sendBits(const int16_t data, const uint8_t size, const bool send_parity, const bool ack) {
 	bool parity = false;
 	for(uint8_t i=0;i<size;i+=1) {
+		//if((size-1)-i < 0)
+		//	continue;
+
 		const bool data_bit = data & bit((size-1) - i);
 		this->sendBit(data_bit);
 		if(data_bit)
@@ -83,7 +86,28 @@ void IEBusHandler::sendBits(const uint16_t data, const uint8_t size, const bool 
 	}
 }
 
+//Get bits from a number.
+void IEBusHandler::getBits(Vector<bool>* bits, const int16_t data, const uint8_t size, const bool send_parity, const bool ack) {
+	bool parity = false;
+	for(uint8_t i=0;i<size;i+=1) {
+		if((size-1)-i < 0)
+			continue;
+
+		const bool data_bit = data & bit((size-1) - i);
+		bits->push_back(data_bit);
+		if(data_bit)
+			parity = !parity;
+	}
+
+	if(send_parity)
+		bits->push_back(parity);
+
+	if(ack)
+		bits->push_back(true); //TODO: Full acknowledgement check?
+}
+
 int8_t IEBusHandler::readBit() {
+	TIMER_SCALER = 2;
 	TIMER = 0;
 	while((*rx_portregister&rx_bitmask) == 0) {
 		if(TIMER > IE_NORMAL_BIT_0_LENGTH)
@@ -116,7 +140,7 @@ int IEBusHandler::readBits(const uint8_t length, const bool with_parity, const b
 	int value = 0;
 	bool parity = false;
 
-	for(uint8_t i=0;i<length;i+=1) {
+	for(int i=0;i<int(length);i+=1) {
 		value <<= 1;
 
 		const int8_t data = readBit();
@@ -128,6 +152,10 @@ int IEBusHandler::readBits(const uint8_t length, const bool with_parity, const b
 	}
 	
 	if(with_parity) {
+		/*const int8_t bit_data = readBit();
+		if(bit_data < 0)
+			return -1;*/
+
 		const bool data = readBit() > 0;
 		if(data != parity && send_ack) {
 			send_ack = false;
@@ -136,11 +164,8 @@ int IEBusHandler::readBits(const uint8_t length, const bool with_parity, const b
 	}
 
 	if(with_ack && send_ack) {
-		TIMER = 0;
-		while((*rx_portregister&rx_bitmask) == 0) { //TODO: Check.
-			if(TIMER > IE_NORMAL_BIT_0_LENGTH)
-				return -1;
-		}
+		//TIMER = 0;
+		while((*rx_portregister&rx_bitmask) == 0);
 		sendAckBit();
 	} else if(with_ack && !send_ack)
 		readBit();
@@ -153,14 +178,37 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 }
 
 void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) {
+	const uint8_t cx = ie_d->getChecksum();
+	const unsigned int bit_count = 1+13+14+6+10+10*(checksum ? ie_d->l + 1 : ie_d->l);
+
+	bool bits[bit_count];
+	Vector<bool> bit_vec;
+	bit_vec.setStorage(bits, bit_count, 0);
+
+	bit_vec.push_back(ie_d->direct);
+	getBits(&bit_vec, ie_d->sender, 12, true, false);
+	getBits(&bit_vec, ie_d->receiver, 12, true, true);
+	getBits(&bit_vec, ie_d->control, 4, true, true);
+	getBits(&bit_vec, checksum ? ie_d->l+1 : ie_d->l, 8, true, true);
+	
+	for(unsigned int i=0;i<ie_d->l;i+=1)
+		getBits(&bit_vec, ie_d->data[i], 8, true, true);
+
+	if(checksum)
+		getBits(&bit_vec, cx, 8, true, true);
+	
 	noInterrupts();
 	
 	if(wait) {
 		TIMER_SCALER = 3;
 		TIMER = 0;
+		bool reset = false;
+
 		while(TIMER < IE_DELAY) {
-			if((*rx_portregister&rx_bitmask) != 0)
+			if((*rx_portregister&rx_bitmask) != 0 && !reset) {
 				TIMER = 0;
+				reset = true;
+			}
 		}
 		TIMER_SCALER = 2;
 	}
@@ -168,10 +216,8 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 	/*uint8_t direct = 0;
 	if(ie_d->direct)
 		direct = 1;*/
-		
-	const uint8_t cx = ie_d->getChecksum();
 
-	this->sendStartBit();
+	/*this->sendStartBit();
 	this->sendBit(ie_d->direct);
 	this->sendBits(ie_d->sender, 12, true, false);
 	this->sendBits(ie_d->receiver, 12);
@@ -186,7 +232,29 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 		this->sendBits(ie_d->data[i], 8);
 
 	if(checksum)
-		this->sendBits(cx, 8);
+		this->sendBits(cx, 8);*/
+
+	this->sendStartBit();
+
+	TIMER = IE_NORMAL_BIT_0_LENGTH;
+	volatile int bit_timer = IE_NORMAL_BIT_0_LENGTH;
+	volatile bool current_bit = false, last_bit = false;
+	for(unsigned int i=0;i<bit_count;i+=1) {
+		last_bit = current_bit;
+		current_bit = bits[i];
+
+		bit_timer = last_bit ? IE_NORMAL_BIT_1_LENGTH : IE_NORMAL_BIT_0_LENGTH;
+		while(TIMER < bit_timer);
+
+		TIMER = 0;
+
+		*tx_portregister |= this->tx_bitmask;
+		if(current_bit)
+			while(TIMER < IE_BIT_1_HOLD_ON_LENGTH);
+		else
+			while(TIMER < IE_BIT_0_HOLD_ON_LENGTH);
+		*tx_portregister &= ~this->tx_bitmask;
+	}
 
 	interrupts();
 }
@@ -210,6 +278,7 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 	}
 
 	if(TIMER < START_COMP_LENGTH) {
+		TIMER_SCALER = 2;
 		interrupts();
 		return -1;
 	}
@@ -259,7 +328,8 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 
 	if(receiver >= 0) {
 		if(receiver == id && ack_response) {
-			while((*rx_portregister&rx_bitmask) == 0);
+			TIMER = 0;
+			while((*rx_portregister&rx_bitmask) == 0 && TIMER < IE_NORMAL_BIT_0_LENGTH);
 			this->sendBit(false);
 		} else
 			readBit();
@@ -305,9 +375,9 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 		return 4;
 	}
 
-	uint8_t data[l];
+	int16_t data[l];
 
-	for(unsigned int i=0;i<l;i+=1) {
+	for(int i=0;i<l;i+=1) {
 		//Ensure data bits are sent.
 		TIMER = 0;
 		while((*rx_portregister&rx_bitmask) == 0) {
@@ -326,8 +396,12 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 	}
 	interrupts();
 
+	uint8_t new_data[l];
+	for(int i=0;i<sizeof(new_data);i+=1)
+		new_data[i] = uint8_t(data[i]);
+
 	ie_d->refreshIEData(l, sender, receiver, control, direct);
-	ie_d->refreshIEData(data);
+	ie_d->refreshIEData(new_data);
 
 	return 0;
 }
@@ -338,8 +412,4 @@ void IEBusHandler::sendAcknowledgement(const uint16_t sender, const uint16_t rec
 	ack_msg.refreshIEData(ack_data);
 
 	this->sendMessage(&ack_msg, true, true, false);
-}
-
-bool IEBusHandler::getInputOn() {
-	return((*rx_portregister&rx_bitmask) != 0);
 }

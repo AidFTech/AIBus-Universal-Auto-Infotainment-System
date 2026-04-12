@@ -11,6 +11,17 @@ void Settings_Ext_Window::exitWindow() {
 
 	if(ext_menu_sender != ID_NAV_COMPUTER)
 		attribute_list->aibus_handler->writeAIData(&back_msg);
+
+	exited = true;
+}
+
+void Settings_Ext_Window::drawWindow() {
+	if(exited) {
+		attribute_list->next_window = NEXT_WINDOW_SETTINGS_MAIN;
+		return;
+	}
+
+	Settings_Window::drawWindow();
 }
 
 void Settings_Ext_Window::handleEnterButton() {

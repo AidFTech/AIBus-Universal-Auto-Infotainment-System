@@ -26,6 +26,8 @@ public:
 	bool cachePending(const uint8_t id);
 	bool cacheAllPending();
 
+	bool getPending(uint8_t* ids, const int id_l, AIData* msg);
+
 	void waitForAIBus();
 
 private:

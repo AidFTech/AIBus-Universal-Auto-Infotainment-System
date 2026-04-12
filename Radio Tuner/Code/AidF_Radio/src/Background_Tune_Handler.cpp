@@ -101,6 +101,10 @@ void BackgroundTuneHandler::loop() {
 
 //Add a frequency to the station list. If the fequency already exists, set the station name.
 void BackgroundTuneHandler::addFrequency(const uint16_t freq, String station_name_str) {
+	const uint16_t listed_freq = (freq-parameter_list->fm_lower_limit)/parameter_list->fm_inc*parameter_list->fm_inc + parameter_list->fm_lower_limit;
+	if(freq != listed_freq)
+		return;
+
 	bool found = false;
 	int freq_index = -1;
 	for(int i=0;i<freq_list_vec.size();i+=1) {
@@ -172,11 +176,11 @@ int BackgroundTuneHandler::getStationNames(String* names, const bool freq) {
 		
 		if(freq) {
 			new_station_name = String(freq_list_vec.at(i)/100) + "." + String(freq_list_vec.at(i)%100);
-			new_station_name += " MHz: ";
+			new_station_name += " MHz";
 		}
 		
 		if(station_name_vec.at(i).length() > 0)
-			new_station_name += station_name_vec.at(i);
+			new_station_name += ": " + station_name_vec.at(i);
 
 		names[i] = new_station_name;
 	}
@@ -204,4 +208,23 @@ void BackgroundTuneHandler::setStations(const int l, String* names, uint16_t* fr
 		freq_list_vec.push_back(freqs[i]);
 		station_name_vec.push_back(names[i]);
 	}
+}
+
+//Refresh the tuner limits.
+void BackgroundTuneHandler::setLimits() {
+	br_tuner->setLimits();
+	for(int i=0;i<freq_list_vec.size();i+=1) {
+		const uint16_t listed_freq = (freq_list_vec[i]-parameter_list->fm_lower_limit)/parameter_list->fm_inc*parameter_list->fm_inc + parameter_list->fm_lower_limit;
+		if(listed_freq != freq_list_vec[i]) { //Remove this listing.
+			freq_list_vec.remove(i);
+			station_name_vec.remove(i);
+			i -= 1;
+		}
+	}
+}
+
+//Clear station names, i.e. if the RDS source changes.
+void BackgroundTuneHandler::clearStationNames() {
+	for(int i=0;i<station_name_vec.size();i+=1)
+		station_name_vec[i] = "";
 }

@@ -5,6 +5,8 @@
 
 #define AI_BAUD 115200
 
+#define AIDATA_LIMIT (0x20)
+
 #define ID_NAV_COMPUTER 0x1
 #define ID_NAV_SCREEN 0x7
 

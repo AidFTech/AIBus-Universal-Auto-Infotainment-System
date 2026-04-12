@@ -30,6 +30,14 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	if(ai_d->l >= 2 && ai_d->data[0] == 0x2B) { //Menu message.
+		if(!allow_ext_menu && ai_d->data[0] == 0x50) { //Deny.
+			uint8_t deny_data[] = {0x2B, 0x40};
+			AIData deny_msg(sizeof(deny_data), ID_NAV_COMPUTER, ai_d->sender, deny_data);
+			attribute_list->aibus_handler->writeAIData(&deny_msg);
+
+			return true;
+		}
+		
 		if(!allow_ext_menu)
 			return false;
 
@@ -50,8 +58,6 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 			this->title_block->setText(menu_title);
 
 			this->ext_menu_sender = ai_d->sender;
-
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		} else if(ai_d->data[1] == 0x51 && ai_d->l >= 3) { //New menu item.
 			if(ai_d->sender != this->ext_menu_sender)
@@ -63,8 +69,6 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 
 			const uint16_t index = ai_d->data[2];
 			this->settings_menu->setItem(menu_item, index);
-
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		} else if(ai_d->data[1] == 0x52 && ai_d->l >= 3) { //Select the item.
 			if(ai_d->sender != this->ext_menu_sender)
@@ -73,8 +77,6 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 			const uint16_t index = ai_d->data[2];
 			this->settings_menu->setSelected(index);
 			this->settings_menu->setTextItems();
-
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		} else if(ai_d->data[1] == 0x53) { //Set the title.
 			if(ai_d->sender != this->ext_menu_sender)
@@ -85,21 +87,43 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 				menu_title += char(ai_d->data[i]);
 
 			this->title_block->setText(menu_title);
+			return true;
+		} else if(ai_d->data[1] == 0x54) { //Slider.
+			const uint8_t index = ai_d->data[2];
+			const uint8_t max = ai_d->data[4], value = ai_d->data[3];
+			const bool sel = ai_d->data[5] != 0;
 
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
+			string value_text = "";
+			for(uint8_t i=6;i<ai_d->l;i+=1)
+				value_text += ai_d->data[i];
+
+			if(this->settings_menu->getSlider(index) != NULL) {
+				NavSlider* slider = this->settings_menu->getSlider(index);
+				if(max != slider->getMax()) {
+					this->settings_menu->setSlider(value_text, max, value, index);
+					this->settings_menu->getSlider(index)->setSelected(sel);
+				} else {
+					slider->setValue(value);
+					slider->setSelected(sel);
+					
+					TextBox* slider_text = this->settings_menu->getSliderTextBox(index);
+					if(slider_text != NULL)
+						slider_text->setText(value_text);
+				}
+			} else {
+				this->settings_menu->setSlider(value_text, max, value, index);
+				this->settings_menu->getSlider(index)->setSelected(sel);
+			}
 			return true;
 		} else if(ai_d->data[1] == 0x40) { //Clear the menu.
 			attribute_list->next_window = NEXT_WINDOW_SETTINGS_MAIN;
 
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		}
-		//TODO: Sliders.
 		
 		return false;
 	} else if(ai_d->sender == ID_NAV_SCREEN) {
 		if(this->settings_menu->handleAIBus(ai_d)) {
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		}
 
@@ -107,11 +131,9 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 			bool answered = false;
 			const uint8_t control = ai_d->data[1], state = ai_d->data[2]>>6;
 			if(control == 0x7 && state == 0x2) { //Enter button.
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				this->handleEnterButton();
 				answered = true;
 			} else if((control == 0x27 || control == 0x51) && state == 0x2) { //Back button.
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				this->handleBackButton();
 				answered = true;
 			}

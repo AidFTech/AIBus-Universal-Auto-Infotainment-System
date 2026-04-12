@@ -5,7 +5,7 @@ int main() {
 	ElapsedMillis elapsed_millis;
 	elapsed_millis.run = &run;
 
-	pthread_t timer_thread;
+	pthread_t timer_thread, aibus_thread;
 	pthread_create(&timer_thread, NULL, millisThread, (void*)&elapsed_millis);
 
 	string edid_path = "", res_path = "";
@@ -29,7 +29,7 @@ int main() {
 		return 1;
 
 	#ifdef RPI_UART
-	SerialAIBusHandler ai_handler("/dev/ttyS0", ID_COMPUTER_PROXY, &elapsed_millis.time);
+	SerialAIBusHandler ai_handler("/dev/ttyAMA0", ID_COMPUTER_PROXY, &elapsed_millis.time);
 	#else
 	SerialAIBusHandler ai_handler(ID_COMPUTER_PROXY, &elapsed_millis.time);
 	#endif
@@ -45,8 +45,8 @@ int main() {
 
 	vector<uint8_t> edid_bin(0);
 
-	while(!received_edid && elapsed_millis.time - start_time < 1500) {
-		if(elapsed_millis.time - last_send > 250) {
+	while(!received_edid && elapsed_millis.time - start_time < 2000) {
+		if(elapsed_millis.time - last_send > 300) {
 			last_send = elapsed_millis.time;
 
 			uint8_t edid_request_data[] = {0x3E, 0xF0};
@@ -59,9 +59,9 @@ int main() {
 			if(rec.sender == ID_COMPUTER_PROXY)
 				continue;
 
-			if(rec.receiver == ID_COMPUTER_PROXY && rec.l > 0 && rec[0] != 0x80)
-				ai_handler.sendAcknowledgement(ID_COMPUTER_PROXY, rec.sender);
-			else
+			if(rec.receiver == ID_COMPUTER_PROXY && rec.l > 0 && rec[0] != 0x80) {
+				
+			} else
 				continue;
 
 			if(rec.sender == ID_NAV_SCREEN && rec.l >= 1 && rec.data[0] == 0x3E) { //EDID message.
@@ -145,10 +145,10 @@ int main() {
 	}
 
 	start_time = elapsed_millis.time;
-	last_send = elapsed_millis.time + 250;
+	last_send = elapsed_millis.time + 300;
 
-	while(!received_res && elapsed_millis.time - start_time < 1500) {
-		if(elapsed_millis.time - last_send > 250) {
+	while(!received_res && elapsed_millis.time - start_time < 2000) {
+		if(elapsed_millis.time - last_send > 300) {
 			last_send = elapsed_millis.time;
 
 			uint8_t res_request_data[] = {0x2C, 0xF0};
@@ -163,9 +163,9 @@ int main() {
 			if(rec.sender == ID_COMPUTER_PROXY)
 				continue;
 
-			if(rec.receiver == ID_COMPUTER_PROXY && rec.l > 0 && rec[0] != 0x80)
-				ai_handler.sendAcknowledgement(ID_COMPUTER_PROXY, rec.sender);
-			else
+			if(rec.receiver == ID_COMPUTER_PROXY && rec.l > 0 && rec[0] != 0x80) {
+
+			} else
 				continue;
 
 			if(rec.sender == ID_NAV_SCREEN && rec.l >= 5 && rec.data[0] == 0x2C) { //Resolution message.
@@ -200,6 +200,7 @@ int main() {
 
 	run = false;
 	pthread_cancel(timer_thread);
+	pthread_cancel(aibus_thread);
 
 	#ifdef RPI_UART
 	if(!edid_match)

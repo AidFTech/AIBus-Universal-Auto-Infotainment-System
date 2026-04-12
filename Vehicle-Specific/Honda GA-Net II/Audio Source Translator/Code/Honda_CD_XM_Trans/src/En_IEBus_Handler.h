@@ -19,6 +19,8 @@ public:
 	void init(EnIEBusParams* ie_params);
 
 	bool cacheAIBus();
+	AIData getAIBus(const uint8_t id);
+	AIData getAIBus(const uint8_t* id, const int id_l);
 
 	void sendMessageStrict(IE_Message* ie_d, const bool ack_response, const bool checksum);
 	void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum);

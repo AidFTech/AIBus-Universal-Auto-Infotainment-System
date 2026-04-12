@@ -22,8 +22,17 @@ enum radio_menu_t : uint8_t {
 	PRESET_MENU,
 	STATION_MENU,
 	TONE_MENU,
+	SVC_MENU,
+	AUDIO_SETTINGS_MENU,
+	SOURCE_FUNCTION_MENU,
+	LATENCY_MENU,
 	RADIO_SETTINGS_MENU,
 	RDS_FLASH_MENU,
+	STEERING_CONTROL_MENU,
+	FM_BAND_MENU,
+	FM_INC_MENU,
+	AM_BAND_MENU,
+	RDS_CALLSIGN_MENU,
 };
 
 #define TONE_OPTION_BASS 0
@@ -63,6 +72,8 @@ public:
 
 	bool getForceSourceChanged();
 	void checkSources();
+
+	void cancelScan();
 	
 	void setPower(const bool power);
 
@@ -82,6 +93,8 @@ private:
 
 	uint8_t* imid_supported_sources = nullptr;
 	int imid_supported_source_count;
+
+	uint8_t settings_menu_requestor = ID_RADIO;
 
 	uint16_t current_source = 0;
 	AIBusHandler* ai_handler;
@@ -107,8 +120,8 @@ private:
 
 	bool sendSourceQuery(const uint8_t source);
 
-	bool clearMenu();
-	bool createMenu(const String title, const int items);
+	bool clearMenu(const bool audio = true);
+	bool createMenu(const String title, const int items, const bool audio = true);
 
 	void createSourceMenu();
 	void createPresetMenu(const uint8_t group);
@@ -117,10 +130,25 @@ private:
 	void createToneMenu();
 	void createToneMenuItem(const int item);
 
+	void createSVCMenu();
+
+	void createAudioSettingsMenu(const bool audio);
+	void createAudioSettingsMenuItem(const int item);
+
+	void createSourceFunctionMenu();
+	void createDACLatencyMenu();
+
 	void createRadioSettingsMenu();
 	void createRadioSettingsMenuItem(const int item);
 
+	void createFMBandMenu();
+	void createFMIncMenu();
+	void createAMBandMenu();
+	void setBandFrequencies();
+
 	void createRDSFlashMenu();
+	void createRDSCallsignMenu();
+	void createSteeringControlMenu();
 
 	void sendManualTuneMessage();
 	

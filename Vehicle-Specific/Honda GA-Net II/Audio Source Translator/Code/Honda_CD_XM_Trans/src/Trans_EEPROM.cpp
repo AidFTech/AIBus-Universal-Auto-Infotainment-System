@@ -45,3 +45,27 @@ void getCDSettings(bool* auto_start, bool* imid_text, bool* split) {
 	*imid_text = (load_byte&CD_SETTINGS_IMID) != 0;
 	*split = (load_byte&CD_SETTINGS_SPLIT) != 0;
 }
+
+//Save IMID settings to EEPROM.
+void setIMIDSettings(const bool rds, const bool volume, const uint8_t char_count) {
+	uint8_t save_byte = 0;
+
+	if(rds)
+		save_byte |= IMID_SETTINGS_RDS;
+
+	if(volume)
+		save_byte |= IMID_SETTINGS_VOL;
+
+	save_byte |= (char_count&0b11) << IMID_SETTINGS_CHAR;
+
+	EEPROM.write(IMID_SETTINGS_MAIN, save_byte);
+}
+
+//Load IMID settings from EEPROM.
+void getIMIDSettings(bool* rds, bool* volume, uint8_t* char_count) {
+	const uint8_t load_byte = EEPROM.read(IMID_SETTINGS_MAIN);
+
+	*rds = (load_byte&IMID_SETTINGS_RDS) != 0;
+	*volume = (load_byte&IMID_SETTINGS_VOL) != 0;
+	*char_count = (load_byte >> IMID_SETTINGS_CHAR)&0b11;
+}

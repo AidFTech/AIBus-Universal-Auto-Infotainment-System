@@ -6,8 +6,7 @@ HondaTapeHandler::HondaTapeHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_d
 	this->imid_handler = imid_handler;
 
 	getTapeSettings(&this->autostart, &this->fwd_start);
-
-	ie_vec.setStorage(ie_cache, 0);
+	use_ai_cache = true;
 }
 
 //Tape handler loop function.
@@ -44,14 +43,13 @@ void HondaTapeHandler::loop() {
 				parameter_list->radio_connected = false;
 		}
 
-		//if(ie_driver->getInputOn())
-		//	this->listenForIEBus();
+		if(ie_driver->getInputOn())
+			this->listenForIEBus(500, false);
 
-		while(ie_vec.size() > 0) {
-			interpretTapeMessage(&ie_vec[0], false);
-			ie_vec.remove(0);
+		while(ie_cache_vec.size() > 0) {
+			handleIEBus(&ie_cache_vec[0], false);
+			ie_cache_vec.remove(0);
 		}
-		ie_vec.clear();
 	}
 }
 
@@ -115,9 +113,6 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message, const bool 
 		uint8_t tape_state = the_message->data[4];
 		if(tape_state == 0x12)
 			tape_state = 0;
-
-		if(listen && (tape_state == TAPE_MODE_LOAD || tape_state == TAPE_MODE_EJECT))
-			listenForIEBus();
 		
 		const uint8_t direction_state = the_message->data[7]&(~8), track_state = the_message->data[6];
 		const uint8_t last_mode = tape_mode, last_dir = getDirectionByte(!fwd, repeat_on, nr_on, cro2), last_track = track_count;
@@ -166,17 +161,23 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message, const bool 
 					change_dir = false;
 			}
 		}
+
+		if(listen && (tape_state == TAPE_MODE_LOAD || tape_state == TAPE_MODE_EJECT))
+			listenForIEBus(2000, false);
 	} else if(the_message->l >= 6 && the_message->data[0] ==0x10 && the_message->data[3] == 0x10 && the_message->data[4] == 0x10 && !source_sel) { //Tape loading but not selected.
 		uint8_t tape_load_data[] = {0x31, TAPE_MODE_LOAD, 0x2, 0x0};
 		AIData tape_load_message(sizeof(tape_load_data), ID_TAPE, ID_RADIO);
 		tape_load_message.refreshAIData(tape_load_data);
 		
 		ai_driver->writeAIData(&tape_load_message, parameter_list->radio_connected);
+
 		if(text_control)
 			sendTapeTextMessage();
 
 		if(autostart && !source_sel)
 			requestRadioControl();
+
+		listenForIEBus(1000, false);
 	}
 	
 	if(ack)
@@ -194,17 +195,11 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 	if(!parameter_list->power_on)
 		return;
 	
-	bool ack = true;
 	const uint8_t sender = the_message->sender;
 	
 	if(the_message->l >= 3 && the_message->data[0] == 0x4 && the_message->data[1] == 0xE6 && the_message->data[2] == 0x10) { //Name request.
-		ack = false;
-		sendAIAckMessage(sender);
 		sendSourceNameMessage(the_message->sender);
 	} else if(the_message->l == 2 && the_message->data[0] == 0x28 && source_sel) {
-		ack = false;
-		sendAIAckMessage(sender);
-		
 		switch(the_message->data[1]) {
 			case 0x1: //Direction change.
 				this->sendButtonMessage(HONDA_BUTTON_DIR);
@@ -242,9 +237,6 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function change.
 		const uint8_t active_source = the_message->data[2];
 
-		ack = false;
-		sendAIAckMessage(sender);
-
 		if(active_source == ID_TAPE) {
 			text_ping_timer = 0;
 			text_ping_timer_enabled = true;
@@ -253,8 +245,8 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			source_sel = true;
 			sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function, sizeof(function));
 			sendFunctionMessage(ie_driver, false, IE_ID_TAPE, function, sizeof(function));
-			//getIEAckMessage(device_ie_id);
-			listenForIEBus();
+			
+			listenForIEBus(500, false);
 			
 			sendTapeUpdateMessage(ID_RADIO);
 			*parameter_list->screen_request_timer = SCREEN_REQUEST_TIMER;
@@ -267,6 +259,8 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 
 			if(parameter_list->audio_pin >= 0)
 				digitalWrite(parameter_list->audio_pin, HIGH);
+
+			listenForIEBus(1500, false);
 
 		} else {
 			if(source_sel) {
@@ -284,10 +278,9 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 				digitalWrite(parameter_list->audio_pin, LOW);
 		}
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO) {
-		ack = false;
-		sendAIAckMessage(sender);
-
 		text_ping_timer_enabled = false;
+
+		const bool last_text_control = text_control;
 		
 		this->text_control = the_message->data[2] == device_ai_id;
 		if(this->text_control) {
@@ -295,12 +288,13 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			//	clearExternalIMID();
 			sendTapeTextMessage();
 			sendFunctionTextMessage();
+
+			if(!last_text_control) {
+				listenForIEBus(1200, false);
+			}
 		}
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x70 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function heartbeat.
 		if(source_sel && !text_control) {
-			ack = false;
-			sendAIAckMessage(sender);
-
 			uint8_t text_request_data[] = {0x60, 0x11};
 			AIData text_request_msg(sizeof(text_request_data), ID_TAPE, ID_RADIO, text_request_data);
 			ai_driver->writeAIData(&text_request_msg);
@@ -308,8 +302,6 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 	
 	} else if(sender == ID_NAV_SCREEN) {
 		if(!this->source_sel) {
-			ack = false;
-			sendAIAckMessage(sender);
 			return;
 		}
 
@@ -330,20 +322,18 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			else if(button == 0x25 && state == 0x2) //FWD search.
 				sendButtonMessage(HONDA_BUTTON_SKIPFWD, 1);
 			else if(button == 0x53 && state == 0x2) { //Info.
-				ack = false;
-				sendAIAckMessage(sender);
 				sendFullTapeNavOverlay();
 			}
 		}
 	} else if(the_message->l >= 2 && the_message->data[0] == 0x2B && source_sel) {
-		ack = false;
-		sendAIAckMessage(sender);
-		
 		if((the_message->data[1] == 0x4A || the_message->data[1] == 0x45) && sender == ID_RADIO) {
 			createTapeMenu();
 		} else if(the_message->data[1] == 0x40) {
 			//TODO: Change the active menu depending on what cleared it.
 			*active_menu = 0;
+
+			if(open_audio_menu) 
+				requestAudioSettingsMenu();
 		} else if(the_message->data[1] == 0x60 && the_message->l >= 3 && sender == ID_NAV_COMPUTER && *active_menu == MENU_TAPE) {
 			const MenuList tape_menu = getMenu(MENU_INDEX_TAPE_SETTINGS, parameter_list->locale);
 			
@@ -359,20 +349,23 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 				createTapeMenuOption(tape_menu.getLocalIndex(MENU_INDEX_TAPE_SETTINGS_AUTO_START));
 				break;
 			case MENU_INDEX_TAPE_SETTINGS_AUDIO: //Radio settings.
-				//TODO: Request radio settings.
+				{
+					uint8_t clear_data[] = {0x2B, 0x4A};
+					AIData clear_msg(sizeof(clear_data), device_ai_id, ID_NAV_COMPUTER, clear_data);
+					ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
+
+					*active_menu = 0;
+
+					open_audio_menu = true;
+				}
 				break;
 			default:
 				break;
 			}
 		}
 	} else if(the_message->sender == ID_RADIO && the_message->l >= 3 && the_message->data[0] == 0x4 && the_message->data[1] == 0xE6 && the_message->data[2] == 0x10) {
-		ack = false;
-		sendAIAckMessage(sender);
 		this->sendSourceNameMessage();
 	}
-	
-	if(ack)
-		sendAIAckMessage(sender);
 }
 
 //Refresh the source.
@@ -450,33 +443,19 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button, const uint8_t tra
 	listenForIEBus();
 }
 
-//Listen for IEBus data.
-inline void HondaTapeHandler::listenForIEBus() {
-	if(!source_sel)
-		return;
+//Handle an AIBus message internally.
+void HondaTapeHandler::handleAIBus(AIData* msg) {
+	readAIBusMessage(msg);
+}
 
-	elapsedMillis ie_timer;
+//Handle an IEBus message internally.
+void HondaTapeHandler::handleIEBus(IE_Message* msg, const bool listen) {
+	interpretTapeMessage(msg, listen);
+}
 
-	while(ie_timer < 500) {
-		if(ie_driver->getInputOn()) {
-			IE_Message new_msg;
-			const int res = ie_driver->readMessage(&new_msg, true, IE_ID_RADIO);
-			if(res == 0) {
-				if(new_msg.sender != device_ie_id || new_msg.receiver != IE_ID_RADIO)
-					continue;
-
-				if(ie_vec.size() < ie_vec.max_size()) {
-					ie_driver->sendAcknowledgement(IE_ID_RADIO, new_msg.sender);
-					ie_vec.push_back(new_msg);
-
-					if(new_msg.direct && new_msg.control == 0xF && new_msg.l > 0 && new_msg.data[0] == 0x60)
-						break;
-				}
-			}
-		}
-
-		ie_driver->cacheAIBus();
-	}
+//Forward a message to the IMID.
+void HondaTapeHandler::handleIMIDAIBus(AIData* msg) {
+	imid_handler->readAIBusMessage(msg);
 }
 
 //Determine whether the up/down symbol should be shown.
@@ -804,7 +783,6 @@ void HondaTapeHandler::createTapeMenu() {
 		if(ai_driver->dataAvailable(false) > 0) {
 			if(ai_driver->readAIData(&ai_msg, false)) {
 				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //No menu available.
-					sendAIAckMessage(ai_msg.sender);
 					return;
 				}
 			}
@@ -815,7 +793,7 @@ void HondaTapeHandler::createTapeMenu() {
 
 	for(uint8_t i=0;i<menu_size;i+=1)
 		createTapeMenuOption(i);
-	displayAudioMenu(1);
+	displayMenu(1);
 }
 
 //Create a tape main menu option.
@@ -830,7 +808,7 @@ void HondaTapeHandler::createTapeMenuOption(const uint8_t option) {
 		item_txt = fwd_start ? "#RON " : "#ROF ";
 
 	item_txt += main_menu[option];
-	appendAudioMenu(option, item_txt);
+	appendMenu(option, item_txt);
 
 	/*switch(option) {
 	case 0:

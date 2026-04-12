@@ -20,11 +20,16 @@ enum eeprom_settings_index_t : uint8_t {
 #define CD_SETTINGS_SPLIT _BV(2)
 
 #define IMID_SETTINGS_RDS _BV(0)
+#define IMID_SETTINGS_VOL _BV(1)
+#define IMID_SETTINGS_CHAR 2
 
 void setTapeSettings(const bool auto_start, const bool fwd_start);
 void getTapeSettings(bool* auto_start, bool* fwd_start);
 
 void setCDSettings(const bool auto_start, const bool imid_text, const bool split);
 void getCDSettings(bool* auto_start, bool* fwd_start, bool* split);
+
+void setIMIDSettings(const bool rds, const bool volume, const uint8_t char_count);
+void getIMIDSettings(bool* rds, bool* volume, uint8_t* char_count);
 
 #endif

@@ -24,6 +24,7 @@ void HondaCDXMTrans::setup() {
 	digitalWrite(LED_BUILTIN, LOW);
 
 	parameters.audio_pin = AUDIO_ON;
+	parameters.ie_cache_vec.setStorage(parameters.ie_cache, 0);
 
 	#ifdef DDRA
 	DDRA = 0;
@@ -105,6 +106,7 @@ void HondaCDXMTrans::setup() {
 
 	digitalWrite(MAIN_POWER, HIGH);
 	ai_handler.writeAIData(&init_msg, false);
+	ai_handler.flush();
 	digitalWrite(MAIN_POWER, LOW);
 }
 
@@ -139,6 +141,7 @@ void HondaCDXMTrans::loop() {
 				}
 
 				const int message_value = ie_handler.readMessage(&ie_msg, true, IE_ID_RADIO);
+
 				if (message_value == 0) {
 					IE_Message check_msg(ie_msg.l - 1, ie_msg.sender, ie_msg.receiver, ie_msg.control, ie_msg.direct);
 					for (int i = 0; i < ie_msg.l - 1; i += 1)
@@ -148,6 +151,17 @@ void HondaCDXMTrans::loop() {
 						parameters.last_iebus_msg = 0;
 						if (ie_msg.receiver == IE_ID_RADIO && ie_msg.l >= 1 && ie_msg.data[0] != 0x80) {
 							ie_handler.sendAcknowledgement(ie_msg.receiver, ie_msg.sender);
+
+							/*{ 
+								AIData ie_ai(ie_msg.l + 2, ie_msg.sender&0xFF, 0xFF);
+								ie_ai[0] = 0xA1;
+								ie_ai[1] = 0xFF;
+								for(int i=0;i<ie_msg.l;i+=1)
+									ie_ai[i+2] = ie_msg.data[i];
+
+								ai_handler.writeAIData(&ie_ai, false);
+							}*/
+
 							interpretIEData(ie_msg);
 						}
 					}
@@ -175,9 +189,10 @@ void HondaCDXMTrans::loop() {
 		}
 	}
 
-	AIData ai_msg;
-
+	elapsedMillis ai_timer;
+	
 	do {
+		AIData ai_msg;
 		bool ai_received = false;
 		const unsigned int avail = ai_handler.dataAvailable();
 		if (avail > 0) {
@@ -190,8 +205,7 @@ void HondaCDXMTrans::loop() {
 			)) {
 				ai_received = true;
 			} else if(ai_result == AIBUS_READ_TIMEOUT ||
-						ai_result == AIBUS_READ_INVALID_CHECKSUM ||
-						ai_result == AIBUS_READ_INCOMPLETE) {
+						ai_result == AIBUS_READ_INVALID_CHECKSUM) {
 				//Set the timer to ping the CANslator just in case we missed something.
 				power_ping_timer = POWER_PING_TIMER - 200;
 			}
@@ -209,6 +223,7 @@ void HondaCDXMTrans::loop() {
 
 			if (!parameters.computer_connected && ai_msg.sender == ID_NAV_COMPUTER && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg)) {
 				parameters.computer_connected = true;
+				dimension_request_timer = DIMENSION_REQUEST_TIMER - 10;
 				ai_handler.setCacheAck(false);
 			}
 
@@ -234,6 +249,11 @@ void HondaCDXMTrans::loop() {
 					imid_handler.writeVolumeLimitMessage();
 				}
 			}
+
+			if(!parameters.canslator_connected && ai_msg.sender == ID_CANSLATOR && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg)) {
+				parameters.canslator_connected = true;
+			}
+		 
 			#endif
 			
 			if(getInitMessage(&ai_msg) || getPoweroffMessage(&ai_msg)) {
@@ -241,6 +261,7 @@ void HondaCDXMTrans::loop() {
 					parameters.radio_connected = false;
 				else if(ai_msg.sender == ID_NAV_COMPUTER) {
 					parameters.computer_connected = false;
+					parameters.has_dimensions = false;
 					ai_handler.setCacheAck(true);
 				} else if(ai_msg.sender == ID_NAV_SCREEN)
 					parameters.screen_connected = false;
@@ -274,9 +295,6 @@ void HondaCDXMTrans::loop() {
 
 				if((selected == ID_CDC || selected == ID_CD || selected == ID_TAPE || selected == ID_XM) &&
 				ai_handler.getValidMessage(&ai_msg) && !cd_handler.getSelected() && !tape_handler.getSelected() && !xm_handler.getSelected()) {
-					if(ai_msg.receiver != 0xFF)
-						ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-
 					AIData request_msg(sizeof(request_data), selected, ID_RADIO, request_data);
 					ai_handler.writeAIData(&request_msg);
 
@@ -284,30 +302,22 @@ void HondaCDXMTrans::loop() {
 					AIData text_request_msg(sizeof(text_request_data), selected, ID_RADIO, text_request_data);
 					ai_handler.writeAIData(&text_request_msg);
 				} else if(selected != ID_CDC && selected != ID_CD && cd_handler.getSelected()) {
-					if(ai_msg.receiver != 0xFF && ai_handler.getValidMessage(&ai_msg))
-						ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-
 					AIData request_msg(sizeof(request_data), ID_CDC, ID_RADIO, request_data);
 					ai_handler.writeAIData(&request_msg);
 				} else if(selected != ID_TAPE && tape_handler.getSelected()) {
-					if(ai_msg.receiver != 0xFF && ai_handler.getValidMessage(&ai_msg))
-						ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-
 					AIData request_msg(sizeof(request_data), ID_TAPE, ID_RADIO, request_data);
 					ai_handler.writeAIData(&request_msg);
 				} else if(selected != ID_XM && xm_handler.getSelected()) {
-					if(ai_msg.receiver != 0xFF && ai_handler.getValidMessage(&ai_msg))
-						ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-
 					AIData request_msg(sizeof(request_data), ID_XM, ID_RADIO, request_data);
 					ai_handler.writeAIData(&request_msg);
 				}
+			} else if(ai_msg.sender == ID_NAV_COMPUTER && ai_msg.l >= 5 && ai_msg[0] == 0x2C) { //Dimensions.
+				parameters.screen_w = (ai_msg[1]<<8) | ai_msg[2];
+				parameters.screen_h = (ai_msg[3]<<8) | ai_msg[4];
+				parameters.has_dimensions = true;
 			}
 
 			if (ai_handler.getValidMessage(&ai_msg) && ai_msg.l >= 2 && ai_msg.data[0] == 0xA1) { // Broadcast message.
-				if(ai_msg.receiver != 0xFF)
-					ai_handler.sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-
 				if (ai_msg.l >= 3 && ai_msg.data[1] == 0x1F) {
 					if (ai_msg.data[2] == 0x1 && ai_msg.l >= 5) { // Time.
 						parameters.hour = ai_msg.data[3]&0x1F;
@@ -412,7 +422,7 @@ void HondaCDXMTrans::loop() {
 			} else if (tape_handler.getSelected()) {
 				uint8_t tape_function[] = {0x13, 0x0, 0x1};
 				sendFunctionMessage(&ie_handler, false, IE_ID_TAPE, tape_function, sizeof(tape_function));
-				tape_handler.refreshSource();
+				//tape_handler.refreshSource();
 			} else if (xm_handler.getSelected()) {
 				uint8_t xm_function[] = {0x19, 0x0, 0x1};
 				if (xm_handler.getXM2())
@@ -488,16 +498,37 @@ void HondaCDXMTrans::loop() {
 					ping_src = ID_XM;
 				else if(imid_handler.getEstablished())
 					ping_src = ID_IMID_SCR;
+				else ping_src = 0;
 			}
 
-			uint8_t power_ping_data[] = {0x4A, 0x1E};
-			AIData power_ping_msg(sizeof(power_ping_data), ping_src, ID_CANSLATOR, power_ping_data);
-			ai_handler.writeAIData(&power_ping_msg, false);
+			if(ping_src > 0) {
+				uint8_t power_ping_data[] = {0x4A, 0x1E};
+				AIData power_ping_msg(sizeof(power_ping_data), ping_src, ID_CANSLATOR, power_ping_data);
+				ai_handler.writeAIData(&power_ping_msg, false);
+			}
+		}
+
+		if(!parameters.has_dimensions && dimension_request_timer > DIMENSION_REQUEST_TIMER) {
+			dimension_request_timer = 0;
+			uint8_t ping_src = ID_CDC;
+
+			if(!cd_handler.getEstablished()) {
+				if(tape_handler.getEstablished())
+					ping_src = ID_TAPE;
+				else if(xm_handler.getEstablished())
+					ping_src = ID_XM;
+				else if(imid_handler.getEstablished())
+					ping_src = ID_IMID_SCR;
+				else ping_src = 0;
+			}
+
+			if(ping_src > 0) {
+				uint8_t dim_ping_data[] = {0x2C, 0xF0};
+				AIData dim_ping_msg(sizeof(dim_ping_data), ping_src, ID_NAV_COMPUTER, dim_ping_data);
+				ai_handler.writeAIData(&dim_ping_msg, parameters.computer_connected);
+			}
 		}
 	}
-
-	//if (ai_handler.dataAvailable(false) > 0)
-	//	ai_handler.cacheAllPending();
 	
 	if(parameters.key_position == 0 && door_timer_enabled && door_timer > DOOR_TIMER) {
 		door_timer_enabled = false;
@@ -553,7 +584,6 @@ void HondaCDXMTrans::sendIMIDRequest() {
 
 				response_timer = 0;
 				if (reply.sender == ID_IMID_SCR && reply.l >= 2 && reply.data[0] == 0x3B) {
-					ai_handler.sendAcknowledgement(ack_id, reply.sender);
 					if (reply.data[1] == 0x23 && reply.l >= 4) { // Custom text field.
 						parameters.external_imid_char = reply.data[2];
 						parameters.external_imid_lines = reply.data[3];
@@ -598,6 +628,7 @@ void HondaCDXMTrans::powerOff() {
 		poweroff_msg.sender = ID_XM;
 		ai_handler.writeAIData(&poweroff_msg, false);
 	}
+	ai_handler.flush();
 
 	digitalWrite(GA_ON, LOW);
 	digitalWrite(MAIN_POWER, LOW);

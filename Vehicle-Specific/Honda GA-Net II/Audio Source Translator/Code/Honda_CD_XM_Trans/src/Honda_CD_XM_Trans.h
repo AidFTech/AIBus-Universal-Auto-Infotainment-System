@@ -70,6 +70,8 @@
 
 #define POWER_PING_TIMER 45250
 
+#define DIMENSION_REQUEST_TIMER 4000
+
 #define DOOR_TIMER 30000
 
 #define CACHE_SIZE 32
@@ -93,7 +95,7 @@ private:
 
 	BrightnessHandler brightness_handler = BrightnessHandler(ILL_CS, ILL_ANODE);
 
-	elapsedMillis function_timer, ai_timer, screen_request_timer, ping_timer, power_ping_timer;
+	elapsedMillis function_timer, screen_request_timer, ping_timer, power_ping_timer, dimension_request_timer;
 
 	elapsedMillis door_timer;
 	bool door_timer_enabled = false;

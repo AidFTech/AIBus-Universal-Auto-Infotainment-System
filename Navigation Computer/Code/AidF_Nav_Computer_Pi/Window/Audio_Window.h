@@ -23,6 +23,8 @@ public:
 	void drawWindow();
 	void refreshWindow();
 
+	void setActive(const bool active);
+
 	void exitWindow();
 
 	bool handleAIBus(AIData* msg);
@@ -61,6 +63,8 @@ private:
 	bool settings_menu_active = false, settings_menu_prep = false;
 
 	unsigned long prep_time = 0;
+
+	unsigned long last_exit = 0;
 
 	//Dimensions.
 	int area_w = 400, area_h = 60;

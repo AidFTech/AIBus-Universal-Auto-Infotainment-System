@@ -57,11 +57,6 @@ bool EnAIBusHandler::cachePending(const uint8_t cache_id) {
 			}
 
 			if(id) {
-				if(ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
-					if(ai_msg.receiver != 0xFF && cached_vec.size() < cached_vec.max_size())
-						sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-				}
-					
 				if(cached_vec.size() < cached_vec.max_size() && ((ai_msg.l >= 1 && ai_msg.data[0] != 0x80) || cache_ack)) {
 					cached_vec.push_back(ai_msg);
 				}
@@ -99,11 +94,6 @@ bool EnAIBusHandler::cacheAllPending() {
 			}
 
 			if(id) {
-				if(ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
-					if(ai_msg.receiver != 0xFF && cached_vec.size() < cached_vec.max_size())
-						sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-				}
-
 				if((ai_msg.l >= 1 && ai_msg.data[0] != 0x80) || cache_ack) {			
 					if(cached_vec.size() < cached_vec.max_size()) {
 						cached_vec.push_back(ai_msg);
@@ -111,6 +101,53 @@ bool EnAIBusHandler::cacheAllPending() {
 				}
 				
 				return true;
+			}
+		} else if(ai_err != AIBUS_READ_NODATA) {
+			delay(5);
+		}
+	}
+	return false;
+}
+
+//Return any incoming messages whose receiver ID is on the list, cache otherwise.
+bool EnAIBusHandler::getPending(uint8_t* ids, const int id_l, AIData* msg) {
+	if(ai_serial->available() >= 2) {
+		AIData ai_msg;
+		const aibus_read_result_t ai_err = readAIDataErr(&ai_msg, false);
+		if(ai_err == AIBUS_READ_OK_SERIAL || ai_err == AIBUS_READ_OK_MULTIPLE) {
+			for(int i=0;i<id_l;i+=1) {
+				if(ids[i] == ai_msg.receiver) {
+					msg->refreshAIData(ai_msg);
+					return true;
+				}
+			}
+
+			bool id = false;
+
+			if(ai_msg.receiver == 0xFF)
+				id = true;
+			else {
+				for(unsigned int i=0;i<id_vec.size();i+=1) {
+					if((ai_msg.receiver == id_vec[i]) && id_vec[i] != 0x0) {
+						id = true;
+						break;
+					}
+				}
+			}
+
+			for(unsigned int i=0;i<id_vec.size();i+=1) {
+				if((ai_msg.sender == id_vec[i]) && id_vec[i] != 0x0) {
+					id = false;
+					break;
+				}
+			}
+
+			if(id) {
+				if((ai_msg.l >= 1 && ai_msg.data[0] != 0x80) || cache_ack) {			
+					if(cached_vec.size() < cached_vec.max_size()) {
+						cached_vec.push_back(ai_msg);
+					}
+				}
 			}
 		} else if(ai_err != AIBUS_READ_NODATA) {
 			delay(5);

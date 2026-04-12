@@ -1,4 +1,5 @@
 #include "Serial_AIBus_Handler.h"
+#include "AIBus/AIBus_Serial.h"
 
 #ifdef RPI_UART
 #ifdef SOCKET_SERVER
@@ -6,9 +7,13 @@ SerialAIBusHandler::SerialAIBusHandler(string port, int** socket_list, const int
 #else
 SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned long* timer) {
 #endif
-	this->cached_vec = vector<AIData>(0);
-	gpioCfgSetInternals(1<<10);
-	gpioInitialise();
+	this->cached_rx = vector<AIData>(0);
+	this->cached_tx = vector<AIData>(0);
+	this->cached_ack = vector<bool>(0);
+	
+	static const char* const chip_path = "/dev/gpiochip0";
+
+	chip = gpiod_chip_open(chip_path);
 
 	const char* c_port = port.c_str();
 	
@@ -19,8 +24,7 @@ SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned 
 	} else 
 		this->ai_port = test_port;
 
-	gpioSetMode(AI_RX, PI_INPUT);
-	gpioSetPullUpDown(AI_RX, PI_PUD_UP);
+	setPinMode(chip, AI_RX, PIN_MODE_INPUT_PULLUP);
 
 	#ifdef SOCKET_SERVER
 	this->socket_list = new int*[socket_l];
@@ -32,6 +36,9 @@ SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned 
 
 	this->timer = timer;
 	this->id = id;
+
+	multi_thread_params = (void*)(new MultiMessageThreadParameters);
+	((MultiMessageThreadParameters*)(multi_thread_params))->ai_handler = this;
 }
 #else
 #ifdef SOCKET_SERVER
@@ -39,7 +46,9 @@ SerialAIBusHandler::SerialAIBusHandler(int** socket_list, const int socket_l, co
 #else
 SerialAIBusHandler::SerialAIBusHandler(const uint8_t id, unsigned long* timer) {
 #endif
-	this->cached_vec = vector<AIData>(0);
+	this->cached_rx = vector<AIData>(0);
+	this->cached_tx = vector<AIData>(0);
+	this->cached_ack = vector<bool>(0);
 	cout<<"Ready!\nEnter the sender, receiver, and data. Separate all characters with a space. Do not include the checksum.\n";
 
 	#ifdef SOCKET_SERVER
@@ -51,6 +60,9 @@ SerialAIBusHandler::SerialAIBusHandler(const uint8_t id, unsigned long* timer) {
 	#endif
 	this->timer = timer;
 	this->id = id;
+
+	multi_thread_params = (void*)(new MultiMessageThreadParameters);
+	((MultiMessageThreadParameters*)(multi_thread_params))->ai_handler = this;
 }
 #endif
 
@@ -58,12 +70,14 @@ SerialAIBusHandler::~SerialAIBusHandler() {
 	if(this->ai_port >= 0)
 		aiserialClose(this->ai_port);
 	#ifdef RPI_UART
-	gpioTerminate();
+	//gpiod_chip_close(chip);
 	#endif
 
 	#ifdef SOCKET_SERVER
 	delete[] this->socket_list;
 	#endif
+
+	delete (MultiMessageThreadParameters*)multi_thread_params;
 }
 
 #ifndef RPI_UART
@@ -88,27 +102,44 @@ bool SerialAIBusHandler::readAIData(AIData* ai_d) {
 
 //Read AIBus data.
 bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool multiple) {
+	return readAIData(ai_d, cache, multiple, false);
+}
+
+//Read AIBus data.
+bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool multiple, const bool threaded) {
+	if(!threaded) {
+		/*while(thread_locked && cache && multiple) {
+			if(main_locked)
+				break;
+		}*/
+		if(thread_locked && cache && multiple)
+			return false;
+	}
+
+	const bool last_main_locked = main_locked;
+	main_locked = true;
 	ai_d->refreshAIData(0, 0, 0);
 	if(port_connected) {
-		if(cache && cached_msg.l > 0) {
-			ai_d->refreshAIData(cached_msg);
-
-			if(cached_vec.size() > 0) {
-				cached_msg.refreshAIData(cached_vec.at(0));
-				cached_vec.erase(cached_vec.begin());
-			} else {
-				cached_msg.refreshAIData(0,0,0);
-			}
+		if(cache && cached_rx.size() > 0) {
+			ai_d->refreshAIData(cached_rx.at(0));
+			cached_rx.erase(cached_rx.begin());
 			
 			writeToSocket(ai_d);
+			main_locked = last_main_locked;
 			return true;
-		} else if(aiserialBytesAvailable(this->ai_port) >= 2) {
+		} else if(aiserialBytesAvailable(this->ai_port) >= 4) {
 			const uint8_t s = uint8_t(aiserialReadByte(this->ai_port));
 			const uint8_t l = uint8_t(aiserialReadByte(this->ai_port));
+
+			if(l > AIDATA_LIMIT + 5) { //Length was misread.
+				main_locked = last_main_locked;
+				return false;
+			}
 
 			if(l<2) {
 				while(aiserialBytesAvailable(this->ai_port) > 0)
 					aiserialReadByte(this->ai_port);
+				main_locked = last_main_locked;
 				return false;
 			}
 			
@@ -123,15 +154,16 @@ bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool m
 					unsigned long clear_time = *this->timer;
 					
 					while((*this->timer - clear_time) < 1) {
-						#ifdef RPI_UART
-						if(gpioRead(AI_RX) == 0)
-							clear_time = *this->timer;
-						#endif
+						//#ifdef RPI_UART
+						//if(!readPin(chip, AI_RX))
+						//	clear_time = *this->timer;
+						//#endif
 						if(aiserialBytesAvailable(this->ai_port) > 0) {
 							aiserialReadByte(this->ai_port);
 							clear_time = *this->timer;
 						}
 					}
+					main_locked = last_main_locked;
 					return false;
 				}
 			}
@@ -156,8 +188,14 @@ bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool m
 				if(!checkValidity(chex,l+2)) {
 					while(aiserialBytesAvailable(this->ai_port) > 0)
 						aiserialReadByte(this->ai_port);
+					main_locked = last_main_locked;
 					return false;
 				}
+			}
+
+			if(sizeof(d) == 3 && d[0] == s && d[1] == l && d[2] == r) {
+				main_locked = last_main_locked;
+				return false;
 			}
 
 			ai_d->refreshAIData(l-2, s, r);
@@ -165,19 +203,23 @@ bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool m
 			for(uint8_t i=0;i<ai_d->l;i+=1)
 				ai_d->data[i] = d[i];
 
-			if(multiple && ai_d->l >= 3 && ai_d->data[0] == 0x91 && (getID(ai_d->receiver) || ai_d->receiver == 0xFF)) { //Multiple messages are on the way.
-				if(getID(ai_d->receiver))
-					sendAcknowledgement(ai_d->receiver, ai_d->sender);
+			if(getID(r) && ai_d->l > 0 && ai_d->data[0] != 0x80)
+				sendAcknowledgement(r, s);
 
-				if(ai_d->data[2] != 0)
+			if(multiple && ai_d->l >= 3 && ai_d->data[0] == 0x91 && (getID(ai_d->receiver) || ai_d->receiver == 0xFF)) { //Multiple messages are on the way.
+				if(ai_d->data[2] != 0) {
+					main_locked = last_main_locked;
 					return false;
+				}
 
 				const int msg_count = ai_d->data[1];
 				uint8_t full_data[msg_count*AIDATA_LIMIT];
 				int full_length = ai_d->l - 3;
 
-				if(msg_count <= 0)
+				if(msg_count <= 0) {
+					main_locked = last_main_locked;
 					return true;
+				}
 
 				writeToSocket(ai_d);
 
@@ -186,39 +228,29 @@ bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool m
 				int m = 1;
 				unsigned long ai_timer = *timer;
 
+				MultiMessageThreadParameters* thread_params = (MultiMessageThreadParameters*)multi_thread_params;
+				thread_params->message_count = msg_count;
+				thread_params->sender = ai_d->sender;
+				thread_params->receiver = ai_d->receiver;
 
-				AIData test_msg;
-				while(m < msg_count && *timer - ai_timer < 200) {
-					if(readAIData(&test_msg, true, false)) {
-						if(test_msg.l < 3 || test_msg.receiver != ai_d->receiver || test_msg.sender != ai_d->sender || test_msg.data[0] != 0x91 || test_msg.data[1] != msg_count) {
-							if((test_msg.receiver == ai_d->receiver || test_msg.receiver == 0xFF) && test_msg.l > 0 && test_msg.data[0] != 0x80)
-								cacheMessage(&test_msg); 
-							continue;
-						}
+				{
+					vector<uint8_t> msg_data(0);
+					for(int i=3;i<ai_d->l;i+=1)
+						msg_data.push_back(ai_d->data[i]);
 
-						if(getID(test_msg.receiver))
-							sendAcknowledgement(test_msg.receiver, test_msg.sender);
-
-						for(int i=0;i<test_msg.l-3;i+=1)
-							full_data[(AIDATA_LIMIT)*m + i] = test_msg[i+3];
-
-						full_length += test_msg.l - 3;
-
-						m += 1;
-						ai_timer = *timer;
-					}
-
-					if(*timer - ai_timer > 200)
-						return false;
+					thread_params->loaded_data = msg_data;
 				}
 
-				ai_d->refreshAIData(full_length, ai_d->sender, ai_d->receiver);
-				ai_d->refreshAIData(full_data);
+				if(!multi_thread_enabled) {
+					multi_thread_enabled = true,
+					pthread_create(&multi_thread, NULL, readMultiThread, multi_thread_params);
+				}
 
 				#if !defined(RPI_UART) && defined(AIBUS_PRINT)
 				printBytes(ai_d);
 				#endif
 
+				main_locked = last_main_locked;
 				return true;
 			}
 
@@ -227,23 +259,27 @@ bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool m
 			#endif
 			
 			writeToSocket(ai_d);
+			main_locked = last_main_locked;
 			return true;
 		} else {
+			main_locked = last_main_locked;
 			return false;
 		}
-
 	} else {
 		#ifndef RPI_UART
 		string ai_t;
 		getline(cin, ai_t);
 
-		if(ai_t.empty())
+		if(ai_t.empty()) {
+			main_locked = last_main_locked;
 			return false;
+		}
 
 		if(ai_t.find('/') != string::npos) { //Possible serial start.
 			const int success = connectAIPort(ai_t);
 			if(success >= 0)
 				cout<<ai_t<<" connection successful!\n";
+			main_locked = last_main_locked;
 			return false;
 		}
 
@@ -267,15 +303,19 @@ bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool m
 			pos = space_index + 1;
 		}
 
-		if(d_v.size() < 2)
+		if(d_v.size() < 2) {
+			main_locked = last_main_locked;
 			return false;
+		}
 		
 		ai_d->refreshAIData(d_v.size()-2, d_v.at(0), d_v.at(1));
 		for(uint8_t i=0;i<d_v.size()-2;i+=1)
 			ai_d->data[i] = d_v.at(i+2);
 		
+		main_locked = last_main_locked;
 		return true;
 		#else
+		main_locked = last_main_locked;
 		return false;
 		#endif
 	}
@@ -305,6 +345,30 @@ bool SerialAIBusHandler::writeAIData(AIData* ai_d) {
 
 //Write AIBus data. Wait for an acknowledgement message if acknowledge is true.
 bool SerialAIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
+	/*while(thread_locked);
+	main_locked = true;
+	cached_tx.push_back(*ai_d);
+	cached_ack.push_back(acknowledge);
+	main_locked = false;*/
+	return writeAIBusToSerial(ai_d, acknowledge);
+}
+
+//Write AIBus data to the cache and send as a thread.
+void SerialAIBusHandler::writeToCache(AIData* ai_d, const bool acknowledge) {
+	while(thread_locked);
+	main_locked = true;
+	cached_tx.push_back(*ai_d);
+	cached_ack.push_back(acknowledge);
+	main_locked = false;
+
+	if(!cache_thread_enabled) {
+		cache_thread_enabled = true;
+		pthread_create(&cache_thread, NULL, flushCacheThread, (void*)this);
+	}
+}
+
+//Write AIBus data to the serial port.
+bool SerialAIBusHandler::writeAIBusToSerial(AIData* ai_d, const bool acknowledge) {
 	bool sent = true;
 
 	if(ai_d->l > AIDATA_LIMIT + 3) {
@@ -325,19 +389,18 @@ bool SerialAIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 
 		{
 			unsigned long start = *this->timer;
-			#ifndef RPI_UART
 			int current_cached_bytes = aiserialBytesAvailable(this->ai_port);
-			#endif
 			while((*this->timer - start) < 1) {
 				#ifdef RPI_UART
-				if(gpioRead(AI_RX) == 0)
-					start = *this->timer;
-				#else
+				//if(!chip) {
+				//	if(!readPin(chip, AI_RX))
+				//		start = *this->timer;
+				//} else
+				#endif
 				if(current_cached_bytes != aiserialBytesAvailable(this->ai_port)) {
 					current_cached_bytes = aiserialBytesAvailable(this->ai_port);
 					start = *this->timer;
 				}
-				#endif
 			}
 			start = *this->timer;
 			while((*this->timer - start) < 1);
@@ -345,7 +408,7 @@ bool SerialAIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 
 		bool ack = false;
 		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
-			ack = writeAIData(&ai_group[i], acknowledge);
+			ack = writeAIBusToSerial(&ai_group[i], acknowledge);
 			if(!ack && acknowledge)
 				return false;
 
@@ -359,68 +422,58 @@ bool SerialAIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 		uint8_t data[ai_d->l + 4];
 		ai_d->getBytes(data);
 
-		while(aiserialBytesAvailable(this->ai_port) >= 2) {
+		const unsigned long cache_timer = *timer;
+
+		while(aiserialBytesAvailable(this->ai_port) >= 2 && *timer - cache_timer < 5) {
 			AIData msg;
 			if(readAIData(&msg, false)) {
 				if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
-					sendAcknowledgement(msg.receiver, msg.sender);
-					
-					if(cached_msg.l <= 0)
-						cached_msg.refreshAIData(msg);
-					else {
-						/*uint8_t data[msg.l+4];
-						msg.getBytes(data);
-
-						for(int i=0;i<sizeof(data);i+=1)
-							cached_vec.push_back(data[i]);*/
-						cached_vec.push_back(msg);
-					}
+					cached_rx.push_back(msg);
 				}
 			}
 		}
 
 		{
 			unsigned long start = *this->timer;
-			#ifndef RPI_UART
 			int current_cached_bytes = aiserialBytesAvailable(this->ai_port);
-			#endif
 			while((*this->timer - start) < 1) {
 				#ifdef RPI_UART
-				if(gpioRead(AI_RX) == 0)
-					start = *this->timer;
-				#else
+				//if(!chip) {
+				//	if(!readPin(chip, AI_RX))
+				//		start = *this->timer;
+				//} else
+				#endif
 				if(current_cached_bytes != aiserialBytesAvailable(this->ai_port)) {
 					current_cached_bytes = aiserialBytesAvailable(this->ai_port);
 					start = *this->timer;
 				}
-				#endif
 			}
 			start = *this->timer;
 			while((*this->timer - start) < 1);
 		}
 
-		for(uint8_t i=0;i<ai_d->l+4;i+=1)
-			aiserialWriteByte(this->ai_port, data[i]);
+		if(ai_d->l == 2 && ai_d->data[0] == ai_d->sender && data[sizeof(data)-1] == ai_d->receiver) {
+			AIData ext_msg(ai_d->l + 1, ai_d->sender, ai_d->receiver);
+			for(int i=0;i<ai_d->l;i+=1)
+				ext_msg[i] = ai_d->data[i];
+			ext_msg[ext_msg.l-1] = 0;
 
-		while(aiserialBytesAvailable(this->ai_port) >= 2) {
+			uint8_t ext_data[ext_msg.l + 4];
+			ext_msg.getBytes(ext_data);
+
+			aiserialWrite(this->ai_port, (char*)ext_data, sizeof(ext_data));
+		} else {
+			aiserialWrite(this->ai_port, (char*)data, sizeof(data));
+		}
+
+		/*while(aiserialBytesAvailable(this->ai_port) >= 2) {
 			AIData msg;
 			if(readAIData(&msg, false)) {
 				if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
-					sendAcknowledgement(msg.receiver, msg.sender);
-					
-					if(cached_msg.l <= 0)
-						cached_msg.refreshAIData(msg);
-					else {
-						/*uint8_t data[msg.l+4];
-						msg.getBytes(data);
-
-						for(int i=0;i<sizeof(data);i+=1)
-							cached_vec.push_back(data[i]);*/
-						cached_vec.push_back(msg);
-					}
+					cached_vec.push_back(msg);
 				}
 			}
-		}
+		}*/
 
 		if(acknowledge)
 			sent = awaitAcknowledgement(ai_d);
@@ -442,7 +495,7 @@ void SerialAIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t
 	AIData ack_msg(1, sender, receiver);
 	ack_msg.data[0] = 0x80;
 
-	writeAIData(&ack_msg, false);
+	writeAIBusToSerial(&ack_msg, false);
 }
 
 //Wait for the acknowledgement message.
@@ -453,39 +506,39 @@ bool SerialAIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 
 	while(!acknowledge && tries < MAX_REPEAT) {
 		AIData new_msg;
-		if(readAIData(&new_msg, false)) {
+		if(readAIData(&new_msg, false, true, true)) {
 			if(new_msg.sender == ai_d->sender)
 				continue;
 
-			if(new_msg.sender == ai_d->receiver && new_msg.receiver == ai_d->sender && new_msg.data[0] == 0x80){
+			if(new_msg.sender == ai_d->receiver && new_msg.receiver == ai_d->sender && new_msg.data[0] == 0x80) {
 				acknowledge = true;
 				break;
 			} else {
 				if(new_msg.sender != ai_d->sender && (new_msg.receiver == ai_d->sender || new_msg.receiver == 0xFF) && new_msg.l >= 1 && new_msg.data[0] != 0x80) {
-					sendAcknowledgement(new_msg.receiver, new_msg.sender);
-					
-					if(cached_msg.l <= 0)
-						cached_msg.refreshAIData(new_msg);
-					else {
-						/*uint8_t data[new_msg.l+4];
-						new_msg.getBytes(data);
-
-						for(int i=0;i<sizeof(data);i+=1)
-							cached_vec.push_back(data[i]);*/
-						cached_vec.push_back(new_msg);
-					}
+					cached_rx.push_back(new_msg);
 				}
 				repeat_time = *this->timer;
 			}
 		}
 
+		for(int i=0;i<cached_rx.size();i+=1) {
+			AIData* rx_msg = &cached_rx.at(i);
+			if(rx_msg->sender == ai_d->receiver && rx_msg->receiver == ai_d->sender && rx_msg->l > 0 && rx_msg->data[0] == 0x80) {
+				acknowledge = true;
+				break;
+			}
+		}
+
+		if(acknowledge)
+			break;
+
 		if((*this->timer-repeat_time) > REPEAT_DELAY && !acknowledge) {
 			if(ai_d->l == 2 && ai_d->data[0] != 0xA1) {
 				AIData padded_msg(ai_d->l + 1, ai_d->sender, ai_d->receiver, ai_d->data);
 				padded_msg[padded_msg.l-1] = 0x0;
-				writeAIData(&padded_msg, false);
+				writeAIBusToSerial(&padded_msg, false);
 			} else
-				writeAIData(ai_d, false);
+				writeAIBusToSerial(ai_d, false);
 				
 			repeat_time = *this->timer;
 			tries += 1;
@@ -503,10 +556,10 @@ int SerialAIBusHandler::getAvailableBytes() {
 //Get the number of available bytes.
 int SerialAIBusHandler::getAvailableBytes(const bool cache) {
 	if(port_connected) {
-		if(!cache || cached_msg.l <= 0)
+		if(!cache || cached_rx.size() <= 0)
 			return aiserialBytesAvailable(this->ai_port);
 		else
-			return cached_msg.l + 4;
+			return cached_rx.at(0).l + 4;
 	} else
 		return -1;
 }
@@ -523,28 +576,22 @@ bool SerialAIBusHandler::getConnected() {
 
 //Cache any pending messages.
 bool SerialAIBusHandler::cachePending() {
+	return cachePending(false);
+}
+
+//Cache any pending messages.
+bool SerialAIBusHandler::cachePending(const bool threaded) {
 	if(!port_connected)
 		return false;
 
 	if(aiserialBytesAvailable(ai_port) > 0) {
 		AIData ai_msg;
-		if(readAIData(&ai_msg)) {
+		if(readAIData(&ai_msg, false, true, threaded)) {
 			if(ai_msg.receiver == this->id || ai_msg.receiver == 0xFF) {
 				if(ai_msg.sender != this->id && ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
-					sendAcknowledgement(ai_msg.receiver, ai_msg.sender);
-
-					if(cached_msg.l <= 0)
-						cached_msg.refreshAIData(ai_msg);
-					else {
-						/*uint8_t data[ai_msg.l+4];
-						ai_msg.getBytes(data);
-
-						for(int i=0;i<sizeof(data);i+=1)
-							cached_vec.push_back(data[i]);*/
-						cached_vec.push_back(ai_msg);
-					}
+					cached_rx.push_back(ai_msg);
+					return true;
 				}
-				return true;
 			}
 		}
 	}
@@ -556,39 +603,92 @@ bool SerialAIBusHandler::cachePending() {
 void SerialAIBusHandler::cacheMessage(AIData* ai_msg) {
 	if(ai_msg->receiver == this->id || ai_msg->receiver == 0xFF) {
 		if(ai_msg->sender != this->id && ai_msg->l >= 1 && ai_msg->data[0] != 0x80) {
-			sendAcknowledgement(ai_msg->receiver, ai_msg->sender);
-
-			if(cached_msg.l <= 0)
-				cached_msg.refreshAIData(*ai_msg);
-			else {
-				/*uint8_t data[ai_msg->l+4];
-				ai_msg->getBytes(data);
-
-				for(int i=0;i<sizeof(data);i+=1)
-					cached_vec.push_back(data[i]);*/
-				cached_vec.push_back(*ai_msg);
-			}
+			cached_rx.push_back(*ai_msg);
 		}
 	}
 }
 
-//Cache a message to be sent later.
-void SerialAIBusHandler::cacheTxMessage(AIData* ai_msg) {
-	if(this->cached_tx.l == 0)
-		this->cached_tx.refreshAIData(*ai_msg);
+//Send all cached messages. Return whether successful.
+bool SerialAIBusHandler::flushCached() {
+	cache_thread_enabled = true;
+	int l = cached_tx.size();
+	unsigned long cache_timer = *timer;
+
+	//Wait for the cache to reach its full size.
+	while(*timer - cache_timer < 20) {
+		if(cached_tx.size() != l) {
+			l = cached_tx.size();
+			cache_timer = *timer;
+		}
+	}
+
+	bool ack = true;
+
+	while(main_locked);
+
+	thread_locked = true;
+
+	while(this->cached_tx.size() > 0 && this->cached_ack.size() > 0) {
+		ack &= writeAIBusToSerial(&this->cached_tx.at(0), cached_ack.at(0));
+
+		cached_tx.erase(cached_tx.begin());
+		cached_ack.erase(cached_ack.begin());
+	}
+	thread_locked = false;
+
+	cache_thread_enabled = false;
+	return ack;
 }
 
-//Send a cached message. Return whether successful.
-bool SerialAIBusHandler::flushCached() {
-	if(this->cached_tx. l <= 0)
-		return true;
+//Read a multi-send message. Threaded.
+void SerialAIBusHandler::readMultiple(const uint8_t sender, const uint8_t receiver, vector<uint8_t> data, const int message_count) {
+	thread_locked = true;
+
+	uint8_t full_data[AIDATA_LIMIT*message_count];
+	for(int i=0;i<data.size();i+=1)
+		full_data[i] = data.at(i);
+
+	int full_length = data.size();
+
+	unsigned long start = *timer;
+	int m = 1;
+	bool message_complete = false;
+	while(m < message_count && *timer - start < 200) {
+		AIData test_msg;
+		if(readAIData(&test_msg, false, false, true)) {
+			if(test_msg.l < 3 || test_msg.receiver != receiver || test_msg.sender != sender || test_msg.data[0] != 0x91 || test_msg.data[1] != message_count) {
+				if((test_msg.receiver == receiver || test_msg.receiver == 0xFF) && test_msg.l > 0 && test_msg.data[0] != 0x80)
+					cacheMessage(&test_msg); 
+				continue;
+			}
+
+			const uint8_t index = test_msg[2];
+
+			if(index < m)
+				continue;
+
+			for(int i=0;i<test_msg.l-3;i+=1)
+				full_data[(AIDATA_LIMIT)*index + i] = test_msg[i+3];
+
+			full_length += test_msg.l - 3;
+
+			m += 1;
+			start = *timer;
+		}
+
+		if(m == message_count) {
+			message_complete = true;
+			break;
+		}
+	}
+
+	if(message_complete) {
+		AIData ai_d(full_length, sender, receiver, full_data);
+		cached_rx.push_back(ai_d);
+	}
 	
-	bool ack = false;
-	ack = writeAIData(&this->cached_tx);
-
-	cached_tx.refreshAIData(0,0,0);
-
-	return ack;
+	thread_locked = false;
+	multi_thread_enabled = false;
 }
 
 //Write a message to a socket.
@@ -706,4 +806,53 @@ void printBytes(AIData* ai_d) {
 		cout<<hex<<int(data[i])<<" "<<dec;
 	cout<<'\n';
 	#endif
+}
+
+#ifdef RPI_UART
+//Set a GPIO pin mode.
+void setPinMode(gpiod_chip *chip, const int pin, const pin_mode_t mode) {
+	gpiod_line* line = gpiod_chip_get_line(chip, pin);
+
+	switch(mode) {
+	case PIN_MODE_INPUT_PULLUP:
+		gpiod_line_request_input_flags(line, "Consumer", GPIOD_LINE_REQUEST_FLAG_BIAS_PULL_UP);
+		break;
+	case PIN_MODE_INPUT:
+		gpiod_line_request_input(line, "Consumer");
+		break;
+	case PIN_MODE_OUTPUT:
+		gpiod_line_request_output(line, "Consumer", 0);
+		break;
+	default:
+		break;
+	}
+
+	gpiod_line_release(line);
+}
+
+//Read a GPIO pin.
+bool readPin(gpiod_chip* chip, const int pin) {
+	gpiod_line* line = gpiod_chip_get_line(chip, pin);
+	const bool val = gpiod_line_get_value(line) > 0;
+
+	gpiod_line_release(line);
+	return val;
+}
+#endif
+
+void* flushCacheThread(void* v_aibus_handler) {
+	SerialAIBusHandler* aibus_handler = (SerialAIBusHandler*)v_aibus_handler;
+	aibus_handler->flushCached();
+
+	void* the_return;
+	return the_return;
+}
+
+void* readMultiThread(void* multi_thread_params) {
+	MultiMessageThreadParameters* thread_params = (MultiMessageThreadParameters*)multi_thread_params;
+	SerialAIBusHandler* handler = thread_params->ai_handler;
+	handler->readMultiple(thread_params->sender, thread_params->receiver, thread_params->loaded_data, thread_params->message_count);
+
+	void* the_return;
+	return the_return;
 }

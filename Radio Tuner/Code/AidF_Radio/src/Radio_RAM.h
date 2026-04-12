@@ -40,6 +40,9 @@ enum ADDR {
 	FM2_PRESETS = FM1_PRESETS + sizeof(uint16_t)*PRESET_COUNT,
 	AM_PRESETS = FM2_PRESETS + sizeof(uint16_t)*PRESET_COUNT,
 	RDS_DISPLAY_MODE = AM_PRESETS + sizeof(uint16_t)*PRESET_COUNT,
+	AUX_NAV_LEVEL,
+	SOURCE_FUNCTION_FILTER,
+	SVC_SETTING,
 
 	SOURCE_START = 0x100,
 	FM_STATION_START = 0x400,
@@ -63,7 +66,11 @@ struct StartParams {
 	uint16_t vol = 0, max_vol = DEFAULT_VOL_RANGE, treble = 0, bass = 0;
 	int16_t balance = 0, fader = 0;
 
+	svc_setting_t svc_setting;
 	header_rds_setting_t rds_setting;
+	source_button_t source_button_setting;
+	uint8_t aux_level, nav_cut;
+	bool dac_latency, steering_control_preset;
 };
 
 class SRAMHandler {

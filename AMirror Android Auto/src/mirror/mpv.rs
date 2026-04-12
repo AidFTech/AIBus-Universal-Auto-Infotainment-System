@@ -1,5 +1,4 @@
 use core::str;
-use std::io::Cursor;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::process::Command;
@@ -22,10 +21,6 @@ use imageproc::drawing::draw_text_mut;
 
 use imageproc::point::Point;
 use imageproc::rect::Rect;
-use rodio::Decoder as AudioDecoder;
-use rodio::OutputStream;
-use rodio::OutputStreamHandle;
-use rodio::Sink;
 
 use crate::ipc;
 
@@ -45,20 +40,87 @@ pub struct MpvVideo {
 
 	text_color: Rgba<u8>,
 	header_color: Rgba<u8>,
+
+	fullscreen: bool,
+	x_pan: f32,
 }
 
 impl MpvVideo {
 	pub fn new(width: u16, height: u16, fullscreen: bool) -> Result<MpvVideo, String> {
+		let mut full_w = width;
+		let mut full_h = height;
+
+		let mut pos = 0;
+
+		let res_print = match Command::new("cat").arg("/sys/class/graphics/fb0/virtual_size").output() {
+			Ok(output) => Some(output),
+			Err(e) => {
+				println!("{}", e);
+				None
+			}
+		};
+
+		match res_print {
+			Some(res_print) => {
+				let res_str = String::from_utf8_lossy(&res_print.stdout);
+				for s in res_str.split(",") {
+					let val = s.to_string();
+
+					if pos == 0 {
+						full_w = match val.parse::<u16>() {
+							Ok(w) => w,
+							Err(_) => width,
+						};
+					} else if pos == 1 {
+						full_h = match val.parse::<u16>() {
+							Ok(h) => h,
+							Err(_) => width,
+						};
+					}
+
+					pos += 1;
+				}
+			}
+			None => {
+
+			}
+		}
+
+		//Calculate pan.
+		let mut pan_x = "".to_string();
+		let mut pan_y = "".to_string();
+
+		if fullscreen {
+			if full_w > width {
+				pan_x = "--video-pan-x=-".to_string();
+				let pan_x_f = ((full_w - width) as f32)/(width as f32)/2.0;
+				pan_x += &f32::to_string(&pan_x_f);
+			}
+
+			if full_h > height {
+				pan_y = "--video-pan-y=-".to_string();
+				let pan_y_f = ((full_h-height) as f32)/(height as f32)/2.0;
+				pan_y += &f32::to_string(&pan_y_f);
+			}
+		}
+
+		//Start MPV.
 		let mut mpv_cmd = Command::new("mpv");
 		let process;
-		mpv_cmd.arg(format!("--geometry={}x{}", width, height));
+		mpv_cmd.arg(format!("--geometry={}x{}+0+0", width, height));
+		mpv_cmd.arg(pan_x);
+		mpv_cmd.arg(pan_y);
 		mpv_cmd.arg("--hwdec=rpi");
 		mpv_cmd.arg("--demuxer-rawvideo-fps=60");
 		mpv_cmd.arg("--untimed");
-		mpv_cmd.arg("--osc=no");
 
 		if fullscreen {
 			mpv_cmd.arg("--fs=yes");
+
+			mpv_cmd.arg("--alpha=yes");
+			mpv_cmd.arg("--background=#00000000");
+		} else {
+			mpv_cmd.arg("--osc=no");
 		}
 
 		mpv_cmd.arg("--fps=60");
@@ -91,6 +153,12 @@ impl MpvVideo {
 			}
 		}
 
+		let x_pan = if full_w > width {
+			((full_w - width) as f32)/(width as f32)/2.0
+		} else {
+			0.0
+		};
+
 		return Ok(MpvVideo {
 			process: process.unwrap(),
 			mpv_ipc: sock,
@@ -103,9 +171,13 @@ impl MpvVideo {
 
 			text_color: Rgba([0,0,0,255]),
 			header_color: Rgba([0xFF, 0xFF, 0x3A, 255]),
+
+			fullscreen,
+			x_pan,
 		 });
 	}
 
+	///Send video bytes.
 	pub fn send_video(&mut self, data: &[u8]) {
 		let mut child_stdin = self.process.stdin.as_ref().unwrap();
 		let _ = child_stdin.write(&data);
@@ -255,45 +327,73 @@ impl MpvVideo {
 	
 	///Minimize or maximize the video window.
 	pub fn set_minimize(&mut self, minimize: bool) {
-		let pid = self.process.id();
-		let wid_cmd = Command::new("xdotool").arg("search").arg("--pid").arg(format!("{}", pid)).output();
+		if self.fullscreen {
+			let pan_str = f32::to_string(&-self.x_pan);
 
-		let wid_vec = match wid_cmd {
-			Ok(wid) => wid.stdout,
-			Err(_) => {
-				return;
-			}
-		};
+			let minimize_str = "set video-pan-x ".to_string() + if minimize {
+				"1"
+			} else {
+				&pan_str
+			} + "\n";
 
-		let wid_str = match str::from_utf8(&wid_vec) {
-			Ok(wid_str) => wid_str,
-			Err(_) => {
-				return;
-			}
-		};
+			println!("{}", minimize_str);
 
-		if minimize {
-			let minimize_cmd = Command::new("xdotool").arg("windowminimize").arg(wid_str).output();
-			match minimize_cmd {
+			let mut mpv_ipc = match &self.mpv_ipc {
+				Some(mpv_ipc) => mpv_ipc,
+				None => return,
+			};
+
+			match mpv_ipc.write(minimize_str.as_bytes()) {
 				Ok(_) => {
-
+					
 				}
+				Err(e) => {
+					println!("Error: {}", e);
+				}
+			}
+		 } else {
+			let pid = self.process.id();
+			let wid_cmd = Command::new("xdotool").arg("search").arg("--pid").arg(format!("{}", pid)).output();
+
+			let wid_vec = match wid_cmd {
+				Ok(wid) => wid.stdout,
+				Err(_) => {
+					println!("No window found for process {}.", pid);
+					return;
+				}
+			};
+
+			let wid_str = match str::from_utf8(&wid_vec) {
+				Ok(wid_str) => wid_str,
 				Err(_) => {
 					return;
 				}
-			}
-		} else {
-			let minimize_cmd = Command::new("xdotool").arg("windowactivate").arg(wid_str).output();
-			match minimize_cmd {
-				Ok(_) => {
+			};
 
+			if minimize {
+				let minimize_cmd = Command::new("xdotool").arg("windowminimize").arg(wid_str).output();
+				match minimize_cmd {
+					Ok(_) => {
+						
+					}
+					Err(_) => {
+						return;
+					}
 				}
-				Err(_) => {
-					return;
+			} else {
+				let minimize_cmd = Command::new("xdotool").arg("windowactivate").arg(wid_str).output();
+				match minimize_cmd {
+					Ok(_) => {
+						
+					}
+					Err(_) => {
+						return;
+					}
 				}
 			}
 		}
 	}
+	
 
 	///Save an overlay image.
 	fn save_overlay_image(&self) {
@@ -531,59 +631,155 @@ impl MpvVideo {
 }
 
 pub struct RdAudio {
-	_stream: OutputStream,
-	_handler: OutputStreamHandle,
-	sink: Sink,
+	//_stream: OutputStream,
+	//_handler: OutputStreamHandle,
+	//sink: Sink,
+	process: Child,
 	data: Vec<u8>,
 	sample: u32,
 	bits: u16,
 	channels: u16,
+	send_header: bool,
 }
 
 impl RdAudio {
 	pub fn new() -> Result<RdAudio, String> {
-		let (stream, handler) = OutputStream::try_default().unwrap();
-		let sink = Sink::try_new(&handler).unwrap();
+		/*let (stream, handler) = match OutputStream::try_default() {
+			Ok(sh) => sh,
+			Err(e) => {
+				return Err(e.to_string());
+			}
+		};
+		let sink = match Sink::try_new(&handler) {
+			Ok(sh) => sh,
+			Err(e) => {
+				return Err(e.to_string());
+			}
+		};
 
 		let data = Vec::new();
-		return Ok(RdAudio{_stream: stream, _handler: handler, sink, data, sample: 48000, bits: 16, channels: 2});
+		return Ok(RdAudio{_stream: stream, _handler: handler, sink, data, sample: 48000, bits: 16, channels: 2});*/
+
+		let mut mpv_cmd = Command::new("mpv");
+		let process;
+		
+		mpv_cmd.arg("-");
+		mpv_cmd.arg("--no-config");
+		mpv_cmd.arg("--profile=low-latency");
+		match mpv_cmd.stdin(Stdio::piped()).spawn() {
+			Err(e) => return Err(format!("Could not start audio Mpv: {} ", e)),
+			Ok(match_process) => {
+				process = Some(match_process);
+			}
+		}
+
+		let mut this = RdAudio { process: process.unwrap(), data: Vec::new(), sample: 48000, bits: 16, channels: 2, send_header: true };
+		this.send_audio(&[]);
+
+		return Ok(this);
 	}
 
+	///Send audio bytes.
 	pub fn send_audio(&mut self, data: &[u8]) {
 		for i in 0..data.len() {
 			self.data.push(data[i]);
 		}
 
-		let mut new_data = get_wav_header(self.data.len(), self.sample, self.channels, self.bits);
+		let mut new_data = if self.send_header {
+			self.send_header = false;
+			get_wav_header(self.data.len(), self.sample, self.channels, self.bits)
+		} else {
+			Vec::new()
+		};
 
 		for i in 0..self.data.len() {
 			new_data.push(self.data[i]);
 		}
 		self.data.clear(); 
 
-		let cursor = Cursor::new(new_data);
+		/*let cursor = Cursor::new(new_data);
 		let source = match AudioDecoder::new_wav(cursor) {
 			Ok(source) => source,
 			Err(err) => {
 				println!("Decoder Error: {}", err);
 				return;
 			}
-		};
+		};*/
 		
-		self.sink.append(source);
+		//self.sink.append(source);
+		let mut child_stdin = self.process.stdin.as_ref().unwrap();
+		let _ = child_stdin.write(&new_data);
 	}
 	
+	///Set the audio sample rate, bits, and channel count. Restart the audio stream as needed.
 	pub fn set_audio_profile(&mut self, sample: u32, bits: u16, channels: u16) {
+		let last_sample = self.sample;
+		let last_bits = self.bits;
+		let last_channels = self.channels;
+
 		self.sample = sample;
 		self.bits = bits;
 		self.channels = channels;
+
+		if last_sample != sample || last_bits != bits || last_channels != channels {
+			self.send_header = true;
+
+			let _ = self.process.kill();
+
+			let process = match self.get_audio_process() {
+				Some(process) => process,
+				None => {
+					return;
+				}
+			};
+
+			self.process = process;
+			self.send_audio(&[]);
+		}
 	}
 	
+	///Get the audio sample rate, bits, and channel count.
 	pub fn get_audio_profile(&mut self) -> (u32, u16, u16) {
 		return (self.sample, self.bits, self.channels);
 	}
+
+	///Get an audio process.
+	fn get_audio_process(&self) -> Option<Child> {
+		let mut mpv_cmd = Command::new("mpv");
+		let process;
+
+		let mut audio_format = "".to_string();
+		if self.bits == 8 {
+			audio_format = "--audio-format=u8".to_string();
+		} else if self.bits == 16 {
+			audio_format = "--audio-format=s16".to_string();
+		} else if self.bits == 32 {
+			audio_format = "--audio-format=s32".to_string();
+		} else if self.bits == 64 {
+			audio_format = "--audio-format=s64".to_string();
+		}
+
+		mpv_cmd.arg("-");
+		mpv_cmd.arg("--no-config");
+		mpv_cmd.arg("--profile=low-latency");
+		mpv_cmd.arg(format!("--audio-samplerate={}", self.sample));
+		mpv_cmd.arg(audio_format);
+		mpv_cmd.arg(format!("--audio-channels={}", self.channels));
+		match mpv_cmd.stdin(Stdio::piped()).spawn() {
+			Err(e) => {
+				println!("Error: {}", e);
+				return None;
+			}
+			Ok(match_process) => {
+				process = Some(match_process);
+			}
+		}
+
+		return process;
+	}
 }
 
+///Get the WAV byte header.
 fn get_wav_header(len: usize, sample: u32, channels: u16, bits: u16) -> Vec<u8> {
 	let mut wav_header = Vec::new();
 

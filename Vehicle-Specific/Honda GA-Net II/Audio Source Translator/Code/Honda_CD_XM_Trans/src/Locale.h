@@ -5,6 +5,42 @@
 #ifndef locale_h
 #define locale_h
 
+enum translator_text_index : unsigned int {
+	//Generic strings:
+	LOCALE_STRING_NO_DATA,
+
+	//CD strings:
+	LOCALE_STRING_CD_TRACK,
+	LOCALE_STRING_CD_ARTIST,
+	LOCALE_STRING_CD_ALBUM,
+	LOCALE_STRING_CD_FOLDER,
+	LOCALE_STRING_CD_FILE,
+
+	//XM strings:
+	LOCALE_STRING_XM_SONG,
+	LOCALE_STRING_XM_ARTIST,
+	LOCALE_STRING_XM_CHANNEL,
+	LOCALE_STRING_XM_GENRE,
+};
+
+static const char* TEXT_ENG[] {
+	//Generic strings:
+	"No Data",
+	
+	//CD strings:
+	"Track",
+	"Artist",
+	"Album",
+	"Folder",
+	"File",
+
+	//XM strings:
+	"Song",
+	"Artist",
+	"Channel",
+	"Genre",
+};
+
 enum translator_menu_index : menu_index_t {
 	//CDC settings menu.
 	MENU_INDEX_CDC_SETTINGS,
@@ -42,6 +78,18 @@ enum translator_menu_index : menu_index_t {
 	MENU_INDEX_XM_DIRECT,
 	MENU_INDEX_XM_DIRECT_ENTER,
 
+	//IMID settings.
+	MENU_INDEX_IMID_SETTINGS,
+	MENU_INDEX_IMID_SETTINGS_RDS,
+	MENU_INDEX_IMID_SETTINGS_VOLUME,
+	MENU_INDEX_IMID_SETTINGS_CD_TEXT,
+	MENU_INDEX_IMID_SETTINGS_LENGTH,
+
+	MENU_INDEX_IMID_CHARACTER,
+	MENU_INDEX_IMID_CHARACTER_8,
+	MENU_INDEX_IMID_CHARACTER_10,
+	MENU_INDEX_IMID_CHARACTER_12,
+
 	MENU_INDEX_LEN
 };
 
@@ -52,6 +100,8 @@ static const translator_menu_index MENU_START_INDEX[] = {
 	MENU_INDEX_XM_SETTINGS,
 	MENU_INDEX_XM_PRESET,
 	MENU_INDEX_XM_DIRECT,
+	MENU_INDEX_IMID_SETTINGS,
+	MENU_INDEX_IMID_CHARACTER,
 };
 
 static const char* MENUS_ENG[] = {
@@ -90,8 +140,21 @@ static const char* MENUS_ENG[] = {
 	//XM direct tune menu.
 	"Enter Channel Number",
 	"Enter",
+
+	//IMID Settings
+	"IMID Settings (Audio)",
+	"Display RDS",
+	"Display Volume Bar",
+	"Display CD Text",
+	"Allowed Character Count",
+
+	"Character Count",
+	"8",
+	"10",
+	"12",
 };
 
 MenuList getMenu(const translator_menu_index index, const uint8_t locale);
+const char* getString(const translator_text_index index, const uint8_t locale);
 
 #endif

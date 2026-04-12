@@ -30,6 +30,7 @@ IE_Message::~IE_Message() {
 }
 
 IE_Message IE_Message::operator=(const IE_Message &copy) {
+	delete[] this->data;
 	this->l = copy.l;
 	this->data = new uint8_t[this->l];
 	this->sender = copy.sender;

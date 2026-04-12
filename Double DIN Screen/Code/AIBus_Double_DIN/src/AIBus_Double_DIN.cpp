@@ -218,14 +218,10 @@ void AIBusDoubleDIN::loop() {
 			}
 
 			if(message_read) {
-				bool ack = true;
-
 				if(msg.sender == ID_NAV_SCREEN)
 					continue;
 
 				if(msg.l >= 2 && msg.data[0] == 0x31 && msg.data[1] == 0x30) { //Button request.
-					ack = false;
-					ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
 					sendButtonsPresent(msg.sender);
 				} else if(msg.l >= 3 && msg.data[0] == 0x77) { //Control change.
 					const uint8_t controls = msg.data[2], receiver = msg.data[1];
@@ -271,9 +267,6 @@ void AIBusDoubleDIN::loop() {
 					else if(command == 2)
 						open_handler.setOpen();
 				} else if(msg.l >= 4 && msg.data[0] == 0x33) { //Forward.
-					ack = false;
-					ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
-
 					const uint8_t dest = msg.data[1], button = msg.data[2], state = msg.data[3];
 					uint8_t button_data[] = {0x30, button, state};
 					AIData button_msg(sizeof(button_data), ID_NAV_SCREEN, dest, button_data);
@@ -289,22 +282,13 @@ void AIBusDoubleDIN::loop() {
 					for(int i=0;i<sizeof(aibt_edid);i+=1)
 						edid_msg[i+1] = aibt_edid[i];
 					
-					ack = false;
-					ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
-					
 					ai_handler.writeAIData(&edid_msg);
 				} else if(msg.l >= 2 && msg.data[0] == 0x2C && msg.data[1] == 0xF0) { //Screen resolution request.
-					ack = false;
-					ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
-				
 					const uint16_t w = 800, h = 480;
 					uint8_t resolution_data[] = {0x2C, w>>8, w&0xFF, h>>8, h&0xFF};
 					AIData resolution_msg(sizeof(resolution_data), ID_NAV_SCREEN, msg.sender, resolution_data);
 					ai_handler.writeAIData(&resolution_msg);
 				}
-
-				if(ack)
-					ai_handler.sendAcknowledgement(ID_NAV_SCREEN, msg.sender);
 			}
 
 			if(!first_msg) {

@@ -166,6 +166,11 @@ private:
 
 	void clearUpperField();
 	void requestControl(const uint8_t id);
+
+	//Bus stuff.
+	void handleAIBus(AIData* msg);
+	void handleIEBus(IE_Message* msg, const bool listen = true);
+	void handleIMIDAIBus(AIData* msg);
 };
 
 #endif

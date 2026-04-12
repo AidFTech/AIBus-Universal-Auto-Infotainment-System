@@ -37,23 +37,25 @@ bool Main_Menu_Window::handleAIBus(AIData* msg) {
 
 	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
-	if(msg->sender == ID_NAV_SCREEN) { //From the screen.
+	if(msg->l >= 2 && msg->data[0] == 0x2B && msg->data[1] == 0x50) { //Settings menu. Deny.
+		uint8_t data[] = {0x2B, 0x40};
+		AIData no_menu_msg(sizeof(data), ID_NAV_COMPUTER, msg->sender, data);
+
+		aibus_handler->writeAIData(&no_menu_msg);
+		return true;
+	} else if(msg->sender == ID_NAV_SCREEN) { //From the screen.
 		if(msg->data[0] == 0x32 && msg->data[1] == 0x7) { //Knob turn.
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 			interpretMenuChange(msg);
 			return true;
 		} else if(msg->data[0] == 0x30) { //Button press.
 			const uint8_t button = msg->data[1], state = msg->data[2]>>6;
 			if(button == 0x7 && state == 0x2) { //Enter button.
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				handleEnterButton();
 				return true;
 			} else if((button == 0x28 || button == 0x29 || button == 0x2A || button == 0x2B) && state == 0x2) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				interpretMenuChange(msg);
 				return true;
 			} else if(button == 0x51 && state == 0x2) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				attribute_list->next_window = NEXT_WINDOW_SETTINGS_MAIN;
 				return true;
 			} else

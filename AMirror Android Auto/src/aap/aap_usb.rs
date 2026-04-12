@@ -64,14 +64,16 @@ impl AndroidUSBConnection {
 					handle = d_handle;
 				}
 
-				Err(_) => {
+				Err(e) => {
 					continue;
 				}
 			}
 
 			let device_descriptor = match device.device_descriptor() {
 				Ok(d) => d,
-				Err(_e) => continue,
+				Err(_e) => {
+					continue;
+				} 
 			};
 
 			if device_descriptor.vendor_id() == 0x1314 {
@@ -79,11 +81,13 @@ impl AndroidUSBConnection {
 			}
 
 			if device_descriptor.vendor_id() == 0x18D1 && (device_descriptor.product_id()&0xFFF0) == 0x2D00 { //Google accessory.
+				println!("Found Google accessory...");
 				match handle.claim_interface(0) {
 					Ok(_) => {
 						println!("Interface claim successful!");
 					}
-					Err(_) => {
+					Err(e) => {
+						println!("Interface claim failed... {}", e);
 						continue;
 					}
 				}

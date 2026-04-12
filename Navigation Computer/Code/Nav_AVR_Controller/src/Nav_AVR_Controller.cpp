@@ -17,18 +17,22 @@ void NavAVRController::setup() {
 	pinMode(PI_POWER, OUTPUT); //Hard Pi power.
 	pinMode(POWER_ON, OUTPUT); //System power force on.
 	pinMode(PI_RUNNING, INPUT); //High if the Pi is running normally.
+	#ifdef PI_CM
 	pinMode(PI_BOOT, INPUT); //High if the Pi is starting to boot.
 	pinMode(PI_OFF_HARDWARE, OUTPUT); //Drive low to power Pi off.
 	pinMode(PI_OFF_SOFT, OUTPUT); //Drive high to power Pi off when it is on.
 	pinMode(PROG, INPUT);
+	#endif
 	pinMode( UART_DTR, INPUT);
 
 	pinMode(AI_RX, INPUT_PULLUP);
 
 	digitalWrite(PI_POWER, LOW);
 	digitalWrite(POWER_ON, LOW);
+	#ifdef PI_CM
 	digitalWrite(PI_OFF_HARDWARE, HIGH);
 	digitalWrite(PI_OFF_SOFT, LOW);
+	#endif
 
 	AISerial.begin(AI_BAUD);
 	delay(1000);
@@ -38,6 +42,7 @@ void NavAVRController::setup() {
 
 	digitalWrite(POWER_ON, HIGH);
 	ai_handler.writeAIData(&init_msg, false);
+	ai_handler.flush();
 	digitalWrite(POWER_ON, LOW);
 }
 
@@ -48,11 +53,13 @@ void NavAVRController::loop() {
 
 	do {
 		if(ai_handler.dataAvailable() > 0) {
-			if(ai_handler.readAIData(&ai_msg)) {
-				if(ai_msg.sender == ID_NAV_COMPUTER)
-					continue;
-				
+			if(ai_handler.readAIData(&ai_msg)) {	
 				ai_timer = 0;
+
+				if(ai_msg.sender == ID_NAV_COMPUTER && !getPoweroffMessage(&ai_msg) && !getInitMessage(&ai_msg)) {
+					pi_boot_timer = PI_BOOT_TIMER + 1;
+					computer_connected = true;
+				}
 				
 				if(ai_msg.receiver == 0xFF) {
 					if(ai_msg.l >= 3 && ai_msg.data[0] == 0xA1 && ai_msg.data[1] == 0x2) { //Key position.
@@ -85,7 +92,9 @@ void NavAVRController::loop() {
 										powerOff();
 									else {
 										digitalWrite(PI_POWER, LOW);
+										#ifdef PI_CM
 										digitalWrite(PI_OFF_HARDWARE, LOW);
+										#endif
 										digitalWrite(POWER_ON, LOW);
 									}
 								} else {
@@ -97,14 +106,13 @@ void NavAVRController::loop() {
 						}
 					}
 				} else if(ai_msg.receiver == ID_COMPUTER_PROXY) {
-					if(ai_msg.sender != ID_COMPUTER_PROXY)
-						ai_handler.sendAcknowledgement(ID_COMPUTER_PROXY, ai_msg.sender);
-
 					if(ai_msg.sender != ID_CANSLATOR)
 						continue;
 
 					if(ai_msg.l >= 3 && ai_msg.data[0] == 0x2 && ai_msg.data[1] == 0x0 && ai_msg.data[2] == 0x0) {
+						#ifdef PI_CM
 						digitalWrite(PI_OFF_HARDWARE, LOW);
+						#endif
 						powerOff();
 					}
 				}
@@ -114,16 +122,27 @@ void NavAVRController::loop() {
 
 	const bool last_boot = boot, last_run = run;
 
+	#ifdef PI_CM
 	boot = digitalRead(PI_BOOT) == HIGH;
 	run = digitalRead(PI_RUNNING) == HIGH;
+	#else
+	run = pi_on;//digitalRead(PI_RUNNING) == HIGH;
+	boot = run;
+	#endif
 
 	if(last_boot != boot || last_run != run || use_shutdown_timer) {
 		if((boot || run) && !shutdown)
 			powerOn();
+		#ifdef PI_CM
 		else if(shutdown && shutdown_timer >= 1000 && !boot && !run) { //Pi has shut down.
+		#else
+		else if(shutdown && shutdown_timer >= 5000 && !boot && !run) { //Pi has shut down.
+		#endif
 			use_shutdown_timer = false;
 			digitalWrite(PI_POWER, LOW);
+			#ifdef PI_CM
 			digitalWrite(PI_OFF_HARDWARE, LOW);
+			#endif
 			digitalWrite(POWER_ON, LOW);
 		}
 
@@ -138,7 +157,9 @@ void NavAVRController::loop() {
 				powerOff();
 			else {
 				digitalWrite(PI_POWER, LOW);
+				#ifdef PI_CM
 				digitalWrite(PI_OFF_HARDWARE, LOW);
+				#endif
 				digitalWrite(POWER_ON, LOW);
 			}
 		}
@@ -147,6 +168,19 @@ void NavAVRController::loop() {
 	if(boot_timer_enabled && pi_boot_timer > PI_BOOT_TIMER) {
 		boot_timer_enabled = false;
 		digitalWrite(PI_POWER, HIGH);
+	}
+
+	if(pi_ping_timer > PI_PING_TIMER && pi_on && key_position != 0) {
+		pi_ping_timer = 0;
+
+		uint8_t ping_data[] = {0x1};
+		AIData ping_msg(sizeof(ping_data), ID_COMPUTER_PROXY, ID_NAV_COMPUTER, ping_data);
+		const bool ack = ai_handler.writeAIData(&ping_msg, computer_connected);
+
+		if(ack&&computer_connected)
+			pi_boot_timer = PI_BOOT_TIMER + 1;
+		else
+			computer_connected = false;
 	}
 
 	if((!boot && !run) && pi_boot_timer > 30000 && pi_on && key_position != 0) { //Pi crashed? Power cycle it.
@@ -162,7 +196,9 @@ void NavAVRController::loop() {
 
 //Turn full power on.
 void NavAVRController::powerOn() {
+	#ifdef PI_CM
 	digitalWrite(PI_OFF_HARDWARE, HIGH);
+	#endif
 	digitalWrite(POWER_ON, HIGH);
 	boot_timer_enabled = true;
 	pi_boot_timer = 0;
@@ -178,8 +214,12 @@ void NavAVRController::powerOff() {
 
 	//GPIO3 power cycle.
 	if(pi_on) {
+		#ifdef PI_CM
 		digitalWrite(PI_OFF_SOFT, HIGH);
 		delay(100);
 		digitalWrite(PI_OFF_SOFT, LOW);
+		#else
+		pi_on = false;
+		#endif
 	}
 }

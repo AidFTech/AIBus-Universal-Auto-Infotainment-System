@@ -1,0 +1,4 @@
+{
+	"rust-analyzer.cargoRunner": "cross-rust-analyzer",
+	"cross-rust-analyzer.target": "aarch64-unknown-linux-gnu"
+}

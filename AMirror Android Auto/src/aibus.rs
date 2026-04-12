@@ -10,7 +10,7 @@ pub const AIBUS_DEVICE_IMID: u8 = 0x11;
 pub const AIBUS_DEVICE_ANTENNA: u8 = 0x3B;
 pub const AIBUS_DEVICE_PHONE: u8 = 0xC8;
 
-pub const AIDATA_LIMIT: usize = 0x30 - 4;
+pub const AIDATA_LIMIT: usize = 0x20;
 
 pub struct AIBusMessage {
 	pub sender: u8,
@@ -113,6 +113,14 @@ pub fn get_aibus_message(data: Vec<u8>) -> AIBusMessage {
 	}
 	
 	if data[1] != (data.len() - 2) as u8 {
+		return AIBusMessage {
+			sender: 0,
+			receiver: 0,
+			data: Vec::new(),
+		};
+	}
+
+	if data.len() == 6 && data[3] == data[0] && data[4] == data[1] && data[5] == data[2] { //Likely error.
 		return AIBusMessage {
 			sender: 0,
 			receiver: 0,

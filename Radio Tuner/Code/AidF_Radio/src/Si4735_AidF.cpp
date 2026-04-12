@@ -39,6 +39,11 @@ void Si4735Controller::loop() {
 		queued_frequency_set = false;
 		parameters->tune_changed = true;
 	}
+
+	if(parameters->scan_on && !seeking && parameters->scan_timer >= 7000) {
+		parameters->scan_timer = 0;
+		startSeek(true);
+	}
 }
 
 //Return whether a frequency is queued.
@@ -55,7 +60,25 @@ void Si4735Controller::queueFrequency(const uint16_t des_freq) {
 
 //Set the desired frequency, within the tuning range.
 uint16_t Si4735Controller::setFrequency(const uint16_t des_freq) {
-	tuner.setFrequency(des_freq);
+	uint16_t set_freq = des_freq;
+
+	switch(parameters->last_sub) {
+	case SUB_FM1:
+	case SUB_FM2:
+		set_freq -= parameters->fm_lower_limit;
+		set_freq /= parameters->fm_inc;
+		set_freq *= parameters->fm_inc;
+		set_freq += parameters->fm_lower_limit;
+		break;
+	case SUB_AM:
+		set_freq -= parameters->am_lower_limit;
+		set_freq /= parameters->am_inc;
+		set_freq *= parameters->am_inc;
+		set_freq += parameters->am_lower_limit;
+		break;
+	}
+
+	tuner.setFrequency(set_freq);
 	delay(30);
 	return tuner.getFrequency();
 }
@@ -82,11 +105,23 @@ void Si4735Controller::setPower(const bool power, const uint8_t function) {
 			this->tuner.setAM(parameters->am_lower_limit, parameters->am_upper_limit, parameters->am_tune, parameters->am_inc);
 
 		if(function != SUB_AM) {
+			this->tuner.setFrequencyStep(parameters->fm_inc);
+
 			this->tuner.setRdsConfig(3, 3, 3, 3, 3);
 			this->tuner.setFifoCount(1);
+		} else {
+			this->tuner.setFrequencyStep(parameters->am_inc);
 		}
 	} else
 		tuner.powerDown();
+}
+
+//Set the seek limits.
+void Si4735Controller::setLimits() {
+	this->tuner.setSeekFmLimits(parameters->fm_lower_limit, parameters->fm_upper_limit);
+	this->tuner.setSeekAmLimits(parameters->am_lower_limit, parameters->am_upper_limit);
+	this->tuner.setSeekFmSpacing(parameters->fm_inc);
+	this->tuner.setSeekAmSpacing(parameters->am_inc);
 }
 
 //Increment the tuned frequency.
@@ -119,6 +154,15 @@ void Si4735Controller::startSeek(const bool seek_up) {
 		tuner.seekStation(0, 1);
 
 	seeking = true;
+}
+
+//Start scanning.
+void Si4735Controller::startScan() {
+	if(!parameters->scan_on)
+		return;
+
+	parameters->scan_timer = 0;
+	startSeek(true);
 }
 
 //Reset the frequency change timer.
@@ -179,32 +223,42 @@ bool Si4735Controller::getRdsInfo(String* rds) {
 
 //Fill string rds with callsign. 
 bool Si4735Controller::getCallsign(String* rds) {
-	const uint8_t status_request_bytes[] = {0x4};
-	tuner.sendCommand(FM_RDS_STATUS, sizeof(status_request_bytes), status_request_bytes);
+	if(parameters->rds_callsign_source == RDS_CALLSIGN_PS) {
+		const char* c_text = tuner.getRdsStationName();
 
-	uint8_t status_response_bytes[12];
-	tuner.getCommandResponse(sizeof(status_response_bytes), status_response_bytes);
+		if(c_text == NULL)
+			return false;
 
-	if((status_response_bytes[0]&0x11) == 0)
-		return false;
-	
-	uint16_t rds_a = (status_response_bytes[4]<<8) | status_response_bytes[5];
-	
-	//TODO: Station names outside the US.
-	//Thanks to: https://www.fmsystems-inc.com/rds-pi-code-formula-station-callsigns/
-	if(rds_a < 4096)
-		return false;
-	
-	if(rds_a >= 21672) {
-		rds_a -= 21672;
-		*rds = "W";
+		*rds = String(c_text);
+		return true;
 	} else {
-		rds_a -= 4096;
-		*rds = "K";
-	}
+		const uint8_t status_request_bytes[] = {0x4};
+		tuner.sendCommand(FM_RDS_STATUS, sizeof(status_request_bytes), status_request_bytes);
 
-	const char callsign_letters[] = {char(rds_a/(26*26) + 'A'), char((rds_a/26)%26 + 'A'), char(rds_a%26 + 'A'), '\0'};
-	*rds += callsign_letters;
+		uint8_t status_response_bytes[12];
+		tuner.getCommandResponse(sizeof(status_response_bytes), status_response_bytes);
+
+		if((status_response_bytes[0]&0x11) == 0)
+			return false;
+		
+		uint16_t rds_a = (status_response_bytes[4]<<8) | status_response_bytes[5];
+		
+		//TODO: Station names outside the US.
+		//Thanks to: https://www.fmsystems-inc.com/rds-pi-code-formula-station-callsigns/
+		if(rds_a < 4096)
+			return false;
+		
+		if(rds_a >= 21672) {
+			rds_a -= 21672;
+			*rds = "W";
+		} else {
+			rds_a -= 4096;
+			*rds = "K";
+		}
+
+		const char callsign_letters[] = {char(rds_a/(26*26) + 'A'), char((rds_a/26)%26 + 'A'), char(rds_a%26 + 'A'), '\0'};
+		*rds += callsign_letters;
+	}
 	
 	return true;
 }

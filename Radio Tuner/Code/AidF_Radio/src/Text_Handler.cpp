@@ -92,6 +92,28 @@ void TextHandler::setOverlayHeader(String text) {
 	ai_handler->writeAIData(&header_msg, parameter_list->computer_connected);
 }
 
+//Write the radio header to the screen.
+void TextHandler::setRadioHeader(const uint8_t sub_id, const uint8_t preset) {
+	String header_text = "";
+	switch(sub_id) {
+	case SUB_FM1:
+		header_text += "FM1";
+		break;
+	case SUB_FM2:
+		header_text += "FM2";
+		break;
+	case SUB_AM:
+		header_text += "AM";
+		break;
+	}
+
+	if(preset > 0)
+		header_text += "-" + String(preset);
+
+	AIData text_msg = getTextMessage(header_text, 0, 0);
+	ai_handler->writeAIData(&text_msg, parameter_list->computer_connected);
+}
+
 //Write a radio frequency to the screen.
 void TextHandler::sendTunedFrequencyMessage(const uint16_t frequency, const bool mhz, const bool sub) {
 	sendTunedFrequencyMessage(0, frequency, mhz, sub);
@@ -168,11 +190,11 @@ void TextHandler::sendLongRDSMessage(String text) {
 		if(text.length() <= 0)
 			return;
 
-		String sub_text[5] = {"","","","",""};
+		String sub_text[] = {"","","","",""};
 		
-		splitText((parameter_list->screen_w/2)/28, text, sub_text, 5);
+		splitText((parameter_list->screen_w/2)/28, text, sub_text, sizeof(sub_text)/sizeof(String));
 		
-		for(int i=0;i<5;i+=1) {
+		for(int i=0;i<sizeof(sub_text)/sizeof(String);i+=1) {
 			AIData rds_message;
 			if(sub_text[i].length() > 0) {
 				rds_message = getTextMessage(sub_text[i], 0, uint8_t(i+1));
@@ -182,13 +204,13 @@ void TextHandler::sendLongRDSMessage(String text) {
 				rds_message.refreshAIData(clear_data);
 			}
 			
-			if(i >= 4)
+			if(i >= 4 && rds_message.l>=2)
 				rds_message.data[1] |= 0x10;
 			
 			ai_handler->writeAIData(&rds_message, parameter_list->computer_connected);
 		}
 
-		if(parameter_list->header_rds_setting == HEADER_RDS_ALWAYS || (parameter_list->info_mode && parameter_list->header_rds_setting == HEADER_RDS_INFO_MODE)) { //TODO: And this feature is active.
+		if(parameter_list->header_rds_setting == HEADER_RDS_ALWAYS || (parameter_list->info_mode && parameter_list->header_rds_setting == HEADER_RDS_INFO_MODE)) {
 			text.replace("#", "##  ");
 			text.trim();
 			setOverlayHeader(text);
@@ -244,9 +266,9 @@ void TextHandler::createRadioMenu(const uint8_t sub) {
 	ai_handler->writeAIData(&preset_aid, parameter_list->computer_connected);
 
 	if(sub != SUB_AM) {
-		String scan_msg = radio_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_SCAN), list_msg = radio_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_STATION_LIST);
+		String scan_msg = String(parameter_list->scan_on ? "#RON " : "#ROF ") + radio_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_SCAN), list_msg = radio_menu.getLocalEntry(MENU_INDEX_RADIO_MAIN_MENU_STATION_LIST);
 		
-		AIData scan_aid = getTextMessage(scan_msg, 0xB, 2);
+		AIData scan_aid = getTextMessage(scan_msg, 0xB, 2, false);
 		ai_handler->writeAIData(&scan_aid, parameter_list->computer_connected);
 
 		AIData list_aid = getTextMessage(list_msg, 0xB, 3);
@@ -368,11 +390,11 @@ void TextHandler::sendIMIDRDSMessage(const uint16_t frequency, String text) {
 	if(parameter_list->imid_radio) {
 		AIData rds_msg(2 + text.length(), ID_RADIO, ID_IMID_SCR);
 
-		rds_msg.data[0] = 0x63;
-		rds_msg.data[1] = 0x61;
+		rds_msg[0] = 0x63;
+		rds_msg[1] = 0x61;
 
-		for(int i=0;i<text.length();i+=1)
-			rds_msg.data[i+2] = uint8_t(text.charAt(i));
+		for(int i=0;i<text.length() && i<rds_msg.l;i+=1)
+			rds_msg[i+2] = uint8_t(text.charAt(i));
 
 		ai_handler->writeAIData(&rds_msg);
 	} else if(parameter_list->imid_lines >= 2 && parameter_list->imid_char > 0) {
@@ -401,11 +423,11 @@ void TextHandler::sendIMIDFullRDSMessage(String text) {
 
 	AIData rds_msg(2 + text.length(), ID_RADIO, ID_IMID_SCR);
 
-	rds_msg.data[0] = 0x63;
-	rds_msg.data[1] = 0x62;
+	rds_msg[0] = 0x63;
+	rds_msg[1] = 0x62;
 
-	for(int i=0;i<text.length();i+=1)
-		rds_msg.data[i+2] = uint8_t(text.charAt(i));
+	for(int i=0;i<text.length() && i<rds_msg.l;i+=1)
+		rds_msg[i+2] = uint8_t(text.charAt(i));
 
 	ai_handler->writeAIData(&rds_msg);
 }
@@ -524,8 +546,9 @@ void TextHandler::sendTime() {
 }
 
 //Get a text message from a string.
-AIData getTextMessage(String text, const uint8_t group, const uint8_t area) {
-	text.replace("#","##  ");
+AIData getTextMessage(String text, const uint8_t group, const uint8_t area, const bool replace_number_signs) {
+	if(replace_number_signs)
+		text.replace("#","##  ");
 	
 	uint8_t text_data[3 + text.length()];
 	text_data[0] = 0x23;

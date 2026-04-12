@@ -14,9 +14,13 @@ public:
 	Settings_Ext_Window(AttributeList *attribute_list);
 
 	void exitWindow();
+
+	void drawWindow();
 private:
 	void handleEnterButton();
 	void handleBackButton();
+
+	bool exited = false;
 };
 
 #endif

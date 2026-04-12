@@ -45,6 +45,14 @@ void SRAMHandler::setStartParams(StartParams* start_params) {
 
 	sram.writeByte(RDS_DISPLAY_MODE, start_params->rds_setting);
 
+	const uint8_t aux_nav_levels = start_params->aux_level | (start_params->nav_cut << 3);
+	sram.writeByte(AUX_NAV_LEVEL, aux_nav_levels);
+
+	const uint8_t source_function_filter = (start_params->source_button_setting&0b11) | (start_params->dac_latency ? 0b100 : 0) | (start_params->steering_control_preset ? 0b1000 : 0);
+	sram.writeByte(SOURCE_FUNCTION_FILTER, source_function_filter);
+
+	sram.writeByte(SVC_SETTING, start_params->svc_setting);
+
 	writeUint16(VOL, start_params->vol);
 	writeUint16(MAX_VOL, start_params->max_vol);
 	writeUint16(TREBLE, start_params->treble);
@@ -67,6 +75,17 @@ void SRAMHandler::getStartParams(StartParams* start_params) {
 	start_params->audio_on = sram.readByte(AUDIO_ON) != 0;
 
 	start_params->rds_setting = (header_rds_setting_t)sram.readByte(RDS_DISPLAY_MODE);
+
+	const uint8_t aux_nav_levels = sram.readByte(AUX_NAV_LEVEL);
+	start_params->aux_level = aux_nav_levels&0b111;
+	start_params->nav_cut = aux_nav_levels>>3;
+
+	const uint8_t source_function_filter = sram.readByte(SOURCE_FUNCTION_FILTER);
+	start_params->source_button_setting = (source_button_t)(source_function_filter&0b11);
+	start_params->dac_latency = (source_function_filter&0b100) != 0;
+	start_params->steering_control_preset = (source_function_filter&0b1000) != 0;
+
+	start_params->svc_setting = (svc_setting_t)sram.readByte(SVC_SETTING);
 	
 	start_params->vol = readUint16(VOL);
 	start_params->max_vol = readUint16(MAX_VOL);

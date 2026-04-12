@@ -130,8 +130,6 @@ bool Color_Picker_Window::handleAIBus(AIData* ai_d) {
 					}
 				}
 			}
-
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		} else if(ai_d->l >= 3 && ai_d->data[0] == 0x30) { //Button press.
 			if(ai_d->data[1] >= 0x28 && ai_d->data[1] <= 0x29 && (ai_d->data[2] >> 6) == 0x2) {
@@ -160,7 +158,6 @@ bool Color_Picker_Window::handleAIBus(AIData* ai_d) {
 					}
 				}
 
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				return true;
 			} else {
 				bool answered = false;
@@ -189,8 +186,6 @@ bool Color_Picker_Window::handleAIBus(AIData* ai_d) {
 				} else if(control == 0x26) //Audio button, to prevent it from being used.
 					answered = true;
 				
-				if(answered)
-					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				
 				return answered;
 			}

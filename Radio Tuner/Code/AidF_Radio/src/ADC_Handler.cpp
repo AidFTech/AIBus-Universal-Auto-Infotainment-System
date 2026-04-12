@@ -59,10 +59,10 @@ void PCM9211Handler::setADCOn() {
 
 //Set the output to digital input from the Pi.
 void PCM9211Handler::setPiOut() {
-	writeRegister(REG_OUTPUT_PORT, 0x04);
+	writeRegister(REG_OUTPUT_PORT, 0x44);
 	writeRegister(REG_RECOUT0_SOURCE, 0xF);
 	writeRegister(REG_DIR_INPUT_SOURCE, 0xCF);
-	writeRegister(REG_DIT_FUNCTION0, 0x04);
+	writeRegister(REG_DIT_FUNCTION0, 0x44);
 	writeRegister(REG_DIT_FUNCTION1, 0x10);
 }
 

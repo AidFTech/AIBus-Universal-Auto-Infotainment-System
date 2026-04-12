@@ -46,6 +46,9 @@ public:
 	int16_t getFader();
 
 	bool getVolumeChanged();
+	void setUseAuxLevel(const bool use_aux_level);
+
+	void refreshSVC();
 private:
 	MCP4251 *vol_mcp, *treble_mcp, *bass_mcp, *fader_mcp;
 	AIBusHandler* ai_handler;
@@ -57,6 +60,8 @@ private:
 	int16_t balance = 0, fader = 0;
 
 	bool volume_changed = false;
+
+	bool use_aux_level = false;
 
 	void setVolume();
 	void setVolumeDisplay();

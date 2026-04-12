@@ -89,6 +89,12 @@ enum transmission_type_t : uint8_t {
 #define TRANSMISSION_POS_LOW 0x8
 #define TRANSMISSION_POS_MANUAL 0x9
 
+enum auto_stop_t : uint8_t {
+	AUTO_STOP_OFF,
+	AUTO_STOP_DISABLED,
+	AUTO_STOP_ON = 0xFF,
+};
+
 struct InfoParameters {
 	//Supported common parameters.
 	uint8_t supported_a = 0xF, supported_b = 0xFF;
@@ -126,6 +132,7 @@ struct InfoParameters {
 	//Transmission.
 	transmission_type_t transmission_type = TRANSMISSION_OTHER;
 	int8_t selected_pos = -1, gear = -1;
+	auto_stop_t auto_stop = AUTO_STOP_OFF;
 
 	//Display:
 	bool display_cruise = true;
@@ -143,7 +150,7 @@ struct InfoParameters {
 	uint8_t charge_assist_pos = 0x7F; //The position of the charge/assist meter, centered at 0x7F.
 
 	//Displayed parameters:
-	info_param param_index[PARAM_COUNT];
+	info_param param_index[PARAM_COUNT] = {INFO_PARAM_NONE, INFO_PARAM_NONE, INFO_PARAM_NONE, INFO_PARAM_NONE};
 };
 
 void setLightState(AIData* light_msg, InfoParameters* info_parameters);

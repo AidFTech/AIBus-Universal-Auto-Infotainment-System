@@ -1,12 +1,15 @@
+#include <SDL2/SDL_render.h>
 #include <stdint.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_video.h>
 #include <SDL2/SDL_ttf.h>
 #include <SDL2/SDL_mouse.h>
+
 #include <string>
 #include <fstream>
 #include <vector>
 #include <cstdlib>
+
 #include <pthread.h>
 
 #include "AidF_Color_Profile.h"
@@ -17,7 +20,7 @@
 #include "Saved_Settings.h"
 
 #ifdef RPI_UART
-#include <pigpio.h>
+#include <gpiod.h>
 #endif
 
 #include "Background/Nav_Background.h"
@@ -51,8 +54,6 @@
 #define HEADER_LIMIT_VOLUME 700
 #define HEADER_LIMIT_OTHER 2000
 
-#define AIBUS_WAIT 5
-
 #define SOCKET_AIBUS_TEST
 
 #ifdef RPI_UART
@@ -70,6 +71,8 @@ struct ElapsedMillis {
 	unsigned long time = 0;
 	bool* run;
 };
+
+using namespace std;
 
 class AidF_Nav_Computer {
 public:
@@ -111,7 +114,7 @@ private:
 
 	SerialAIBusHandler* aibus_handler;
 
-	Background* br;
+	Background* br = nullptr;
 
 	Window_Handler* window_handler;
 	AttributeList* attribute_list;

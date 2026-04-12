@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <SDL2/SDL.h>
 
+#include <vector>
+
 #include "../AidF_Color_Profile.h"
 #include "../Background/Nav_Background.h"
 #include "../Serial_AIBus_Handler.h"
@@ -51,6 +53,7 @@ struct AttributeList {
 	uint8_t day_night_settings = DAY_NIGHT_AUTO;
 	bool night = false;
 	bool canslator_connected = false, radio_connected = false, mirror_connected = false, gps_antenna_connected = false;
+	vector<uint8_t> ping_device_list = vector<uint8_t>(0);
 	
 	bool background_changed = false; //True if the background was changed by the user.
 	bool text_changed = false; //True if the text color was changed.

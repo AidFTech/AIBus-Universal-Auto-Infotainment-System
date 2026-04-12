@@ -67,7 +67,6 @@ void Consumption_Window::exitWindow() {
 
 bool Consumption_Window::handleAIBus(AIData* ai_d) {
 	if(ai_d->l >= 3 && ai_d->data[0] == 0x46 && ai_d->sender == ID_CANSLATOR) { //Trip information message.
-		aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 		if(ai_d->data[1] == MSG46_ECON) {
 			const uint8_t row = ai_d->data[2]&0xF;
 			const bool right_column = (ai_d->data[2]&0x80) != 0;
@@ -103,8 +102,6 @@ bool Consumption_Window::handleAIBus(AIData* ai_d) {
 				delete this->settings_menu;
 
 			this->settings_menu = new NavMenu(attribute_list, x, y, w, h, ml, -1, h*6/7, rows, loop, menu_title);
-
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		} else if(ai_d->data[1] == 0x51 && ai_d->l >= 3) { //New menu item.
 			if(settings_menu == NULL)
@@ -116,8 +113,6 @@ bool Consumption_Window::handleAIBus(AIData* ai_d) {
 
 			const uint16_t index = ai_d->data[2];
 			this->settings_menu->setItem(menu_item, index);
-
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		} else if(ai_d->data[1] == 0x52 && ai_d->l >= 3) { //Select the item.
 			if(settings_menu == NULL)
@@ -126,8 +121,6 @@ bool Consumption_Window::handleAIBus(AIData* ai_d) {
 			const uint16_t index = ai_d->data[2];
 			this->settings_menu->setSelected(index);
 			this->settings_menu->setTextItems();
-
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		} else if(ai_d->data[1] == 0x53) { //Set the title.
 			if(settings_menu == NULL)
@@ -138,16 +131,12 @@ bool Consumption_Window::handleAIBus(AIData* ai_d) {
 				menu_title += char(ai_d->data[i]);
 
 			this->settings_menu->setTitle(menu_title);
-
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		} else if(ai_d->data[1] == 0x40) { //Clear the menu.
 			if(settings_menu == NULL)
 				return false;
 
 			this->settings_menu = NULL;
-
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		}
 	} else if(ai_d->sender == ID_NAV_SCREEN) {
@@ -156,7 +145,6 @@ bool Consumption_Window::handleAIBus(AIData* ai_d) {
 
 		if(this->settings_menu != NULL) {
 			if(this->settings_menu->handleAIBus(ai_d)) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				return true;
 			}
 		}
@@ -165,15 +153,12 @@ bool Consumption_Window::handleAIBus(AIData* ai_d) {
 			bool answered = false;
 			const uint8_t control = ai_d->data[1], state = ai_d->data[2]>>6;
 			if(control == 0x7 && state == 0x2) { //Enter button.
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				this->handleEnterButton();
 				answered = true;
 			} else if(control == 0x27 && state == 0x2) { //Back button.
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				this->handleBackButton();
 				answered = true;
 			} else if(control == 0x51 && state == 0x2) { //Menu/setup button.
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				handleSettingsButton();
 				answered = true;
 			}

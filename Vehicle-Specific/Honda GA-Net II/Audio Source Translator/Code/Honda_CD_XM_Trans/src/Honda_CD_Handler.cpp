@@ -4,6 +4,8 @@ HondaCDHandler::HondaCDHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_drive
 	this->device_ie_id = IE_ID_CDC;
 	this->device_ai_id = ID_CDC;
 
+	this->use_ai_cache = true;
+
 	this->imid_handler = imid_handler;
 	this->clearCDText(true, true, true, true, true);
 
@@ -12,7 +14,34 @@ HondaCDHandler::HondaCDHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_drive
 
 //CDC handler loop function.
 void HondaCDHandler::loop() {
+	if(parameter_list->cd_text_changed) {
+		if(parameter_list->imid_connected && this->source_sel) {
+			if(use_function_timer) {
+				function_timer_enabled = true;
+				function_timer = FUNCTION_CHANGE_TIMER - 10;
+			} else {
+				imid_handler->setIMIDSource(ID_CDC, 0);
+				imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status));
+			}
+		}
+		setting_changed = true;
+		parameter_list->cd_text_changed = false;
+	}
+
+	if(setting_changed) {
+		setting_changed = false;
+		setCDSettings(this->autostart, this->use_function_timer, this->split);
+	}
+
 	if(this->source_sel) {
+		if(second_timer > 800 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff) {
+			second_timer = 0;
+			this->listenForIEBus(400, false);
+
+			if(text_timer >= TEXT_REFRESH_TIMER/2)
+				text_timer = 0;
+		}
+
 		if(text_timer_enabled && text_timer >= TEXT_REFRESH_TIMER) {
 			text_timer_enabled = false;
 
@@ -23,14 +52,17 @@ void HondaCDHandler::loop() {
 				if(text_timer_song) {
 					text_timer_song = false;
 					sendCDTextMessage(TEXT_SONG, true);
+					goto exit;
 				}
 				if(text_timer_artist) {
 					text_timer_artist = false;
 					sendCDTextMessage(TEXT_ARTIST, true);
+					goto exit;
 				}
 				if(text_timer_album) {
 					text_timer_album = false;
 					sendCDTextMessage(TEXT_ALBUM, true);
+					goto exit;
 				}
 
 				if(strlen(song_title) <= 0 || strlen(artist) <= 0 || strlen(album) <= 0)
@@ -40,28 +72,40 @@ void HondaCDHandler::loop() {
 				if(text_timer_folder) {
 					text_timer_folder = false;
 					sendCDTextMessage(0, true);
+					goto exit;
 				}
 				if(text_timer_file) {
 					text_timer_file = false;
 					sendCDTextMessage(1, true);
+					goto exit;
 				}
 				if(text_timer_song) {
 					text_timer_song = false;
 					sendCDTextMessage(2, true);
+					goto exit;
 				}
 				if(text_timer_album) {
 					text_timer_album = false;
 					sendCDTextMessage(3, true);
+					goto exit;
 				}
 				if(text_timer_artist) {
 					text_timer_artist = false;
 					sendCDTextMessage(4, true);
+					goto exit;
 				}
 			}
 
-			if(text_timer_info_change) {
-				text_timer_info_change = false;
-				incrementInfo();
+			exit: {
+				if(text_timer_song || text_timer_artist || text_timer_album || text_timer_folder || text_timer_file) {
+					text_timer_enabled = true;
+					text_timer = 0;
+				}
+
+				if(text_timer_info_change) {
+					text_timer_info_change = false;
+					incrementInfo();
+				}
 			}
 		}
 	
@@ -97,11 +141,13 @@ void HondaCDHandler::loop() {
 			}
 			sendCDIMIDTrackandTimeMessage();
 
-			text_timer_enabled = true;
-			text_timer_album = true;
-			text_timer_artist = true;
-			text_timer_song = true;
-			text_timer = 0;
+			if(text_mode != TEXT_MODE_BLANK) {
+				text_timer_enabled = true;
+				text_timer_album = true;
+				text_timer_artist = true;
+				text_timer_song = true;
+				text_timer = 0;
+			}
 		}
 
 		if((ff || fr) && ff_fr_timer >= FRFF_INTERVAL) {
@@ -132,11 +178,14 @@ void HondaCDHandler::loop() {
 			}
 
 			sendCDIMIDTrackandTimeMessage();
-			text_timer = 0;
-			text_timer_enabled = true;
-			text_timer_song = true;
-			text_timer_artist = true;
-			text_timer_album = true;
+
+			if(text_mode != TEXT_MODE_BLANK) {
+				text_timer = 0;
+				text_timer_enabled = true;
+				text_timer_song = true;
+				text_timer_artist = true;
+				text_timer_album = true;
+			}
 		}
 
 		if(parameter_list->radio_ping_timer > RADIO_PING_WAIT) {
@@ -158,16 +207,16 @@ void HondaCDHandler::loop() {
 			if(!ack)
 				parameter_list->radio_connected = false;
 		}
-	
-		if(setting_changed) {
-			setting_changed = false;
-			setCDSettings(this->autostart, this->use_function_timer, this->split);
+
+		while(ie_cache_vec.size() > 0) {
+			interpretCDMessage(&ie_cache_vec[0], false);
+			ie_cache_vec.remove(0);
 		}
 	}
 }
 
 //Interpret a CDC IEBus message.
-void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
+void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool listen) {
 	if(the_message->receiver != IE_ID_RADIO || the_message->sender != IE_ID_CDC)
 		return;
 
@@ -218,9 +267,12 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 
 				if(source_established && parameter_list->radio_connected)
 					sendSourceNameMessage();
+
+				if(source_established)
+					parameter_list->imid_cd_text = &use_function_timer;
 			}
 		}
-	} else if(the_message->l >= 0xF && the_message->data[0] == 0x60 && the_message->data[1] == 0x6) { //Display change message.
+	} else if(the_message->l >= 16 && the_message->data[0] == 0x60 && the_message->data[1] == 0x6) { //Display change message.
 		ack = false;
 		sendIEAckMessage(IE_ID_CDC);
 
@@ -267,14 +319,17 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 				text_timer = 0;
 				text_timer_enabled = true;
 			}
+
+			bool track_changed = false;
 			
-			if(disc_and_track != ((disc << 8) | track) || getIECDStatus(ai_cd_status) != last_status || getIECDRepeat(ai_cd_status) != last_repeat) {
+			if(disc_and_track != uint16_t((disc << 8) | track) || getIECDStatus(ai_cd_status) != last_status || getIECDRepeat(ai_cd_status) != last_repeat) {
 				uint8_t track_data[] = {0x39, 0x0, ai_cd_status, 0x0, 0x3F, 0x0, disc, track};
 
 				AIData track_msg(sizeof(track_data), ID_CDC, ID_RADIO);
 				track_msg.refreshAIData(track_data);
 
 				ai_driver->writeAIData(&track_msg, parameter_list->radio_connected);
+				text_mode = TEXT_MODE_BLANK;
 
 				if(disc != ((disc_and_track&0xFF00)>>8)) {
 					display_parameter = TEXT_NONE;
@@ -290,11 +345,18 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 				if(text_control) {		
 					clearAICDText(track != (disc_and_track&0xFF), track != (disc_and_track&0xFF), disc != ((disc_and_track&0xFF00)>>8) || text_mode == TEXT_MODE_MP3, folder_num != last_folder && text_mode == TEXT_MODE_MP3, track != (disc_and_track&0xFF) && text_mode==TEXT_MODE_MP3);
 					
-					if((disc != ((disc_and_track&0xFF00)>>8)) || text_mode == TEXT_MODE_MP3) 
+					if((disc != ((disc_and_track&0xFF00)>>8)) || text_mode == TEXT_MODE_MP3) { 
+						if(parameter_list->imid_connected)
+							imid_handler->clearIMIDCDText();
+
 						clearExternalCDIMID(true);
+					}
 					
 					sendCDTrackMessage();
 				}
+
+				track_changed = true;
+				second_timer = 0;
 			}
 		
 			const int16_t last_timer = timer;
@@ -309,11 +371,13 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 				ai_driver->writeAIData(&timer_msg, parameter_list->radio_connected);
 				if(text_control)
 					sendCDTimeMessage();
+
+				second_timer = 0;
 			}
 
 			if(text_control) {
-				if(timer != last_timer || disc_and_track != ((disc<<8) | track) || getIECDStatus(ai_cd_status) != last_status || getIECDRepeat(ai_cd_status) != last_repeat) {
-					if(getIECDRepeat(ai_cd_status) != last_repeat && (disc_and_track&0xFF00) == (disc<<8) &&
+				if(timer != last_timer || disc_and_track != uint16_t((disc<<8) | track) || getIECDStatus(ai_cd_status) != last_status || getIECDRepeat(ai_cd_status) != last_repeat) {
+					if(getIECDRepeat(ai_cd_status) != last_repeat && (disc_and_track&0xFF00) == uint16_t(disc<<8) &&
 					(parameter_list->imid_connected || (parameter_list->external_imid_char > 0 && parameter_list-> external_imid_char < 16 && parameter_list->external_imid_lines == 1 && !parameter_list->external_imid_cd))) {
 						this->mode_timer_enabled = true;
 						this->mode_timer = 0;
@@ -324,6 +388,9 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 
 				sendCDLoadWaitMessage(message_type);
 			}
+
+			if(listen && track_changed)
+				listenForIEBus(300, false);
 		} else if((str == 0x80 || str == 0x81 || str == 0x82 || (str >= 0x70 && str < 0x80)) && (message_type == 3 || message_type == 2)) {
 			char* affected;
 			uint8_t* stage;
@@ -384,15 +451,17 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 						stage = &this->artist_stage;
 						change = &this->artist_change;
 						len = sizeof(this->artist)/sizeof(char)-1;
-						break; 
+						break;
+					default: return;
 				}
-			}
+			} else return;
 
 			uint8_t increment = the_message->data[6], msg_stage = the_message->data[7]>>4;
 			if(increment > 2)
 				increment = 1;
 			
 			const unsigned int olen = len;
+			const String original = affected;
 			
 			unsigned int start = 0;
 			if(msg_stage > 0)
@@ -406,13 +475,16 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 					break;
 
 				if(the_message->data[d] != 0xFF) {
-					if(the_message->data[d] != affected[i])
+					if(char(the_message->data[d]) != affected[i])
 						*change = true;
 					
 					affected[i] = the_message->data[d];
 				} else
 					affected[i] = 0;
 			}
+
+			//if(*change && original.length() != 0 && parameter_list->imid_connected)
+			//	imid_handler->clearIMIDCDText();
 
 			if(msg_stage == 0)
 				*stage = 1;
@@ -425,8 +497,10 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message) {
 				sendAICDTextMessage(ID_RADIO, str&0xF);
 				if(text_control) {
 					startTextTimer(str&0xF);
+					sendIMIDInfoMessage();
 				}
 			}
+
 		}
 	}
 	
@@ -453,18 +527,17 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 	if(!parameter_list->power_on)
 		return;
 	
-	bool ack = true;
 	const uint8_t sender = the_message->sender;
+
+	if(sender == ID_RADIO && the_message->l >= 3 && (the_message->data[0] == 0x40 || the_message->data[0] == 0x70)) {
+		parameter_list->radio_ping_timer = 0;
+		text_ping_timer = 0;
+	}
 	
 	if(the_message->l >= 3 && the_message->data[0] == 0x4 && the_message->data[1] == 0xE6 && the_message->data[2] == 0x10) { //Name request.
-		ack = false;
-		sendAIAckMessage(sender);
 		sendSourceNameMessage(the_message->sender);
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function change.
 		const uint8_t active_source = the_message->data[2];
-
-		ack = false;
-		sendAIAckMessage(sender);
 
 		if(active_source == ID_CDC) {
 			text_ping_timer = 0;
@@ -510,6 +583,8 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 					function_timer_enabled = true;
 				}
 			}
+
+			listenForIEBus();
 		} else {
 			if(source_sel) {
 				source_sel = false;
@@ -528,9 +603,6 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 				digitalWrite(parameter_list->audio_pin, LOW);
 		}
 	} else if (the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x1 && sender == ID_RADIO) {
-		ack = false;
-		sendAIAckMessage(sender);
-
 		text_ping_timer_enabled = false;
 	
 		this->text_control = the_message->data[2] == device_ai_id;
@@ -558,17 +630,12 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 		}
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x70 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function heartbeat.
 		if(source_sel && !text_control) {
-			ack = false;
-			sendAIAckMessage(sender);
-
 			uint8_t text_request_data[] = {0x60, 0x11};
 			AIData text_request_msg(sizeof(text_request_data), ID_CDC, ID_RADIO, text_request_data);
 			ai_driver->writeAIData(&text_request_msg);
 		}
 	} else if(sender == ID_NAV_SCREEN) {
 		if(!this->source_sel) {
-			ack = false;
-			sendAIAckMessage(sender);
 			return;
 		}
 
@@ -668,14 +735,14 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 				break;
 		}
 	} else if(the_message->l >= 2 && the_message->data[0] == 0x2B && source_sel) {
-		ack = false;
-		sendAIAckMessage(sender);
-
 		if((the_message->data[1] == 0x4A || the_message->data[1] == 0x45) && sender == ID_RADIO) {
 			createCDMainMenu();
 		} else if(the_message->data[1] == 0x40) {
 			//TODO: Change the active menu depending on what cleared it.
 			*active_menu = 0;
+
+			if(open_audio_menu) 
+				requestAudioSettingsMenu();
 		} else if(the_message->data[1] == 0x60 && the_message->l >= 3 && sender == ID_NAV_COMPUTER) {
 			if(*active_menu == MENU_CD) {
 				const MenuList cd_menu = getMenu(MENU_INDEX_CDC_SETTINGS, parameter_list->locale);
@@ -695,16 +762,7 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 				case MENU_INDEX_CDC_SETTINGS_TEXT_IMID: //CD text.
 					this->use_function_timer = !this->use_function_timer;
 					setting_changed = true;
-
-					if(parameter_list->imid_connected) {
-						if(use_function_timer) {
-							function_timer_enabled = true;
-							function_timer = FUNCTION_CHANGE_TIMER - 10;
-						} else {
-							imid_handler->setIMIDSource(ID_CDC, 0);
-							imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status));
-						}
-					}
+					parameter_list->cd_text_changed = true;
 
 					createCDMainMenuOption(3);
 					break;
@@ -716,7 +774,15 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 					setting_changed = true;
 					break;
 				case MENU_INDEX_CDC_SETTINGS_AUDIO: //Radio settings.
-					//TODO: Request radio settings.
+					{
+						uint8_t clear_data[] = {0x2B, 0x4A};
+						AIData clear_msg(sizeof(clear_data), device_ai_id, ID_NAV_COMPUTER, clear_data);
+						ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
+
+						*active_menu = 0;
+
+						open_audio_menu = true;
+					}
 					break;
 				default:
 					break;
@@ -734,13 +800,8 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 			}
 		}
 	} else if(the_message->sender == ID_RADIO && the_message->l >= 3 && the_message->data[0] == 0x4 && the_message->data[1] == 0xE6 && the_message->data[2] == 0x10) {
-		ack = false;
-		sendAIAckMessage(sender);
 		this->sendSourceNameMessage();
 	}
-	
-	if(ack)
-		sendAIAckMessage(sender);
 }
 
 //Send the AIBus handshake message to the radio.
@@ -918,6 +979,8 @@ void HondaCDHandler::sendButtonMessage(const uint8_t button) {
 	button_message.refreshIEData(button_data);
 	ie_driver->sendMessage(&button_message, true, true);
 	getIEAckMessage(device_ie_id);
+
+	listenForIEBus(300, button != BUTTON_DISC_CHANGE && button != BUTTON_UP && button != BUTTON_DOWN);
 }
 
 //Send a multi-byte button IEBus message.
@@ -928,6 +991,8 @@ void HondaCDHandler::sendButtonMessage(const uint8_t button, const uint8_t state
 	button_message.refreshIEData(button_data);
 	ie_driver->sendMessage(&button_message, true, true);
 	getIEAckMessage(device_ie_id);
+
+	listenForIEBus(300, button != BUTTON_DISC_CHANGE && button != BUTTON_UP && button != BUTTON_DOWN);
 }
 
 //Send an AIBus track message.
@@ -986,13 +1051,16 @@ void HondaCDHandler::sendCDTrackMessage(const bool track) {
 	if(this->track > 0)
 		nav_header += '-' + String(int(this->track));
 
-	String meta_text = String(this->song_title);
-	if(meta_text.length() > 20)
-		meta_text = meta_text.substring(0,20);
+	if(text_mode != TEXT_MODE_BLANK) {
+		String meta_text = String(this->song_title);
+		if(meta_text.length() > 32)
+			meta_text = meta_text.substring(0, 32);
 
-	meta_text.replace("#", "##  ");
+		meta_text.replace("#", "##  ");
 
-	nav_header += "  " + meta_text;
+		nav_header += "  " + meta_text;
+	}
+
 	setNavHeader(nav_header);
 }
 
@@ -1071,19 +1139,22 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 				len = sizeof(artist)/sizeof(char)-1;
 				ai_field = 2;
 				break;
+			default:
+				return;
 		}
-	}
+	} else return;
 
 	String meta_text = String(affected);
 	if(meta_text.length() > len)
 		meta_text = meta_text.substring(0, len);
 
+	const String orig_text = meta_text;
 	meta_text.replace("#", "##  ");
 
 	AIData meta_msg = getTextMessage(ID_CDC, meta_text, 0, ai_field, refresh);
 	ai_driver->writeAIData(&meta_msg, parameter_list->computer_connected);
 
-	sendCDIMIDTextMessage(field, meta_text);
+	sendCDIMIDTextMessage(field, orig_text);
 
 	if((text_mode == TEXT_MODE_WITH_TEXT && field == TEXT_SONG) ||
 		(text_mode == TEXT_MODE_MP3 && field == 2)) {
@@ -1093,8 +1164,8 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 		if(this->track > 0)
 			nav_header += '-' + String(int(this->track));
 
-		/*if(meta_text.length() > 20)
-			meta_text = meta_text.substring(0,20);*/
+		if(meta_text.length() > 32)
+			meta_text = meta_text.substring(0,20);
 
 		nav_header += "  " + meta_text;
 		setNavHeader(nav_header);
@@ -1214,10 +1285,14 @@ void HondaCDHandler::sendCDLoadWaitMessage(const uint8_t message_type) {
 
 //Start the text send timer.
 void HondaCDHandler::startTextTimer(const uint8_t field) {
+	if(text_mode == TEXT_MODE_BLANK)
+		return;
+
 	text_timer = 0;
 	text_timer_enabled = true;
 
 	if(text_mode == TEXT_MODE_WITH_TEXT) {
+		text_request_timer = 0;
 		switch(field) {
 			case TEXT_ALBUM:
 				text_timer_album = true;
@@ -1253,13 +1328,15 @@ void HondaCDHandler::startTextTimer(const uint8_t field) {
 
 //Send the IEBus text request message.
 void HondaCDHandler::sendTextRequest() {
-	if(!source_sel)
+	if(!source_sel || text_mode == TEXT_MODE_BLANK)
 		return;
 
 	uint8_t function_data[] = {0x6, 0x0};
 	IE_Message function_msg = getFunctionMessage(true, IE_ID_CDC, function_data, sizeof(function_data));
 	ie_driver->sendMessage(&function_msg, true, true);
 	getIEAckMessage(&function_msg, device_ie_id);
+
+	listenForIEBus();
 }
 
 //Send text to the IMID.
@@ -1419,19 +1496,19 @@ void HondaCDHandler::incrementInfo() {
 		String nav_header = "";
 		switch(display_parameter) {
 		case TEXT_SONG:
-			nav_header = "Track: " + String(this->song_title);
+			nav_header = getString(LOCALE_STRING_CD_TRACK, parameter_list->locale) + (": " + String(this->song_title));
 			break;
 		case TEXT_ARTIST:
-			nav_header = "Artist: " + String(this->artist);
+			nav_header = getString(LOCALE_STRING_CD_ARTIST, parameter_list->locale) + (": " + String(this->artist));
 			break;
 		case TEXT_ALBUM:
-			nav_header = "Album: " + String(this->album);
+			nav_header = getString(LOCALE_STRING_CD_ALBUM, parameter_list->locale) + (": " + String(this->album));
 			break;
 		case TEXT_FOLDER:
-			nav_header = "Folder: " + String(this->folder);
+			nav_header = getString(LOCALE_STRING_CD_FOLDER, parameter_list->locale) + (": " + String(this->folder));
 			break;
 		case TEXT_FILE:
-			nav_header = "File: " + String(this->filename);
+			nav_header = getString(LOCALE_STRING_CD_FILE, parameter_list->locale) + (": " + String(this->filename));
 			break;
 		}
 
@@ -1591,19 +1668,22 @@ void HondaCDHandler::sendIMIDInfoMessage(const bool resend) {
 	if(!text_control || display_parameter == TEXT_NONE)
 		return;
 	
-	String text_to_send = F(" ");
+	String text_to_send = " ";
 	
 	if(display_timer_enabled) {
 		if(display_parameter == TEXT_SONG)
-			text_to_send = F("TRACK");
+			text_to_send = getString(LOCALE_STRING_CD_TRACK, parameter_list->locale);
 		else if(display_parameter == TEXT_ARTIST)
-			text_to_send = F("ARTIST");
+			text_to_send = getString(LOCALE_STRING_CD_ARTIST, parameter_list->locale);
 		else if(display_parameter == TEXT_ALBUM)
-			text_to_send = F("ALBUM");
+			text_to_send = getString(LOCALE_STRING_CD_ALBUM, parameter_list->locale);
 		else if(display_parameter == TEXT_FOLDER)
-			text_to_send = F("FOLDER");
+			text_to_send = getString(LOCALE_STRING_CD_FOLDER, parameter_list->locale);
 		else if(display_parameter == TEXT_FILE)
-			text_to_send = F("FILE");
+			text_to_send = getString(LOCALE_STRING_CD_FILE, parameter_list->locale);
+		else return;
+
+		text_to_send.toUpperCase();
 	} else {
 		if(display_parameter == TEXT_SONG)
 			text_to_send = String(song_title);
@@ -1615,17 +1695,11 @@ void HondaCDHandler::sendIMIDInfoMessage(const bool resend) {
 			text_to_send = String(folder);
 		else if(display_parameter == TEXT_FILE)
 			text_to_send = String(filename);
+		else return;
 	}
 
 	if(text_to_send.length() <= 0 || text_to_send.compareTo(" ") == 0)
-		text_to_send = F("No Data");
-
-	if(text_to_send.length() > 32) {
-		text_to_send = text_to_send.substring(0, 32);
-	}
-
-	/*if(resend && (parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0))
-		clearExternalIMID();*/
+		text_to_send = getString(LOCALE_STRING_NO_DATA, parameter_list->locale);
 
 	bool scroll_changed = true;
 	uint8_t max_length = parameter_list->external_imid_char;
@@ -1662,22 +1736,28 @@ void HondaCDHandler::sendIMIDInfoMessage(const bool resend) {
 	}
 	
 	if(resend && !parameter_list->imid_connected && parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines >= 2) {
+		String header_str = "";
 		switch(display_parameter) {
 			case TEXT_SONG:
-				sendIMIDInfoHeader("TRACK");
+				header_str = getString(LOCALE_STRING_CD_TRACK, parameter_list->locale);
 				break;
 			case TEXT_ARTIST:
-				sendIMIDInfoHeader("ARTIST");
+				header_str = getString(LOCALE_STRING_CD_ARTIST, parameter_list->locale);
 				break;
 			case TEXT_ALBUM:
-				sendIMIDInfoHeader("ALBUM");
+				header_str = getString(LOCALE_STRING_CD_ALBUM, parameter_list->locale);
 				break;
 			case TEXT_FOLDER:
-				sendIMIDInfoHeader("FOLDER");
+				header_str = getString(LOCALE_STRING_CD_FOLDER, parameter_list->locale);
 				break;
 			case TEXT_FILE:
-				sendIMIDInfoHeader("FILE");
+				header_str = getString(LOCALE_STRING_CD_FILE, parameter_list->locale);
 				break;
+		}
+
+		if(header_str.length() > 0) {
+			header_str.toUpperCase();
+			sendIMIDInfoHeader(header_str);
 		}
 	}
 	
@@ -1892,7 +1972,6 @@ void HondaCDHandler::createCDMainMenu() {
 		if(ai_driver->dataAvailable(false) > 0) {
 			if(ai_driver->readAIData(&ai_msg, false)) {
 				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //No menu available.
-					sendAIAckMessage(ai_msg.sender);
 					return;
 				}
 			}
@@ -1903,7 +1982,7 @@ void HondaCDHandler::createCDMainMenu() {
 
 	for(uint8_t i=0;i<menu_size;i+=1)
 		createCDMainMenuOption(i);
-	displayAudioMenu(1);
+	displayMenu(1);
 }
 
 //Create an option on the main settings menu.
@@ -1923,7 +2002,7 @@ void HondaCDHandler::createCDMainMenuOption(const uint8_t option) {
 		item_txt = split ? "#ROF " : "#RON ";
 
 	item_txt += main_menu[option];
-	appendAudioMenu(option, item_txt);
+	appendMenu(option, item_txt);
 
 	/*switch(option) {
 	case 0:
@@ -1971,7 +2050,6 @@ void HondaCDHandler::createCDChangeDiscMenu() {
 		if(ai_driver->dataAvailable(false) > 0) {
 			if(ai_driver->readAIData(&ai_msg, false)) {
 				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //Menu cleared.
-					sendAIAckMessage(ai_msg.sender);
 					canceled = true;
 					break;
 				}
@@ -1991,9 +2069,9 @@ void HondaCDHandler::createCDChangeDiscMenu() {
 		createCDChangeDiscMenuOption(i);
 
 	if(disc > 0 && disc <= 6)
-		displayAudioMenu(disc);
+		displayMenu(disc);
 	else
-		displayAudioMenu(1);
+		displayMenu(1);
 
 	*active_menu = MENU_SELECT_DISC;
 }
@@ -2001,5 +2079,36 @@ void HondaCDHandler::createCDChangeDiscMenu() {
 //Create an option on the disc menu.
 void HondaCDHandler::createCDChangeDiscMenuOption(const uint8_t option) {
 	const MenuList disc_menu = getMenu(MENU_INDEX_CDC_DISC, parameter_list->locale);
-	appendAudioMenu(option, disc_menu[0] + String(option+1));
+	appendMenu(option, disc_menu[0] + String(option+1));
+}
+
+//Listen for IEBus data.
+void HondaCDHandler::listenForIEBus(const unsigned long wait, const bool single_msg) {
+	if(ff || fr)
+		return;
+
+	const unsigned long last_radio_ping = parameter_list->radio_ping_timer, last_text_ping = text_ping_timer;
+	use_ai_cache = wait > 200;
+	HondaSourceHandler::listenForIEBus(wait, single_msg);
+
+	if(parameter_list->radio_ping_timer > last_radio_ping)
+		parameter_list->radio_ping_timer = last_radio_ping;
+
+	if(text_ping_timer > last_text_ping)
+		text_ping_timer = last_text_ping;
+}
+
+//Handle an AIBus message internally.
+void HondaCDHandler::handleAIBus(AIData* msg) {
+	readAIBusMessage(msg);
+}
+
+//Handle an IEBus message internally.
+void HondaCDHandler::handleIEBus(IE_Message* msg, const bool listen) {
+	interpretCDMessage(msg, listen);
+}
+
+//Forward a message to the IMID.
+void HondaCDHandler::handleIMIDAIBus(AIData* msg) {
+	imid_handler->readAIBusMessage(msg);
 }

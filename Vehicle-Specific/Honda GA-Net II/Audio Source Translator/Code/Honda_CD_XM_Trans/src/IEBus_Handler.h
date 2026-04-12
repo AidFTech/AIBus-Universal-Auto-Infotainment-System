@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <Arduino.h>
 #include <elapsedMillis.h>
+#include <Vector.h>
 
 #include "IEBus.h"	
 
@@ -34,11 +35,13 @@
 #define SCALE_3 64
 
 #define IE_FAILSAFE_LENGTH			int(40e-6*F_CPU/SCALE)
-#define IE_NORMAL_BIT_0_LENGTH		int(33e-6*F_CPU/SCALE)
-#define IE_NORMAL_BIT_1_LENGTH		int(33e-6*F_CPU/SCALE)
+#define IE_NORMAL_BIT_0_LENGTH		int(40e-6*F_CPU/SCALE)
+#define IE_NORMAL_BIT_1_LENGTH		int(40e-6*F_CPU/SCALE)
+#define IE_NORMAL_BIT_A_LENGTH		int(33e-6*F_CPU/SCALE)
 #define IE_BIT_1_HOLD_ON_LENGTH		int(20e-6*F_CPU/SCALE)
-#define IE_BIT_0_HOLD_ON_LENGTH		int(31e-6*F_CPU/SCALE)
-#define IE_BIT_COMP_LENGTH			int(28e-6*F_CPU/SCALE)
+#define IE_BIT_0_HOLD_ON_LENGTH		int(32e-6*F_CPU/SCALE)
+#define IE_BIT_A_HOLD_ON_LENGTH		int(31e-6*F_CPU/SCALE)
+#define IE_BIT_COMP_LENGTH			int(26e-6*F_CPU/SCALE)
 
 #define START_LENGTH				int(360e-6*F_CPU/SCALE_3)
 #define START_COMP_LENGTH			int(170e-6*F_CPU/SCALE_3)
@@ -58,14 +61,18 @@ public:
 
 	virtual void sendAcknowledgement(const uint16_t sender, const uint16_t receiver);
 	
-	bool getInputOn();
+	inline bool getInputOn() {
+		return((*rx_portregister&rx_bitmask) != 0);
+	}
 
 protected:
 	inline void sendBit(const bool data);
 	inline void sendAckBit();
 	inline void sendStartBit();
-	inline void sendBits(const uint16_t data, const uint8_t size);
-	inline void sendBits(const uint16_t data, const uint8_t size, const bool send_parity, const bool ack);
+	inline void sendBits(const int16_t data, const uint8_t size);
+	inline void sendBits(const int16_t data, const uint8_t size, const bool send_parity, const bool ack);
+
+	inline void getBits(Vector<bool>* bits, const int16_t data, const uint8_t size, const bool send_parity, const bool ack);
 
 	inline int8_t readBit();
 	inline int readBits(const uint8_t length, const bool with_parity, const bool with_ack, bool send_ack);

@@ -1,5 +1,8 @@
 #include <stdint.h>
 #include <elapsedMillis.h>
+#include <Vector.h>
+
+#include "IEBus.h"
 
 #ifndef parameter_list_h
 #define parameter_list_h
@@ -8,9 +11,13 @@
 #define MENU_CD 0x6
 #define MENU_XM 0x19
 #define MENU_RADIO 0x10
+#define MENU_IMID 0x11
+#define MENU_IMID_CHARACTER 0x12
 
 #define SCREEN_REQUEST_TIMER 5000
 #define RADIO_PING_WAIT 7500
+
+#define LAST_IEBUS_WAIT 500
 
 struct ParameterList {
 	bool power_on = true;
@@ -21,8 +28,10 @@ struct ParameterList {
 	bool display_24h = true;
 	
 	uint16_t vehicle_speed = 0;
-	bool computer_connected = false, screen_connected = false, radio_connected = false, mirror_connected = false;
+	bool computer_connected = false, screen_connected = false, radio_connected = false, mirror_connected = false, canslator_connected = false;
 	bool imid_connected = false;
+
+	bool* imid_cd_text = nullptr, cd_text_changed = false;
 
 	uint8_t key_position = 0, door_position = 0;
 
@@ -40,8 +49,12 @@ struct ParameterList {
 
 	uint16_t screen_w = 800, screen_h = 480;
 	elapsedMillis *screen_request_timer;
+
+	bool has_dimensions = false;
 	
 	elapsedMillis last_iebus_msg = 0;
+	IE_Message ie_cache[16];
+	Vector<IE_Message> ie_cache_vec;
 
 	elapsedMillis radio_ping_timer = 0; //To keep track of when the last 40 or 70 message was.
 };

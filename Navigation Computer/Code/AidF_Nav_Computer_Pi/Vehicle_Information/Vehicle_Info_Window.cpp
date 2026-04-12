@@ -1,4 +1,6 @@
 #include "Vehicle_Info_Window.h"
+#include <SDL2/SDL_blendmode.h>
+#include <SDL2/SDL_render.h>
 
 VehicleInfoWindow::VehicleInfoWindow(AttributeList *attribute_list, InfoParameters* info_parameters) : NavWindow(attribute_list),
 	title_box(renderer, MAIN_TITLE_AREA_X, MAIN_TITLE_AREA_Y, this->w-MAIN_TITLE_AREA_X, TITLE_HEIGHT, ALIGN_H_L, ALIGN_V_M, 40, &this->color_profile->text) {
@@ -40,6 +42,10 @@ VehicleInfoWindow::VehicleInfoWindow(AttributeList *attribute_list, InfoParamete
 	this->rearfog_texture = SDL_CreateTexture(this->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, 40, 24);
 	SDL_SetTextureBlendMode(this->rearfog_texture, SDL_BLENDMODE_BLEND);
 	SDL_UpdateTexture(this->rearfog_texture, NULL, image_data_RearFog, 4*40);
+
+	this->auto_stop_texture = SDL_CreateTexture(this->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, 50, 46);
+	SDL_SetTextureBlendMode(this->auto_stop_texture, SDL_BLENDMODE_BLEND);
+	SDL_UpdateTexture(this->auto_stop_texture, NULL, image_data_AutoStopSymbol, 4*50);
 
 	this->electric_motor_texture = SDL_CreateTexture(this->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, 48, 32);
 	SDL_SetTextureBlendMode(this->electric_motor_texture, SDL_BLENDMODE_BLEND);
@@ -120,6 +126,9 @@ VehicleInfoWindow::~VehicleInfoWindow() {
 
 	if(this->rearfog_texture != NULL)
 		SDL_DestroyTexture(this->rearfog_texture);
+
+	if(this->auto_stop_texture != NULL)
+		SDL_DestroyTexture(this->auto_stop_texture);
 
 	if(this->electric_motor_texture != NULL)
 		SDL_DestroyTexture(this->electric_motor_texture);
@@ -252,6 +261,14 @@ void VehicleInfoWindow::drawWindow() {
 			if(this->rearfog_texture != NULL) {
 				SDL_Rect rearfog_rect = {silhouette_start_x + 580, silhouette_start_y + 150, 40, 24};
 				SDL_RenderCopy(this->renderer, this->rearfog_texture, NULL, &rearfog_rect);
+			}
+		}
+
+		//Draw auto stop.
+		if(this->info_parameters->auto_stop == AUTO_STOP_ON) {
+			if(this->auto_stop_texture != NULL) {
+				SDL_Rect autostop_rect = {silhouette_start_x + 92, silhouette_start_y + 44, 50, 48};
+				SDL_RenderCopy(this->renderer, this->auto_stop_texture, NULL, &autostop_rect);
 			}
 		}
 
@@ -414,7 +431,6 @@ void VehicleInfoWindow::drawWindow() {
 bool VehicleInfoWindow::handleAIBus(AIData* ai_d) {
 	if(this->settings_menu != NULL) {
 		if(this->settings_menu->handleAIBus(ai_d)) {
-			attribute_list->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 			return true;
 		}
 	}
@@ -424,11 +440,9 @@ bool VehicleInfoWindow::handleAIBus(AIData* ai_d) {
 			const uint8_t control = ai_d->data[1], state = ai_d->data[2]>>6;
 
 			if(control == 0x7 && state == 0x2) {
-				attribute_list->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				handleEnterButton();
 				return true;
 			} else if(control == 0x27 && state == 0x2) {
-				attribute_list->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
 				if(active_menu == INFO_ACTIVE_MENU_MAIN) {
 					this->settings_menu = NULL;
 					this->active_menu = INFO_ACTIVE_MENU_NONE;
@@ -436,8 +450,6 @@ bool VehicleInfoWindow::handleAIBus(AIData* ai_d) {
 					createDefaultSettingsMenu();
 				return true;
 			} else if(control == 0x51 && state == 0x2) { //Menu button.
-				attribute_list->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_d->sender);
-				
 				if(this->settings_menu == NULL)
 					createDefaultSettingsMenu();
 				else {

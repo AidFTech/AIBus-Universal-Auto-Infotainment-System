@@ -5,10 +5,14 @@
 #include "Honda_Source_Handler.h"
 #include "BCD_to_Dec.h"
 #include "IE_CD_Status.h"
+#include "Locale.h"
+
+#include "Trans_EEPROM.h"
 
 #include <stdint.h>
 #include <Arduino.h>
 #include <elapsedMillis.h>
+#include <Vector.h>
 
 #ifndef honda_imid_handler_h
 #define honda_imid_handler_h
@@ -19,11 +23,18 @@
 #define VOL_LIMIT 40
 
 #define IMID_CHANGE_TIMER 300
+#define IMID_CHANGE_TIMER_LOCAL 200
 #define FREQUENCY_CHANGE_TIMER 400
 
 #define TEXT_MODE_BLANK 0 //No CD text.
 #define TEXT_MODE_WITH_TEXT 1 //CD text present.
 #define TEXT_MODE_MP3 2 //MP3 ID3 text present.
+
+enum char_count_t : uint8_t {
+	CHAR_COUNT_8,
+	CHAR_COUNT_10,
+	CHAR_COUNT_12
+};
 
 class HondaIMIDHandler : public HondaSourceHandler {
 public:
@@ -54,6 +65,7 @@ public:
 
 	void writeIMIDCDCTrackMessage(const uint8_t disc, const uint8_t track, const uint8_t track_count, const uint16_t time, const uint8_t state1, const uint8_t state2);
 	void writeIMIDCDCTextMessage(const uint8_t position, String text);
+	void clearIMIDCDText();
 
 	uint16_t getMode();
 
@@ -64,12 +76,24 @@ private:
 	elapsedMillis imid_change_timer = IMID_CHANGE_TIMER;
 
 	uint8_t button_held = 0;
+
+	uint8_t requestor_list[16];
+	Vector<uint8_t> requestor_vec;
+
+	/*AIData ai_cache[16];
+	Vector<AIData> ai_cache_vec;*/
+
+	elapsedMillis last_change;
 	
-	//Radio paremeters:
+	//Options:
+	bool display_rds = true, display_volume = true, setting_changed = false;
+	char_count_t char_count = CHAR_COUNT_10;
+
+	//Radio parameters:
 	uint16_t frequency = 0;
 	int8_t decimal = 0;
 	uint8_t preset = 0, stereo_mode = 0;
-	bool rds = false, display_rds = true;
+	bool rds = false;
 	bool frequency_change_timer_enabled = false;
 	elapsedMillis frequency_change_timer;
 
@@ -92,6 +116,14 @@ private:
 	void setBTModeNotConnected();
 	void setBTTimer(const long time);
 	void setBTText(const uint8_t field, String text);
+
+	void writeScreenLayoutMessage(const uint8_t receiver);
+
+	//Menu stuff:
+	void createIMIDSettingsMenu();
+	void createIMIDSettingsMenuOption(const unsigned int index);
+	void createIMIDCharacterMenu();
+	void createIMIDCharacterMenuOption(const unsigned int index);
 };
 
 #endif

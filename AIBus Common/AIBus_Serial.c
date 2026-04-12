@@ -44,8 +44,8 @@ int aiserialRead(int port, char* buffer, int l) {
 	return read(port, buffer, l);
 }
 
-void aiserialWrite(int port, char* buffer, int l) {
-	write(port, buffer, l);
+int aiserialWrite(int port, char* buffer, int l) {
+	return write(port, buffer, l);
 }
 
 char aiserialReadByte(int port) {

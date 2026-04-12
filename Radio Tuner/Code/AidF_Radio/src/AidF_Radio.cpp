@@ -189,6 +189,14 @@ void AidFRadio::setup() {
 		volume_handler.setBass(start_params.bass);
 		volume_handler.setBalance(start_params.balance);
 		volume_handler.setFader(start_params.fader);
+
+		parameters.source_button_mode = start_params.source_button_setting;
+		parameters.aux_level = start_params.aux_level;
+		parameters.prompt_cut = start_params.nav_cut > 0 ? start_params.nav_cut : 2;
+		parameters.dac_filter_mode = start_params.dac_latency;
+		parameters.steering_control_preset = start_params.steering_control_preset;
+
+		parameters.svc = start_params.svc_setting;
 	}
 	
 	if(rtc.autoprobe()) { //Start/set the clock.
@@ -209,9 +217,13 @@ void AidFRadio::setup() {
 		rtc_on = true;
 	}
 
+	tuner.setLimits();
+	background_tuner.setLimits();
+
 	uint8_t init_data[] = {0x4A, 0x1F};
 	AIData init_msg(sizeof(init_data), ID_RADIO, ID_CANSLATOR, init_data);
 	aibus_handler.writeAIData(&init_msg, false);
+	aibus_handler.flush();
 
 	powerOff();
 }
@@ -286,6 +298,12 @@ void AidFRadio::loop() {
 	const bool last_phone = parameters.phone_active;
 	const bool last_computer_connected = parameters.computer_connected, last_mirror_connected = parameters.mirror_connected;
 
+	const bool last_dac_filter = parameters.dac_filter_mode;
+	const uint8_t last_aux_level = parameters.aux_level;
+
+	const uint16_t last_speed = parameters.vehicle_speed;
+	const svc_setting_t last_svc = parameters.svc;
+
 	bool last_queued = tuner.getQueued();
 
 	AIData msg;
@@ -324,6 +342,15 @@ void AidFRadio::loop() {
 	if(!*power_on && !power_switched)
 		return;
 
+	if(last_dac_filter != parameters.dac_filter_mode)
+		digitalWrite(DAC_FILTER_MODE, parameters.dac_filter_mode ? HIGH : LOW);
+
+	if(parameters.aux_level != last_aux_level)
+		volume_handler.setUseAuxLevel(source_handler.getCurrentSourceID() == ID_RADIO && source_handler.getCurrentSourceSubID() == 3);
+
+	if((parameters.vehicle_speed != last_speed && parameters.svc != SVC_OFF) || parameters.svc != last_svc)
+		volume_handler.refreshSVC();
+
 	//AudioSource source_list[SOURCE_COUNT];
 	//const uint16_t source_count = source_handler.getFilledSources(source_list), current_source = source_handler.getCurrentSource();
 	
@@ -357,6 +384,9 @@ void AidFRadio::loop() {
 			source_change_timer_enable = true;
 			source_change_timer = 0;
 		}
+
+		if(parameters.scan_on)
+			source_handler.cancelScan();
 		
 		sendAudioLightMessage(current_source_id != 0);
 		
@@ -383,6 +413,8 @@ void AidFRadio::loop() {
 				text_handler.sendMirrorClearMessage(0xE, false);
 
 			parameters.audio_on = current_source_id != 0;
+
+			volume_handler.setUseAuxLevel(current_source_id == ID_RADIO && current_source.sub_id == 3);
 
 			//Enable screen text.
 			text_handler.sendSourceTextControl(ID_NAV_COMPUTER, uint8_t((current_source_id != 0) ? current_source_id : ID_RADIO), parameters.computer_connected);
@@ -521,6 +553,8 @@ void AidFRadio::loop() {
 	do {
 		if(source_handler.getCurrentSourceID() == ID_RADIO && !source_change_timer_enable) {
 			const bool last_queued = tuner.getQueued();
+			
+			const String last_rds = parameters.rds_program_name, last_station_name = parameters.rds_station_name;
 
 			aibus_handler.cachePending(ID_RADIO);
 			tuner.loop();
@@ -642,10 +676,9 @@ void AidFRadio::loop() {
 			
 			if(sub_id == SUB_FM1 || sub_id == SUB_FM2) {
 				const bool seeking = tuner.getSeeking(current_frequency);
+
 				if(!seeking && (parameter_timer >= PARAMETER_DELAY)) {
 					parameter_timer = 0;
-
-					const String last_rds = parameters.rds_program_name, last_station_name = parameters.rds_station_name;
 
 					if(!tuner.getQueued())
 						tuner.getParameters(&parameters, sub_id);
@@ -666,8 +699,12 @@ void AidFRadio::loop() {
 
 					String current_rds = parameters.rds_program_name;
 					if(parameters.has_rds && current_rds.compareTo(last_rds) != 0) {
-						if(current_rds.substring(0,8).indexOf(last_rds.substring(0,8)) < 0)
+						if(current_rds.substring(0,8).indexOf(last_rds.substring(0,8)) < 0) {
 							tuner.clearRds();
+							current_rds = "";
+							for(int i=0;i<RDS_SEGMENT_COUNT;i+=1)
+								rds_program_split[i] = "";
+						}
 
 						for(int c=0;c<current_rds.length();c+=1) {
 							if(current_rds.charAt(c) < ' ') {
@@ -688,6 +725,7 @@ void AidFRadio::loop() {
 
 						splitText(rds_char, current_rds, rds_program_split, RDS_SEGMENT_COUNT);
 						
+						rds_imid_index = 0;
 						text_handler.sendIMIDRDSMessage(rds_program_split[rds_imid_index]);
 						rds_imid_timer = 0;
 
@@ -711,7 +749,7 @@ void AidFRadio::loop() {
 					rds_imid_timer = 0;
 					const int old_len = rds_program_split[rds_imid_index].length();
 
-					if(rds_imid_index < 12)
+					if(rds_imid_index < RDS_SEGMENT_COUNT)
 						rds_imid_index += 1;
 					else
 						rds_imid_index = 0;
@@ -729,12 +767,39 @@ void AidFRadio::loop() {
 			}
 			
 			if(!tuner.getQueued() && (last_compare != *current_frequency || parameters.tune_changed)) {
+				{
+					uint16_t set_freq = *current_frequency;
+					switch(sub_id) {
+					case SUB_FM1:
+					case SUB_FM2:
+						set_freq -= parameters.fm_lower_limit;
+						set_freq /= parameters.fm_inc;
+						set_freq *= parameters.fm_inc;
+						set_freq += parameters.fm_lower_limit;
+						break;
+					case SUB_AM:
+						set_freq -= parameters.am_lower_limit;
+						set_freq /= parameters.am_inc;
+						set_freq *= parameters.am_inc;
+						set_freq += parameters.am_lower_limit;
+						break;
+					}
+
+					if(set_freq != *current_frequency) {
+						tuner.setFrequency(set_freq);
+						*current_frequency = set_freq;
+					}
+				}
+				
 				if(parameters.info_mode) {
 					parameters.info_mode = false;
 					if(parameters.imid_radio)
 						text_handler.sendIMIDSourceMessage(ID_RADIO, sub_id);
 				}
 				
+				if(last_compare != *current_frequency)
+					text_handler.setRadioHeader(sub_id, current_preset);
+
 				text_handler.sendTunedFrequencyMessage(*current_frequency, sub_id != SUB_AM, true);
 
 				if(sub_id == SUB_FM1 || sub_id == SUB_FM2 || sub_id == SUB_AM) {
@@ -811,7 +876,9 @@ void AidFRadio::loop() {
 																|| parameters.bass_adjust
 																|| parameters.treble_adjust
 																|| parameters.balance_adjust
-																|| parameters.fader_adjust);
+																|| parameters.fader_adjust
+																|| parameters.nav_cut_adjust
+																|| parameters.aux_level_adjust);
 
 	if(background_tune_timer >= 100) {
 		background_tuner.loop();
@@ -895,11 +962,7 @@ void AidFRadio::handleAIBus(AIData* msg) {
 	if(msg->receiver != ID_RADIO && msg->receiver != 0xFF)
 		return;
 
-	if(msg->l == 1 && msg->data[0] == 0x1 && msg->receiver == ID_RADIO) { //Ping.
-		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
-	} else if(msg->l >= 1 && msg->data[0] == 0x80) { //Acknowledgement. Ignore.
-	} else if(msg->receiver == ID_RADIO && msg->l >= 2 && msg->data[0] == 0x1D) { //Clock message.
-		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
+	if(msg->receiver == ID_RADIO && msg->l >= 2 && msg->data[0] == 0x1D) { //Clock message.
 		parameters.send_time = (msg->data[1]) != 0;
 		if((msg->data[1]&0x01) != 0)
 			parameters.auto_clock = true;
@@ -908,17 +971,13 @@ void AidFRadio::handleAIBus(AIData* msg) {
 
 		parameters.send_12h = (msg->data[1]&0x80) != 0;
 	} else if(msg->receiver == ID_RADIO && msg->sender == ID_PHONE && msg->l >= 3) { //Phone message.
-		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
+		
 		if(msg->data[1] == 0x6) {
 			parameters.phone_active = msg->data[2] != 0x0;
 		}
 	} else if(msg->sender == ID_NAV_SCREEN && msg->l >= 2 && msg->data[0] == 0x31 && msg->data[1] == 0x30) { //Supported buttons.
-		aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
 		//TODO: This.
-	} else if(msg->sender == ID_NAV_COMPUTER && msg->l >= 5 && msg->data[0] == 0x2C) { //Dimensions.
-		if(msg->receiver == ID_RADIO)
-			aibus_handler.sendAcknowledgement(ID_RADIO, msg->sender);
-
+	} else if(msg->sender == ID_NAV_COMPUTER && msg->receiver == ID_RADIO && msg->l >= 5 && msg->data[0] == 0x2C) { //Dimensions.
 		parameters.screen_w = (msg->data[1]<<8) | msg->data[2];
 		parameters.screen_h = (msg->data[3]<<8) | msg->data[4];
 	} else if(msg->receiver == 0xFF && msg->l >= 1 && msg->data[0] == 0xA1 && msg->sender != ID_RADIO) {
@@ -990,6 +1049,8 @@ void AidFRadio::handleAIBus(AIData* msg) {
 			}
 		}
 	} else if(msg->sender == ID_IMID_SCR && msg->l >= 2 && msg->data[0] == 0x3B) {
+		const bool imid_not_set = !parameters.imid_radio && parameters.imid_char <= 0 && parameters.imid_lines <= 0;
+		
 		if(msg->data[1] == 0x23 && msg-> l >= 4) {
 			parameters.imid_char = msg->data[2];
 			parameters.imid_lines = msg->data[3];
@@ -1010,7 +1071,7 @@ void AidFRadio::handleAIBus(AIData* msg) {
 			source_handler.setImidSupportedSources(sizeof(source_data), source_data);
 		}
 		
-		if(msg->receiver == 0xFF) {
+		if(msg->receiver == 0xFF && imid_not_set) {
 			imid_timer = 0;
 			imid_timer_enabled = true;
 		}
@@ -1052,7 +1113,7 @@ void AidFRadio::handleAIBus(AIData* msg) {
 		{
 			uint8_t data[] = {0x2C, 0xF0};
 			AIData res_request(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
-			aibus_handler.writeAIData(&res_request, parameters.screen_connected);
+			aibus_handler.writeAIData(&res_request, parameters.computer_connected);
 		}
 	}
 
@@ -1316,7 +1377,6 @@ void AidFRadio::sendIMIDRequest() {
 
 				//response_timer = 0;
 				if(reply.sender == ID_IMID_SCR && reply.receiver == ID_RADIO) {
-					aibus_handler.sendAcknowledgement(ID_RADIO, reply.sender);
 					if(reply.data[1] == 0x23 && reply.l >= 4) {
 						parameters.imid_char = reply.data[2];
 						parameters.imid_lines = reply.data[3];
@@ -1339,9 +1399,6 @@ void AidFRadio::sendIMIDRequest() {
 
 					parameters.imid_connected = true;
 				} else if(reply.receiver == ID_RADIO || reply.receiver == 0xFF) {
-					if(reply.receiver == ID_RADIO)
-						aibus_handler.sendAcknowledgement(ID_RADIO, reply.sender);
-						
 					aibus_handler.cacheMessage(&reply);
 				}
 			}
@@ -1513,7 +1570,15 @@ void AidFRadio::powerOff() {
 	start_params.balance = volume_handler.getBalance();
 	start_params.fader = volume_handler.getFader();
 
+	start_params.nav_cut = parameters.prompt_cut;
+	start_params.aux_level = parameters.aux_level;
+	start_params.source_button_setting = parameters.source_button_mode;
+
 	start_params.rds_setting = parameters.header_rds_setting;
+	start_params.dac_latency = parameters.dac_filter_mode;
+	start_params.steering_control_preset = parameters.steering_control_preset;
+
+	start_params.svc_setting = parameters.svc;
 
 	sram_handler.begin();
 	sram_handler.setStartParams(&start_params);
@@ -1534,10 +1599,10 @@ void AidFRadio::powerOff() {
 	uint8_t poweroff_data[] = {0xA0};
 	AIData poweroff_msg(sizeof(poweroff_data), ID_RADIO, 0xFF, poweroff_data);
 	aibus_handler.writeAIData(&poweroff_msg, false);
+	aibus_handler.flush();
 
 	digitalWrite(POWER_ON_SW, LOW);
 	digitalWrite(AUDIO_ON_SW, HIGH);
-	adc_handler.powerOff();
 }
 
 //Get the ranking of an audio source.

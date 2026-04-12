@@ -5,6 +5,8 @@ HondaSourceHandler::HondaSourceHandler(EnIEBusHandler* ie_driver, AIBusHandler* 
 	this->ai_driver = ai_driver;
 	this->parameter_list = parameter_list;
 	this->active_menu = &this->parameter_list->active_menu;
+
+	ie_cache_vec.setStorage(ie_cache, 0);
 }
 
 bool HondaSourceHandler::sendHandshakeAckMessage() {
@@ -53,26 +55,22 @@ bool HondaSourceHandler::sendHandshakeAckMessage() {
 	
 	sendFunctionMessage(ie_driver, true, device_ie_id, function, 2);
 	
-	/*timeout_del = 0;
-	while(!getIEAckMessage(device_ie_id)) {
-		if(timeout_del > TIMEOUT_DEL)
-			return false;
-	}*/
-	
 	ie_driver->addID(this->device_ai_id);
 	return true;
 }
 
+//Send the acknowledgment message.
 void HondaSourceHandler::sendIEAckMessage(const uint16_t recipient) {
 	ie_driver->sendAcknowledgement(IE_ID_RADIO, recipient);
 }
 
+//Get whether the acknowledgment message was sent.
 bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 	bool ack = false;
 
 	elapsedMillis delay_timer = 0;
 	int tries = 0;
-	while(!ack && delay_timer < 20 && tries < IE_TRIES) {
+	while(!ack && delay_timer < 100 && tries < IE_TRIES) {
 		IE_Message ie_d;
 		const int message_result = ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO);
 		if(message_result == 0) {
@@ -87,13 +85,13 @@ bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 			}
 			tries += 1;
 		}
+		ie_driver->cacheAIBus();
 	}
-
-	ie_driver->cacheAIBus();
 
 	return ack;
 }
 
+//Get whether the acknowledgment message was sent, resend the original if necessary.
 bool HondaSourceHandler::getIEAckMessage(IE_Message* msg, const uint16_t sender) {
 	int tries = 0;
 	bool ack = false;
@@ -132,10 +130,6 @@ bool HondaSourceHandler::getIEAckMessageStrict(const uint16_t sender) {
 	return ack;
 }
 
-void HondaSourceHandler::sendAIAckMessage(const uint8_t receiver) {
-	ai_driver->sendAcknowledgement(device_ai_id, receiver);
-}
-
 //Ask the radio to switch over.
 void HondaSourceHandler::requestRadioControl() {
 	uint8_t request_data[] = {0x10, 0x10, device_ai_id};
@@ -155,6 +149,16 @@ void HondaSourceHandler::clearEstablished() {
 	this->source_established = false;
 }
 
+//Send an IEBus message through this source.
+bool HondaSourceHandler::sourceSendIEMessage(IE_Message* msg, const bool ack) {
+	ie_driver->sendMessage(msg, true, true);
+	if(ack)
+		return getIEAckMessage(msg, msg->receiver);
+	else
+		return true;
+}
+
+//Returns whether the source is selected by the radio.
 bool HondaSourceHandler::getSelected() {
 	return this->source_sel;
 }
@@ -174,43 +178,18 @@ void HondaSourceHandler::clearExternalIMID() {
 	}
 }
 
-//Send the introductory menu message.
-void HondaSourceHandler::startAudioMenu(const uint8_t count, const uint8_t rows, const bool loop, String title) {
-	uint8_t start_menu_data[title.length() + 12];
-	
-	unsigned int div = count/rows;
-	if(count%rows != 0)
-		div += 1;
+//Send the introductory settings menu message.
+void HondaSourceHandler::startSettingsMenu(const uint8_t count, const uint8_t rows, const bool loop, String title) {
+	startMenu(false, count, rows, loop, title);
+}
 
-	const uint16_t x = 0, y = 140, width = parameter_list->screen_w/div;
-	
-	start_menu_data[0] = 0x2B;
-	start_menu_data[1] = 0x5A;
-	start_menu_data[2] = rows&0x7F;
-	start_menu_data[3] = count;
-	start_menu_data[4] = (x&0xFF00) >> 8;
-	start_menu_data[5] = x&0xFF;
-	start_menu_data[6] = (y&0xFF00) >> 8;
-	start_menu_data[7] = y&0xFF;
-	start_menu_data[8] = (width&0xFF00)>>8;
-	start_menu_data[9] = width&0xFF;
-	start_menu_data[10] = 0x0;
-	start_menu_data[11] = 0x23;
-	
-	for(unsigned int i=0;i<title.length();i+=1)
-		start_menu_data[i+12] = uint8_t(title.charAt(i));
-	
-	if(loop)
-		start_menu_data[2] |= 0x80;
-	
-	AIData start_menu_msg(sizeof(start_menu_data), device_ai_id, ID_NAV_COMPUTER);
-	start_menu_msg.refreshAIData(start_menu_data);
-	
-	ai_driver->writeAIData(&start_menu_msg, parameter_list->computer_connected);
+//Send the introductory audio menu message.
+void HondaSourceHandler::startAudioMenu(const uint8_t count, const uint8_t rows, const bool loop, String title) {
+	startMenu(true, count, rows, loop, title);
 }
 
 //Append data to the audio menu.
-void HondaSourceHandler::appendAudioMenu(const uint8_t position, String text) {
+void HondaSourceHandler::appendMenu(const uint8_t position, String text) {
 	uint8_t append_menu_data[text.length() + 3];
 	
 	append_menu_data[0] = 0x2B;
@@ -227,7 +206,7 @@ void HondaSourceHandler::appendAudioMenu(const uint8_t position, String text) {
 }
 
 //Display the audio menu.
-void HondaSourceHandler::displayAudioMenu(const uint8_t selected) {
+void HondaSourceHandler::displayMenu(const uint8_t selected) {
 	uint8_t display_menu_data[] = {0x2B, 0x52, selected};
 	AIData display_menu_msg(sizeof(display_menu_data), device_ai_id, ID_NAV_COMPUTER);
 	display_menu_msg.refreshAIData(display_menu_data);
@@ -249,6 +228,49 @@ void HondaSourceHandler::setMenuTitle(String title) {
 	ai_driver->writeAIData(&change_title_msg, parameter_list->computer_connected);
 }
 
+//Request the audio settings menu from the radio.
+void HondaSourceHandler::requestAudioSettingsMenu() {
+	open_audio_menu = false;
+	uint8_t setting_request_data[] = {0x2B, 0x45};
+	AIData setting_request_msg(sizeof(setting_request_data), device_ai_id, ID_RADIO, setting_request_data);
+	ai_driver->writeAIData(&setting_request_msg, parameter_list->radio_connected);
+}
+
+//Send the introductory menu message.
+void HondaSourceHandler::startMenu(const bool audio, const uint8_t count, const uint8_t rows, const bool loop, String title) {
+	uint8_t start_menu_data[title.length() + 12];
+	
+	unsigned int div = count/rows;
+	if(count%rows != 0)
+		div += 1;
+
+	const uint16_t x = 0, y = audio ? 140 : 105, width = parameter_list->screen_w/div;
+	
+	start_menu_data[0] = 0x2B;
+	start_menu_data[1] = audio ? 0x5A : 0x50;
+	start_menu_data[2] = rows&0x7F;
+	start_menu_data[3] = count;
+	start_menu_data[4] = (x&0xFF00) >> 8;
+	start_menu_data[5] = x&0xFF;
+	start_menu_data[6] = (y&0xFF00) >> 8;
+	start_menu_data[7] = y&0xFF;
+	start_menu_data[8] = (width&0xFF00)>>8;
+	start_menu_data[9] = width&0xFF;
+	start_menu_data[10] = 0x0;
+	start_menu_data[11] = audio ? 0x23 : 40;
+	
+	for(unsigned int i=0;i<title.length();i+=1)
+		start_menu_data[i+12] = uint8_t(title.charAt(i));
+	
+	if(loop)
+		start_menu_data[2] |= 0x80;
+	
+	AIData start_menu_msg(sizeof(start_menu_data), device_ai_id, ID_NAV_COMPUTER);
+	start_menu_msg.refreshAIData(start_menu_data);
+	
+	ai_driver->writeAIData(&start_menu_msg, parameter_list->computer_connected);
+}
+
 //Request display control.
 void HondaSourceHandler::requestControl() {
 	this->requestControl(this->device_ai_id);
@@ -266,6 +288,91 @@ void HondaSourceHandler::requestControl(const uint8_t id) {
 	const bool ack = ai_driver->writeAIData(&request_msg, parameter_list->screen_connected);
 	if(parameter_list->screen_connected && !ack)
 		parameter_list->screen_connected = false;
+}
+
+//Listen for IEBus data.
+inline void HondaSourceHandler::listenForIEBus(const unsigned long wait, const bool single_msg) {
+	if(!source_sel)
+		return;
+
+	elapsedMillis ie_timer;
+	IE_Message new_msg;
+	AIData ai_cache;
+
+	while(ie_timer < wait) {
+		if(ie_driver->getInputOn()) {
+			const int res = ie_driver->readMessage(&new_msg, true, IE_ID_RADIO);
+			if(res == 0 && ie_cache_vec.size() < ie_cache_vec.max_size()) {
+				parameter_list->last_iebus_msg = 0;
+				if(new_msg.sender != device_ie_id || new_msg.receiver != IE_ID_RADIO)
+					continue;
+
+				ie_driver->sendAcknowledgement(IE_ID_RADIO, new_msg.sender);
+
+				if(new_msg.direct && new_msg.control == 0xF && new_msg.l > 0 && new_msg.data[0] == 0x60) {
+					if(single_msg) {
+						ie_cache_vec.push_back(new_msg);
+						break;
+					} else {
+						handleIEBus(&new_msg, false);
+					}
+				} else {
+					ie_cache_vec.push_back(new_msg);
+				}
+			}
+		}
+
+		if(allow_recursive_aibus) {
+			if(device_ai_id != ID_IMID_SCR && parameter_list->imid_connected) {
+				uint8_t id_l[] = {device_ai_id, ID_IMID_SCR};
+				AIData pending = ie_driver->getAIBus(id_l, sizeof(id_l));
+				if(pending.l > 0 && pending.receiver == device_ai_id) {
+					allow_recursive_aibus = false;
+					handleAIBus(&pending);
+					allow_recursive_aibus = true;
+					break;
+				} else if(pending.l > 0 && pending.receiver == ID_IMID_SCR) {
+					allow_recursive_aibus = false;
+					handleIMIDAIBus(&pending);
+					allow_recursive_aibus = true;
+				}
+			} else {
+				uint8_t id_l[] = {device_ai_id};
+				AIData pending = ie_driver->getAIBus(id_l, sizeof(id_l));
+				if(pending.l > 0 && pending.receiver == device_ai_id) {
+					allow_recursive_aibus = false;
+					handleAIBus(&pending);
+					allow_recursive_aibus = true;
+					break;
+				}
+			}
+		} else if(use_ai_cache) {
+			uint8_t id_l[] = {device_ai_id};
+			AIData pending = ie_driver->getAIBus(id_l, sizeof(id_l));
+			if(pending.l > 0 && pending.receiver == device_ai_id) {
+				ai_cache.refreshAIData(pending);
+				break;
+			}
+		}
+	}
+
+	if(ai_cache.l > 0)
+		handleAIBus(&ai_cache);
+}
+
+//Generic AIBus read function.
+void HondaSourceHandler::handleAIBus(AIData* msg) {
+
+}
+
+//Generic IEBus read function.
+void HondaSourceHandler::handleIEBus(IE_Message* msg, const bool listen) {
+
+}
+
+//IMID AIBus forward function.
+void HondaSourceHandler::handleIMIDAIBus(AIData* msg) {
+
 }
 
 //Send an overlay message to the phone mirror.

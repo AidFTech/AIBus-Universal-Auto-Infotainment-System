@@ -1,11 +1,22 @@
 #include "IBus_Handler.h"
 
-IBusHandler::IBusHandler(Stream* serial, const int8_t rx_pin) : AIBusHandler(serial, rx_pin) {
+IBusHandler::IBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id) : AIBusHandler(serial, rx_pin, id) {
 	//Same start procedure as AIBus handler.
 }
 
 //Write an IBus message to the OE system.
 void IBusHandler::writeIBData(IBData* ib_d) {
+	if(ib_d->l + 4 > 32) {
+		IBData trimmed = *ib_d;
+		trimmed.refreshAIData(32 - 4, trimmed.sender, trimmed.receiver);
+
+		for(int i=0;i<trimmed.l && i<ib_d->l;i+=1)
+			trimmed[i] = ib_d->data[i];
+
+		writeIBData(&trimmed);
+		return;
+	}
+
 	uint8_t data[ib_d->l + 4];
 	ib_d->getBytes(data);
 
@@ -43,10 +54,10 @@ void IBusHandler::writeIBData(IBData* ib_d) {
 
 //Read an IBus message into ib_d, return whether successful.
 bool IBusHandler::readIBData(IBData* ib_d) {
-	return readAIData(ib_d, true);
+	return readAIData(ib_d, true, false);
 }
 
 //Read an IBus message into ib_d, return whether successful. If cache is true, read from the data cache before the standard stream.
 bool IBusHandler::readIBData(IBData* ib_d, const bool cache) {
-	return readAIData(ib_d, cache);
+	return readAIData(ib_d, cache, false);
 }

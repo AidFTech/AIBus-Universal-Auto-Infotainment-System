@@ -12,6 +12,7 @@
 #include "Window/Consumption_Window.h"
 #include "Window/Settings_Main_Window.h"
 #include "Window/Settings_Display_Window.h"
+#include "Window/Settings_Info_Window.h"
 #include "Window/Settings_Color_Window.h"
 #include "Window/Settings_Color_Picker.h"
 #include "Window/Settings_Clock_Window.h"

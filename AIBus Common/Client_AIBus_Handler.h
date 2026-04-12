@@ -24,8 +24,6 @@
 
 #define DEFAULT_READ_LENGTH 1024
 
-#define AIDATA_LIMIT (0x30 - 4)
-
 using namespace std;
 
 struct SocketMessage {

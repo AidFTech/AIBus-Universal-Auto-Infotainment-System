@@ -34,6 +34,7 @@ public:
 
 	void setOverlayHeader(String text);
 	
+	void setRadioHeader(const uint8_t sub_id, const uint8_t preset);
 	void sendTunedFrequencyMessage(const uint16_t frequency, const bool mhz, const bool sub);
 	void sendTunedFrequencyMessage(const uint8_t preset, const uint16_t frequency, const bool mhz, const bool sub);
 	void sendStereoMessage(const bool stereo);
@@ -65,7 +66,7 @@ private:
 	void sendIMIDFrequencyMessage(const uint16_t frequency, const uint8_t subsrc, const uint8_t preset);
 };
 
-AIData getTextMessage(String text, const uint8_t group, const uint8_t area);
+AIData getTextMessage(String text, const uint8_t group, const uint8_t area, const bool replace_number_signs = true);
 String trimText(String text);
 
 #endif

@@ -84,6 +84,9 @@ void MapMainWindow::loadMapData() {
 	if(this->nav_parameters->map_path.length() <= 0)
 		return;
 
+	if(access(this->nav_parameters->map_path.c_str(), R_OK) != 0)
+		return;
+
 	//Open the map file.
 	sqlite3_open(this->nav_parameters->map_path.c_str(), &this->sq_database);
 	if(sq_database == NULL)
@@ -155,22 +158,18 @@ bool MapMainWindow::handleAIBus(AIData* msg) {
 			const uint8_t button = msg->data[1], state = msg->data[2]>>6;
 
 			if(button == 0x28 && state == 0x0) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				this->offset_v += DEFAULT_OFFSET;
 				nav_parameters->update_map = true;
 				return true;
 			} else if(button == 0x29 && state == 0x0) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				this->offset_v -= DEFAULT_OFFSET;
 				nav_parameters->update_map = true;
 				return true;
 			} else if(button == 0x2A && state == 0x0) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				this->offset_h += DEFAULT_OFFSET;
 				nav_parameters->update_map = true;
 				return true;
 			} else if(button == 0x2B && state == 0x0) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				this->offset_h -= DEFAULT_OFFSET;
 				nav_parameters->update_map = true;
 				return true;
@@ -180,7 +179,6 @@ bool MapMainWindow::handleAIBus(AIData* msg) {
 			const bool cw = (msg->data[2]&0x10) != 0;
 			
 			if(knob == 0x7) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				if(cw) {
 					if(nav_parameters->zoom + steps <= 14)
 						nav_parameters->zoom += steps;

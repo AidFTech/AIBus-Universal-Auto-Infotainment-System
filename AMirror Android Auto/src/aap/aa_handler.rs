@@ -1035,6 +1035,11 @@ impl<'a> AapHandler <'a> {
 		openssl_sys::init();
 		
 		unsafe {
+			/*#[cfg(target_arch = "aarch64")] {
+			SSL_library_init();
+			SSL_load_error_strings();
+			}*/
+
 			OPENSSL_init_ssl(0, std::ptr::null());
 			OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | 0x2, std::ptr::null());
 
@@ -1068,7 +1073,12 @@ impl<'a> AapHandler <'a> {
 				return;
 			}
 
+			//#[cfg(not(target_arch = "aarch64"))] {
 			self.ssl_method = TLS_client_method();
+			/*}
+			#[cfg(target_arch = "aarch64")] {
+			self.ssl_method = SSLv23_client_method();
+			}*/
 			self.ssl_context = SSL_CTX_new(self.ssl_method);
 			
 			SSL_CTX_use_certificate(self.ssl_context, x509_cert);

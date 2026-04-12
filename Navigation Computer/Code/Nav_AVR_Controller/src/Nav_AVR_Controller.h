@@ -11,26 +11,36 @@
 #define PI_POWER PIN_PA2
 #define POWER_ON PIN_PA3
 #define PI_RUNNING PIN_PA4
+#ifdef PI_CM
 #define PI_BOOT PIN_PA5
 #define PI_OFF_HARDWARE PIN_PA6
 #define PI_OFF_SOFT PIN_PA7
+#endif
 #define AI_RX PIN_PC0
+#ifdef PI_CM
 #define PROG PIN_PC1
+#endif
 #define UART_DTR PIN_PC2
 #else
 #define PI_POWER 2
 #define POWER_ON 3
 #define PI_RUNNING 4
+#ifdef PI_CM
 #define PI_BOOT 5
 #define PI_OFF_HARDWARE 6
 #define PI_OFF_SOFT 7
+#endif
 #define AI_RX 8
+#ifdef PI_CM
 #define PROG 9
+#endif
 #define UART_DTR 10
 #endif
 
 #define DOOR_TIMER 30000
 #define PI_BOOT_TIMER 20
+
+#define PI_PING_TIMER 10000
 
 #define AISerial Serial
 
@@ -54,6 +64,9 @@ private:
 
 	elapsedMillis pi_boot_timer = 0;
 	bool boot_timer_enabled = false;
+
+	elapsedMillis pi_ping_timer = 0;
+	bool computer_connected = false;
 
 	void powerOn();
 	void powerOff();

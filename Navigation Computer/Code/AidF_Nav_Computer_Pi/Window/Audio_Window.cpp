@@ -35,6 +35,8 @@ Audio_Window::Audio_Window(AttributeList *attribute_list) : NavWindow(attribute_
 		function_area_change[i] = false;
 		function_area_id[i] = ID_RADIO;
 	}
+
+	last_exit = *attribute_list->timer;
 }
 
 //Audio window destructor.
@@ -73,15 +75,11 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	if(msg->l >= 2 && (msg->data[0] == 0x20 || msg->data[0] == 0x23) && (msg->data[1]&0x60) == 0x60) {
-		aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
-
 		if(msg->sender == attribute_list->active_audio_device || msg->sender == ID_RADIO)
 			this->interpretAudioScreenChange(msg);
 		
 		return true;
 	} else if (msg->data[0] == 0x2B) { //Menu-related commands.
-		bool ack = true;
-
 		if(msg->data[1] == 0x5A) { //Initialize a new audio menu.
 			if(this->settings_menu_active) {
 				uint8_t data[] = {0x2B, 0x40};
@@ -90,8 +88,23 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 
 				aibus_handler->writeAIData(&no_menu_msg);
 			} else {
-				this->initializeSettingsMenu(msg);
+				if(active || (*attribute_list->timer - last_exit) > 300)
+					this->initializeSettingsMenu(msg);
+				else { //Deny.
+					uint8_t data[] = {0x2B, 0x40};
+					AIData no_menu_msg(sizeof(data), ID_NAV_COMPUTER, msg->sender, data);
+
+					aibus_handler->writeAIData(&no_menu_msg);
+				}
 			}
+		} else if(msg->data[1] == 0x50) { //New settings menu- deny.
+			if(!active)
+				return false;
+			
+			uint8_t data[] = {0x2B, 0x40};
+			AIData no_menu_msg(sizeof(data), ID_NAV_COMPUTER, msg->sender, data);
+
+			aibus_handler->writeAIData(&no_menu_msg);
 		} else if(msg->data[1] == 0x51 && this->settings_menu != NULL) { //Add a menu entry.
 			if(!getSettingsMenuValid(msg->sender) || (!this->settings_menu_active && !this->settings_menu_prep))
 				return false;
@@ -111,9 +124,6 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 				return false;
 				
 			if(!active) {
-				ack = false;
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
-				
 				attribute_list->next_window = NEXT_WINDOW_AUDIO;
 
 				if(attribute_list->phone_active && attribute_list->phone_type != 0 && attribute_list->mirror_connected) {
@@ -177,14 +187,10 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 			this->settings_menu_active = false;
 			this->settings_menu_prep = false;
 
-			ack = false;
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 			sendMenuClose(msg->sender);
 		} else
 			return false;
 
-		if(ack)
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 
 		return true;
 	} else if(msg->sender == ID_NAV_SCREEN) { //Button pressed on screen.
@@ -193,26 +199,21 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 		
 		if(msg->data[0] == 0x32 && msg->data[1] == 0x7) {
 			this->interpretMenuChange(msg);
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 			return true;
 		} else if(msg->data[0] == 0x30) {
 			const uint8_t button = msg->data[1], state = msg->data[2]>>6;
 			if(button == 0x7 && state == 0x2) { //Enter button.
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				this->handleEnterButton();
 				return true;
 			} else if ((button == 0x27 || (button == 0x51 && this->settings_menu_active)) && state == 0x2) { //Menu or back button.
 				if(this->settings_menu_active) {
 					this->settings_menu_active = false;
-					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 					this->settings_menu_prep = false;
 					sendMenuClose();
 					return true;
 				} else
 					return false;
 			} else if(button == 0x51 && state == 0x2 && !this->settings_menu_active) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
-				
 				uint8_t menu_request_data[] = {0x2B, 0x4A};
 				AIData menu_request_msg(sizeof(menu_request_data), ID_NAV_COMPUTER, ID_RADIO);
 				menu_request_msg.refreshAIData(menu_request_data);
@@ -224,30 +225,25 @@ bool Audio_Window::handleAIBus(AIData* msg) {
 
 				if(this->settings_menu_active) {
 					this->settings_menu_active = false;
-					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 					this->settings_menu_prep = false;
 					sendMenuClose();
 				}
 
 				this->attribute_list->next_window = NEXT_WINDOW_MAIN;
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				return true;
 			} else if(button == 0x26 && state == 0x2 && this->active) { //Audio button.
 				this->active = false;
 
 				if(this->settings_menu_active) {
 					this->settings_menu_active = false;
-					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 					this->settings_menu_prep = false;
 					sendMenuClose();
 				}
 
 				this->attribute_list->next_window = NEXT_WINDOW_LAST;
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				return true;
 			} else if((button == 0x28 || button == 0x29 || button == 0x2A || button == 0x2B) && state == 0x2)  {
 				this->interpretMenuChange(msg);
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				return true;
 			} else
 				return false;
@@ -308,8 +304,19 @@ void Audio_Window::exitWindow() {
 	if(this->settings_menu_active) {
 		this->settings_menu_active = false;
 		this->settings_menu_prep = false;
+
 		sendMenuClose();
 	}
+
+	if(attribute_list->timer != nullptr)
+		last_exit = *attribute_list->timer;
+}
+
+//Set active function.
+void Audio_Window::setActive(const bool active) {
+	NavWindow::setActive(active);
+	if(!active)
+		last_exit = *attribute_list->timer;
 }
 
 //Change the audio screen.
@@ -481,7 +488,6 @@ void Audio_Window::interpretMenuChange(AIData* ai_b) {
 void Audio_Window::handleEnterButton() {
 	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
-	aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ID_NAV_SCREEN);
 	if(this->settings_menu_active && this->settings_menu != NULL) {
 		uint8_t data[] = {0x2B, 0x60, uint8_t(this->settings_menu->getSelected())};
 		AIData enter_msg(3, ID_NAV_COMPUTER, this->settings_menu_sender);
@@ -582,6 +588,9 @@ void Audio_Window::sendMenuClose(const uint8_t receiver) {
 	close_msg.refreshAIData(data);
 
 	this->attribute_list->aibus_handler->writeAIData(&close_msg);
+
+	if(attribute_list->timer != nullptr)
+		last_exit = *attribute_list->timer;
 }
 
 //Return whether a menu message is for the audio settings menu.

@@ -35,8 +35,6 @@ bool VolumeHandler::handleAIBus(AIData *msg) {
 	if(msg->receiver == ID_RADIO && msg->sender == ID_NAV_SCREEN) { //Volume knob.
 		if(msg->l >= 3 && msg->data[0] == 0x32) {
 			if(msg->data[1] == 0x6) {
-				ai_handler->sendAcknowledgement(ID_RADIO, msg->sender);
-
 				if(!parameters->audio_on)
 					return true;
 				
@@ -61,8 +59,6 @@ bool VolumeHandler::handleAIBus(AIData *msg) {
 		}
 	} else if(msg->receiver == ID_RADIO) {
 		if(msg->l >= 4 && msg->data[0] == 0x33 && msg->data[1] == 0x6) { //Volume range.
-			ai_handler->sendAcknowledgement(ID_RADIO, msg->sender);
-
 			const uint16_t new_max = (msg->data[2]<<8)|msg->data[3], old_max = this->vol_range;
 			this->vol_range = new_max;
 			
@@ -84,8 +80,6 @@ void VolumeHandler::setAIBusParameter(AIData *msg) {
 		|| parameters->fader_adjust) {
 
 		if(msg->l >= 3 && msg->data[0] == 0x30) {
-			ai_handler->sendAcknowledgement(ID_RADIO, msg->sender);
-
 			const uint8_t button = msg->data[1], state = msg->data[2] >> 6;
 			if(button == 0x2A && state == 2) {
 				const int increment = -DEFAULT_TONE_RANGE/DEFAULT_SLIDER_RANGE;
@@ -159,7 +153,34 @@ void VolumeHandler::setVolume(const uint16_t volume) {
 		this->volume = this->vol_range;
 
 	if(!this->parameters->digital_amp) { //Analog mode.
-		uint16_t lf_vol = this->volume*DEFAULT_TONE_RANGE/vol_range, rf_vol = this->volume*DEFAULT_TONE_RANGE/vol_range, lr_vol = volume*DEFAULT_TONE_RANGE/vol_range, rr_vol = volume*DEFAULT_TONE_RANGE/vol_range;
+		unsigned int svc_factor = 0;
+		switch(parameters->svc) {
+		case SVC_LOW:
+			svc_factor = 20;
+			break;
+		case SVC_MED:
+			svc_factor = 10;
+			break;
+		case SVC_HIGH:
+			svc_factor = 5;
+			break;
+		default:
+			break;
+		}
+
+		unsigned int svc_add = parameters->vehicle_speed/svc_factor;
+		if(svc_add > 10)
+			svc_add = 10;
+		
+		uint16_t norm_vol = this->volume + svc_factor;
+		if(norm_vol > vol_range)
+			norm_vol = vol_range;
+
+		if(use_aux_level)
+			norm_vol *= parameters->aux_level/5;
+		
+		uint16_t lf_vol = norm_vol*DEFAULT_TONE_RANGE/vol_range, rf_vol = norm_vol*DEFAULT_TONE_RANGE/vol_range, lr_vol = norm_vol*DEFAULT_TONE_RANGE/vol_range, rr_vol = norm_vol*DEFAULT_TONE_RANGE/vol_range;
+		
 		if(balance < 0) { //Left balance.
 			rf_vol = rf_vol*(DEFAULT_TONE_RANGE/2 - abs(balance))/(DEFAULT_TONE_RANGE/2);
 			rr_vol = rr_vol*(DEFAULT_TONE_RANGE/2 - abs(balance))/(DEFAULT_TONE_RANGE/2);
@@ -300,6 +321,41 @@ bool VolumeHandler::getVolumeChanged() {
 	this->volume_changed = false;
 
 	return return_changed;
+}
+
+//Set whether to compensate for the aux level setting.
+void VolumeHandler::setUseAuxLevel(const bool use_aux_level) {
+	this->use_aux_level = use_aux_level;
+	setVolume();
+}
+
+//Refresh the volume for SVC.
+void VolumeHandler::refreshSVC() {
+	unsigned int svc_factor = 0;
+	switch(parameters->svc) {
+	case SVC_LOW:
+		svc_factor = 20;
+		break;
+	case SVC_MED:
+		svc_factor = 10;
+		break;
+	case SVC_HIGH:
+		svc_factor = 5;
+		break;
+	default:
+		break;
+	}
+
+	unsigned int svc_add = parameters->vehicle_speed/svc_factor;
+	if(svc_add > 10)
+		svc_add = 10;
+	
+	uint16_t norm_vol = this->volume + svc_factor;
+	if(norm_vol > vol_range)
+		norm_vol = vol_range;
+
+	if(norm_vol != this->volume)
+		setVolume();
 }
 
 //Display the volume.

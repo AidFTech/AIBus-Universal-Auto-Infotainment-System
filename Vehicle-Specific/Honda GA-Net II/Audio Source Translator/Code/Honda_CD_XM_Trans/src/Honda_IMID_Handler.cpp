@@ -3,6 +3,24 @@
 HondaIMIDHandler::HondaIMIDHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_driver, ParameterList* parameter_list) : HondaSourceHandler(ie_driver, ai_driver, parameter_list) {
 	this->device_ie_id = IE_ID_IMID;
 	this->device_ai_id = ID_IMID_SCR;
+
+	requestor_vec.setStorage(requestor_list, 0);
+
+	getIMIDSettings(&display_rds, &display_volume, (uint8_t*)&char_count);
+
+	switch(char_count) {
+	case CHAR_COUNT_8:
+		max_char = 8;
+		break;
+	case CHAR_COUNT_10:
+		max_char = 10;
+		break;
+	case CHAR_COUNT_12:
+		max_char = 12;
+		break;
+	default:
+		break;
+	}
 }
 
 void HondaIMIDHandler::loop() {
@@ -10,6 +28,16 @@ void HondaIMIDHandler::loop() {
 		frequency_change_timer_enabled = false;
 		writeIMIDRadioMessage(frequency, decimal, preset, stereo_mode);
 	}
+
+	if(setting_changed) {
+		setting_changed = false;
+		setIMIDSettings(display_rds, display_volume, char_count);
+	}
+
+	/*if(imid_change_timer >= IMID_CHANGE_TIMER_LOCAL && ai_cache_vec.size() > 0) {
+		readAIBusMessage(&ai_cache_vec[0], false);
+		ai_cache_vec.remove(0);
+	}*/
 }
 
 void HondaIMIDHandler::interpretIMIDMessage(IE_Message* the_message) {
@@ -149,32 +177,28 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 	if(!parameter_list->power_on)
 		return;
 
-	bool ack = true;
+	/*if(cache && imid_change_timer < IMID_CHANGE_TIMER_LOCAL && 
+			ai_cache_vec.size() < ai_cache_vec.max_size() &&
+			!(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10) &&
+			!(the_message->l >= 3 && the_message->data[0] == 0x62)) {
+		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);	
+		ai_cache_vec.push_back(*the_message);
+	}*/
 
 	if(the_message->l >= 3 && the_message->data[0] == 0x4 && the_message->data[1] == 0xE6 && the_message->data[2] == 0x3B) {
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
-		uint8_t screen_field_data[] = {0x3B, 0x23, max_char, LINES};
-		AIData screen_field_msg(sizeof(screen_field_data), ID_IMID_SCR, the_message->sender);
-		screen_field_msg.refreshAIData(screen_field_data);
+		writeScreenLayoutMessage(the_message->sender);
 
-		uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM, ID_PHONE, ID_ANDROID_AUTO};
-		AIData screen_oem_msg(sizeof(screen_oem_data), ID_IMID_SCR, the_message->sender);
-		screen_oem_msg.refreshAIData(screen_oem_data);
+		bool requestor_found = false;
+		for(int i=0;i<requestor_vec.size();i+=1) {
+			if(requestor_vec[i] == the_message->sender) {
+				requestor_found = true;
+				break;
+			}
+		}
 
-		ai_driver->writeAIData(&screen_field_msg);
-		ai_driver->writeAIData(&screen_oem_msg);
-		
-		uint8_t vol_limit_data[] = {0x33, 0x6, VOL_LIMIT>>8, VOL_LIMIT&0xFF};
-		AIData vol_limit_msg(sizeof(vol_limit_data), ID_IMID_SCR, the_message->sender);
-
-		vol_limit_msg.refreshAIData(vol_limit_data);
-		ai_driver->writeAIData(&vol_limit_msg);
+		if(!requestor_found)
+			requestor_vec.push_back(the_message->sender);
 	} else if(the_message->l >= 4 && the_message->data[0] == 0x23 && the_message->data[1] == 0x60) { //Write a custom message.
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
 		if(the_message->data[3] > 1)
 			return;
 		
@@ -191,9 +215,6 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		writeIMIDTextMessage(new_text);
 		imid_change_timer = 0;
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && the_message->sender == ID_RADIO) { //Function change.
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
 		const uint8_t source = the_message->data[2];
 		if(the_message->l >= 4) {
 			const uint8_t subsource = the_message->data[3];
@@ -210,9 +231,6 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 			ai_driver->writeAIData(&data_request, parameter_list->radio_connected);
 		}
 	} else if((the_message->data[0] == 0x39 || the_message->data[0] == 0x3B) && the_message->sender == ID_CDC) {
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-
 		if(the_message->l >= 8 && the_message->data[0] == 0x39) { //Track and disc.
 			if(the_message->data[6] != disc)
 				setIMIDSource(ID_CDC, 0);
@@ -264,13 +282,7 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		//TODO: Byte count.
 		writeIMIDCDCTextMessage(field, text);
 		imid_change_timer = 0;
-
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
 	} else if(the_message->sender == ID_RADIO && the_message->l >= 6 && the_message->data[0] == 0x67) { //Frequency change message.	
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
 		const uint16_t last_frequency = this->frequency;
 		const uint16_t frequency = (the_message->data[1]<<8) | the_message->data[2];
 
@@ -296,9 +308,6 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		frequency_change_timer = 0;
 		frequency_change_timer_enabled = true;
 	} else if(the_message->sender == ID_RADIO && the_message->l >= 2 && the_message->data[0] == 0x63) { //RDS.
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
 		String rds_str = "";
 		for(int i=2;i<the_message->l;i+=1)
 			rds_str += char(the_message->data[i]);
@@ -317,8 +326,8 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 			imid_change_timer = 0;
 		}
 	} else if(the_message->sender == ID_RADIO && the_message->l >= 3 && the_message->data[0] == 0x62) { //Volume control display.
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+		if(!display_volume)
+			return;
 		
 		const int max_vol = 40;
 		const uint8_t new_vol = the_message->data[1]*max_vol/the_message->data[2];
@@ -326,9 +335,6 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		writeIMIDVolumeMessage(new_vol);
 		imid_change_timer = 0;
 	} else if(the_message->sender == ID_XM && the_message->l >= 5 && the_message->data[0] == 0x39) { //XM channel change message.
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
 		const uint16_t channel = (the_message->data[2]<<8) | the_message->data[3];
 		const uint8_t preset = the_message->data[4]&0x3F;
 
@@ -338,9 +344,6 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		}
 		//TODO: If signal is unavailable, send the appropriate message.
 	} else if(the_message->sender == ID_XM && the_message->l >= 2 && the_message->data[0] == 0x23) { //Sirius text message.
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
 		uint8_t field = 0;
 		switch(the_message->data[1]&0xF) {
 			case 1:
@@ -366,15 +369,9 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		writeIMIDSiriusTextMessage(field, text);
 		imid_change_timer = 0;
 	} else if((the_message->sender == ID_PHONE || the_message->sender == ID_ANDROID_AUTO) && the_message->l >= 5 && the_message->data[0] == 0x3B) { //Bluetooth timer.
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
 		const long time = the_message->data[4] | (the_message->data[3]<<8);
 		setBTTimer(time);
-	} else if(the_message->sender == ID_PHONE && the_message->l >= 3 && the_message->data[0] == 0x23 && (the_message->data[1]&0xF0) == 0x60) { //Bluetooth text message.
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
+	} else if(the_message->sender == ID_PHONE && the_message->l >= 3 && the_message->data[0] == 0x23 && (the_message->data[1]&0xF0) == 0x60) { //Bluetooth text message.	
 		uint8_t leader = 0xFF;
 
 		switch(the_message->data[1]) {
@@ -404,9 +401,6 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		this->setBTModeNotConnected();
 		imid_change_timer = 0;
 	} else if(the_message->sender == ID_ANDROID_AUTO && the_message-> l >= 2 && the_message->data[0] == 0x23 && (the_message->data[1]&0xF0) == 0x60) { //Mirror text message.
-		ack = false;
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
-		
 		uint8_t leader = 0xFF;
 
 		switch(the_message->data[1]) {
@@ -436,10 +430,107 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 		} else {
 			
 		}
-	}
+	} else if(the_message->sender == ID_NAV_COMPUTER && the_message->l >= 2 && the_message->data[0] == 0x2B) { //Menu message.
+		const uint8_t operation = the_message->data[1];
 
-	if(ack)
-		ai_driver->sendAcknowledgement(ID_IMID_SCR, the_message->sender);
+		if(operation == 0x55 || operation == 0x56 || operation == 0x57) { //Menu presence request.
+			String menu_requested = "";
+			for(int i=2;i<the_message->l;i+=1)
+				menu_requested += char(the_message->data[i]);
+
+			if(menu_requested.equalsIgnoreCase("SETTING")) {
+				const MenuList settings_menu = getMenu(MENU_INDEX_IMID_SETTINGS, parameter_list->locale);
+				const String menu_name = settings_menu.title;
+
+				if(operation == 0x55) //Display the menu.
+					createIMIDSettingsMenu();
+				else {
+					uint8_t response_data[] = {0x2B, operation};
+					AIData response_msg(sizeof(response_data) + (operation == 0x57 ? menu_name.length() : 0), ID_IMID_SCR, the_message->sender);
+
+					for(int i=0;i<sizeof(response_data);i+=1)
+						response_msg[i] = response_data[i];
+
+					if(operation == 0x57) {
+						for(int i=0;i<menu_name.length() && i+sizeof(response_data)<response_msg.l;i+=1)
+							response_msg[i+sizeof(response_data)] = uint8_t(menu_name[i]);
+					}
+
+					ai_driver->writeAIData(&response_msg);
+				}
+			}
+		} else if(operation == 0x45) { //Menu request.
+			createIMIDSettingsMenu();
+		} else if(operation == 0x40) { //Menu closed.
+			if(*active_menu == MENU_IMID) {
+				*active_menu = 0;
+
+				uint8_t close_data[] = {0x2B, 0x40};
+				AIData close_msg(sizeof(close_data), ID_IMID_SCR, the_message->sender, close_data);
+				ai_driver->writeAIData(&close_msg);
+			} else if(*active_menu == MENU_IMID_CHARACTER) {
+				createIMIDSettingsMenu();
+			}
+		} else if(operation == 0x60) { //Selection.
+			const int selected = the_message->data[2] - 1;
+			if(selected < 0)
+				return;
+
+			if(*active_menu == MENU_IMID) {
+				const MenuList settings_menu = getMenu(MENU_INDEX_IMID_SETTINGS, parameter_list->locale);
+				switch(settings_menu.getGlobalIndex(selected)) {
+				case MENU_INDEX_IMID_SETTINGS_RDS:
+					display_rds = !display_rds;
+					createIMIDSettingsMenuOption(selected);
+
+					if((imid_mode&0xFF) == ID_RADIO)
+						writeIMIDRadioMessage(frequency, decimal, preset, stereo_mode);
+					
+					setting_changed = true;
+					break;
+				case MENU_INDEX_IMID_SETTINGS_CD_TEXT:
+					if(parameter_list->imid_cd_text != nullptr && parameter_list->imid_cd_text != NULL) {
+						*parameter_list->imid_cd_text = !*parameter_list->imid_cd_text;
+						parameter_list->cd_text_changed = true;
+
+						createIMIDSettingsMenuOption(selected);
+					}
+					break;
+				case MENU_INDEX_IMID_SETTINGS_VOLUME:
+					display_volume = !display_volume;
+					createIMIDSettingsMenuOption(selected);
+					setting_changed = true;
+					break;
+				case MENU_INDEX_IMID_SETTINGS_LENGTH:
+					createIMIDCharacterMenu();
+					break;
+				}
+			} else if(*active_menu == MENU_IMID_CHARACTER) {
+				char_count = (char_count_t)(selected&0b11);
+				setting_changed = true;
+
+				switch(char_count) {
+				case CHAR_COUNT_8:
+					max_char = 8;
+					break;
+				case CHAR_COUNT_10:
+					max_char = 10;
+					break;
+				case CHAR_COUNT_12:
+					max_char = 12;
+					break;
+				default:
+					break;
+				}
+
+				writeScreenLayoutMessage(0xFF);
+				for(int i=0;i<requestor_vec.size();i+=1)
+					writeScreenLayoutMessage(requestor_vec[i]);
+
+				createIMIDSettingsMenu();
+			}
+		}
+	}
 }
 
 //Get the IMID change timer.
@@ -474,6 +565,26 @@ void HondaIMIDHandler::writeScreenLayoutMessage() {
 	}
 
 	ai_driver->writeAIData(&screen_oem_msg, false);
+}
+
+//Write the screen layout message.
+void HondaIMIDHandler::writeScreenLayoutMessage(const uint8_t receiver) {
+	uint8_t screen_field_data[] = {0x3B, 0x23, max_char, LINES};
+	AIData screen_field_msg(sizeof(screen_field_data), ID_IMID_SCR, receiver);
+	screen_field_msg.refreshAIData(screen_field_data);
+
+	uint8_t screen_oem_data[] = {0x3B, 0x57, ID_RADIO, ID_CD, ID_CDC, ID_XM, ID_PHONE, ID_ANDROID_AUTO};
+	AIData screen_oem_msg(sizeof(screen_oem_data), ID_IMID_SCR, receiver);
+	screen_oem_msg.refreshAIData(screen_oem_data);
+
+	ai_driver->writeAIData(&screen_field_msg, receiver != 0xFF);
+	ai_driver->writeAIData(&screen_oem_msg, receiver != 0xFF);
+	
+	uint8_t vol_limit_data[] = {0x33, 0x6, VOL_LIMIT>>8, VOL_LIMIT&0xFF};
+	AIData vol_limit_msg(sizeof(vol_limit_data), ID_IMID_SCR, receiver);
+
+	vol_limit_msg.refreshAIData(vol_limit_data);
+	ai_driver->writeAIData(&vol_limit_msg, receiver != 0xFF);
 }
 
 void HondaIMIDHandler::writeTimeAndDayMessage(uint8_t hour, const uint8_t minute, const uint8_t month, const uint8_t day, const uint16_t year, const bool display_24h) {
@@ -540,37 +651,26 @@ bool HondaIMIDHandler::writeIMIDTextMessage(String text) {
 	
 	bta_text1.refreshIEData(bta_text_data1);
 
-	elapsedMillis timeout_del = 0;
-
 	if(imid_mode != 0x23) {
 		imid_mode = 0x23;
 		ie_driver->sendMessage(&bta_trigger_msg, true, true);
+		getIEAckMessage(&bta_trigger_msg, device_ie_id);
 		
-		if(!getIEAckMessage(&bta_trigger_msg, device_ie_id))
-			return false;
-		
+		delay(10);
 		ie_driver->sendMessage(&bta_msg1, true, true);
+		getIEAckMessage(&bta_msg1, device_ie_id);
 		
-		timeout_del = 0;
-		if(!getIEAckMessage(&bta_msg1, device_ie_id))
-			return false;
-		
+		delay(10);
 		ie_driver->sendMessage(&bta_msg2, true, true);
+		getIEAckMessage(&bta_msg2, device_ie_id);
 		
-		timeout_del = 0;
-		if(!getIEAckMessage(&bta_msg2, device_ie_id))
-			return false;
-		
+		delay(10);
 		ie_driver->sendMessage(&bta_msg3, true, true);
-		
-		timeout_del = 0;
-		if(!getIEAckMessage(&bta_msg3, device_ie_id))
-			return false;
+		getIEAckMessage(&bta_msg3, device_ie_id);
 	}
 	
+	delay(10);
 	ie_driver->sendMessage(&bta_text1, true, true);
-	
-	timeout_del = 0;
 	if(!getIEAckMessage(&bta_text1, device_ie_id))
 		return false;
 	
@@ -633,28 +733,12 @@ bool HondaIMIDHandler::setIMIDSource(const uint8_t source, const uint8_t subsour
 				
 				IE_Message cd_msg_2(sizeof(cd_data_2), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
 				cd_msg_2.refreshIEData(cd_data_2);
-
-				bool ack = false;
-				elapsedMillis wait_timer;
 				
-				while(!ack && wait_timer < 5000) {
-					ie_driver->sendMessage(&cd_msg_1, true, true);
-					ack = getIEAckMessage(device_ie_id);
-				}
-			
-				if(!ack)
-					return false;
-
-				ack = false;
-				wait_timer = 0;
+				ie_driver->sendMessage(&cd_msg_1, true, true);
+				getIEAckMessage(&cd_msg_1, device_ie_id);
 				
-				while(!ack && wait_timer < 5000) {
-					ie_driver->sendMessage(&cd_msg_2, true, true);
-					ack = getIEAckMessage(device_ie_id);
-				}
-			
-				if(!ack)
-					return false;
+				ie_driver->sendMessage(&cd_msg_2, true, true);
+				getIEAckMessage(&cd_msg_2, device_ie_id);
 			} else {
 				uint8_t cd_data_1[] = {0x60, 0x4, 0x11, 0x0, 0x15, 0x10, 0x1, 0x2A, 0x80, 0xE0, 0x1};
 				uint8_t cd_data_2[] = {0x60, 0x4, 0x11, 0x0, 0x15, 0x1, 0x80, 0x0, 0xA0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
@@ -666,16 +750,10 @@ bool HondaIMIDHandler::setIMIDSource(const uint8_t source, const uint8_t subsour
 				cd_msg_2.refreshIEData(cd_data_2);
 				
 				ie_driver->sendMessage(&cd_msg_1, true, true);
-			
-				elapsedMillis timeout_del = 0;
-				if(!getIEAckMessage(device_ie_id))
-					return false;
+				getIEAckMessage(&cd_msg_1, device_ie_id);
 				
 				ie_driver->sendMessage(&cd_msg_2, true, true);
-			
-				timeout_del = 0;
-				if(!getIEAckMessage(device_ie_id))
-					return false;
+				getIEAckMessage(&cd_msg_2, device_ie_id);
 			}
 		}
 		
@@ -924,8 +1002,7 @@ void HondaIMIDHandler::setBTText(const uint8_t field, String text) {
 	text_msg.refreshIEData(text_data);
 
 	ie_driver->sendMessage(&text_msg, true, true);
-	if(!getIEAckMessage(&text_msg, device_ie_id))
-		return;
+	getIEAckMessage(&text_msg, device_ie_id);
 
 	if(text.length() > 16) {
 		text = text.substring(16);
@@ -941,8 +1018,7 @@ void HondaIMIDHandler::setBTText(const uint8_t field, String text) {
 	text_msg.refreshIEData(text_data2);
 
 	ie_driver->sendMessage(&text_msg, true, true);
-	if(!getIEAckMessage(&text_msg, device_ie_id))
-	return;
+	getIEAckMessage(&text_msg, device_ie_id);
 }
 
 void HondaIMIDHandler::writeIMIDRadioMessage(const uint16_t frequency, const int8_t decimal, const uint8_t preset, const uint8_t stereo_mode, const bool acknowledge) {
@@ -1143,7 +1219,7 @@ bool HondaIMIDHandler::getTuningMessage(uint8_t* frequency_bytes, uint8_t* subso
 		frequency_bytes[2] = 0xF0;
 		if(div >= 100) {
 			frequency_bytes[2] &= 0xF;
-			frequency_bytes[2] |= getBCDFromByte((frequency_ls%(div/100))%10) << 4;
+			frequency_bytes[2] |= getBCDFromByte((frequency_ls/(div/100))%10) << 4;
 		}
 	} else {
 		frequency_bytes[0] = getBCDFromByte(frequency_ms/100);
@@ -1263,7 +1339,7 @@ void HondaIMIDHandler::writeIMIDCDCTrackMessage(const uint8_t disc, const uint8_
 		text_state = 0x60;
 	
 	uint8_t cd_data[] = {0x60,
-						uint8_t(imid_mode),
+						uint8_t(imid_mode&0xFF),
 						0x11,
 						0x0,
 						state1,
@@ -1290,13 +1366,8 @@ void HondaIMIDHandler::writeIMIDCDCTrackMessage(const uint8_t disc, const uint8_
 	IE_Message cd_message(sizeof(cd_data), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
 	cd_message.refreshIEData(cd_data);
 
-	bool ack = false;
-	elapsedMillis wait_timer;
-
-	while(!ack && wait_timer < 5000) {
-		ie_driver->sendMessage(&cd_message, true, true);
-		ack = this->getIEAckMessage(IE_ID_RADIO);
-	}
+	ie_driver->sendMessage(&cd_message, true, true);
+	getIEAckMessage(&cd_message, device_ie_id);
 
 	if(change_disc)
 		cd_text_mode = TEXT_MODE_BLANK;
@@ -1304,7 +1375,7 @@ void HondaIMIDHandler::writeIMIDCDCTrackMessage(const uint8_t disc, const uint8_
 	if((change_disc || change_track) && state1 < 0x10 && cd_text_mode != TEXT_MODE_BLANK) {
 		writeIMIDCDCTextMessage(1, " ");
 		writeIMIDCDCTextMessage(2, " ");
-		if(change_disc)
+		if(change_disc || cd_text_mode == TEXT_MODE_MP3)
 			writeIMIDCDCTextMessage(0, " ");
 	}
 }
@@ -1321,10 +1392,11 @@ void HondaIMIDHandler::writeIMIDCDCTextMessage(const uint8_t position, String te
 	if(cd_text_mode == TEXT_MODE_BLANK)
 		cd_text_mode = TEXT_MODE_WITH_TEXT;
 
-	writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_mode), getIECDRepeat(ai_cd_mode));
+	//TODO: Why are we doing this?
+	//writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_mode), getIECDRepeat(ai_cd_mode));
 
 	uint8_t text_data1[] = {0x60,
-							uint8_t(imid_mode),
+							uint8_t(imid_mode&0xFF),
 							0x11,
 							0x0,
 							0x3,
@@ -1349,7 +1421,7 @@ void HondaIMIDHandler::writeIMIDCDCTextMessage(const uint8_t position, String te
 							0xFF};
 
 	uint8_t text_data2[] = {0x60,
-							uint8_t(imid_mode),
+							uint8_t(imid_mode&0xFF),
 							0x11,
 							0x0,
 							0x3,
@@ -1393,20 +1465,20 @@ void HondaIMIDHandler::writeIMIDCDCTextMessage(const uint8_t position, String te
 	IE_Message text_msg2(sizeof(text_data2), IE_ID_RADIO, IE_ID_IMID, 0xF, true);
 	text_msg2.refreshIEData(text_data2);
 
-	bool ack = false;
-	elapsedMillis wait_timer;
+	ie_driver->sendMessage(&text_msg1, true, true);
+	getIEAckMessage(&text_msg1, device_ie_id);
 
-	while(!ack && wait_timer < 5000) {
-		ie_driver->sendMessage(&text_msg1, true, true);
-		ack = getIEAckMessage(IE_ID_RADIO);
-	}
+	delay(10);
+	
+	ie_driver->sendMessage(&text_msg2, true, true);
+	getIEAckMessage(&text_msg2, device_ie_id);
+}
 
-	ack = false;
-	wait_timer = 0;
-	while(!ack && wait_timer < 5000) {
-		ie_driver->sendMessage(&text_msg2, true, true);
-		ack = getIEAckMessage(IE_ID_RADIO);
-	}
+//Clear the CD text.
+void HondaIMIDHandler::clearIMIDCDText() {
+	writeIMIDCDCTextMessage(0, "");
+	writeIMIDCDCTextMessage(1, "");
+	writeIMIDCDCTextMessage(2, "");
 }
 
 //Get the current IMID mode.
@@ -1421,4 +1493,91 @@ void HondaIMIDHandler::sendSourceRequest(const uint8_t source) {
 	request_msg.refreshAIData(request_data);
 
 	ai_driver->writeAIData(&request_msg);
+}
+
+//Create the IMID settings menu.
+void HondaIMIDHandler::createIMIDSettingsMenu() {
+	const MenuList settings_menu = getMenu(MENU_INDEX_IMID_SETTINGS, parameter_list->locale);
+
+	startSettingsMenu(settings_menu.size(), settings_menu.size(), false, settings_menu.title);
+
+	elapsedMillis cancel_wait;
+	while(cancel_wait < 20) {
+		AIData ai_msg;
+		if(ai_driver->dataAvailable(false) > 0) {
+			if(ai_driver->readAIData(&ai_msg, false)) {
+				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //No menu available.
+					return;
+				}
+			}
+		}
+	}
+
+	*active_menu = MENU_IMID;
+
+	for(int i=0;i<settings_menu.size();i+=1)
+		createIMIDSettingsMenuOption(i);
+
+	displayMenu(1);
+}
+
+//Add an option to the settings menu.
+void HondaIMIDHandler::createIMIDSettingsMenuOption(const unsigned int index) {
+	const MenuList settings_menu = getMenu(MENU_INDEX_IMID_SETTINGS, parameter_list->locale);
+	String option = "";
+
+	switch(settings_menu.getGlobalIndex(index)) {
+	case MENU_INDEX_IMID_SETTINGS_RDS:
+		option = display_rds ? "#RON " : "#ROF ";
+		break;
+	case MENU_INDEX_IMID_SETTINGS_CD_TEXT:
+		if(parameter_list->imid_cd_text == NULL || parameter_list->imid_cd_text == nullptr)
+			return;
+
+		option = *parameter_list->imid_cd_text ? "#RON " : "#ROF ";
+		break;
+	case MENU_INDEX_IMID_SETTINGS_VOLUME:
+		option = display_volume ? "#RON " : "#ROF ";
+		break;
+	default:
+		break;
+	}
+
+	option += settings_menu[index];
+	appendMenu(index, option);
+}
+
+//Create the IMID character count setting menu.
+void HondaIMIDHandler::createIMIDCharacterMenu() {
+	const MenuList character_menu = getMenu(MENU_INDEX_IMID_CHARACTER, parameter_list->locale);
+
+	startSettingsMenu(character_menu.size(), character_menu.size(), false, character_menu.title);
+
+	elapsedMillis cancel_wait;
+	while(cancel_wait < 20) {
+		AIData ai_msg;
+		if(ai_driver->dataAvailable(false) > 0) {
+			if(ai_driver->readAIData(&ai_msg, false)) {
+				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //No menu available.
+					return;
+				}
+			}
+		}
+	}
+
+	*active_menu = MENU_IMID_CHARACTER;
+
+	for(int i=0;i<character_menu.size();i+=1)
+		createIMIDCharacterMenuOption(i);
+
+	displayMenu(1);
+}
+
+//Add an option to the character menu.
+void HondaIMIDHandler::createIMIDCharacterMenuOption(const unsigned int index) {
+	const MenuList character_menu = getMenu(MENU_INDEX_IMID_CHARACTER, parameter_list->locale);
+	String option = this->char_count == index ? "#CON " : "#COF ";
+
+	option += character_menu[index];
+	appendMenu(index, option);
 }

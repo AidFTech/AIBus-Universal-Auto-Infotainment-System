@@ -66,6 +66,28 @@ bool EnIEBusHandler::cacheAIBus() {
 		return false;
 }
 
+//Get any pending AIBus messages to the specified ID.
+AIData EnIEBusHandler::getAIBus(const uint8_t id) {
+	AIData ai_return(0,0,0);
+	uint8_t id_list[] = {id};
+	ai_handler->getPending(id_list, sizeof(id_list), &ai_return);
+
+	return ai_return;
+}
+
+//Get any pending AIBus messages to the specified IDs.
+AIData EnIEBusHandler::getAIBus(const uint8_t* id, const int id_l) {
+	AIData ai_return(0,0,0);
+	uint8_t id_list[id_l];
+	
+	for(int i=0;i<id_l;i+=1)
+		id_list[i] = id[i];
+
+	ai_handler->getPending(id_list, sizeof(id_list), &ai_return);
+
+	return ai_return;
+}
+
 void EnIEBusHandler::sendMessageStrict(IE_Message* ie_d, const bool ack_response, const bool checksum) {
 	IEBusHandler::sendMessage(ie_d, ack_response, checksum);
 

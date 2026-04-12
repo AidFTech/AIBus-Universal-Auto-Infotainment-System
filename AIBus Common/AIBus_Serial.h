@@ -15,7 +15,7 @@ int aiserialOpen(const char* port);
 void aiserialClose(int port);
 
 int aiserialRead(int port, char* buffer, int l);
-void aiserialWrite(int port, char* buffer, int l);
+int aiserialWrite(int port, char* buffer, int l);
 char aiserialReadByte(int port);
 void aiserialWriteByte(int port, char byte);
 

@@ -1,6 +1,6 @@
 #include "AidF_Nav_Computer_Pi.h"
 
-//Must be compiled with options -lSDL2 -lSDL2_ttf -lpigpio -lrt
+//Must be compiled with options -lSDL2 -lSDL2_ttf -lrt
 
 AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, const uint16_t lh) {
 	this->lw = lw;
@@ -27,14 +27,14 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	int* socket_list[] = {&this->amirror_socket_parameters.client_socket, &this->abta_socket_parameters.client_socket};
 
 	#ifdef RPI_UART
-	this->aibus_handler = new SerialAIBusHandler("/dev/ttyS0", socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
+	this->aibus_handler = new SerialAIBusHandler("/dev/ttyAMA0", socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
 
-	gpioSetMode(GPIO_I2S_MCLK, PI_OUTPUT);
-	gpioWrite(GPIO_I2S_MCLK, PI_LOW);
-	gpioSetMode(GPIO_DAC_MUTE, PI_OUTPUT);
-	gpioWrite(GPIO_DAC_MUTE, PI_HIGH);
-	gpioSetMode(GPIO_USB_PWR, PI_OUTPUT);
-	gpioWrite(GPIO_USB_PWR, PI_HIGH);
+	//gpioSetMode(GPIO_I2S_MCLK, PI_OUTPUT);
+	//gpioWrite(GPIO_I2S_MCLK, PI_LOW);
+	//gpioSetMode(GPIO_DAC_MUTE, PI_OUTPUT);
+	//gpioWrite(GPIO_DAC_MUTE, PI_HIGH);
+	//gpioSetMode(GPIO_USB_PWR, PI_OUTPUT);
+	//gpioWrite(GPIO_USB_PWR, PI_HIGH);
 	#else
 	this->aibus_handler = new SerialAIBusHandler(socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
 	#endif
@@ -89,7 +89,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 
 	this->frame_parameters.frame = &attribute_list->frame;
 	this->frame_parameters.run = &this->running;
-
+	
 	this->elapsed_millis.run = &this->running;
 
 	pthread_create(&amirror_socket_thread, NULL, socketThread, (void *)&amirror_socket_parameters);
@@ -201,11 +201,15 @@ void AidF_Nav_Computer::loop() {
 	this->window_handler->drawWindow();
 	SDL_RenderPresent(renderer);
 
+	NavWindow* active_window = this->window_handler->getActiveWindow();
+	const bool full_aibus_check = typeid(*active_window) != typeid(VehicleInfoWindow);
+
 	AIData ai_msg;
 	do {
 		if(!this->aibus_handler->getConnected() || this->aibus_handler->getAvailableBytes() > 0) {
 			if(this->aibus_handler->readAIData(&ai_msg)) {
-				aibus_read_time = elapsed_millis.time;
+				if(full_aibus_check)
+					aibus_read_time = elapsed_millis.time;
 
 				if(!*canslator_connected && ai_msg.sender == ID_CANSLATOR && !getPowerOffMessage(&ai_msg))
 					*canslator_connected = true;
@@ -221,6 +225,28 @@ void AidF_Nav_Computer::loop() {
 					this->setMirrorColors();
 				}
 
+				vector<uint8_t> *ping_device_list = &attribute_list->ping_device_list;
+				if(!getInitMessage(&ai_msg) && !getPowerOffMessage(&ai_msg) && ai_msg.sender != 0 && ai_msg.sender != ID_NAV_COMPUTER) {
+					bool exists = false;
+					int ins_ind = -1;
+					for(int i=0;i<ping_device_list->size();i+=1) {
+						if(ping_device_list->at(i) > ai_msg.sender) {
+							ins_ind = i;
+							break;
+						} else if(ping_device_list->at(i) == ai_msg.sender) {
+							exists = true;
+							break;
+						}
+					}
+
+					if(!exists) {
+						if(ins_ind >= 0)
+							ping_device_list->insert(ping_device_list->begin() + ins_ind, ai_msg.sender);
+						else
+							ping_device_list->push_back(ai_msg.sender);
+					}
+				}
+
 				if(getInitMessage(&ai_msg) || getPowerOffMessage(&ai_msg)) {
 					if(ai_msg.sender == ID_RADIO)
 						*radio_connected = false;
@@ -228,6 +254,13 @@ void AidF_Nav_Computer::loop() {
 						*mirror_connected = false;
 					else if(ai_msg.sender == ID_CANSLATOR)
 						attribute_list->canslator_connected = false;
+
+					for(int i=0;i<ping_device_list->size();i+=1) {
+						if(ping_device_list->at(i) == ai_msg.sender) {
+							ping_device_list->erase(ping_device_list->begin() + i);
+							break;
+						}
+					}
 				}
 
 				//Send clock settings.
@@ -259,7 +292,6 @@ void AidF_Nav_Computer::loop() {
 						answered = handleBroadcastMessage(&ai_msg) && typeid(*active_window) != typeid(IntroWindow);
 					else if(ai_msg.sender == ID_GPS_ANTENNA && ai_msg.data[0] == 0x55) {
 						answered = true;
-						aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_msg.sender);
 						handleNavMessage(&ai_msg, window_handler->getNavParameters());
 
 						NavWindow* active_window = window_handler->getActiveWindow();
@@ -276,9 +308,6 @@ void AidF_Nav_Computer::loop() {
 					if(!answered && this->window_handler->getActiveWindow() != NULL  && this->window_handler->getActiveWindow() != audio_window)
 						answered = this->window_handler->getActiveWindow()->handleAIBus(&ai_msg);
 					if(!answered) { //Handle the AIBus message directly.
-						if(ai_msg.receiver == ID_NAV_COMPUTER)
-							this->aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ai_msg.sender);
-
 						if(ai_msg.l >= 2 && ai_msg.data[0] == 0x22 && ai_msg.data[1] == 0x61 && (ai_msg.sender == ID_RADIO || ai_msg.sender == attribute_list->active_audio_device)) { //Headerbar.
 							if(!audio_window->getActive()) {
 								std::string header_text = "";
@@ -399,8 +428,6 @@ void AidF_Nav_Computer::loop() {
 			}
 		}
 	} while(running && aibus_handler->getConnected() && (elapsed_millis.time - aibus_read_time) < AIBUS_WAIT);
-
-	aibus_handler->flushCached();
 }
 
 bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
@@ -738,7 +765,12 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 			this->window_handler->refresh();
 
 		return true;
-
+	} else if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 3 && ai_d->data[1] == 0x14) { //Auto stop.
+		InfoParameters* info_parameters = window_handler->getVehicleInfo();
+		if(ai_d->data[2] > 1)
+			info_parameters->auto_stop = AUTO_STOP_ON;
+		else
+			info_parameters->auto_stop = (auto_stop_t)ai_d->data[2];
 	} else if(ai_d->l >= 2 && ai_d->data[1] == 0x33) { //Hybrid system.
 		InfoParameters* info_parameters = window_handler->getVehicleInfo();
 		
@@ -778,6 +810,9 @@ void AidF_Nav_Computer::setDayNight(const bool night) {
 	else
 		setColorProfile(&active_color_profile, day_profile);
 	
+	if(this->br != NULL)
+		delete this->br;
+
 	if(active_color_profile.background == active_color_profile.background2)
 		this->br = new BR_Solid(this->lw, this->lh, active_color_profile.background);
 	else
@@ -809,10 +844,7 @@ void AidF_Nav_Computer::setMirrorColors() {
 	AIData text_msg(sizeof(text_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
 	text_msg.refreshAIData(text_data);
 
-	const bool connect = aibus_handler->writeAIData(&header_msg, attribute_list->mirror_connected);
-	if(attribute_list->mirror_connected && !connect)
-		attribute_list->mirror_connected = false;
-
+	aibus_handler->writeAIData(&header_msg, attribute_list->mirror_connected);
 	aibus_handler->writeAIData(&text_msg, attribute_list->mirror_connected);
 }
 
@@ -833,6 +865,9 @@ SDL_Renderer* AidF_Nav_Computer::getRenderer() {
 }
 
 void AidF_Nav_Computer::getBackground() {
+	if(this->br != NULL)
+		delete this->br;
+
 	if(active_color_profile.background == active_color_profile.background2)
 		this->br = new BR_Solid(this->lw, this->lh, active_color_profile.background);
 	else

@@ -105,7 +105,6 @@ bool PhoneWindow::handleAIBus(AIData* msg) {
 	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	if(msg->data[0] == 0x21 && msg->data[1] == 0xA5) { //Write data.
-		aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 		this->interpretPhoneScreenChange(msg);
 		return true;
 	} else if(msg->sender == ID_NAV_SCREEN) { //Button pressed on screen.
@@ -114,26 +113,21 @@ bool PhoneWindow::handleAIBus(AIData* msg) {
 		
 		if(msg->data[0] == 0x32 && msg->data[1] == 0x7) {
 			this->interpretMenuChange(msg);
-			aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 			return true;
 		} else if(msg->data[0] == 0x30) {
 			const uint8_t button = msg->data[1], state = msg->data[2]>>6;
 			if(button == 0x7 && state == 0x2) { //Enter button.
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				this->handleEnterButton();
 				return true;
 			} else if ((button == 0x27 || (button == 0x51 && this->settings_menu_active)) && state == 0x2) { //Menu or back button.
 				if(this->settings_menu_active) {
 					this->settings_menu_active = false;
-					aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 					this->settings_menu_prep = false;
 					sendMenuClose();
 					return true;
 				} else
 					return false;
 			} else if(button == 0x51 && state == 0x2 && !this->settings_menu_active) {
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
-				
 				uint8_t menu_request_data[] = {0x2B, 0x4C};
 				AIData menu_request_msg(sizeof(menu_request_data), ID_NAV_COMPUTER, ID_PHONE);
 				menu_request_msg.refreshAIData(menu_request_data);
@@ -143,11 +137,9 @@ bool PhoneWindow::handleAIBus(AIData* msg) {
 			} else if(button == 0x20 && state == 0x2) { //Home button.
 				this->active = false;
 				this->attribute_list->next_window = NEXT_WINDOW_MAIN;
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				return true;
 			} else if((button == 0x28 || button == 0x29 || button == 0x2A || button == 0x2B) && state == 0x2)  {
 				this->interpretMenuChange(msg);
-				aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, msg->sender);
 				return true;
 			} else
 				return false;
@@ -329,7 +321,6 @@ void PhoneWindow::interpretMenuChange(AIData* ai_b) {
 void PhoneWindow::handleEnterButton() {
 	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
-	aibus_handler->sendAcknowledgement(ID_NAV_COMPUTER, ID_NAV_SCREEN);
 	if(this->settings_menu_active && this->settings_menu != NULL) {
 		uint8_t data[] = {0x2B, 0x60, uint8_t(this->settings_menu->getSelected())};
 		AIData enter_msg(3, ID_NAV_COMPUTER, this->settings_menu_sender);

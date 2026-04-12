@@ -8,7 +8,7 @@
 #ifndef aibus_handler_h
 #define aibus_handler_h
 
-#define AI_DELAY_U 20
+#define AI_DELAY_U 100
 #define AI_DELAY_M 2
 #define L_WAIT 20
 #define AI_WAIT 5
@@ -24,8 +24,6 @@
 #ifndef AI_CACHE_SIZE
 #define AI_CACHE_SIZE 16
 #endif
-
-#define AIDATA_LIMIT (0x30 - 4)
 
 enum aibus_read_result_t : int8_t {
 	AIBUS_READ_OK_SERIAL,
@@ -44,8 +42,7 @@ public:
 	AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size = AI_CACHE_SIZE);
 	~AIBusHandler();
 
-	virtual int dataAvailable();
-	virtual int dataAvailable(const bool cache);
+	virtual int dataAvailable(const bool cache = true);
 
 	virtual bool readAIData(AIData* ai_d);
 	virtual bool readAIData(AIData* ai_d, const bool cache, const bool multiple = true);
@@ -58,6 +55,7 @@ public:
 	virtual bool writeAIData(AIData* ai_d);
 	virtual bool writeAIData(AIData* ai_d, const bool acknowledge);
 	virtual void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
+	virtual void flush();
 	
 	virtual void cacheMessage(AIData* ai_msg);
 	virtual bool cachePending(const uint8_t id);
@@ -72,6 +70,7 @@ protected:
 	uint8_t id;
 
 	virtual bool awaitAcknowledgement(AIData* ai_d);
+
 	virtual bool getID(const uint8_t id);
 
 	inline void clearSerial();

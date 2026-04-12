@@ -70,7 +70,7 @@ public:
 	HondaCDHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_driver, ParameterList* parameter_list, HondaIMIDHandler *imid_handler);
 	void loop();
 
-	void interpretCDMessage(IE_Message* the_message);
+	void interpretCDMessage(IE_Message* the_message, const bool listen = true);
 	void readAIBusMessage(AIData* the_message);
 	
 	void sendSourceNameMessage();
@@ -132,6 +132,9 @@ private:
 	//Manual refresh timer.
 	//elapsedMillis refresh_timer;
 
+	//Timer to check for second count.
+	elapsedMillis second_timer;
+
 	HondaIMIDHandler* imid_handler;
 
 	bool fr = false, ff = false; //True if actively fast-searching a disc.
@@ -176,6 +179,12 @@ private:
 	void createCDMainMenuOption(const uint8_t option);
 	void createCDChangeDiscMenu();
 	void createCDChangeDiscMenuOption(const uint8_t option);
+
+	//Internal:
+	void handleAIBus(AIData* msg);
+	void handleIEBus(IE_Message* msg, const bool listen = true);
+	void listenForIEBus(const unsigned long wait = 500, const bool single_msg = true);
+	void handleIMIDAIBus(AIData* msg);
 };
 
 #endif

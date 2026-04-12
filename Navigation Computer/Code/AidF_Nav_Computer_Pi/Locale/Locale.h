@@ -30,6 +30,7 @@ enum nav_text_index: unsigned int {
 	LOCALE_STRING_TRIP_DISTANCE,
 	LOCALE_STRING_CRUISE_SPEED,
 	LOCALE_STRING_GEAR,
+	LOCALE_STRING_INFO_WINDOW_SETTINGS_HEADER,
 
 	//Phone Mirror Headers
 	LOCALE_STRING_MIRROR,
@@ -64,6 +65,7 @@ static const char* TEXT_ENG[] {
 	"Trip Distance",
 	"Cruise Speed",
 	"Gear",
+	"Info Window Settings",
 
 	//Mirror Messages
 	"Phone Mirror",

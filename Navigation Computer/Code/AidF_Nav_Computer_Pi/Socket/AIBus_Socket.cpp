@@ -150,6 +150,7 @@ void writeSocketMessage(SocketMessage* msg, const int socket) {
 
 	data[byte_l-1] = checksum;
 
+	signal(SIGPIPE, SIG_IGN);
 	send(socket, data, byte_l, 0);
 }
 
@@ -162,22 +163,24 @@ void *socketThread(void* parameters_v) {
 			parameters->socket_ptr = new AIBusSocket(parameters->socket_path.c_str());
 			parameters->client_socket = parameters->socket_ptr->getClient();
 		} else {
+			if(access(parameters->socket_path.c_str(), F_OK) != 0) { //File doesn't exist.
+				parameters->client_socket = -1;
+				delete parameters->socket_ptr;
+				parameters->socket_ptr = nullptr;
+				continue;
+			}
+
 			SocketMessage rx_msg(0, DEFAULT_READ_LENGTH);
 
 			const int socket_byte_count = parameters->socket_ptr->readSocketMessage(&rx_msg);
 
 			if(socket_byte_count > 0) {
 				if(rx_msg.opcode == OPCODE_AIBUS_RECEIVE) {
-					bool is_ack = false;
-
-					if(rx_msg.l == 5 && rx_msg.data[4] == 0x80)
-						is_ack = true;
-
 					char rx_buf[rx_msg.l];
 					for(int i=0;i<rx_msg.l;i+=1)
 						rx_buf[i] = char(rx_msg.data[i]);
 
-					if(parameters->timer != nullptr && !is_ack) {
+					if(parameters->timer != nullptr) {
 						unsigned long start = *parameters->timer;
 						int current_cached_bytes = aiserialBytesAvailable(*parameters->ai_serial);
 						while(*parameters->timer - start < 2) {
@@ -191,6 +194,12 @@ void *socketThread(void* parameters_v) {
 					}
 
 					aiserialWrite(*parameters->ai_serial, rx_buf, rx_msg.l);
+
+					{
+						const int avail = aiserialBytesAvailable(*parameters->ai_serial);
+						char db[avail];
+						aiserialRead(*parameters->ai_serial, db, avail);
+					}
 				}
 			} else if(socket_byte_count == 0) { //Socket closed.
 				close(parameters->client_socket);

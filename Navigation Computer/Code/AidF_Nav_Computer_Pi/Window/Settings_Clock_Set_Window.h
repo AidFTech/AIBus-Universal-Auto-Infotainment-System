@@ -25,6 +25,8 @@ public:
 	void refreshWindow();
 	void drawWindow();
 
+	void exitWindow();
+
 	bool handleAIBus(AIData* ai_d);
 private:
 	TextBox title_box, msg_box;
@@ -36,6 +38,8 @@ private:
 
 	int8_t hour = -1, minute = -1;
 	bool auto_set = false;
+
+	bool exited = false;
 
 	void setClockItems(const int8_t hour, const int8_t minute);
 	void incrementTime(const int steps, const bool up);
