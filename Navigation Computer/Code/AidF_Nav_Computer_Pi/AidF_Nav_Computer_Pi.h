@@ -44,6 +44,7 @@
 #include "Map/Map_Main_Window.h"
 
 #include "Socket/AIBus_Socket.h"
+#include "Socket/Video_Socket.h"
 
 #ifndef aidf_nav_computer_pi_h
 #define aidf_nav_computer_pi_h
@@ -110,6 +111,7 @@ private:
 	bool* canslator_connected, *radio_connected, *mirror_connected;
 
 	SDL_Renderer* renderer;
+	SDL_Texture* video_texture;
 	AidFColorProfile active_color_profile, day_profile, night_profile;
 
 	SerialAIBusHandler* aibus_handler;
@@ -124,9 +126,10 @@ private:
 	Main_Menu_Window* main_window;
 	NavWindow* misc_window;
 
-	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread;
+	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread, video_thread, video_socket_thread;
 
 	SocketHandlerParameters amirror_socket_parameters, abta_socket_parameters;
+	VideoSocketParameters video_socket_parameters;
 	FrameParameters frame_parameters;
 	ElapsedMillis elapsed_millis;
 

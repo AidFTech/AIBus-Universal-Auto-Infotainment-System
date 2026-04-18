@@ -61,8 +61,11 @@ void MirrorWindow::writeConnectDisconnectMessage(const bool connect) {
 	uint8_t connect_data[] = {0x48, 0x8E, 0x0};
 	AIData connect_msg(sizeof(connect_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
 
-	if(connect)
+	if(connect) {
 		connect_data[2] = 0x1;
+	} else {
+
+	}
 
 	connect_msg.refreshAIData(connect_data);
 	attribute_list->aibus_handler->writeAIData(&connect_msg, attribute_list->mirror_connected);

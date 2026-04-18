@@ -1,5 +1,4 @@
 #include "AidF_Nav_Computer_Pi.h"
-
 //Must be compiled with options -lSDL2 -lSDL2_ttf -lrt
 
 AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, const uint16_t lh) {
@@ -7,6 +6,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->lh = lh;
 
 	this->renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	this->video_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, lw, lh);
 	
 	this->night_profile.background = DEFAULT_BACKGROUND_NIGHT;
 	this->night_profile.background2 = DEFAULT_BACKGROUND_NIGHT;
@@ -61,6 +61,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->attribute_list->day_profile = &this->day_profile;
 	this->attribute_list->night_profile = &this->night_profile;
 	this->night = &this->attribute_list->night;
+	this->attribute_list->window = window;
 	this->attribute_list->timer = &elapsed_millis.time;
 
 	audio_window = new Audio_Window(attribute_list);
@@ -92,10 +93,16 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	
 	this->elapsed_millis.run = &this->running;
 
+	this->video_socket_parameters.socket_handler = new ClientVideoSocketHandler(VIDEO_SOCKET_PATH, window, this->lw, this->lh);
+	this->video_socket_parameters.running = &this->running;
+	this->video_socket_parameters.socket_path = VIDEO_SOCKET_PATH;
+
 	pthread_create(&amirror_socket_thread, NULL, socketThread, (void *)&amirror_socket_parameters);
 	pthread_create(&abta_socket_thread, NULL, socketThread, (void *)&abta_socket_parameters);
 	pthread_create(&frame_thread, NULL, frameThread, (void*)&frame_parameters);
 	pthread_create(&timer_thread, NULL, millisThread, (void*)&elapsed_millis);
+	//pthread_create(&video_socket_thread, NULL, videoSocketThread, (void*)&video_socket_parameters);
+	pthread_create(&video_thread, NULL, videoPlayThread, (void*)&video_socket_parameters);
 
 	#ifdef RPI_UART
 	uint8_t init_data[] = {0x4A, 0x1F};
@@ -118,6 +125,8 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	pthread_cancel(abta_socket_thread);
 	pthread_cancel(frame_thread);
 	pthread_cancel(timer_thread);
+	pthread_cancel(video_socket_thread);
+	pthread_cancel(video_thread);
 	#ifndef RPI_UART
 	std::cout<<"Threads exited!\n";
 	#endif
@@ -125,6 +134,10 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	if(this->amirror_socket_parameters.socket_ptr != nullptr)
 		delete this->amirror_socket_parameters.socket_ptr;
 
+	if(this->video_socket_parameters.socket_handler != nullptr)
+		delete this->video_socket_parameters.socket_handler;
+
+	SDL_DestroyTexture(video_texture);
 	SDL_DestroyRenderer(this->renderer);
 	delete this->br;
 	delete this->aibus_handler;
@@ -197,8 +210,11 @@ void AidF_Nav_Computer::loop() {
 	if(audio_window != NULL)
 		audio_window->loop();
 
+	//if(!attribute_list->phone_active || attribute_list->phone_type == 0) {
 	this->br->drawBackground(renderer, 0, 0, lw, lh);
 	this->window_handler->drawWindow();
+
+
 	SDL_RenderPresent(renderer);
 
 	NavWindow* active_window = this->window_handler->getActiveWindow();
@@ -894,7 +910,7 @@ int main(int argc, char* args[]) {
 	#ifdef RPI_UART
 	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_FULLSCREEN | SDL_WINDOW_OPENGL);
 	#else
-	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_SHOWN);
+	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
 	#endif
 	//TODO: Hide the cursor.
 	SDL_ShowCursor(SDL_DISABLE);

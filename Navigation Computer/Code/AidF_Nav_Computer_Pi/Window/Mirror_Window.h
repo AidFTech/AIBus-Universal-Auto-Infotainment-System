@@ -1,5 +1,7 @@
 #include <stdint.h>
 
+#include <SDL2/SDL_video.h>
+
 #include "../Window/Nav_Window.h"
 #include "../AidF_Color_Profile.h"
 

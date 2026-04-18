@@ -1066,6 +1066,15 @@ impl <'a> AMirror<'a> {
 				self.aa_handler.send_coordinates();
 			}
 		}
+
+		match self.mpv_video.try_lock() {
+			Ok(mut mpv_video) => {
+				mpv_video.process();
+			}
+			Err(_) => {
+				println!("AMirror Process Phone Type: MPV Locked.");
+			}
+		}
 	}
 
 	///Read an AIBus message.
@@ -1123,6 +1132,10 @@ impl <'a> AMirror<'a> {
 			self.write_aibus_message(addr_request);
 		}
 
+		if ai_msg.sender == AIBUS_DEVICE_IMID && !context.imid_connected && !get_init_message(&ai_msg) && !get_poweroff_message(&ai_msg) && self.powered_on {
+			context.imid_connected = true;
+		}
+
 		if get_init_message(&ai_msg) || get_poweroff_message(&ai_msg) {
 			if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN {
 				context.screen_connected = false;
@@ -1130,6 +1143,8 @@ impl <'a> AMirror<'a> {
 				context.bluetooth_connected = false;
 			} else if ai_msg.sender == AIBUS_DEVICE_RADIO {
 				context.radio_connected = false;
+			} else if ai_msg.sender == AIBUS_DEVICE_IMID {
+				context.imid_connected = false;
 			}
 		}
 

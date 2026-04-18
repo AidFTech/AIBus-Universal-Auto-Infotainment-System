@@ -94,6 +94,9 @@ void TextBox::renderText() {
 	string text = asciiToUTF8(this->text);
 
 	TTF_Font* AidF_Font = TTF_OpenFont("AidF Font.ttf", this->size);
+	if(AidF_Font == NULL)
+		return;
+	
 	SDL_Surface* text_surface = TTF_RenderUTF8_Solid(AidF_Font, text.c_str(), getSDLColor(*color));
 
 	this->texture = SDL_CreateTextureFromSurface(renderer, text_surface);

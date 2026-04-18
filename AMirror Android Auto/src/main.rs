@@ -9,7 +9,6 @@ mod text_split;
 mod locale;
 
 use std::io::Write;
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -137,9 +136,6 @@ fn main() {
 			}
 		}
 	}
-
-	//Ping MPV.
-	let _ = Command::new("mpv").arg("--no-config");
 
 	while mpv_found < 3 {
 		match MpvVideo::new(w, h, fullscreen) {
@@ -307,12 +303,12 @@ fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mut
 		let _ = stream.write(&socket_data);
 		println!("Wrote {:X?}", socket_data);
 
-		let (radio_connected, screen_connected, bluetooth_connected) = match context.try_lock() {
+		let (radio_connected, screen_connected, bluetooth_connected, imid_connected) = match context.try_lock() {
 			Ok(context) => {
-				(context.radio_connected, context.screen_connected, context.bluetooth_connected)
+				(context.radio_connected, context.screen_connected, context.bluetooth_connected, context.imid_connected)
 			}
 			Err(_) => {
-				(true, true, true)
+				(true, true, true, true)
 			}
 		};
 		
@@ -325,6 +321,8 @@ fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mut
 			ack = screen_connected;
 		} else if ai_msg.receiver == AIBUS_DEVICE_PHONE {
 			ack = bluetooth_connected;
+		} else if ai_msg.receiver == AIBUS_DEVICE_IMID {
+			ack = imid_connected;
 		}
 
 		if ack {

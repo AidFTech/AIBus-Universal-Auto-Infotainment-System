@@ -41,6 +41,7 @@ enum next_window_t : int16_t {
 
 struct AttributeList {
 	SDL_Renderer* renderer;
+	SDL_Window* window;
 
 	AidFColorProfile *color_profile, *day_profile, *night_profile;
 	Background *br;

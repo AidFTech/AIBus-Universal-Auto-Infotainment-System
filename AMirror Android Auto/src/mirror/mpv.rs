@@ -1,4 +1,6 @@
 use core::str;
+use std::fs::OpenOptions;
+use std::io::Read;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 use std::process::Command;
@@ -27,8 +29,10 @@ use crate::ipc;
 const OVERLAY_STR_COUNT: usize = 5;
 const EMPTY_STRING: String = String::new();
 
+const MPV_PATH: &str = "/tmp/amirror_mpv";
+
 pub struct MpvVideo {
-	process: Child,
+	//process: Child,
 	mpv_ipc: Option<UnixStream>,
 
 	w: u16,
@@ -104,21 +108,26 @@ impl MpvVideo {
 			}
 		}
 
+		//Start FIFO.
+		let _ = Command::new("mkfifo").arg(format!("{}", MPV_PATH)).spawn();
+
 		//Start MPV.
-		let mut mpv_cmd = Command::new("mpv");
+		/*let mut mpv_cmd = Command::new("mpv");
 		let process;
+		mpv_cmd.arg("--vf=format=fmt=rgb24");
+		mpv_cmd.arg("--of=rawvideo");
+		mpv_cmd.arg("--ovc=rawvideo");
+		mpv_cmd.arg("--no-cache");
+
 		mpv_cmd.arg(format!("--geometry={}x{}+0+0", width, height));
 		mpv_cmd.arg(pan_x);
 		mpv_cmd.arg(pan_y);
-		mpv_cmd.arg("--hwdec=rpi");
+		mpv_cmd.arg("--hwdec=no");
 		mpv_cmd.arg("--demuxer-rawvideo-fps=60");
 		mpv_cmd.arg("--untimed");
 
 		if fullscreen {
 			mpv_cmd.arg("--fs=yes");
-
-			mpv_cmd.arg("--alpha=yes");
-			mpv_cmd.arg("--background=#00000000");
 		} else {
 			mpv_cmd.arg("--osc=no");
 		}
@@ -130,12 +139,15 @@ impl MpvVideo {
 		mpv_cmd.arg("--video-unscaled=yes");
 		mpv_cmd.arg("--input-ipc-server=/tmp/mka_cmd");
 		mpv_cmd.arg("-");
-		match mpv_cmd.stdin(Stdio::piped()).spawn() {
+
+		mpv_cmd.arg(format!("--o={}", MPV_PATH));
+
+		match mpv_cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn() {
 			Err(e) => return Err(format!("Could not start video Mpv: {} ", e)),
 			Ok(match_process) => {
 				process = Some(match_process);
 			}
-		}
+		}*/
 
 		let sock_wait = Instant::now();
 		while Instant::now() - sock_wait < Duration::from_millis(500) {
@@ -160,8 +172,9 @@ impl MpvVideo {
 		};
 
 		return Ok(MpvVideo {
-			process: process.unwrap(),
+			//process: process.unwrap(),
 			mpv_ipc: sock,
+
 			w: width,
 			h: height,
 
@@ -177,10 +190,25 @@ impl MpvVideo {
 		 });
 	}
 
+	///Loop function.
+	pub fn process(&mut self) {
+		
+	}
+
 	///Send video bytes.
 	pub fn send_video(&mut self, data: &[u8]) {
-		let mut child_stdin = self.process.stdin.as_ref().unwrap();
-		let _ = child_stdin.write(&data);
+		/*let mut child_stdin = self.process.stdin.as_ref().unwrap();
+		let _ = child_stdin.write(&data);*/
+
+		match OpenOptions::new().write(true).open(MPV_PATH) {
+			Ok(mut stdin) => {
+				let _ = stdin.write_all(data);
+				let _ = stdin.flush();
+			}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
 	}
 
 	///Set the overlay text color.
@@ -315,14 +343,14 @@ impl MpvVideo {
 	
 	///Stop video playback.
 	pub fn stop(&mut self) {
-		match self.process.kill() {
+		/*match self.process.kill() {
 			Ok(_) => {
 
 			}
 			Err(e) => {
 				println!("Error: {}", e);
 			}
-		}
+		}*/
 	}
 	
 	///Minimize or maximize the video window.
@@ -335,8 +363,6 @@ impl MpvVideo {
 			} else {
 				&pan_str
 			} + "\n";
-
-			println!("{}", minimize_str);
 
 			let mut mpv_ipc = match &self.mpv_ipc {
 				Some(mpv_ipc) => mpv_ipc,
@@ -352,7 +378,7 @@ impl MpvVideo {
 				}
 			}
 		 } else {
-			let pid = self.process.id();
+			/*let pid = self.process.id();
 			let wid_cmd = Command::new("xdotool").arg("search").arg("--pid").arg(format!("{}", pid)).output();
 
 			let wid_vec = match wid_cmd {
@@ -390,7 +416,7 @@ impl MpvVideo {
 						return;
 					}
 				}
-			}
+			}*/
 		}
 	}
 	
@@ -666,6 +692,9 @@ impl RdAudio {
 		mpv_cmd.arg("-");
 		mpv_cmd.arg("--no-config");
 		mpv_cmd.arg("--profile=low-latency");
+		mpv_cmd.arg("--audio-samplerate=48000");
+		mpv_cmd.arg("--audio-format=s32");
+		mpv_cmd.arg("--audio-channels=2");
 		match mpv_cmd.stdin(Stdio::piped()).spawn() {
 			Err(e) => return Err(format!("Could not start audio Mpv: {} ", e)),
 			Ok(match_process) => {
@@ -673,7 +702,7 @@ impl RdAudio {
 			}
 		}
 
-		let mut this = RdAudio { process: process.unwrap(), data: Vec::new(), sample: 48000, bits: 16, channels: 2, send_header: true };
+		let mut this = RdAudio { process: process.unwrap(), data: Vec::new(), sample: 48000, bits: 32, channels: 2, send_header: true };
 		this.send_audio(&[]);
 
 		return Ok(this);
