@@ -23,9 +23,6 @@ ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, strin
 	mpv_set_option_string(mpv_handler, "cmd", "no");
 	#endif
 
-	string autofit_string = to_string(w) + "x" + to_string(h);
-	mpv_set_option_string(mpv_handler, "autofit", autofit_string.c_str());
-
 	mpv_set_option_string(mpv_handler, "profile", "low-latency");
 	mpv_set_option_string(mpv_handler, "demuxer-rawvideo-fps", "60");
 	mpv_set_option_string(mpv_handler, "fps", "60");

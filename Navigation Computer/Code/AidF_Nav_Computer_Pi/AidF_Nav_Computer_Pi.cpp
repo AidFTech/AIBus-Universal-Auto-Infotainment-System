@@ -97,6 +97,10 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->video_socket_parameters.running = &this->running;
 	this->video_socket_parameters.socket_path = VIDEO_SOCKET_PATH;
 
+	VideoCache* video_cache = this->video_socket_parameters.socket_handler->getVideoCache();
+	SDL_LockTexture(video_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
+	SDL_UnlockTexture(video_texture);
+
 	pthread_create(&amirror_socket_thread, NULL, socketThread, (void *)&amirror_socket_parameters);
 	pthread_create(&abta_socket_thread, NULL, socketThread, (void *)&abta_socket_parameters);
 	pthread_create(&frame_thread, NULL, frameThread, (void*)&frame_parameters);
@@ -223,7 +227,8 @@ void AidF_Nav_Computer::loop() {
 		this->br->drawBackground(renderer, 0, 0, lw, lh);
 		this->window_handler->drawWindow();
 	} else {
-		SDL_RenderCopy(renderer, video_texture, NULL, NULL);
+		SDL_Rect dest = {0, 0, lw, lh};
+		SDL_RenderCopy(renderer, video_texture, NULL, &dest);
 	}
 
 	SDL_RenderPresent(renderer);

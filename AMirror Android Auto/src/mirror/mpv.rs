@@ -61,6 +61,7 @@ impl MpvVideo {
 		mpv_cmd.arg(format!("--o={}", MPV_PATH));
 
 		mpv_cmd.arg(format!("--geometry={}x{}+0+0", width, height));
+		mpv_cmd.arg(format!("--video-aspect-override={}:{}", width, height));
 		mpv_cmd.arg("--hwdec=no");
 		mpv_cmd.arg("--demuxer-rawvideo-fps=60");
 		mpv_cmd.arg("--untimed");
