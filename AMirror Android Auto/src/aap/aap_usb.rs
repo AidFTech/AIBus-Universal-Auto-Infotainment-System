@@ -64,7 +64,7 @@ impl AndroidUSBConnection {
 					handle = d_handle;
 				}
 
-				Err(e) => {
+				Err(_e) => {
 					continue;
 				}
 			}

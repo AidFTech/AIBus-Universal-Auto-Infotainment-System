@@ -1682,7 +1682,7 @@ impl<'a> AapHandler <'a> {
 
 		match self.mpv_video.try_lock() {
 			Ok(mut mpv_video) => {
-				mpv_video.send_video(&mpv_data);
+				mpv_video.push_video(&mpv_data);
 			}
 			Err(_) => {
 				println!("MPV handler locked.");

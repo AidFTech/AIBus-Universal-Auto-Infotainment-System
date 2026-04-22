@@ -126,7 +126,7 @@ void NavAVRController::loop() {
 	boot = digitalRead(PI_BOOT) == HIGH;
 	run = digitalRead(PI_RUNNING) == HIGH;
 	#else
-	run = pi_on;//digitalRead(PI_RUNNING) == HIGH;
+	run = digitalRead(PI_RUNNING) == HIGH;
 	boot = run;
 	#endif
 
@@ -136,7 +136,7 @@ void NavAVRController::loop() {
 		#ifdef PI_CM
 		else if(shutdown && shutdown_timer >= 1000 && !boot && !run) { //Pi has shut down.
 		#else
-		else if(shutdown && shutdown_timer >= 5000 && !boot && !run) { //Pi has shut down.
+		else if(shutdown && shutdown_timer >= 5000) { //Pi has shut down.
 		#endif
 			use_shutdown_timer = false;
 			digitalWrite(PI_POWER, LOW);
@@ -170,7 +170,7 @@ void NavAVRController::loop() {
 		digitalWrite(PI_POWER, HIGH);
 	}
 
-	if(pi_ping_timer > PI_PING_TIMER && pi_on && key_position != 0) {
+	if(pi_ping_timer > PI_PING_TIMER && pi_on && !boot && !run && key_position != 0) {
 		pi_ping_timer = 0;
 
 		uint8_t ping_data[] = {0x1};

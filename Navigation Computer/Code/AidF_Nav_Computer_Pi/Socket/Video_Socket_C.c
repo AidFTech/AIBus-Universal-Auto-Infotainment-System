@@ -5,10 +5,9 @@ void* getProcAddressMPV(void *fn_ctx, const char *name) {
 }
 
 //Create the render context.
-int createRenderContext(mpv_handle* mpv_handler, mpv_render_context** mpv_gl, mpv_opengl_init_params* mpv_ogl_init_params, int* mpv_advanced_control) {
+int createRenderContext(mpv_handle* mpv_handler, mpv_render_context** mpv_gl, int* mpv_advanced_control) {
 	mpv_render_param params[] = {
-		{MPV_RENDER_PARAM_API_TYPE, MPV_RENDER_API_TYPE_OPENGL},
-		{MPV_RENDER_PARAM_OPENGL_INIT_PARAMS, mpv_ogl_init_params},
+		{MPV_RENDER_PARAM_API_TYPE, MPV_RENDER_API_TYPE_SW},
 		{MPV_RENDER_PARAM_ADVANCED_CONTROL, mpv_advanced_control},
 		{0},
 	};
@@ -32,4 +31,17 @@ void onMPVRenderUpdate(void* ctx) {
 void setCallbacks(mpv_handle* mpv_handler, mpv_render_context* mpv_gl) {
 	mpv_set_wakeup_callback(mpv_handler, onMPVEvents, NULL);
 	mpv_render_context_set_update_callback(mpv_gl, onMPVRenderUpdate, NULL);
+}
+
+//Render the video.
+int mpvPixelRender(mpv_render_context* renderer, const int w, const int h, size_t* pitch, void* pixels) {
+	mpv_render_param params[] = {
+		{MPV_RENDER_PARAM_SW_SIZE, (int[2]){w, h}},
+		{MPV_RENDER_PARAM_SW_FORMAT, "0bgr"},
+		{MPV_RENDER_PARAM_SW_STRIDE, pitch},
+		{MPV_RENDER_PARAM_SW_POINTER, pixels},
+		{0},
+	};
+
+	return mpv_render_context_render(renderer, params);
 }

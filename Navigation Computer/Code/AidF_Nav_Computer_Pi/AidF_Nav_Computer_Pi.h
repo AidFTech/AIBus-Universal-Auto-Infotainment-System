@@ -126,7 +126,7 @@ private:
 	Main_Menu_Window* main_window;
 	NavWindow* misc_window;
 
-	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread, video_thread, video_socket_thread;
+	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread, video_thread;
 
 	SocketHandlerParameters amirror_socket_parameters, abta_socket_parameters;
 	VideoSocketParameters video_socket_parameters;

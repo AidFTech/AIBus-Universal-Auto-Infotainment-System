@@ -445,7 +445,7 @@ impl<'a> MirrorHandler<'a> {
 
 			match self.mpv_video.try_lock() {
 				Ok(mut mpv_video) => {
-					mpv_video.send_video(&data);
+					mpv_video.push_video(&data);
 				}
 				Err(_) => {
 					println!("Carplay Handler: MPV Video Locked")

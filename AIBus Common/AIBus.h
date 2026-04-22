@@ -11,6 +11,7 @@
 #define ID_NAV_SCREEN 0x7
 
 #define ID_COMPUTER_PROXY 0x2
+#define ID_DISPLAY_DAEMON 0x3
 #define ID_CD 0x4
 #define ID_CDC 0x6
 #define ID_RADIO 0x10

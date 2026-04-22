@@ -1072,7 +1072,7 @@ impl <'a> AMirror<'a> {
 				mpv_video.process();
 			}
 			Err(_) => {
-				println!("AMirror Process Phone Type: MPV Locked.");
+				println!("AMirror: MPV Locked.");
 			}
 		}
 	}

@@ -8,6 +8,7 @@
 
 #include <unistd.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include <string>
 #include <iostream>
@@ -23,6 +24,7 @@
 
 #include "AIBus_Socket.h"
 #include "Video_Socket_C.h"
+#include "Video_Socket_Params.h"
 
 #ifndef video_socket_h
 #define video_socket_h
@@ -31,29 +33,39 @@
 
 using namespace std;
 
+struct VideoCache {
+	void* pixels;
+	size_t pitch;
+};
+
 class ClientVideoSocketHandler {
 public:
-	ClientVideoSocketHandler(const char* socket_path, SDL_Window* window, const int w, const int h);
+	ClientVideoSocketHandler(SDL_Renderer* renderer, string socket_path, const int w, const int h);
 	~ClientVideoSocketHandler();
 
-	void refreshSocket(const char* socket_path);
-	void clearSocket();
+	void loop();
 
-	int readVideoMessage();
-	void handleEvent(SDL_Event* event);
+	bool handleEvent(SDL_Event* event);
+	void render();
 
-	int getClient();
-	void refreshVideo();
+	VideoCache* getVideoCache();
+	bool getRefresh();
+
+	bool getVideoInit();
+	void clearVideoInit();
 private:
-	int ipc_fifo = -1;
+	VideoCache video_cache;
 	int w = 800, h = 480;
 
+	string video_socket_path = "";
+	bool video_socket_path_set = false;
+
 	mpv_handle* mpv_handler;
-	SDL_GLContext sdl_gl;
 	mpv_render_context* mpv_gl;
 
-	mpv_opengl_init_params mpv_ogl_init_params = {.get_proc_address = getProcAddressMPV};
-	int mpv_advanced_control = 1;
+	int mpv_advanced_control = 1, mpv_flip_y = 1;
+
+	bool refresh = false, video_init = false;
 };
 
 struct VideoSocketParameters {
@@ -62,7 +74,6 @@ struct VideoSocketParameters {
 	string socket_path;
 };
 
-void *videoSocketThread(void* parameters_v);
 void *videoPlayThread(void* parameters_v);
 
 #endif

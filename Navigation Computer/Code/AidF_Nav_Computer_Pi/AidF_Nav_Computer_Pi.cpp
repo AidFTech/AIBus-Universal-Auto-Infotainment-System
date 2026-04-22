@@ -6,7 +6,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->lh = lh;
 
 	this->renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-	this->video_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, lw, lh);
+	this->video_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, lw, lh);
 	
 	this->night_profile.background = DEFAULT_BACKGROUND_NIGHT;
 	this->night_profile.background2 = DEFAULT_BACKGROUND_NIGHT;
@@ -93,7 +93,7 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	
 	this->elapsed_millis.run = &this->running;
 
-	this->video_socket_parameters.socket_handler = new ClientVideoSocketHandler(VIDEO_SOCKET_PATH, window, this->lw, this->lh);
+	this->video_socket_parameters.socket_handler = new ClientVideoSocketHandler(renderer, VIDEO_SOCKET_PATH, this->lw, this->lh);
 	this->video_socket_parameters.running = &this->running;
 	this->video_socket_parameters.socket_path = VIDEO_SOCKET_PATH;
 
@@ -101,7 +101,6 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	pthread_create(&abta_socket_thread, NULL, socketThread, (void *)&abta_socket_parameters);
 	pthread_create(&frame_thread, NULL, frameThread, (void*)&frame_parameters);
 	pthread_create(&timer_thread, NULL, millisThread, (void*)&elapsed_millis);
-	//pthread_create(&video_socket_thread, NULL, videoSocketThread, (void*)&video_socket_parameters);
 	pthread_create(&video_thread, NULL, videoPlayThread, (void*)&video_socket_parameters);
 
 	#ifdef RPI_UART
@@ -125,7 +124,6 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	pthread_cancel(abta_socket_thread);
 	pthread_cancel(frame_thread);
 	pthread_cancel(timer_thread);
-	pthread_cancel(video_socket_thread);
 	pthread_cancel(video_thread);
 	#ifndef RPI_UART
 	std::cout<<"Threads exited!\n";
@@ -210,15 +208,28 @@ void AidF_Nav_Computer::loop() {
 	if(audio_window != NULL)
 		audio_window->loop();
 
-	//if(!attribute_list->phone_active || attribute_list->phone_type == 0) {
-	this->br->drawBackground(renderer, 0, 0, lw, lh);
-	this->window_handler->drawWindow();
+	ClientVideoSocketHandler* video_socket_handler = video_socket_parameters.socket_handler;
+		
+	if(video_socket_handler->getRefresh()) {
+		VideoCache *video_cache = video_socket_handler->getVideoCache();
+		
+		SDL_LockTexture(video_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
+		video_socket_handler->render();
 
+		SDL_UnlockTexture(video_texture);
+	}
+
+	if(!attribute_list->phone_active || attribute_list->phone_type == 0 || !video_socket_handler->getVideoInit()) {
+		this->br->drawBackground(renderer, 0, 0, lw, lh);
+		this->window_handler->drawWindow();
+	} else {
+		SDL_RenderCopy(renderer, video_texture, NULL, NULL);
+	}
 
 	SDL_RenderPresent(renderer);
 
 	NavWindow* active_window = this->window_handler->getActiveWindow();
-	const bool full_aibus_check = typeid(*active_window) != typeid(VehicleInfoWindow);
+	const bool full_aibus_check = typeid(*active_window) != typeid(VehicleInfoWindow) && typeid(*active_window) != typeid(MirrorWindow);
 
 	AIData ai_msg;
 	do {
@@ -412,6 +423,14 @@ void AidF_Nav_Computer::loop() {
 							} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x30) { //Phone type.
 								const uint8_t type = ai_msg.data[1];
 								attribute_list->phone_type = type;
+
+								if(type == 0) {
+									SDL_SetRenderTarget(renderer, video_texture);
+									SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+									SDL_RenderClear(renderer);
+									SDL_SetRenderTarget(renderer, NULL);
+									video_socket_handler->clearVideoInit();
+								}
 
 								//TODO: Only if the window is the mirror window.
 								window_handler->getActiveWindow()->refreshWindow();

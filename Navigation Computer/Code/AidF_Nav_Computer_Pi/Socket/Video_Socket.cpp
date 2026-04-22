@@ -1,21 +1,20 @@
 #include "Video_Socket.h"
 
-ClientVideoSocketHandler::ClientVideoSocketHandler(const char* socket_path, SDL_Window* window, const int w, const int h) {
+ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, string socket_path, const int w, const int h) {
 	this->w = w;
 	this->h = h;
 
+	this->video_socket_path = socket_path;
+
 	mpv_handler = mpv_create();
 	mpv_set_option_string(mpv_handler, "vo", "libmpv");
-	
-	string geometry_str = to_string(w) + "x" + to_string(h) + "+0+0";
-	mpv_set_option_string(mpv_handler, "geometry", geometry_str.c_str());
 
 	#ifdef RPI_MPV
 	mpv_set_option_string(mpv_handler, "hwdec", "rpi");
+	#else
+	mpv_set_option_string(mpv_handler, "hwdec", "no");
 	#endif
 
-	mpv_set_option_string(mpv_handler, "hwdec", "no");
-	mpv_set_option_string(mpv_handler, "demuxer-rawvideo-fps", "60");
 	mpv_set_option_string(mpv_handler, "untimed", "yes");
 
 	#ifdef RPI_MPV
@@ -24,16 +23,22 @@ ClientVideoSocketHandler::ClientVideoSocketHandler(const char* socket_path, SDL_
 	mpv_set_option_string(mpv_handler, "cmd", "no");
 	#endif
 
-	mpv_set_option_string(mpv_handler, "fps", "60");
+	string autofit_string = to_string(w) + "x" + to_string(h);
+	mpv_set_option_string(mpv_handler, "autofit", autofit_string.c_str());
+
 	mpv_set_option_string(mpv_handler, "profile", "low-latency");
+	mpv_set_option_string(mpv_handler, "demuxer-rawvideo-fps", "60");
+	mpv_set_option_string(mpv_handler, "fps", "60");
 	mpv_set_option_string(mpv_handler, "no-correct-pts", "yes");
-	mpv_set_option_string(mpv_handler, "input-ipc-server", "/tmp/mka_cmd");
 	mpv_set_option_string(mpv_handler, "keep-open", "yes");
 	mpv_set_option_string(mpv_handler, "idle", "yes");
 
+	mpv_set_option_string(mpv_handler, "input-ipc-server", "/tmp/mka_cmd");
+
 	mpv_initialize(mpv_handler);
-	sdl_gl = SDL_GL_CreateContext(window);
-	createRenderContext(mpv_handler, &mpv_gl, &mpv_ogl_init_params, &mpv_advanced_control);
+	mpv_request_log_messages(mpv_handler, "debug");
+
+	createRenderContext(mpv_handler, &mpv_gl, &mpv_advanced_control);
 
 	if(!mpv_events_set) {
 		mpv_events_set = true;
@@ -43,88 +48,81 @@ ClientVideoSocketHandler::ClientVideoSocketHandler(const char* socket_path, SDL_
 
 	setCallbacks(mpv_handler, mpv_gl);
 
-	const char* load_command[] = {"loadfile", VIDEO_SOCKET_PATH, NULL};
-	mpv_command_async(mpv_handler, 0, load_command);
+	system("chmod 666 /tmp/mka_cmd");
 }
 
 ClientVideoSocketHandler::~ClientVideoSocketHandler() {
-	if(this->ipc_fifo >= 0)
-		close(ipc_fifo);
-
 	mpv_render_context_free(mpv_gl);
 	mpv_destroy(mpv_handler);
 }
 
-//Refresh the socket connection.
-void ClientVideoSocketHandler::refreshSocket(const char* socket_path) {
-	if(this->ipc_fifo >= 0)
-		return;
-
-	ipc_fifo = open(socket_path, O_RDONLY);
-}
-
-//Read a video message.
-int ClientVideoSocketHandler::readVideoMessage() {
-	uint8_t data[0x8000];
-
-	const int message_size = read(ipc_fifo, data, sizeof(data));
-
-	if(message_size < 0)
-		return -1;
-	else if(message_size == 0)
-		return 0;
-
-	char s_data[message_size];
-	for(int i=0;i<message_size;i+=1)
-		s_data[i] = (char)data[i];
-
-	const char* video_command[] = {s_data, NULL};
-	cout<<"Command run "<<mpv_command_async(mpv_handler, 0, video_command)<<endl;
-
-	return message_size;
-}
-
-//Handle an SDL event.
-void ClientVideoSocketHandler::handleEvent(SDL_Event* event) {
-	cout<<"Event received: "<<event->type<<endl;
-}
-
-//Clear the socket address.
-void ClientVideoSocketHandler::clearSocket() {
-	close(ipc_fifo);
-	ipc_fifo = -1;
-}
-
-//Get the client socket.
-int ClientVideoSocketHandler::getClient() {
-	return this->ipc_fifo;
-}
-
-//Refresh the video socket.
-void ClientVideoSocketHandler::refreshVideo() {
-	const char* load_command[] = {"loadfile", VIDEO_SOCKET_PATH, "replace", NULL};
-	mpv_command_async(mpv_handler, 0, load_command);
-}
-
-//Socket thread function.
-void *videoSocketThread(void* parameters_v) {
-	VideoSocketParameters* parameters = (VideoSocketParameters*)parameters_v;
-	ClientVideoSocketHandler* socket_ptr = parameters->socket_handler;
-
-	while(*parameters->running) {
-		if(socket_ptr->getClient() < 0) {
-			socket_ptr->refreshSocket(parameters->socket_path.c_str());
-			continue;
+//Object loop function.
+void ClientVideoSocketHandler::loop() {
+	if(!video_socket_path_set) {
+		if(access(video_socket_path.c_str(), F_OK) == 0) {
+			const char* load_command[] = {"loadfile", video_socket_path.c_str(), NULL};
+			mpv_command_async(mpv_handler, 0, load_command);
+			video_socket_path_set = true;
+		} else {
+			return;
 		}
-
-		const int socket_byte_count = socket_ptr->readVideoMessage();
-
-		if(socket_byte_count == 0)
-			socket_ptr->clearSocket();
+	} else {
+		if(access(video_socket_path.c_str(), F_OK) != 0) {
+			video_socket_path_set = false;
+			return;
+		}
 	}
 
-	void* result;
-	return result;
+	SDL_Event event;
+	if(SDL_WaitEvent(&event) > 0)
+		this->handleEvent(&event);
+}
+
+//Handle an SDL event. Return whether to rerender.
+bool ClientVideoSocketHandler::handleEvent(SDL_Event* event) {
+	if(event->type == wakeup_on_mpv_render_update) {
+		const uint64_t flags = mpv_render_context_update(mpv_gl);
+		if((flags&MPV_RENDER_UPDATE_FRAME) == MPV_RENDER_UPDATE_FRAME) {
+			refresh = true;
+			video_init = true;
+			return true;
+		}
+	} else if(event->type == wakeup_on_mpv_events) {
+		while(true) {
+			mpv_event* mp_event = mpv_wait_event(mpv_handler, 0);
+			if(mp_event->event_id == MPV_EVENT_NONE)
+				break;
+		}
+	}
+
+	return false;
+}
+
+//Render a frame.
+void ClientVideoSocketHandler::render() {
+	size_t* pitch_s = (size_t*)&video_cache.pitch;
+	refresh = false;
+	mpvPixelRender(mpv_gl, w, h, pitch_s, video_cache.pixels);
+}
+
+//Get the video texture.
+VideoCache* ClientVideoSocketHandler::getVideoCache() {
+	return &this->video_cache;
+}
+
+//Return whether the frame was refreshed.
+bool ClientVideoSocketHandler::getRefresh() {
+	return refresh;
+}
+
+//Return whether a video frame has been sent.
+bool ClientVideoSocketHandler::getVideoInit() {
+	return this->video_init;
+}
+
+//Clear video initialization.
+void ClientVideoSocketHandler::clearVideoInit() {
+	this->video_init = false;
 }
 
 //Video thread function.
@@ -132,15 +130,8 @@ void *videoPlayThread(void* parameters_v) {
 	VideoSocketParameters* parameters = (VideoSocketParameters*)parameters_v;
 	ClientVideoSocketHandler* socket_ptr = parameters->socket_handler;
 
-	while(*parameters->running) {
-		//if(socket_ptr->getClient() < 0)
-		//	continue;
-		socket_ptr->refreshVideo();
-
-		SDL_Event event;
-		if(SDL_WaitEventTimeout(&event, 100))
-			socket_ptr->handleEvent(&event);
-	}
+	while(*parameters->running)
+		socket_ptr->loop();
 
 	void* result;
 	return result;

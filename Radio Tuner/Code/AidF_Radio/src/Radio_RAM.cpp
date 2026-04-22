@@ -245,6 +245,12 @@ void SRAMHandler::getFrequencies(BackgroundTuneHandler* tuner) {
 		}
 		head += 1;
 
+		station_name.trim();
+		if(station_name.startsWith(":")) {
+			station_name = station_name.substring(1);
+			station_name.trim();
+		}
+
 		station_names[i] = station_name;
 	}
 

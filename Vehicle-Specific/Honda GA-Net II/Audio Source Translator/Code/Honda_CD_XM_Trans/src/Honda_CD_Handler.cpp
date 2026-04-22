@@ -1158,7 +1158,7 @@ void HondaCDHandler::sendCDTextMessage(const uint8_t field, const bool refresh) 
 
 	if((text_mode == TEXT_MODE_WITH_TEXT && field == TEXT_SONG) ||
 		(text_mode == TEXT_MODE_MP3 && field == 2)) {
-		this->sendMirrorMessage(meta_text, 2, false);
+		this->sendMirrorMessage(meta_text, 2, true);
 
 		String nav_header = "CD" + String(int(disc));
 		if(this->track > 0)
