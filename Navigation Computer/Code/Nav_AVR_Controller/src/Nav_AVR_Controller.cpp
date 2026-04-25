@@ -110,9 +110,11 @@ void NavAVRController::loop() {
 						continue;
 
 					if(ai_msg.l >= 3 && ai_msg.data[0] == 0x2 && ai_msg.data[1] == 0x0 && ai_msg.data[2] == 0x0) {
+						digitalWrite(PI_POWER, LOW);
 						#ifdef PI_CM
 						digitalWrite(PI_OFF_HARDWARE, LOW);
 						#endif
+						digitalWrite(POWER_ON, LOW);
 						powerOff();
 					}
 				}

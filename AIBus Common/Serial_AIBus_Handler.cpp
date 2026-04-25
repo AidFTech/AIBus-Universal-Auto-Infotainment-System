@@ -1,5 +1,4 @@
 #include "Serial_AIBus_Handler.h"
-#include "AIBus/AIBus_Serial.h"
 
 #ifdef RPI_UART
 #ifdef SOCKET_SERVER
@@ -13,7 +12,7 @@ SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned 
 	
 	static const char* const chip_path = "/dev/gpiochip0";
 
-	chip = gpiod_chip_open(chip_path);
+	//chip = gpiod_chip_open(chip_path);
 
 	const char* c_port = port.c_str();
 	
@@ -24,7 +23,7 @@ SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned 
 	} else 
 		this->ai_port = test_port;
 
-	setPinMode(chip, AI_RX, PIN_MODE_INPUT_PULLUP);
+	//setPinMode(chip, AI_RX, PIN_MODE_INPUT_PULLUP);
 
 	#ifdef SOCKET_SERVER
 	this->socket_list = new int*[socket_l];
@@ -810,7 +809,7 @@ void printBytes(AIData* ai_d) {
 
 #ifdef RPI_UART
 //Set a GPIO pin mode.
-void setPinMode(gpiod_chip *chip, const int pin, const pin_mode_t mode) {
+/*void setPinMode(gpiod_chip *chip, const int pin, const pin_mode_t mode) {
 	gpiod_line* line = gpiod_chip_get_line(chip, pin);
 
 	switch(mode) {
@@ -837,7 +836,7 @@ bool readPin(gpiod_chip* chip, const int pin) {
 
 	gpiod_line_release(line);
 	return val;
-}
+}*/
 #endif
 
 void* flushCacheThread(void* v_aibus_handler) {

@@ -1,5 +1,5 @@
 #if __has_include(<gpiod.h>)
-#include <gpiod.h>
+//#include <gpiod.h>
 #define RPI_UART
 #else
 #include <iostream>
@@ -102,7 +102,7 @@ private:
 	#ifdef RPI_UART
 	const bool port_connected = true;
 
-	gpiod_chip *chip;
+	//gpiod_chip *chip;
 	#else
 	bool port_connected = false;
 	#endif
@@ -141,8 +141,8 @@ void* flushCacheThread(void* v_aibus_handler);
 void* readMultiThread(void* multi_thread_params);
 
 #ifdef RPI_UART
-void setPinMode(gpiod_chip* chip, const int pin, const pin_mode_t mode);
-bool readPin(gpiod_chip* chip, const int pin);
+//void setPinMode(gpiod_chip* chip, const int pin, const pin_mode_t mode);
+//bool readPin(gpiod_chip* chip, const int pin);
 #endif
 
 struct MultiMessageThreadParameters {

@@ -20,7 +20,7 @@
 #include "Saved_Settings.h"
 
 #ifdef RPI_UART
-#include <gpiod.h>
+//#include <gpiod.h>
 #endif
 
 #include "Background/Nav_Background.h"

@@ -467,6 +467,20 @@ void AidF_Nav_Computer::loop() {
 				}
 			}
 		}
+
+		if(video_socket_handler->getRefresh()) {
+			VideoCache *video_cache = video_socket_handler->getVideoCache();
+			
+			SDL_LockTexture(video_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
+			video_socket_handler->render();
+
+			SDL_UnlockTexture(video_texture);
+
+			if(attribute_list->phone_active && attribute_list->phone_type != 0 && video_socket_handler->getVideoInit()) {
+				SDL_Rect dest = {0, 0, lw, lh};
+				SDL_RenderCopy(renderer, video_texture, NULL, &dest);
+			}
+		}
 	} while(running && aibus_handler->getConnected() && (elapsed_millis.time - aibus_read_time) < AIBUS_WAIT);
 }
 
