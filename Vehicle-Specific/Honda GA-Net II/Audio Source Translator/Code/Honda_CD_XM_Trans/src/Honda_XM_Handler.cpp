@@ -141,6 +141,7 @@ void HondaXMHandler::loop() {
 	while(ie_cache_vec.size() > 0) {
 		interpretSiriusMessage(&ie_cache_vec[0]);
 		ie_cache_vec.remove(0);
+		ie_driver->cacheAIBus();
 	}
 }
 
@@ -362,6 +363,11 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		return;
 
 	const uint8_t sender = the_message->sender;
+
+	if(sender == ID_RADIO && the_message->l >= 3 && (the_message->data[0] == 0x40 || the_message->data[0] == 0x70)) {
+		parameter_list->radio_ping_timer = 0;
+		text_ping_timer = 0;
+	}
 	
 	if(the_message->l >= 3 && the_message->data[0] == 0x4 && the_message->data[1] == 0xE6 && the_message->data[2] == 0x10) { //Name request.
 		sendSourceNameMessage(the_message->sender);

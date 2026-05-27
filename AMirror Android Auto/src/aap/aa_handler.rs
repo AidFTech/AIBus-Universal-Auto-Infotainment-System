@@ -13,6 +13,7 @@ use protobuf::Message;
 use openssl_sys::*;
 use protobuf::MessageField;
 
+use crate::aap;
 use crate::mirror::mpv::MpvVideo;
 use crate::aibus::*;
 use crate::mirror::mpv::RdAudio;
@@ -614,6 +615,29 @@ impl<'a> AapHandler <'a> {
 			self.handle_ssl_handshake(msg_data.to_vec());
 		} else if msg_type == ControlMessageType::MESSAGE_SERVICE_DISCOVERY_REQUEST as u16 { //Service request.
 			self.handle_service_discovery_request(chan);
+		} else if msg_type == ControlMessageType::MESSAGE_VOICE_SESSION_NOTIFICATION as u16 { //Voice session start/stop.
+			let mut notification = VoiceSessionNotification::new();
+			match notification.merge_from_bytes(msg_data) {
+				Ok(_) => {
+					let voice_on = notification.status() == VoiceSessionStatus::VOICE_SESSION_START;
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							if !context.audio_selected {
+								context.phone_mute = voice_on;
+							}
+							if voice_on {
+								context.notification = false;
+							}
+						}
+						Err(_) => {
+							println!("Voice session: Context Locked");
+						}
+					}
+				}
+				Err(e) => {
+					println!("Error: {}", e);
+				}
+			}
 		} else if msg_type == ControlMessageType::MESSAGE_AUDIO_FOCUS_REQUEST as u16 { //Audio focus request.
 			let mut request = AudioFocusRequestNotification::new();
 			let request_data = msg_data;
@@ -800,6 +824,19 @@ impl<'a> AapHandler <'a> {
 						println!("Error: {}", e);
 					}
 				}
+
+				if chan == ServiceChannels::Audio1Channel as usize {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							if !context.phone_mute {
+								context.notification = true;
+							}
+						}
+						Err(_) => {
+							println!("Audio request: Context locked.")
+						}
+					}
+				}
 			} else if msg_type == MediaMessageId::MEDIA_MESSAGE_STOP as u16 {
 				self.channel_session[chan] = 0;
 				println!("Stop requested on channel {}", chan);
@@ -812,6 +849,17 @@ impl<'a> AapHandler <'a> {
 						}
 						Err(_) => {
 							println!("Shutdown message: Context locked.");
+						}
+					}
+				}
+
+				if chan == ServiceChannels::Audio1Channel as usize {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							context.notification = false;
+						}
+						Err(_) => {
+							println!("Audio request: Context locked.")
 						}
 					}
 				}
@@ -1291,7 +1339,6 @@ impl<'a> AapHandler <'a> {
 		};
 		
 		let mut response = ServiceDiscoveryResponse::new();
-		//TODO: Configure the response based on the context settings.
 
 		//Input:
 		let mut input_service = InputSourceService::new();

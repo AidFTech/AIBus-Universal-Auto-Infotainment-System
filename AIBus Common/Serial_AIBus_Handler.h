@@ -1,5 +1,5 @@
 #if __has_include(<gpiod.h>)
-//#include <gpiod.h>
+#include <gpiod.h>
 #define RPI_UART
 #else
 #include <iostream>
@@ -26,6 +26,8 @@
 #define aibus_handler_h
 
 #define AI_RX 4
+#define NAV_MUTE_GATE 12
+
 #define AI_WAIT 1
 
 #define AIBUS_WAIT 5
@@ -45,18 +47,10 @@ enum pin_mode_t : uint8_t {
 
 class SerialAIBusHandler {
 public:
-	#ifdef RPI_UART
 	#ifdef SOCKET_SERVER
 	SerialAIBusHandler(std::string port, int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer);
 	#else
 	SerialAIBusHandler(std::string port, const uint8_t id, unsigned long* timer);
-	#endif
-	#else
-	#ifdef SOCKET_SERVER
-	SerialAIBusHandler(int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer);
-	#else
-	SerialAIBusHandler(const uint8_t id, unsigned long* timer);
-	#endif
 	#endif
 	~SerialAIBusHandler();
 
@@ -82,6 +76,10 @@ public:
 	bool flushCached();
 	void readMultiple(const uint8_t sender, const uint8_t receiver, vector<uint8_t> data, const int message_count);
 
+	#ifdef RPI_UART
+	gpiod_chip* getChip();
+	#endif
+
 private:
 	#ifndef RPI_UART
 	int connectAIPort(string port);
@@ -102,7 +100,8 @@ private:
 	#ifdef RPI_UART
 	const bool port_connected = true;
 
-	//gpiod_chip *chip;
+	gpiod_chip *chip;
+	gpiod_line *line_ai_rx;
 	#else
 	bool port_connected = false;
 	#endif
@@ -141,8 +140,10 @@ void* flushCacheThread(void* v_aibus_handler);
 void* readMultiThread(void* multi_thread_params);
 
 #ifdef RPI_UART
-//void setPinMode(gpiod_chip* chip, const int pin, const pin_mode_t mode);
-//bool readPin(gpiod_chip* chip, const int pin);
+gpiod_line* getGPIOLine(gpiod_chip* chip, const int pin);
+void setPinMode(gpiod_line* line, const pin_mode_t mode);
+bool readPin(gpiod_line* line);
+int writePin(gpiod_line* line, const bool state);
 #endif
 
 struct MultiMessageThreadParameters {

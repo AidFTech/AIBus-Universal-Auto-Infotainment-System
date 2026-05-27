@@ -1,7 +1,7 @@
 #include "AidF_Nav_Computer_Pi.h"
 //Must be compiled with options -lSDL2 -lSDL2_ttf -lrt
 
-AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, const uint16_t lh) {
+AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, string port, const uint16_t lw, const uint16_t lh) {
 	this->lw = lw;
 	this->lh = lh;
 
@@ -25,9 +25,15 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	this->getBackground();
 
 	int* socket_list[] = {&this->amirror_socket_parameters.client_socket, &this->abta_socket_parameters.client_socket};
+	
+	this->aibus_handler = new SerialAIBusHandler(port, socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
 
 	#ifdef RPI_UART
-	this->aibus_handler = new SerialAIBusHandler("/dev/ttyAMA0", socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
+	gpiod_chip* chip = aibus_handler->getChip();
+	this->line_nav_mute = getGPIOLine(chip, GPIO_NAV_MUTE);
+
+	setPinMode(line_nav_mute, PIN_MODE_OUTPUT);
+	writePin(line_nav_mute, false);
 
 	//gpioSetMode(GPIO_I2S_MCLK, PI_OUTPUT);
 	//gpioWrite(GPIO_I2S_MCLK, PI_LOW);
@@ -35,8 +41,6 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, cons
 	//gpioWrite(GPIO_DAC_MUTE, PI_HIGH);
 	//gpioSetMode(GPIO_USB_PWR, PI_OUTPUT);
 	//gpioWrite(GPIO_USB_PWR, PI_HIGH);
-	#else
-	this->aibus_handler = new SerialAIBusHandler(socket_list, sizeof(socket_list)/sizeof(int*), ID_NAV_COMPUTER, &elapsed_millis.time);
 	#endif
 
 	this->window_handler = new Window_Handler(this->renderer, this->br, this->lw, this->lh, &this->active_color_profile, this->aibus_handler);
@@ -139,6 +143,10 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	if(this->video_socket_parameters.socket_handler != nullptr)
 		delete this->video_socket_parameters.socket_handler;
 
+	#ifdef RPI_UART
+	gpiod_line_release(line_nav_mute);
+	#endif
+
 	SDL_DestroyTexture(video_texture);
 	SDL_DestroyRenderer(this->renderer);
 	delete this->br;
@@ -170,6 +178,8 @@ void AidF_Nav_Computer::loop() {
 				break;
 		}
 	}
+
+	const bool last_nav_prompt = attribute_list->nav_prompt_active;
 	
 	this->window_handler->checkNextWindow(misc_window, audio_window, phone_window, main_window);
 
@@ -214,14 +224,15 @@ void AidF_Nav_Computer::loop() {
 
 	ClientVideoSocketHandler* video_socket_handler = video_socket_parameters.socket_handler;
 		
-	if(video_socket_handler->getRefresh()) {
+	const unsigned long video_start = elapsed_millis.time;
+	do {
 		VideoCache *video_cache = video_socket_handler->getVideoCache();
 		
 		SDL_LockTexture(video_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
 		video_socket_handler->render();
 
 		SDL_UnlockTexture(video_texture);
-	}
+	} while(video_socket_handler->getRefresh() && elapsed_millis.time - video_start < 17);
 
 	if(!attribute_list->phone_active || attribute_list->phone_type == 0 || !video_socket_handler->getVideoInit()) {
 		this->br->drawBackground(renderer, 0, 0, lw, lh);
@@ -234,7 +245,7 @@ void AidF_Nav_Computer::loop() {
 	SDL_RenderPresent(renderer);
 
 	NavWindow* active_window = this->window_handler->getActiveWindow();
-	const bool full_aibus_check = typeid(*active_window) != typeid(VehicleInfoWindow) && typeid(*active_window) != typeid(MirrorWindow);
+	const bool full_aibus_check = typeid(*active_window) != typeid(VehicleInfoWindow);
 
 	AIData ai_msg;
 	do {
@@ -246,8 +257,11 @@ void AidF_Nav_Computer::loop() {
 				if(!*canslator_connected && ai_msg.sender == ID_CANSLATOR && !getPowerOffMessage(&ai_msg))
 					*canslator_connected = true;
 
-				if(!*radio_connected && ai_msg.sender == ID_RADIO && !getInitMessage(&ai_msg) && !getPowerOffMessage(&ai_msg))
+				if(!*radio_connected && ai_msg.sender == ID_RADIO && !getInitMessage(&ai_msg) && !getPowerOffMessage(&ai_msg)) {
 					*radio_connected = true;
+
+					setMonitorOn(attribute_list->monitor_on);
+				}
 
 				if(!attribute_list->gps_antenna_connected && ai_msg.sender == ID_GPS_ANTENNA && !getInitMessage(&ai_msg) && !getPowerOffMessage(&ai_msg))
 					attribute_list->gps_antenna_connected = true;
@@ -318,6 +332,13 @@ void AidF_Nav_Computer::loop() {
 
 				if(ai_msg.sender != ID_NAV_COMPUTER && (ai_msg.receiver == ID_NAV_COMPUTER || ai_msg.receiver == 0xFF) && ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
 					bool answered = false;
+
+					if(ai_msg.l >= 2 && ai_msg[0] == 0x71) //Turn the monitor on or off.
+						setMonitorOn(ai_msg[1] != 0);
+
+					//Reactivate hte monitor if a button is pressed.
+					if(!attribute_list->monitor_on && ai_msg.sender == ID_NAV_SCREEN && ai_msg.l >= 3 && (ai_msg[0] == 0x30 || ai_msg[0] == 0x32))
+						setMonitorOn(true);
 
 					NavWindow* active_window = this->window_handler->getActiveWindow();
 					if(ai_msg.receiver == 0xFF && ai_msg.data[0] == 0xA1)
@@ -425,6 +446,9 @@ void AidF_Nav_Computer::loop() {
 									else
 										attribute_list->next_window = NEXT_WINDOW_MAIN;
 								}
+
+								if(!attribute_list->monitor_on)
+									setMonitorOn(true);
 							} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x30) { //Phone type.
 								const uint8_t type = ai_msg.data[1];
 								attribute_list->phone_type = type;
@@ -451,6 +475,8 @@ void AidF_Nav_Computer::loop() {
 								window_handler->getActiveWindow()->refreshWindow();
 							} else if(ai_msg.l >= 2 && ai_msg.data[0] == 0x60 && ai_msg.data[1] == 0x20) { //Color request.
 								this->setMirrorColors();
+							} else if(ai_msg.l >= 3 && ai_msg[0] == 0x7F && ai_msg[1] == 0x6) { //Mute/unmute.
+								attribute_list->nav_prompt_active = ai_msg[2] != 0;
 							}
 						}
 					}
@@ -468,7 +494,7 @@ void AidF_Nav_Computer::loop() {
 			}
 		}
 
-		if(video_socket_handler->getRefresh()) {
+	 	if(video_socket_handler->getRefresh()) {
 			VideoCache *video_cache = video_socket_handler->getVideoCache();
 			
 			SDL_LockTexture(video_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
@@ -479,11 +505,21 @@ void AidF_Nav_Computer::loop() {
 			if(attribute_list->phone_active && attribute_list->phone_type != 0 && video_socket_handler->getVideoInit()) {
 				SDL_Rect dest = {0, 0, lw, lh};
 				SDL_RenderCopy(renderer, video_texture, NULL, &dest);
+				SDL_RenderPresent(renderer);
 			}
 		}
 	} while(running && aibus_handler->getConnected() && (elapsed_millis.time - aibus_read_time) < AIBUS_WAIT);
+
+	if(last_nav_prompt != attribute_list->nav_prompt_active) {
+		#ifdef RPI_UART
+		writePin(line_nav_mute, attribute_list->nav_prompt_active);
+		#else
+		cout<<"Nav mute "<<(attribute_list->nav_prompt_active ? "active" : "incative")<<endl;
+		#endif
+	}
 }
 
+//Handle a broadcast AIBus message.
 bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 	if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 3 && ai_d->data[1] == 0x2) { //Key position message.
 		this->key_position = ai_d->data[2]&0xF;
@@ -928,6 +964,26 @@ void AidF_Nav_Computer::getBackground() {
 		this->br = new BR_Gradient(this->lw, this->lh, active_color_profile.background, active_color_profile.background2, active_color_profile.vertical, active_color_profile.square);
 }
 
+//Set the monitor on or off.
+void AidF_Nav_Computer::setMonitorOn(const bool on) {
+	uint8_t screen_off_data[] = {0x10, (uint8_t)(on ? 0x1 : 0x0)};
+	AIData screen_off_msg(sizeof(screen_off_data), ID_NAV_COMPUTER, ID_NAV_SCREEN, screen_off_data);
+	aibus_handler->writeAIData(&screen_off_msg);
+
+	screen_off_data[0] = 0x71;
+	AIData radio_screen_off(sizeof(screen_off_data), ID_NAV_COMPUTER, ID_RADIO, screen_off_data);
+	aibus_handler->writeAIData(&radio_screen_off, attribute_list->radio_connected);
+
+	const bool last_on = attribute_list->monitor_on;
+	attribute_list->monitor_on = on;
+
+	if(on && !last_on) {
+		NavWindow* active_window = this->window_handler->getActiveWindow();
+		if(typeid(*active_window) != typeid(main_window))
+			attribute_list->next_window = NEXT_WINDOW_MAIN;
+	}
+}
+
 //Thread setup.
 void setup(AidF_Nav_Computer* nav_computer) {
 }
@@ -950,7 +1006,6 @@ int main(int argc, char* args[]) {
 	#else
 	SDL_Window* window = SDL_CreateWindow("AidF", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_w, screen_h, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
 	#endif
-	//TODO: Hide the cursor.
 	SDL_ShowCursor(SDL_DISABLE);
 
 	if(SDL_GetCurrentVideoDriver() == NULL) {
@@ -967,7 +1022,17 @@ int main(int argc, char* args[]) {
 		system(name_cmd.c_str());
 	}
 
-	AidF_Nav_Computer nav_computer(window, screen_w, screen_h);
+	string port = "";
+	for(int i=1;i<argc;i+=1) {
+		const string arg = args[i];
+
+		if(arg.find("/dev") != string::npos) { //Serial port.
+			port = arg;
+			break;
+		}
+	}
+
+	AidF_Nav_Computer nav_computer(window, port, screen_w, screen_h);
 	setup(&nav_computer);
 
 	#ifdef RPI_UART

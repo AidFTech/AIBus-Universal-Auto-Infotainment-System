@@ -20,6 +20,7 @@ void Main_Menu_Window::refreshWindow() {
 	this->main_menu.refreshItems();
 }
 
+//Redraw the menu.
 void Main_Menu_Window::setMainMenu() {
 	MenuList main_menu_list = getMenu(MENU_INDEX_MAIN, attribute_list->locale);
 
@@ -123,11 +124,15 @@ void Main_Menu_Window::handleEnterButton() {
 		case MAIN_MENU_ITEM_MONITOR_OFF:
 			this->main_menu.setSelected(1);
 			{
-				AIData screen_off_msg(2, ID_NAV_COMPUTER, ID_NAV_SCREEN);
-				//TODO: Cut all controls to the screen.
-				screen_off_msg.data[0] = 0x10;
-				screen_off_msg.data[1] = 0x0;
-				this->attribute_list->aibus_handler->writeAIData(&screen_off_msg);
+				uint8_t screen_off_data[] = {0x10, 0x0};
+				AIData screen_off_msg(sizeof(screen_off_data), ID_NAV_COMPUTER, ID_NAV_SCREEN, screen_off_data);
+				attribute_list->aibus_handler->writeAIData(&screen_off_msg);
+
+				screen_off_data[0] = 0x71;
+				AIData radio_screen_off(sizeof(screen_off_data), ID_NAV_COMPUTER, ID_RADIO, screen_off_data);
+				attribute_list->aibus_handler->writeAIData(&radio_screen_off, attribute_list->radio_connected);
+
+				attribute_list->monitor_on = false;
 			}
 			break;
 		case MAIN_MENU_ITEM_MIRROR:

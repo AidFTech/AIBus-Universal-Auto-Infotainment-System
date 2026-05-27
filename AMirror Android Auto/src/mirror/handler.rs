@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::{Context, AIBusMessage};
 use crate::mirror::dongle_usb::DongleUSBConnection;
@@ -41,6 +41,8 @@ pub struct MirrorHandler<'a> {
 	config_data: Vec<u8>,
 	android_icon_data: Vec<u8>,
 	carplay_icon_data: Vec<u8>,
+
+	last_notification: Instant,
 }
 
 impl<'a> MirrorHandler<'a> {
@@ -118,6 +120,8 @@ impl<'a> MirrorHandler<'a> {
 			config_data,
 			android_icon_data,
 			carplay_icon_data,
+
+			last_notification: Instant::now(),
 		};
 	}
 
@@ -175,6 +179,18 @@ impl<'a> MirrorHandler<'a> {
 			None => ()
 		}
 		self.heartbeat();
+
+		match self.context.try_lock() {
+			Ok(mut context) => {
+				if context.notification && Instant::now() - self.last_notification > Duration::from_millis(500) {
+					context.notification = false;
+				}
+			}
+			Err(_) => {
+				println!("AA Handler process: Context locked.");
+				return;
+			}
+		};
 	}
 
 	fn heartbeat(&mut self) {
@@ -510,7 +526,15 @@ impl<'a> MirrorHandler<'a> {
 					}
 					rd_audio.send_audio(&data);
 				} else if audio_type == 2 {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							context.notification = true;
+						}
+						Err(_) => {
+						}
+					}
 					nav_audio.send_audio(&data);
+					self.last_notification = Instant::now();
 				}
 			}
 		} else if message.message_type == 8 { //Phone specific command.
@@ -530,6 +554,28 @@ impl<'a> MirrorHandler<'a> {
 					match self.context.try_lock() {
 						Ok(mut context) => {
 							context.phone_active = true;
+						}
+						Err(_) => {
+						}
+					}
+				} else if command == COMMAND_SIRI_START {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							if !context.audio_selected {
+								context.notification = false;
+								context.phone_mute = true;
+							}
+						}
+						Err(_) => {
+						}
+					}
+				} else if command == COMMAND_SIRI_STOP {
+					match self.context.try_lock() {
+						Ok(mut context) => {
+							if !context.audio_selected {
+								context.notification = false;
+								context.phone_mute = false;
+							}
 						}
 						Err(_) => {
 						}

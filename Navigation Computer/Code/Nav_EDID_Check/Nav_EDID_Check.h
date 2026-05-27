@@ -22,7 +22,7 @@ struct ElapsedMillis {
 	bool* run;
 };
 
-int main();
+int main(int argc, char* args[]);
 
 void *millisThread(void* millis_v);
 

@@ -22,6 +22,8 @@ IEBusHandler::IEBusHandler(const int8_t rx_pin, const int8_t tx_pin) {
 	rx_bitmask = digitalPinToBitMask(this->rx_pin);
 	const uint8_t rx_port = digitalPinToPort(this->rx_pin);
 	this->rx_portregister = portInputRegister(rx_port);
+
+	rx_cache.setStorage(rx_cache_array, 0);
 }
 
 void IEBusHandler::sendBit(const bool data) {
@@ -257,6 +259,32 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 	}
 
 	interrupts();
+}
+
+//Cache a GA-NET message.
+int IEBusHandler::cacheMessage(const bool ack_response, const uint16_t id) {
+	IE_Message msg;
+	const int res = readMessage(&msg, ack_response, id);
+
+	if(res == 0) {
+		IE_Message ack(1, id, msg.sender, 0xF, true);
+		ack.data[0]= 0x80;
+		sendMessage(&ack, true, true);
+
+		rx_cache.push_back(msg);
+	}
+	
+	return res;
+}
+
+//Get the RX cache.
+Vector<IE_Message>* IEBusHandler::getRX() {
+	return &this->rx_cache;
+}
+
+//Clear the RX cache.
+void IEBusHandler::clearRX() {
+	rx_cache.clear();
 }
 
 int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id) {

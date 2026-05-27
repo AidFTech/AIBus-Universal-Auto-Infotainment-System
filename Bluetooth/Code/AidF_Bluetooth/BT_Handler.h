@@ -1,4 +1,5 @@
 #include <sdbus-c++/sdbus-c++.h>
+#include <stdlib.h>
 
 #include <iostream>
 #include <vector>
@@ -32,12 +33,15 @@ class BTHandler {
 public:
 	BTHandler(ParameterList* parameter_list, BTADevice** connected_device, TextHandler* text_handler, uint8_t* bt_mac);
 	void loop();
-	void init();
+	void init(unsigned long* timer);
 
 	//Discovery:
 	void startDiscovery();
 	void stopDiscovery();
 	bool getDiscoverable();
+
+	//Connect/disconnect.
+	void disconnectDevice();
 
 	//Get the device.
 	BTADevice* getConnectedDevice();
@@ -56,11 +60,13 @@ private:
 
 	TextHandler* text_handler;
 
-	unique_ptr<IConnection> connection;
-	unique_ptr<IProxy> adapter_proxy, media_proxy;
+	unique_ptr<IConnection> connection = nullptr;
+	unique_ptr<IProxy> adapter_proxy = nullptr, media_proxy = nullptr;
 
 	map<string, Variant> media_properties;
 	bool media_check_ok = true;
+
+	unsigned long* timer;
 
 	void connectKnownDevice();
 	void connectDevice(ObjectPath device_path);

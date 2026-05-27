@@ -119,20 +119,21 @@ void HondaCDXMTrans::loop() {
 
 	IE_Message ie_msg;
 
-	const bool ie_ready = !(imid_handler.getEstablished() &&
-							imid_handler.getIMIDChangeTimer() < IMID_CHANGE_TIMER &&
-							!cd_handler.getSelected() &&
-							!tape_handler.getSelected() &&
-							!xm_handler.getSelected());
+	elapsedMillis message_timer;
+	bool first_ie = false;
 
-	if (parameters.power_on && ie_ready) { // Don't check IEBus if the car isn't on or the IMID needs to change.
-		elapsedMillis ie_timer;
-		bool first_ie = false;
+	while(message_timer < 50) {
+		const bool ie_ready = !(imid_handler.getEstablished() &&
+								imid_handler.getIMIDChangeTimer() < IMID_CHANGE_TIMER &&
+								!cd_handler.getSelected() &&
+								!tape_handler.getSelected() &&
+								!xm_handler.getSelected());
 
-		if (ai_handler.dataAvailable(false) > 0)
-			ai_handler.cacheAllPending();
+		if (parameters.power_on && ie_ready) { // Don't check IEBus if the car isn't on or the IMID needs to change.
 
-		while (ie_timer < 50) {
+			if (ai_handler.dataAvailable(false) > 0)
+				ai_handler.cacheAllPending();
+
 			const bool was_first_ie = first_ie;
 			if (ie_handler.getInputOn()) {
 				if (!first_ie) {
@@ -141,7 +142,6 @@ void HondaCDXMTrans::loop() {
 				}
 
 				const int message_value = ie_handler.readMessage(&ie_msg, true, IE_ID_RADIO);
-
 				if (message_value == 0) {
 					IE_Message check_msg(ie_msg.l - 1, ie_msg.sender, ie_msg.receiver, ie_msg.control, ie_msg.direct);
 					for (int i = 0; i < ie_msg.l - 1; i += 1)
@@ -166,7 +166,7 @@ void HondaCDXMTrans::loop() {
 						}
 					}
 				} else if(message_value > 0 || message_value < -1)
-					ie_timer = 0;
+					message_timer = 0;
 
 				digitalWrite(REC_CLEAR, LOW);
 				digitalWrite(REC_CLEAR, HIGH);
@@ -174,24 +174,22 @@ void HondaCDXMTrans::loop() {
 
 			if(!first_ie || (first_ie && !was_first_ie))
 				ai_handler.cacheAllPending();
+
+			ie_handler.clearRX();
+
+			if(digitalRead(REC_SET) == HIGH) { //Possible miss.
+				digitalWrite(REC_CLEAR, LOW);
+				digitalWrite(REC_CLEAR, HIGH);
+
+				if(cd_handler.getSelected())
+					cd_handler.refreshSource();
+				else if(tape_handler.getSelected())
+					tape_handler.refreshSource();
+				else if(xm_handler.getSelected())
+					xm_handler.refreshSource();
+			}
 		}
-
-		if(digitalRead(REC_SET) == HIGH) { //Possible miss.
-			digitalWrite(REC_CLEAR, LOW);
-			digitalWrite(REC_CLEAR, HIGH);
-
-			if(cd_handler.getSelected())
-				cd_handler.refreshSource();
-			else if(tape_handler.getSelected())
-				tape_handler.refreshSource();
-			else if(xm_handler.getSelected())
-				xm_handler.refreshSource();
-		}
-	}
-
-	elapsedMillis ai_timer;
 	
-	do {
 		AIData ai_msg;
 		bool ai_received = false;
 		const unsigned int avail = ai_handler.dataAvailable();
@@ -213,7 +211,7 @@ void HondaCDXMTrans::loop() {
 
 		if (ai_received) {
 			if(!cd_handler.getSelected() && !tape_handler.getSelected() && !xm_handler.getSelected())
-				ai_timer = 0;
+				message_timer = 0;
 
 			if ((ai_msg.sender == ID_IMID_SCR && imid_handler.getEstablished()) ||
 				(ai_msg.sender == ID_TAPE && tape_handler.getEstablished()) ||
@@ -405,7 +403,7 @@ void HondaCDXMTrans::loop() {
 			else if (ai_msg.receiver == ID_XM && xm_handler.getEstablished())
 				xm_handler.readAIBusMessage(&ai_msg);
 		}
-	} while (ai_timer < 50);
+	}
 
 	if (parameters.power_on) {
 		if (function_timer > FUNCTION_DELAY) {

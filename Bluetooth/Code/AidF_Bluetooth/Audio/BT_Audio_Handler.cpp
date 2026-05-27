@@ -816,6 +816,7 @@ void BTAudioHandler::writeAllMetadata() {
 	if(device != nullptr && device != NULL)
 		device_name = device->getDeviceName();
 
+	text_handler->writeAudioWindowText("Bluetooth", 0, 0, false);
 	text_handler->writeAudioWindowText(song_title, 0, 1, false);
 	text_handler->writeAudioWindowText(artist, 0, 2, false);
 	text_handler->writeAudioWindowText(album, 0, 3, false);

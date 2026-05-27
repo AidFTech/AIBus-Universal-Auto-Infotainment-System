@@ -4,7 +4,6 @@ pub struct Context {
 	pub audio_selected: bool, //True if the mirror is selected as the active audio device.
 	pub audio_text: bool, //True if audio text handling is allowed.
 	pub phone_active: bool, //True if phone mirroring is active.
-	//pub fullscreen: bool, //True on the final Raspberry Pi, false for testing.
 	pub playing: bool, //True if the phone is playing music.
 
 	pub phone_type: u8, //The phone type, as defined by the dongle.
@@ -21,6 +20,9 @@ pub struct Context {
 	pub track_time: i32, //The current song runtime.
 
 	pub night: bool, //True if the system is in night mode.
+
+	pub notification: bool, //True if a notification is active.
+	pub phone_mute: bool, //True if audio should be muted for a phone call or other voice event.
 
 	pub phone_req_off: bool, //True if the phone has requested a return to the factory UI.
 	pub home_held: bool, //True if "home" was held by the user.
@@ -60,7 +62,6 @@ impl Context {
 			audio_selected: false,
 			audio_text: false,
 			phone_active: true,
-			//fullscreen: false,
 			playing: false,
 
 			mac_addr: [0;MAC_ADDR_LEN],
@@ -77,6 +78,9 @@ impl Context {
 			track_time: -1,
 
 			night: false,
+
+			notification: false,
+			phone_mute: false,
 
 			phone_req_off: false,
 			home_held: false,

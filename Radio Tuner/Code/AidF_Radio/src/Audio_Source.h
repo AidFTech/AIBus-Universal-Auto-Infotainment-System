@@ -73,6 +73,10 @@ public:
 	bool getForceSourceChanged();
 	void checkSources();
 
+	void clearOpenMenu();
+
+	void sendMonitorRequest(const bool monitor_on);
+
 	void cancelScan();
 	
 	void setPower(const bool power);

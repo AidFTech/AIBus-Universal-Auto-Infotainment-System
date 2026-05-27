@@ -1,4 +1,5 @@
 #include "AidF_Radio.h"
+#include "Arduino.h"
 
 AidFRadio aidf_radio;
 
@@ -19,7 +20,7 @@ void AidFRadio::setup() {
 	pinMode(TUNER_RESET, OUTPUT);
 
 	pinMode(AUDIO_SW, OUTPUT);
-	pinMode(NAV_SW, INPUT);
+	pinMode(NAV_SW, OUTPUT);
 	pinMode(AUDIO_ON_SW, OUTPUT);
 	pinMode(POWER_ON_SW, OUTPUT);
 	pinMode(AUX_SW, INPUT_PULLUP);
@@ -39,6 +40,7 @@ void AidFRadio::setup() {
 	pinMode(DIGITAL_ERROR, INPUT);
 	
 	digitalWrite(TUNER_RESET, HIGH);
+	digitalWrite(NAV_SW, LOW);
 
 	digitalWrite(AUDIO_SW, LOW);
 
@@ -220,6 +222,8 @@ void AidFRadio::setup() {
 	tuner.setLimits();
 	background_tuner.setLimits();
 
+	phone_active_vec.setStorage(phone_active_list);
+
 	uint8_t init_data[] = {0x4A, 0x1F};
 	AIData init_msg(sizeof(init_data), ID_RADIO, ID_CANSLATOR, init_data);
 	aibus_handler.writeAIData(&init_msg, false);
@@ -351,6 +355,17 @@ void AidFRadio::loop() {
 	if((parameters.vehicle_speed != last_speed && parameters.svc != SVC_OFF) || parameters.svc != last_svc)
 		volume_handler.refreshSVC();
 
+	//Nav mute/cut.
+	const bool last_nav_mute = nav_mute;
+	nav_mute = digitalRead(NAV_MUTE) == LOW;
+	if(nav_mute != last_nav_mute) {
+		volume_handler.setUseNavCut(nav_mute && !pi_source);
+		digitalWrite(NAV_SW, ((nav_mute && !pi_source) || nav_sound) ? HIGH : LOW);
+
+		if(!analog_source)
+			digitalWrite(AUDIO_ON_SW, ((nav_mute && !pi_source) || nav_sound) ? LOW : HIGH);
+	}
+
 	//AudioSource source_list[SOURCE_COUNT];
 	//const uint16_t source_count = source_handler.getFilledSources(source_list), current_source = source_handler.getCurrentSource();
 	
@@ -444,11 +459,15 @@ void AidFRadio::loop() {
 		
 			//Set audio switch.
 			if(current_source_id == 0 || (source_change_timer_enable && (source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source))) { //Audio off or waiting.
+				analog_source = false;
+				pi_source = false;
 				digitalWrite(AUDIO_ON_SW, HIGH);
 				digitalWrite(AUDIO_SW, LOW);
 				digitalWrite(DAC_MUTE, LOW);
 				adc_handler.powerOff();
 			} else if(current_source_id == ID_RADIO) {
+				analog_source = true;
+				pi_source = false;
 				if(volume_handler.getVolume() > 0)
 					digitalWrite(DAC_MUTE, HIGH);
 				adc_handler.setADCOn();
@@ -460,14 +479,18 @@ void AidFRadio::loop() {
 					digitalWrite(AUDIO_SW, HIGH);
 				}
 			} else if(current_source_id == ID_PHONE || current_source_id == ID_ANDROID_AUTO) { //Pi. TODO: Use an AIBus flag.
+				analog_source = false;
+				pi_source = true;
 				if(volume_handler.getVolume() > 0)
 					digitalWrite(DAC_MUTE, HIGH);
 				digitalWrite(AUDIO_ON_SW, HIGH);
 				adc_handler.setPiOut();
 			} else { //External audio.
+				analog_source = false;
+				pi_source = false;
 				if(volume_handler.getVolume() > 0)
 					digitalWrite(DAC_MUTE, HIGH);
-				digitalWrite(AUDIO_ON_SW, HIGH);
+				digitalWrite(AUDIO_ON_SW, nav_mute ? LOW : HIGH);
 				adc_handler.setExtOut();
 			}
 		} else {
@@ -551,7 +574,7 @@ void AidFRadio::loop() {
 	}
 
 	do {
-		if(source_handler.getCurrentSourceID() == ID_RADIO && !source_change_timer_enable) {
+		if(source_handler.getCurrentSourceID() == ID_RADIO && !source_change_timer_enable && !parameters.phone_active) {
 			const bool last_queued = tuner.getQueued();
 			
 			const String last_rds = parameters.rds_program_name, last_station_name = parameters.rds_station_name;
@@ -865,7 +888,7 @@ void AidFRadio::loop() {
 		setTunerFrequency(SUB_AM);
 	}
 
-	if(src_ping_timer >= SOURCE_PING_DELAY)
+	if(src_ping_timer >= SOURCE_PING_DELAY && !parameters.phone_active)
 		pingActiveSource();
 
 	if(!parameters.computer_connected && computer_ping_timer >= COMPUTER_PING_DELAY)
@@ -878,7 +901,8 @@ void AidFRadio::loop() {
 																|| parameters.balance_adjust
 																|| parameters.fader_adjust
 																|| parameters.nav_cut_adjust
-																|| parameters.aux_level_adjust);
+																|| parameters.aux_level_adjust
+																|| !parameters.monitor_on);
 
 	if(background_tune_timer >= 100) {
 		background_tuner.loop();
@@ -962,6 +986,32 @@ void AidFRadio::handleAIBus(AIData* msg) {
 	if(msg->receiver != ID_RADIO && msg->receiver != 0xFF)
 		return;
 
+	if(msg->l >= 2 && msg->data[0] == 0x71) {
+		const bool last_monitor = parameters.monitor_on;
+		parameters.monitor_on = msg->data[1] != 0;
+
+		if(last_monitor != parameters.monitor_on) {
+			screen_ping_timer = SCREEN_PING_DELAY;
+
+			if(!parameters.monitor_on)
+				source_handler.clearOpenMenu();
+			else {
+				uint8_t screen_ping_data[] = {0x77, parameters.last_control, 0x10};
+				AIData screen_ping_msg(sizeof(screen_ping_data), ID_RADIO, ID_NAV_SCREEN, screen_ping_data);
+				aibus_handler.writeAIData(&screen_ping_msg);
+			}
+		}
+	}
+
+	if(!parameters.monitor_on && msg->sender == ID_NAV_SCREEN && msg->l >= 3 && msg->data[0] == 0x30 && (msg->data[1] == 0x20 || msg->data[1] == 0x51 || msg->data[1] == 0x26)) {
+		source_handler.sendMonitorRequest(true);
+		if(msg->data[1] == 0x26) {
+			uint8_t audio_window_data[] = {0x27, 0x30, 0x26};
+			AIData audio_window_msg(sizeof(audio_window_data), ID_RADIO, ID_NAV_COMPUTER, audio_window_data);
+			aibus_handler.writeAIData(&audio_window_msg, parameters.computer_connected);
+		}
+	}
+
 	if(msg->receiver == ID_RADIO && msg->l >= 2 && msg->data[0] == 0x1D) { //Clock message.
 		parameters.send_time = (msg->data[1]) != 0;
 		if((msg->data[1]&0x01) != 0)
@@ -970,10 +1020,29 @@ void AidFRadio::handleAIBus(AIData* msg) {
 			parameters.auto_clock = false;
 
 		parameters.send_12h = (msg->data[1]&0x80) != 0;
-	} else if(msg->receiver == ID_RADIO && msg->sender == ID_PHONE && msg->l >= 3) { //Phone message.
-		
-		if(msg->data[1] == 0x6) {
-			parameters.phone_active = msg->data[2] != 0x0;
+	} else if(msg->receiver == ID_RADIO && (msg->sender == ID_PHONE || msg->sender == ID_ANDROID_AUTO) && msg->l >= 1 && msg->data[0] == 0x21) { //Phone message.
+		if(msg->l >= 3 && msg->data[0] == 0x21 && msg->data[1] == 0x6) {
+			const bool phone_active = msg->data[2] != 0x0;
+
+			int id = -1;
+			for(int i=0;i<phone_active_vec.size();i+=1) {
+				if(phone_active_vec[i] == msg->sender) {
+					id = i;
+					break;
+				}
+			}
+
+			if(phone_active) {
+				parameters.phone_active = true;
+
+				if(id < 0)
+					phone_active_vec.push_back(msg->sender);
+			} else {
+				if(id >= 0)
+					phone_active_vec.remove(id);
+				if(phone_active_vec.size() <= 0)
+					parameters.phone_active = false;
+			}
 		}
 	} else if(msg->sender == ID_NAV_SCREEN && msg->l >= 2 && msg->data[0] == 0x31 && msg->data[1] == 0x30) { //Supported buttons.
 		//TODO: This.

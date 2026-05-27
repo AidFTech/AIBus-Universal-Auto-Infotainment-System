@@ -47,6 +47,7 @@ public:
 
 	bool getVolumeChanged();
 	void setUseAuxLevel(const bool use_aux_level);
+	void setUseNavCut(const bool use_nav_cut);
 
 	void refreshSVC();
 private:
@@ -61,7 +62,7 @@ private:
 
 	bool volume_changed = false;
 
-	bool use_aux_level = false;
+	bool use_aux_level = false, use_nav_cut = false;
 
 	void setVolume();
 	void setVolumeDisplay();

@@ -1,6 +1,5 @@
 #include "Serial_AIBus_Handler.h"
 
-#ifdef RPI_UART
 #ifdef SOCKET_SERVER
 SerialAIBusHandler::SerialAIBusHandler(string port, int** socket_list, const int socket_l, const uint8_t id,  unsigned long* timer) {
 #else
@@ -10,20 +9,31 @@ SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned 
 	this->cached_tx = vector<AIData>(0);
 	this->cached_ack = vector<bool>(0);
 	
+	#ifdef RPI_UART
 	static const char* const chip_path = "/dev/gpiochip0";
 
-	//chip = gpiod_chip_open(chip_path);
+	chip = gpiod_chip_open(chip_path);
+	line_ai_rx = getGPIOLine(chip, AI_RX);
+	#endif
 
 	const char* c_port = port.c_str();
 	
 	const int test_port = aiserialOpen(c_port);
 	if(test_port<0) {
-		ai_port = 0; //TODO: Throw an error.
-		//cout<<"AIBus not connected.\n";
-	} else 
+		ai_port = -1; //TODO: Throw an error.
+		#ifndef RPI_UART
+		cout<<"AIBus not connected."<<endl;
+		#endif
+	} else {
 		this->ai_port = test_port;
+		#ifndef RPI_UART
+		port_connected = true;
+		#endif
+	}
 
-	//setPinMode(chip, AI_RX, PIN_MODE_INPUT_PULLUP);
+	#ifdef RPI_UART
+	setPinMode(line_ai_rx, PIN_MODE_INPUT_PULLUP);
+	#endif
 
 	#ifdef SOCKET_SERVER
 	this->socket_list = new int*[socket_l];
@@ -39,37 +49,13 @@ SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned 
 	multi_thread_params = (void*)(new MultiMessageThreadParameters);
 	((MultiMessageThreadParameters*)(multi_thread_params))->ai_handler = this;
 }
-#else
-#ifdef SOCKET_SERVER
-SerialAIBusHandler::SerialAIBusHandler(int** socket_list, const int socket_l, const uint8_t id, unsigned long* timer) {
-#else
-SerialAIBusHandler::SerialAIBusHandler(const uint8_t id, unsigned long* timer) {
-#endif
-	this->cached_rx = vector<AIData>(0);
-	this->cached_tx = vector<AIData>(0);
-	this->cached_ack = vector<bool>(0);
-	cout<<"Ready!\nEnter the sender, receiver, and data. Separate all characters with a space. Do not include the checksum.\n";
-
-	#ifdef SOCKET_SERVER
-	this->socket_list = new int*[socket_l];
-	for(int i=0;i<socket_l;i+=1)
-		this->socket_list[i] = socket_list[i];
-
-	this->socket_l = socket_l;
-	#endif
-	this->timer = timer;
-	this->id = id;
-
-	multi_thread_params = (void*)(new MultiMessageThreadParameters);
-	((MultiMessageThreadParameters*)(multi_thread_params))->ai_handler = this;
-}
-#endif
 
 SerialAIBusHandler::~SerialAIBusHandler() {
 	if(this->ai_port >= 0)
 		aiserialClose(this->ai_port);
 	#ifdef RPI_UART
-	//gpiod_chip_close(chip);
+	gpiod_line_release(line_ai_rx);
+	gpiod_chip_close(chip);
 	#endif
 
 	#ifdef SOCKET_SERVER
@@ -808,10 +794,18 @@ void printBytes(AIData* ai_d) {
 }
 
 #ifdef RPI_UART
-//Set a GPIO pin mode.
-/*void setPinMode(gpiod_chip *chip, const int pin, const pin_mode_t mode) {
-	gpiod_line* line = gpiod_chip_get_line(chip, pin);
+//Get the GPIO chip.
+gpiod_chip* SerialAIBusHandler::getChip() {
+	return this->chip;
+}
 
+//Get a line.
+gpiod_line* getGPIOLine(gpiod_chip* chip, const int pin) {
+	return gpiod_chip_get_line(chip, pin);
+}
+
+//Set a GPIO pin mode.
+void setPinMode(gpiod_line* line, const pin_mode_t mode) {
 	switch(mode) {
 	case PIN_MODE_INPUT_PULLUP:
 		gpiod_line_request_input_flags(line, "Consumer", GPIOD_LINE_REQUEST_FLAG_BIAS_PULL_UP);
@@ -825,18 +819,18 @@ void printBytes(AIData* ai_d) {
 	default:
 		break;
 	}
-
-	gpiod_line_release(line);
 }
 
 //Read a GPIO pin.
-bool readPin(gpiod_chip* chip, const int pin) {
-	gpiod_line* line = gpiod_chip_get_line(chip, pin);
+bool readPin(gpiod_line* line) {
 	const bool val = gpiod_line_get_value(line) > 0;
-
-	gpiod_line_release(line);
 	return val;
-}*/
+}
+
+//Write the provided state to the GPIO pin.
+int writePin(gpiod_line* line, const bool state) {
+	return gpiod_line_set_value(line, state ? 1 : 0);
+}
 #endif
 
 void* flushCacheThread(void* v_aibus_handler) {

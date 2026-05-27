@@ -49,6 +49,7 @@ void HondaTapeHandler::loop() {
 		while(ie_cache_vec.size() > 0) {
 			handleIEBus(&ie_cache_vec[0], false);
 			ie_cache_vec.remove(0);
+			ie_driver->cacheAIBus();
 		}
 	}
 }
@@ -196,6 +197,11 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 		return;
 	
 	const uint8_t sender = the_message->sender;
+
+	if(sender == ID_RADIO && the_message->l >= 3 && (the_message->data[0] == 0x40 || the_message->data[0] == 0x70)) {
+		parameter_list->radio_ping_timer = 0;
+		text_ping_timer = 0;
+	}
 	
 	if(the_message->l >= 3 && the_message->data[0] == 0x4 && the_message->data[1] == 0xE6 && the_message->data[2] == 0x10) { //Name request.
 		sendSourceNameMessage(the_message->sender);
@@ -246,10 +252,11 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function, sizeof(function));
 			sendFunctionMessage(ie_driver, false, IE_ID_TAPE, function, sizeof(function));
 			
-			listenForIEBus(500, false);
-			
-			sendTapeUpdateMessage(ID_RADIO);
+			//listenForIEBus(500, false);
+
 			*parameter_list->screen_request_timer = SCREEN_REQUEST_TIMER;
+			sendTapeUpdateMessage(ID_RADIO);
+
 			if(this->text_control) {
 				if(!parameter_list->imid_connected && !parameter_list->external_imid_tape)
 					clearExternalIMID();
@@ -260,7 +267,7 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			if(parameter_list->audio_pin >= 0)
 				digitalWrite(parameter_list->audio_pin, HIGH);
 
-			listenForIEBus(1500, false);
+			listenForIEBus(500, false);
 
 		} else {
 			if(source_sel) {

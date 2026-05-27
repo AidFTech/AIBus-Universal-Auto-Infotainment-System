@@ -58,6 +58,8 @@ enum source_button_t : uint8_t {
 struct ParameterList {
 	bool power_on = false, audio_on = false;
 	uint8_t key_position = 0, door_position = 0;
+
+	bool monitor_on = true;
 	
 	uint16_t vehicle_speed = 0;
 	bool computer_connected = false, screen_connected = false, amp_connected = false, mirror_connected = false;

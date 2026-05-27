@@ -278,10 +278,12 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 	uint8_t data[ai_d->l + 4];
 	ai_d->getBytes(data);
 
+	#ifdef AIBUS_DEBUG
 	cout<<"Sent: ";
 	for(int i=0;i<sizeof(data);i+=1)
 		cout<<hex<<int(data[i])<<' ';
 	cout<<endl;
+	#endif
 
 	SocketMessage ai_socket_msg(OPCODE_AIBUS_SEND, sizeof(data));
 	ai_socket_msg.refreshSocketData(data);

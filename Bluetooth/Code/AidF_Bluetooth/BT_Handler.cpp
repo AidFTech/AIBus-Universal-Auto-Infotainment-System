@@ -8,11 +8,16 @@ BTHandler::BTHandler(ParameterList* parameter_list, BTADevice** connected_device
 }
 
 //Initialize Bluetooth.
-void BTHandler::init() {
+void BTHandler::init(unsigned long* timer) {
 	connection = createSystemBusConnection();
-	adapter_proxy = createProxy(*connection, BusName("org.bluez"), ObjectPath("/org/bluez/hci0"));
 
+	this->timer = timer;
+	
+	adapter_proxy = createProxy(*connection, BusName("org.bluez"), ObjectPath("/org/bluez/hci0"));
 	adapter_proxy->setProperty("Powered").onInterface("org.bluez.Adapter1").toValue(true);
+	adapter_proxy->setProperty("Pairable").onInterface("org.bluez.Adapter1").toValue(true);
+	adapter_proxy->setProperty("Alias").onInterface("org.bluez.Adapter1").toValue("AidF BTA");
+
 	getPiMac();
 
 	auto interface_add = [this](Message msg) {
@@ -75,20 +80,16 @@ void BTHandler::connectKnownDevice() {
 	unique_ptr<IProxy> mgr_proxy = createProxy(*connection, BusName("org.bluez"), ObjectPath("/"));
 	mgr_proxy->callMethod("GetManagedObjects").onInterface("org.freedesktop.DBus.ObjectManager").storeResultsTo(reply);
 
-	for(auto path : reply) {
+	for(auto path: reply) {
 		if(path.first.find("dev_") != string::npos && path.first.find("player") == string::npos) {
 			auto dev_proxy = createProxy(*connection, BusName("org.bluez"), path.first);
 			const bool paired = dev_proxy->getProperty("Paired").onInterface("org.bluez.Device1").get<bool>();
 			const bool connected = dev_proxy->getProperty("Connected").onInterface("org.bluez.Device1").get<bool>();
+			
+			cout<<path.first<<": Connected "<<connected<< " Paired "<< paired<<endl;
 
-			if(paired && connected) {
+			if(paired) {
 				connectDevice(path.first);
-				try {
-					auto media_path = dev_proxy->getProperty("Player").onInterface("org.bluez.MediaControl1").get<ObjectPath>();
-					setMediaProxy(media_path);
-				} catch(Error e) {
-					cout<<e.getMessage()<<endl;
-				}
 				break;
 			}
 		}
@@ -101,9 +102,16 @@ void BTHandler::connectDevice(ObjectPath device_path) {
 	const bool paired = dev_proxy->getProperty("Paired").onInterface("org.bluez.Device1").get<bool>();
 	const bool connected = dev_proxy->getProperty("Connected").onInterface("org.bluez.Device1").get<bool>();
 
+	cout<<"Paired "<<paired<<" Connected "<<connected<<endl;
+
 	if(!paired) {
-		//Display the PIN.
-	} else if(!connected) { //Device is known but not connected.
+		//TODO: Display the PIN.
+		dev_proxy->callMethod("Pair").onInterface("org.bluez.Device1").dontExpectReply();
+		dev_proxy->setProperty("Trusted").onInterface("org.bluez.Device1").toValue(true);
+		return;
+	} 
+	
+	if(!connected) { //Device is known but not connected.
 		dev_proxy->callMethod("Connect").onInterface("org.bluez.Device1").dontExpectReply();
 	} else { //Device was connected.
 		if(*connected_device == nullptr || *connected_device == NULL) {
@@ -115,8 +123,19 @@ void BTHandler::connectDevice(ObjectPath device_path) {
 
 			cout<<"Connected to "<<name<<endl;
 			parameter_list->connection_changed = true;
+
+			const auto uuid_list = dev_proxy->getProperty("UUIDs").onInterface("org.bluez.Device1").get<vector<string>>();
+			for(string uuid: uuid_list) {
+				dev_proxy->callMethod("ConnectProfile").onInterface("org.bluez.Device1").withArguments(uuid).dontExpectReply();
+			}
 		}
 	}
+}
+
+//Disconnect a device.
+void BTHandler::disconnectDevice() {
+	auto dev_proxy = createProxy(*connection, BusName("org.bluez"), (*connected_device)->getPath());
+	dev_proxy->callMethod("Disconnect").onInterface("org.bluez.Device1");
 }
 
 //Print the object list.
@@ -198,6 +217,7 @@ void BTHandler::sendMediaControl(const media_control_t cmd) {
 void BTHandler::onInterfaceAdd(Message msg) {
 	ObjectPath op;
 	if(msg >> op) {
+		cout<<"Interface added: "<<op<<endl;
 		if(op.find("/dev_") != string::npos) {
 			auto dev_proxy = createProxy(*connection, BusName("org.bluez"), op);
 			if(op.find("player") != string::npos) {
@@ -216,6 +236,21 @@ void BTHandler::onInterfaceAdd(Message msg) {
 			} else {
 				connectDevice(op);
 			}
+
+			if(*connected_device == NULL || *connected_device == nullptr) {
+				const int start_index = op.find("/dev_") + string("/dev_").length();
+				int end_index = start_index;
+				for(int i=start_index;i<op.length();i+=1) {
+					if(op[i] == '/' || op[i] == '\\') {
+						end_index = i;
+						break;
+					}
+				}
+
+				if(end_index > start_index) {
+					connectDevice(ObjectPath(op.substr(0, end_index)));
+				}
+			}
 		}
 	}
 }
@@ -224,8 +259,23 @@ void BTHandler::onInterfaceAdd(Message msg) {
 void BTHandler::onInterfaceRemove(Message msg) {
 	ObjectPath op;
 	if(msg >> op) {
+		cout<<"Interface removed: "<<op<<endl;
 		if(op.find("/dev_") != string::npos) {
-			auto dev_proxy = createProxy(*connection, BusName("org.bluez"), op);
+			string dev_path = op;
+
+			const int start_index = op.find("/dev_") + string("/dev_").length();
+			int end_index = start_index;
+			for(int i=start_index;i<op.length();i+=1) {
+				if(op[i] == '/' || op[i] == '\\') {
+					end_index = i;
+					break;
+				}
+			}
+
+			if(end_index > start_index)
+				dev_path = op.substr(0,end_index);
+
+			auto dev_proxy = createProxy(*connection, BusName("org.bluez"), ObjectPath(dev_path));
 			const bool paired = dev_proxy->getProperty("Paired").onInterface("org.bluez.Device1").get<bool>();
 			const bool connected = dev_proxy->getProperty("Connected").onInterface("org.bluez.Device1").get<bool>();
 
@@ -233,10 +283,13 @@ void BTHandler::onInterfaceRemove(Message msg) {
 			getMacFromString(dev_proxy->getProperty("Address").onInterface("org.bluez.Device1").get<string>(), mac_addr);
 
 			//TODO: Compare the connected device address with the object path.
-			delete *connected_device;
-			*connected_device = nullptr;
 
-			parameter_list->connection_changed = true;
+			if(*connected_device != nullptr && *connected_device != NULL) {
+				delete *connected_device;
+				*connected_device = nullptr;
+
+				parameter_list->connection_changed = true;
+			}
 		}
 	}
 }

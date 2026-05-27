@@ -58,8 +58,12 @@ public:
 	virtual void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum);
 	virtual void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait);
 	virtual int readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id);
+	virtual int cacheMessage(const bool ack_response, const uint16_t id);
 
 	virtual void sendAcknowledgement(const uint16_t sender, const uint16_t receiver);
+
+	Vector<IE_Message>* getRX();
+	void clearRX();
 	
 	inline bool getInputOn() {
 		return((*rx_portregister&rx_bitmask) != 0);
@@ -81,6 +85,9 @@ protected:
 	
 	uint8_t tx_bitmask, rx_bitmask;
 	volatile uint8_t* tx_portregister, *rx_portregister;
+
+	IE_Message rx_cache_array[10];
+	Vector<IE_Message> rx_cache;
 };
 
 #endif

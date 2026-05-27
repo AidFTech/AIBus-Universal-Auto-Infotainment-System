@@ -60,6 +60,7 @@ public:
 	virtual void cacheMessage(AIData* ai_msg);
 	virtual bool cachePending(const uint8_t id);
 
+	void clearSerial();
 protected:
 	Stream* ai_serial;
 	int8_t rx_pin = -1;
@@ -72,8 +73,6 @@ protected:
 	virtual bool awaitAcknowledgement(AIData* ai_d);
 
 	virtual bool getID(const uint8_t id);
-
-	inline void clearSerial();
 };
 
 bool getInitMessage(AIData* ai_d);

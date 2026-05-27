@@ -302,6 +302,9 @@ impl <'a> AMirror<'a> {
 
 		let mut change_imid = false;
 
+		let notification = context.notification;
+		let phone_mute = context.phone_mute;
+
 		std::mem::drop(context);
 
 		self.dongle_handler.process();
@@ -368,6 +371,8 @@ impl <'a> AMirror<'a> {
 				context.app = "".to_string();
 
 				context.playing = false;
+				context.notification = false;
+				context.phone_mute = false;
 
 				if context.phone_active {
 					match self.mpv_video.try_lock() {
@@ -1059,6 +1064,30 @@ impl <'a> AMirror<'a> {
 		let new_altitude = context.altitude;
 		let phone_type = context.phone_type;
 
+		//Notification.
+		if context.notification != notification {
+			self.write_aibus_message(AIBusMessage { 
+									sender: AIBUS_DEVICE_AMIRROR,
+									receiver: AIBUS_DEVICE_NAV_COMPUTER,
+									data: [0x7F, 0x6, if context.notification {
+										0x1
+									} else {
+										0x0
+									}].to_vec() });
+		}
+
+		//Phone mute.
+		if context.phone_mute != phone_mute {
+			self.write_aibus_message(AIBusMessage { 
+									sender: AIBUS_DEVICE_AMIRROR,
+									receiver: AIBUS_DEVICE_RADIO,
+									data: [0x21, 0x6, if context.phone_mute {
+										0x1
+									} else {
+										0x0
+									}].to_vec() });
+		}
+
 		std::mem::drop(context);
 		
 		if new_latitude != latitude || new_longitude != longitude || new_altitude != altitude {
@@ -1353,6 +1382,9 @@ impl <'a> AMirror<'a> {
 					self.imid_scroll_pos = 0;
 					self.scroll_timer = Instant::now();
 					context.audio_selected = true;
+
+					context.notification = false;
+					context.phone_mute = false;
 					
 					if context.phone_type != 0 {
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAY);

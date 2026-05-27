@@ -178,6 +178,13 @@ void VolumeHandler::setVolume(const uint16_t volume) {
 
 		if(use_aux_level)
 			norm_vol *= parameters->aux_level/5;
+
+		if(use_nav_cut) {
+			if(parameters->prompt_cut != 0 && parameters->prompt_cut < 32)
+				norm_vol /= parameters->prompt_cut;
+			else if(parameters->prompt_cut >= 32)
+				norm_vol = 0;
+		}
 		
 		uint16_t lf_vol = norm_vol*DEFAULT_TONE_RANGE/vol_range, rf_vol = norm_vol*DEFAULT_TONE_RANGE/vol_range, lr_vol = norm_vol*DEFAULT_TONE_RANGE/vol_range, rr_vol = norm_vol*DEFAULT_TONE_RANGE/vol_range;
 		
@@ -326,6 +333,12 @@ bool VolumeHandler::getVolumeChanged() {
 //Set whether to compensate for the aux level setting.
 void VolumeHandler::setUseAuxLevel(const bool use_aux_level) {
 	this->use_aux_level = use_aux_level;
+	setVolume();
+}
+
+//Set whether to reduce volume for a nav prompt.
+void VolumeHandler::setUseNavCut(const bool use_nav_cut) {
+	this->use_nav_cut = use_nav_cut;
 	setVolume();
 }
 

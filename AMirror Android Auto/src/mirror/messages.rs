@@ -1,6 +1,9 @@
 pub const HEADERSIZE: usize = 4*4;
 const MAGIC: u32 = 0x55aa55aa;
 
+pub const COMMAND_SIRI_START: u32 = 1;
+pub const COMMAND_SIRI_STOP: u32 = 2;
+
 pub const PHONE_COMMAND_HOST_UI: u32 = 3;
 pub const PHONE_COMMAND_VOICE: u32 = 5;
 pub const PHONE_COMMAND_CAR_MIC: u32 = 7;

@@ -5,6 +5,7 @@
 #include <RTCx.h>
 
 #include <Wire.h>
+#include <Vector.h>
 
 #include "AIBus.h"
 #include "AIBus_Handler.h"
@@ -95,6 +96,8 @@
 #define RDS_SEGMENT_COUNT 12
 #define RDS_IMID_TIMER 3000
 
+#define PHONE_SOURCES 4
+
 #define AISerial Serial
 
 class AidFRadio {
@@ -146,6 +149,15 @@ private:
 	bool* power_on = &parameters.power_on, *digital_mode = &parameters.digital_mode;
 	bool key_on = false; //True if the key has been at any time during this power cycle.
 	bool rtc_on = false; //True if the clock is on and functional.
+
+	bool nav_mute = false; //True if nav mute is active.
+	bool nav_sound = false; //True if the nav system is beeping or otherwise indicating that nav audio should be passing through.
+
+	bool analog_source = false; //True if an analog source is playing (aux or radio).
+	bool pi_source = false; //True if the Pi is acting as the audio source.
+
+	uint8_t phone_active_list[PHONE_SOURCES];
+	Vector<uint8_t> phone_active_vec;
 
 	bool source_change_timer_enable = false;
 	elapsedMillis source_change_timer;

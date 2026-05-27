@@ -32,11 +32,62 @@ void HondaCDHandler::loop() {
 		setting_changed = false;
 		setCDSettings(this->autostart, this->use_function_timer, this->split);
 	}
+	
+	if((imid_cmd&IMID_REFRESH_CLEAR) != 0) { //Clear the IMID.
+		imid_handler->clearIMIDCDText();
+		imid_cmd &= ~(IMID_REFRESH_CLEAR);
+	}
+
+	if((track_cmd&COMMAND_WRITE_RADIO_TRACK_MSG) != 0) {
+		uint8_t track_data[] = {0x39, 0x0, ai_cd_status, 0x0, 0x3F, 0x0, disc, track};
+
+		AIData track_msg(sizeof(track_data), ID_CDC, ID_RADIO);
+		track_msg.refreshAIData(track_data);
+
+		ai_driver->writeAIData(&track_msg, parameter_list->radio_connected);
+		
+		track_cmd &= ~COMMAND_WRITE_RADIO_TRACK_MSG;
+	}
+
+	if((track_cmd&COMMAND_WRITE_TIME_MESSAGES) != 0) {
+		uint8_t timer_data[] = {0x3B, 0x0, 0x0, uint8_t((timer&0xFF00) >> 8), uint8_t(timer&0xFF)};
+
+		AIData timer_msg(sizeof(timer_data), ID_CDC, ID_RADIO);
+		timer_msg.refreshAIData(timer_data);
+		
+		ai_driver->writeAIData(&timer_msg, parameter_list->radio_connected);
+		if(text_control) {
+			sendCDTimeMessage();
+			sendCDIMIDTrackandTimeMessage();
+		}
+
+		track_cmd &= ~COMMAND_WRITE_TIME_MESSAGES;
+	}
+
+	if(clear_text_cmd != 0) {
+		clearCDText((clear_text_cmd&COMMAND_CLEAR_TEXT_SONG) != 0,
+					(clear_text_cmd&COMMAND_CLEAR_TEXT_ARTIST) != 0,
+					(clear_text_cmd&COMMAND_CLEAR_TEXT_ALBUM) != 0,
+					(clear_text_cmd&COMMAND_CLEAR_TEXT_FOLDER) != 0,
+					(clear_text_cmd&COMMAND_CLEAR_TEXT_FILE) != 0);
+
+		if(text_control) {
+			clearAICDText((clear_text_cmd&COMMAND_CLEAR_TEXT_SONG) != 0,
+					(clear_text_cmd&COMMAND_CLEAR_TEXT_ARTIST) != 0,
+					(clear_text_cmd&COMMAND_CLEAR_TEXT_ALBUM) != 0,
+					(clear_text_cmd&COMMAND_CLEAR_TEXT_FOLDER) != 0,
+					(clear_text_cmd&COMMAND_CLEAR_TEXT_FILE) != 0);
+
+			sendCDTrackMessage();
+		}
+		
+		clear_text_cmd = 0;
+	}
 
 	if(this->source_sel) {
 		if(second_timer > 800 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff) {
 			second_timer = 0;
-			this->listenForIEBus(400, false);
+			this->listenForIEBus(450, false);
 
 			if(text_timer >= TEXT_REFRESH_TIMER/2)
 				text_timer = 0;
@@ -211,6 +262,7 @@ void HondaCDHandler::loop() {
 		while(ie_cache_vec.size() > 0) {
 			interpretCDMessage(&ie_cache_vec[0], false);
 			ie_cache_vec.remove(0);
+			ie_driver->cacheAIBus();
 		}
 	}
 }
@@ -323,12 +375,7 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 			bool track_changed = false;
 			
 			if(disc_and_track != uint16_t((disc << 8) | track) || getIECDStatus(ai_cd_status) != last_status || getIECDRepeat(ai_cd_status) != last_repeat) {
-				uint8_t track_data[] = {0x39, 0x0, ai_cd_status, 0x0, 0x3F, 0x0, disc, track};
-
-				AIData track_msg(sizeof(track_data), ID_CDC, ID_RADIO);
-				track_msg.refreshAIData(track_data);
-
-				ai_driver->writeAIData(&track_msg, parameter_list->radio_connected);
+				track_cmd |= COMMAND_WRITE_RADIO_TRACK_MSG;
 				text_mode = TEXT_MODE_BLANK;
 
 				if(disc != ((disc_and_track&0xFF00)>>8)) {
@@ -340,19 +387,31 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 					}
 				}
 
-				clearCDText(track != (disc_and_track&0xFF), track != (disc_and_track&0xFF), disc != ((disc_and_track&0xFF00)>>8) || text_mode == TEXT_MODE_MP3, folder_num != last_folder && text_mode == TEXT_MODE_MP3,  track != (disc_and_track&0xFF) && text_mode==TEXT_MODE_MP3);
+				if(track != (disc_and_track&0xFF)) {
+					clear_text_cmd |= COMMAND_CLEAR_TEXT_SONG;
+					clear_text_cmd |= COMMAND_CLEAR_TEXT_ARTIST;
+				}
+
+				if(disc != ((disc_and_track&0xFF00)>>8) || text_mode == TEXT_MODE_MP3)
+					clear_text_cmd |= COMMAND_CLEAR_TEXT_ALBUM;
+
+				if(folder_num != last_folder && text_mode == TEXT_MODE_MP3)
+					clear_text_cmd |= COMMAND_CLEAR_TEXT_FOLDER;
+
+				if(track != (disc_and_track&0xFF) && text_mode==TEXT_MODE_MP3)
+					clear_text_cmd |= COMMAND_CLEAR_TEXT_FILE;
+
 				text_request_timer = 0;
 				if(text_control) {		
-					clearAICDText(track != (disc_and_track&0xFF), track != (disc_and_track&0xFF), disc != ((disc_and_track&0xFF00)>>8) || text_mode == TEXT_MODE_MP3, folder_num != last_folder && text_mode == TEXT_MODE_MP3, track != (disc_and_track&0xFF) && text_mode==TEXT_MODE_MP3);
-					
 					if((disc != ((disc_and_track&0xFF00)>>8)) || text_mode == TEXT_MODE_MP3) { 
 						if(parameter_list->imid_connected)
-							imid_handler->clearIMIDCDText();
+							imid_cmd |= IMID_REFRESH_CLEAR;
 
 						clearExternalCDIMID(true);
 					}
-					
-					sendCDTrackMessage();
+
+					if((disc != ((disc_and_track&0xFF00)>>8)))
+						sendCDTrackMessage();
 				}
 
 				track_changed = true;
@@ -363,15 +422,7 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 			timer = getByteFromBCD(the_message->data[7])*60 + getByteFromBCD(the_message->data[8]);
 			
 			if(timer != last_timer) {
-				uint8_t timer_data[] = {0x3B, 0x0, 0x0, uint8_t((timer&0xFF00) >> 8), uint8_t(timer&0xFF)};
-
-				AIData timer_msg(sizeof(timer_data), ID_CDC, ID_RADIO);
-				timer_msg.refreshAIData(timer_data);
-				
-				ai_driver->writeAIData(&timer_msg, parameter_list->radio_connected);
-				if(text_control)
-					sendCDTimeMessage();
-
+				track_cmd |= COMMAND_WRITE_TIME_MESSAGES;
 				second_timer = 0;
 			}
 
@@ -382,8 +433,6 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 						this->mode_timer_enabled = true;
 						this->mode_timer = 0;
 					}
-
-					sendCDIMIDTrackandTimeMessage();
 				}
 
 				sendCDLoadWaitMessage(message_type);
@@ -1002,6 +1051,9 @@ void HondaCDHandler::sendCDTrackMessage() {
 
 //Send the disc and track to the nav screen.
 void HondaCDHandler::sendCDTrackMessage(const bool track) {
+	if(!text_control)
+		return;
+
 	String track_text = "CD" + String(int(this->disc));
 	if(track)
 		track_text += "-" + String(int(this->track));
@@ -1044,6 +1096,8 @@ void HondaCDHandler::sendCDTrackMessage(const bool track) {
 
 		ai_driver->writeAIData(&clear_msg, parameter_list->computer_connected);
 	}
+
+	this->sendCDIMIDTrackandTimeMessage();
 
 	this->sendMirrorMessage(track_text, 0, true);
 

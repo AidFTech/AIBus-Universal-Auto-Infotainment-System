@@ -36,8 +36,6 @@ pub struct MpvVideo {
 	w: u16,
 	h: u16,
 
-	video_cache: Vec<u8>,
-
 	overlay_str: [String; OVERLAY_STR_COUNT],
 	overlay_vol: u8,
 	overlay_vol_limit: u8,
@@ -60,25 +58,28 @@ impl MpvVideo {
 		mpv_cmd.arg("--ovc=rawvideo");
 		mpv_cmd.arg(format!("--o={}", MPV_PATH));
 
-		mpv_cmd.arg(format!("--geometry={}x{}+0+0", width, height));
-		mpv_cmd.arg(format!("--video-aspect-override={}:{}", width, height));
-		mpv_cmd.arg("--hwdec=no");
-		mpv_cmd.arg("--demuxer-rawvideo-fps=60");
 		mpv_cmd.arg("--untimed");
+		mpv_cmd.arg("--keep-open=always");
+		mpv_cmd.arg("--idle=yes");
+
+		//Check these for crashes.
+		mpv_cmd.arg("--video-sync=display-resample");
+		mpv_cmd.arg("--interpolation");
+		mpv_cmd.arg("--tscale=oversample");
 
 		if fullscreen {
-			mpv_cmd.arg("--fs=yes");
+			
 		} else {
 			mpv_cmd.arg("--osc=no");
 		}
 
-		mpv_cmd.arg("--fps=60");
+		//mpv_cmd.arg("--container-fps-override=60");
 		mpv_cmd.arg("--profile=low-latency");
-		mpv_cmd.arg("--no-correct-pts");
+		//mpv_cmd.arg("--no-correct-pts");
 		mpv_cmd.arg("--video-unscaled=yes");
 		mpv_cmd.arg("-");
 
-		match mpv_cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).spawn() {
+		match mpv_cmd.stdin(Stdio::piped()).spawn() {
 			Err(e) => return Err(format!("Could not start video Mpv: {} ", e)),
 			Ok(match_process) => {
 				process = Some(match_process);
@@ -90,22 +91,20 @@ impl MpvVideo {
 
 		}
 
-		let sock = ipc::init_socket("/tmp/mka_cmd".to_string());
+		let ctl_sock = ipc::init_socket("/tmp/mka_cmd".to_string());
 
-		match sock {
+		match ctl_sock {
 			None => {
 				println!("Could not start mpv socket.");
 			}
-			Some(_) => {
-				
+			Some(ref socket) => {
+				let _ = socket.set_nonblocking(true);
 			}
 		}
 
 		return Ok(MpvVideo {
 			process: process.unwrap(),
-			mpv_ipc: sock,
-
-			video_cache: Vec::new(),
+			mpv_ipc: ctl_sock,
 
 			w: width,
 			h: height,
@@ -123,35 +122,15 @@ impl MpvVideo {
 
 	///Loop function.
 	pub fn process(&mut self) {
-		if !self.fullscreen {
-			if self.video_cache.len() > 0 {
-				self.send_video();
-			}
-		}
-	}
-
-	///Add video bytes to the cache.
-	pub fn push_video(&mut self, data: &[u8]) {
-		for d in data {
-			self.video_cache.push(*d);
-		}
-
-		if self.fullscreen {
-			self.send_video();
-		}
+		
 	}
 
 	///Send video bytes.
-	fn send_video(&mut self) {
-		let mut data = Vec::new();
-		
-		for d in &self.video_cache {
-			data.push(*d);
+	pub fn push_video(&mut self, data: &[u8]) {
+		if data.len() > 0 {
+			let mut child_stdin = self.process.stdin.as_ref().unwrap();
+			let _ = child_stdin.write(&data);
 		}
-		self.video_cache.clear();
-
-		let mut child_stdin = self.process.stdin.as_ref().unwrap();
-		let _ = child_stdin.write(&data);
 	}
 
 	///Set the overlay text color.
@@ -647,7 +626,7 @@ impl RdAudio {
 		}
 
 		let mut this = RdAudio { process: process.unwrap(), data: Vec::new(), sample: 48000, bits: 32, channels: 2, send_header: true };
-		this.send_audio(&[]);
+		this.send_audio(&[0; 8]);
 
 		return Ok(this);
 	}

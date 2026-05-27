@@ -20,7 +20,7 @@
 #include "Saved_Settings.h"
 
 #ifdef RPI_UART
-//#include <gpiod.h>
+#include <gpiod.h>
 #endif
 
 #include "Background/Nav_Background.h"
@@ -61,6 +61,7 @@
 #define GPIO_I2S_MCLK 4
 #define GPIO_DAC_MUTE 17
 #define GPIO_USB_PWR 26
+#define GPIO_NAV_MUTE 12
 #endif
 
 struct FrameParameters {
@@ -83,7 +84,7 @@ public:
 	bool test_mode = false; //If true, do not shut the Pi down upon termination.
 	#endif
 
-	AidF_Nav_Computer(SDL_Window* window, const uint16_t lw, const uint16_t lh);
+	AidF_Nav_Computer(SDL_Window* window, string port, const uint16_t lw, const uint16_t lh);
 	~AidF_Nav_Computer();
 
 	void loop();
@@ -101,6 +102,7 @@ private:
 	void setMirrorColors();
 
 	void getBackground();
+	void setMonitorOn(const bool on);
 
 	uint8_t key_position = 0, door_position = 0;
 	bool key_switched_on = false; //True once the key has been cycled on.
@@ -115,6 +117,10 @@ private:
 	AidFColorProfile active_color_profile, day_profile, night_profile;
 
 	SerialAIBusHandler* aibus_handler;
+
+	#ifdef RPI_UART
+	gpiod_line *line_nav_mute;
+	#endif
 
 	Background* br = nullptr;
 

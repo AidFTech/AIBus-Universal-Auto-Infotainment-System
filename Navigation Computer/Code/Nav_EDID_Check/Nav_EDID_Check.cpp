@@ -1,6 +1,6 @@
 #include "Nav_EDID_Check.h"
 
-int main() {
+int main(int argc, char* args[]) {
 	bool run = true;
 	ElapsedMillis elapsed_millis;
 	elapsed_millis.run = &run;
@@ -28,11 +28,17 @@ int main() {
 	if(edid_path.length() <= 0 || res_path.length() <= 0)
 		return 1;
 
-	#ifdef RPI_UART
-	SerialAIBusHandler ai_handler("/dev/ttyAMA0", ID_COMPUTER_PROXY, &elapsed_millis.time);
-	#else
-	SerialAIBusHandler ai_handler(ID_COMPUTER_PROXY, &elapsed_millis.time);
-	#endif
+	string port = "";
+	for(int i=1;i<argc;i+=1) {
+		const string arg = args[i];
+
+		if(arg.find("/dev") != string::npos) { //Serial port.
+			port = arg;
+			break;
+		}
+	}
+
+	SerialAIBusHandler ai_handler(port, ID_COMPUTER_PROXY, &elapsed_millis.time);
 
 	uint8_t poweroff_data[] = {0xA0};
 	AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_COMPUTER, 0xFF, poweroff_data);

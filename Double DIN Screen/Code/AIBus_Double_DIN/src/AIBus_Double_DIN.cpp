@@ -179,6 +179,7 @@ void AIBusDoubleDIN::loop() {
 									ai_handler.writeAIData(&poweroff_msg, false);
 
 									digitalWrite(FULL_POWER_ON, LOW);
+									digitalWrite(BL_ON, LOW);
 								} else {
 									door_timer_enabled = true;
 									door_timer = 0;
@@ -203,6 +204,7 @@ void AIBusDoubleDIN::loop() {
 										ai_handler.writeAIData(&poweroff_msg, false);
 
 										digitalWrite(FULL_POWER_ON, LOW);
+										digitalWrite(BL_ON, LOW);
 									}
 								} else {
 									digitalWrite(FULL_POWER_ON, HIGH);
@@ -276,6 +278,9 @@ void AIBusDoubleDIN::loop() {
 					const bool logo_on = msg.data[1] != 0;
 					nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, logo_on);
 					audio_on = logo_on;
+				} else if(msg.sender == ID_NAV_COMPUTER && msg.l >= 2 && msg[0] == 0x10) { //Screen on/off.
+					const bool on = msg[1] != 0x0;
+					digitalWrite(BL_ON, on ? HIGH : LOW);
 				} else if(msg.l >= 2 && msg.data[0] == 0x3E && msg.data[1] == 0xF0) { //EDID request.
 					AIData edid_msg(sizeof(aibt_edid) + 1, ID_NAV_SCREEN, msg.sender);
 					edid_msg[0] = 0x3E;
@@ -330,6 +335,7 @@ void AIBusDoubleDIN::loop() {
 		ai_handler.writeAIData(&poweroff_msg, false);
 
 		digitalWrite(FULL_POWER_ON, LOW);
+		digitalWrite(BL_ON, LOW);
 	}
 
 	if(all_timer_enabled && all_timer > CONTROL_TIMER) {

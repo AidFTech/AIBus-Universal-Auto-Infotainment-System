@@ -65,6 +65,18 @@
 
 #define MENU_SELECT_DISC 0x16
 
+#define IMID_REFRESH_CLEAR (1<<0)
+
+#define COMMAND_WRITE_RADIO_TRACK_MSG (1<<0)
+#define COMMAND_WRITE_NAV_TRACK_MSG (1<<1)
+#define COMMAND_WRITE_TIME_MESSAGES (1<<2)
+
+#define COMMAND_CLEAR_TEXT_SONG (1<<0)
+#define COMMAND_CLEAR_TEXT_ARTIST (1<<1)
+#define COMMAND_CLEAR_TEXT_ALBUM (1<<2)
+#define COMMAND_CLEAR_TEXT_FOLDER (1<<3)
+#define COMMAND_CLEAR_TEXT_FILE (1<<4)
+
 class HondaCDHandler : public HondaSourceHandler {
 public:
 	HondaCDHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_driver, ParameterList* parameter_list, HondaIMIDHandler *imid_handler);
@@ -87,6 +99,10 @@ private:
 	int16_t timer = -1;
 
 	uint8_t ai_cd_status = 0;
+
+	uint8_t imid_cmd = 0; //Pending IMID command.
+	uint8_t track_cmd = 0; //Pending track command.
+	uint8_t clear_text_cmd = 0; //Clear text command.
 
 	uint8_t text_mode = TEXT_MODE_BLANK; //Whether or not CD text is present.
 

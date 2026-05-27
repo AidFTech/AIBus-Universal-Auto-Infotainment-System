@@ -10,7 +10,7 @@ ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, strin
 	mpv_set_option_string(mpv_handler, "vo", "libmpv");
 
 	#ifdef RPI_MPV
-	mpv_set_option_string(mpv_handler, "hwdec", "rpi");
+	//mpv_set_option_string(mpv_handler, "hwdec", "no");
 	#else
 	mpv_set_option_string(mpv_handler, "hwdec", "no");
 	#endif
@@ -24,9 +24,6 @@ ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, strin
 	#endif
 
 	mpv_set_option_string(mpv_handler, "profile", "low-latency");
-	mpv_set_option_string(mpv_handler, "demuxer-rawvideo-fps", "60");
-	mpv_set_option_string(mpv_handler, "fps", "60");
-	mpv_set_option_string(mpv_handler, "no-correct-pts", "yes");
 	mpv_set_option_string(mpv_handler, "keep-open", "yes");
 	mpv_set_option_string(mpv_handler, "idle", "yes");
 

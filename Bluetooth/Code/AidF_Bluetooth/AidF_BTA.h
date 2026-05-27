@@ -19,7 +19,7 @@
 #ifndef aidf_bta_h
 #define aidf_bta_h
 
-#define PRINT_AIBUS
+//#define PRINT_AIBUS
 
 #define BTA_SOCKET_PATH "/tmp/abta"
 

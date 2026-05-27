@@ -463,14 +463,14 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 void AIBusHandler::clearSerial() {
 	elapsedMillis clear_timer;
 	while(ai_serial->available() > 0) {
-		const int avail = ai_serial->available() < AIDATA_LIMIT + 3 ? ai_serial->available() : AIDATA_LIMIT + 3;
+		const int avail = ai_serial->available();
 		uint8_t db[avail];
 		ai_serial->readBytes(db, avail);
 
-		if(clear_timer > 10) {
+		/*if(clear_timer > 10) {
 			ai_serial->clearWriteError();
 			break;
-		}
+		}*/
 	}
 }
 

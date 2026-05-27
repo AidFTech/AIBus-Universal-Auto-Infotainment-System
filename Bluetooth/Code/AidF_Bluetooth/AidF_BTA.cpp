@@ -15,7 +15,7 @@ AidFBTA::AidFBTA() {
 	for(int i=0;i<sizeof(pi_mac);i+=1)
 		pi_mac[i] = 0;
 
-	bt_handler.init();
+	bt_handler.init(&elapsed_millis.time);
 
 	ping_timer = elapsed_millis.time + RADIO_PING_TIMER;
 	screen_ping_timer = elapsed_millis.time;
@@ -132,6 +132,15 @@ void AidFBTA::handleAIBusMessage(AIData* ai_msg) {
 					break;
 				case MENU_INDEX_MAIN_NC_DEVICE_LIST:
 					bt_handler.getObjectList();
+					break;
+				default:
+					break;
+				}
+			} else if(parameter_list.side_menu == SIDE_MENU_PHONE) {
+				const MenuList side_menu = getMenu(MENU_INDEX_MAIN, parameter_list.locale);
+				switch(side_menu.getGlobalIndex(selected)) {
+				case MENU_INDEX_MAIN_DISCONNECT:
+					bt_handler.disconnectDevice();
 					break;
 				default:
 					break;
