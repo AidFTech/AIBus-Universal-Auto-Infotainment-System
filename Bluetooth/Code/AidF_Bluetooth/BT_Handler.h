@@ -80,4 +80,6 @@ private:
 	void setMediaProxy(ObjectPath proxy_path);
 };
 
+string getDevicePath(string path);
+
 #endif

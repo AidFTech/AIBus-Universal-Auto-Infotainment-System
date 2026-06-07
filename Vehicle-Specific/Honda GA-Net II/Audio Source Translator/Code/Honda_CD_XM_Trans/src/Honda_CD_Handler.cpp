@@ -32,57 +32,6 @@ void HondaCDHandler::loop() {
 		setting_changed = false;
 		setCDSettings(this->autostart, this->use_function_timer, this->split);
 	}
-	
-	if((imid_cmd&IMID_REFRESH_CLEAR) != 0) { //Clear the IMID.
-		imid_handler->clearIMIDCDText();
-		imid_cmd &= ~(IMID_REFRESH_CLEAR);
-	}
-
-	if((track_cmd&COMMAND_WRITE_RADIO_TRACK_MSG) != 0) {
-		uint8_t track_data[] = {0x39, 0x0, ai_cd_status, 0x0, 0x3F, 0x0, disc, track};
-
-		AIData track_msg(sizeof(track_data), ID_CDC, ID_RADIO);
-		track_msg.refreshAIData(track_data);
-
-		ai_driver->writeAIData(&track_msg, parameter_list->radio_connected);
-		
-		track_cmd &= ~COMMAND_WRITE_RADIO_TRACK_MSG;
-	}
-
-	if((track_cmd&COMMAND_WRITE_TIME_MESSAGES) != 0) {
-		uint8_t timer_data[] = {0x3B, 0x0, 0x0, uint8_t((timer&0xFF00) >> 8), uint8_t(timer&0xFF)};
-
-		AIData timer_msg(sizeof(timer_data), ID_CDC, ID_RADIO);
-		timer_msg.refreshAIData(timer_data);
-		
-		ai_driver->writeAIData(&timer_msg, parameter_list->radio_connected);
-		if(text_control) {
-			sendCDTimeMessage();
-			sendCDIMIDTrackandTimeMessage();
-		}
-
-		track_cmd &= ~COMMAND_WRITE_TIME_MESSAGES;
-	}
-
-	if(clear_text_cmd != 0) {
-		clearCDText((clear_text_cmd&COMMAND_CLEAR_TEXT_SONG) != 0,
-					(clear_text_cmd&COMMAND_CLEAR_TEXT_ARTIST) != 0,
-					(clear_text_cmd&COMMAND_CLEAR_TEXT_ALBUM) != 0,
-					(clear_text_cmd&COMMAND_CLEAR_TEXT_FOLDER) != 0,
-					(clear_text_cmd&COMMAND_CLEAR_TEXT_FILE) != 0);
-
-		if(text_control) {
-			clearAICDText((clear_text_cmd&COMMAND_CLEAR_TEXT_SONG) != 0,
-					(clear_text_cmd&COMMAND_CLEAR_TEXT_ARTIST) != 0,
-					(clear_text_cmd&COMMAND_CLEAR_TEXT_ALBUM) != 0,
-					(clear_text_cmd&COMMAND_CLEAR_TEXT_FOLDER) != 0,
-					(clear_text_cmd&COMMAND_CLEAR_TEXT_FILE) != 0);
-
-			sendCDTrackMessage();
-		}
-		
-		clear_text_cmd = 0;
-	}
 
 	if(this->source_sel) {
 		if(second_timer > 800 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff) {
@@ -264,6 +213,62 @@ void HondaCDHandler::loop() {
 			ie_cache_vec.remove(0);
 			ie_driver->cacheAIBus();
 		}
+
+		if((imid_cmd&IMID_REFRESH_CLEAR) != 0) { //Clear the IMID.
+			imid_handler->clearIMIDCDText();
+			imid_cmd &= ~(IMID_REFRESH_CLEAR);
+		}
+
+		if((track_cmd&COMMAND_WRITE_RADIO_TRACK_MSG) != 0) {
+			uint8_t track_data[] = {0x39, 0x0, ai_cd_status, 0x0, 0x3F, 0x0, disc, track};
+
+			AIData track_msg(sizeof(track_data), ID_CDC, ID_RADIO);
+			track_msg.refreshAIData(track_data);
+
+			ai_driver->writeAIData(&track_msg, parameter_list->radio_connected);
+			
+			track_cmd &= ~COMMAND_WRITE_RADIO_TRACK_MSG;
+		}
+
+		if((track_cmd&COMMAND_WRITE_TIME_MESSAGES) != 0) {
+			uint8_t timer_data[] = {0x3B, 0x0, 0x0, uint8_t((timer&0xFF00) >> 8), uint8_t(timer&0xFF)};
+
+			AIData timer_msg(sizeof(timer_data), ID_CDC, ID_RADIO);
+			timer_msg.refreshAIData(timer_data);
+			
+			ai_driver->writeAIData(&timer_msg, parameter_list->radio_connected);
+			if(text_control) {
+				sendCDTimeMessage();
+				sendCDIMIDTrackandTimeMessage();
+			}
+
+			track_cmd &= ~COMMAND_WRITE_TIME_MESSAGES;
+		}
+
+		if((track_cmd&COMMAND_WRITE_FUNCTION) != 0) {
+			sendCDTrackMessage();
+			track_cmd &= ~COMMAND_WRITE_FUNCTION;
+		}
+
+		if(clear_text_cmd != 0) {
+			clearCDText((clear_text_cmd&COMMAND_CLEAR_TEXT_SONG) != 0,
+						(clear_text_cmd&COMMAND_CLEAR_TEXT_ARTIST) != 0,
+						(clear_text_cmd&COMMAND_CLEAR_TEXT_ALBUM) != 0,
+						(clear_text_cmd&COMMAND_CLEAR_TEXT_FOLDER) != 0,
+						(clear_text_cmd&COMMAND_CLEAR_TEXT_FILE) != 0);
+
+			if(text_control) {
+				clearAICDText((clear_text_cmd&COMMAND_CLEAR_TEXT_SONG) != 0,
+						(clear_text_cmd&COMMAND_CLEAR_TEXT_ARTIST) != 0,
+						(clear_text_cmd&COMMAND_CLEAR_TEXT_ALBUM) != 0,
+						(clear_text_cmd&COMMAND_CLEAR_TEXT_FOLDER) != 0,
+						(clear_text_cmd&COMMAND_CLEAR_TEXT_FILE) != 0);
+
+				sendCDTrackMessage();
+			}
+			
+			clear_text_cmd = 0;
+		}
 	}
 }
 
@@ -412,6 +417,9 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 
 					if((disc != ((disc_and_track&0xFF00)>>8)))
 						sendCDTrackMessage();
+
+					if(getIECDStatus(ai_cd_status) != last_status || getIECDRepeat(ai_cd_status) != last_repeat)
+						track_cmd |= COMMAND_WRITE_FUNCTION;
 				}
 
 				track_changed = true;
