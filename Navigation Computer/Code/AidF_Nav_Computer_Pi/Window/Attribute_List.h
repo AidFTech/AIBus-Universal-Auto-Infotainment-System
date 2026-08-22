@@ -66,6 +66,8 @@ struct AttributeList {
 	uint8_t phone_type = PHONE_TYPE_NONE;
 	std::string phone_name = "";
 
+	bool camera_active = false; //True if a camera is active.
+
 	int frame = 0;
 
 	bool display_12h = false; //True if time is to be displayed in 12hr format with an AM/PM.

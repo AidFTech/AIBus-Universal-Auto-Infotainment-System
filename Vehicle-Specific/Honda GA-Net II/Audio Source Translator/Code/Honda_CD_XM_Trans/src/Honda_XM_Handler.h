@@ -121,6 +121,10 @@ private:
 	unsigned long station_request_wait = XM_STATION_TIMER;
 	bool station_received = false;
 
+	bool resend_number = false;
+
+	String resend_text = "";
+
 	void sendAINumberMessage(const uint8_t receiver);
 	void sendAITextMessage(const uint8_t receiver, const uint8_t field);
 

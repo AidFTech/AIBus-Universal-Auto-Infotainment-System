@@ -11,6 +11,9 @@ HondaTapeHandler::HondaTapeHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_d
 
 //Tape handler loop function.
 void HondaTapeHandler::loop() {
+	if(!source_established)
+		return;
+
 	if(this->source_sel) {
 		if(*active_menu == MENU_TAPE && setting_changed) {
 			setting_changed = false;
@@ -45,6 +48,11 @@ void HondaTapeHandler::loop() {
 
 		if(ie_driver->getInputOn())
 			this->listenForIEBus(500, false);
+
+		if(last_imid_str.length() > 0) {
+			if(imid_handler->writeIMIDTextMessage(last_imid_str))
+				last_imid_str = "";
+		}
 
 		while(ie_cache_vec.size() > 0) {
 			handleIEBus(&ie_cache_vec[0], false);
@@ -530,7 +538,8 @@ void HondaTapeHandler::sendTapeTextMessage() {
 				else
 					imid_mode_msg += " <";
 			}
-			imid_handler->writeIMIDTextMessage(imid_mode_msg);
+			if(!imid_handler->writeIMIDTextMessage(imid_mode_msg))
+				last_imid_str = imid_mode_msg;
 		} else if(parameter_list->external_imid_tape) {
 			sendTapeUpdateMessage(ID_IMID_SCR);
 		} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
@@ -592,9 +601,10 @@ void HondaTapeHandler::sendTapeTextMessage() {
 
 		setNavHeader(nr_mode_txt);
 
-		if(parameter_list->imid_connected)
-			imid_handler->writeIMIDTextMessage(nr_mode_txt);
-		else if(parameter_list->external_imid_tape)
+		if(parameter_list->imid_connected) {
+			if(!imid_handler->writeIMIDTextMessage(nr_mode_txt))
+				last_imid_str = nr_mode_txt;
+		} else if(parameter_list->external_imid_tape)
 			sendTapeUpdateMessage(ID_IMID_SCR);
 		else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
 			AIData imid_text_msg(4 + nr_mode_txt.length(), ID_TAPE, ID_IMID_SCR);

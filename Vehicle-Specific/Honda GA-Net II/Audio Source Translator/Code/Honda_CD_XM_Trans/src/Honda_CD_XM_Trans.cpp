@@ -130,9 +130,8 @@ void HondaCDXMTrans::loop() {
 								!xm_handler.getSelected());
 
 		if (parameters.power_on && ie_ready) { // Don't check IEBus if the car isn't on or the IMID needs to change.
-
-			if (ai_handler.dataAvailable(false) > 0)
-				ai_handler.cacheAllPending();
+			//if (ai_handler.dataAvailable(false) > 0)
+			//	ai_handler.cacheAllPending();
 
 			const bool was_first_ie = first_ie;
 			if (ie_handler.getInputOn()) {
@@ -170,6 +169,8 @@ void HondaCDXMTrans::loop() {
 
 				digitalWrite(REC_CLEAR, LOW);
 				digitalWrite(REC_CLEAR, HIGH);
+
+				ai_handler.clearSerial();
 			}
 
 			if(!first_ie || (first_ie && !was_first_ie))

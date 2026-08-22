@@ -39,12 +39,23 @@ enum bta_menu_index : uint8_t {
 	MENU_INDEX_MAIN_RECENT_CALLS,
 	MENU_INDEX_MAIN_DISCONNECT,
 
+	//Audio Menu
+	MENU_INDEX_AUDIO,
+	MENU_INDEX_AUDIO_SCROLL_INFO,
+	MENU_INDEX_AUDIO_AUTOSTART,
+	MENU_INDEX_AUDIO_FLASH,
+	MENU_INDEX_AUDIO_EXT_SETTINGS,
+
+	MENU_INDEX_DEVICE_LIST,
+
 	MENU_INDEX_LEN,
 };
 
 static const bta_menu_index MENU_START_INDEX[] = {
 	MENU_INDEX_MAIN_NC,
 	MENU_INDEX_MAIN,
+	MENU_INDEX_AUDIO,
+	MENU_INDEX_DEVICE_LIST,
 	MENU_INDEX_LEN,
 };
 
@@ -61,6 +72,16 @@ static const char* MENUS_ENG[] {
 	"Contacts",
 	"Recent Calls",
 	"Disconnect",
+
+	//Audio Menu
+	"Bluetooth Settings",
+	"Scroll Info Text",
+	"Auto Music Start",
+	"Flash Song Title on Change",
+	"Audio Settings",
+
+	//Device List
+	"Device List"
 };
 
 const char* getString(const bta_text_index index, const uint8_t locale);

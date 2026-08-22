@@ -1,6 +1,6 @@
 #include "Video_Socket.h"
 
-ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, string socket_path, const int w, const int h) {
+ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, string ipc_path, string socket_path, const int w, const int h) {
 	this->w = w;
 	this->h = h;
 
@@ -23,11 +23,13 @@ ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, strin
 	mpv_set_option_string(mpv_handler, "cmd", "no");
 	#endif
 
+	mpv_set_option_string(mpv_handler, "override-display-fps", "60");
+
 	mpv_set_option_string(mpv_handler, "profile", "low-latency");
 	mpv_set_option_string(mpv_handler, "keep-open", "yes");
 	mpv_set_option_string(mpv_handler, "idle", "yes");
 
-	mpv_set_option_string(mpv_handler, "input-ipc-server", "/tmp/mka_cmd");
+	mpv_set_option_string(mpv_handler, "input-ipc-server", ipc_path.c_str());
 
 	mpv_initialize(mpv_handler);
 	mpv_request_log_messages(mpv_handler, "debug");
@@ -42,7 +44,7 @@ ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, strin
 
 	setCallbacks(mpv_handler, mpv_gl);
 
-	system("chmod 666 /tmp/mka_cmd");
+	system(("chmod 666 " + ipc_path).c_str());
 }
 
 ClientVideoSocketHandler::~ClientVideoSocketHandler() {

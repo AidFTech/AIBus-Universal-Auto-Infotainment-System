@@ -59,6 +59,8 @@ private:
 
 	int8_t desired_track_count = 0;
 
+	String last_imid_str = "";
+
 	HondaIMIDHandler* imid_handler;
 	
 	uint8_t getDirectionByte(const bool rev, const bool repeat, const bool nr, const bool cr_o2);

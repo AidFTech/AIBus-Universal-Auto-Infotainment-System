@@ -54,6 +54,8 @@ struct ParameterList {
 
 	uint32_t wiper_time_limit = WIPER_TIMER_L; //The wiper time limit.
 
+	bool reverse_on = false; //True if the car is in reverse.
+
 	//Settings:
 	bool display_celsius = true; //Display Celsius.
 	bool wiper_door_off = true; //Turn the wipers off if the doors are open.

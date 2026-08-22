@@ -168,11 +168,14 @@ void AIBusDoubleDIN::loop() {
 								digitalWrite(FULL_POWER_ON, HIGH);
 								digitalWrite(BL_ON, HIGH);
 								nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, audio_on);
+								parameters.allow_open = true;
 								key_on = true;
 								door_timer_enabled = false;
 							} else {
 								if((parameters.door_position&0xC) != 0) {
 									nav_mcp.digitalWriteIO(NAV_MCP_ILL_AIDF, false);
+
+									parameters.allow_open = false;
 
 									uint8_t poweroff_data[] = {0xA0};
 									AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_SCREEN, 0xFF, poweroff_data);
@@ -202,6 +205,8 @@ void AIBusDoubleDIN::loop() {
 										uint8_t poweroff_data[] = {0xA0};
 										AIData poweroff_msg(sizeof(poweroff_data), ID_NAV_SCREEN, 0xFF, poweroff_data);
 										ai_handler.writeAIData(&poweroff_msg, false);
+
+										parameters.allow_open = false;
 
 										digitalWrite(FULL_POWER_ON, LOW);
 										digitalWrite(BL_ON, LOW);

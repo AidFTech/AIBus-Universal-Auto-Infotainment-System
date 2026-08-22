@@ -212,14 +212,14 @@ void BCAN_Handler::readCANMessage() {
 					}
 				}
 
-				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;;
+				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;
 
 				if(parameter_list->key_pos != 0)
 					parameter_list->switched_on = true;
 			} else if(can_msg.can_id == BCAN_ID_LEFTDOORS && can_msg.can_dlc == 1) { //Left doors.
 				const uint8_t last_door = parameter_list->doors_open;
 
-				parameter_list->doors_open &= 0xF5;
+				parameter_list->doors_open &= ~0xA;
 				parameter_list->doors_open |= (can_msg.data[0]&0xA0)>>4;
 
 				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;;
@@ -229,20 +229,20 @@ void BCAN_Handler::readCANMessage() {
 			} else if(can_msg.can_id == BCAN_ID_RIGHTDOORS && can_msg.can_dlc == 1) { //Right doors.
 				const uint8_t last_door = parameter_list->doors_open;
 
-				parameter_list->doors_open &= 0xFA;
+				parameter_list->doors_open &= ~0x5;
 				parameter_list->doors_open |= (can_msg.data[0]&0x50)>>4;
 
-				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;;
+				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;
 
 				if(parameter_list->doors_open != last_door)
 					writeAIBusDoorMessage();
 			} else if(can_msg.can_id == BCAN_ID_TRUNK && can_msg.can_dlc == 1) { //Trunk.
 				const uint8_t last_door = parameter_list->doors_open;
 
-				parameter_list->doors_open &= 0xEF;
+				parameter_list->doors_open &= ~0x10;
 				parameter_list->doors_open |= (can_msg.data[0]&0x80)>>3;
 
-				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;;
+				parameter_list->power_on = parameter_list->key_pos != 0 || (parameter_list->doors_open&0xC) != 0 || last_can_msg < CAN_TIMER;
 
 				if(parameter_list->doors_open != last_door)
 					writeAIBusDoorMessage();

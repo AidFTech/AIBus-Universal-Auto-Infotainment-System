@@ -25,6 +25,8 @@ pub struct ClientAIBusHandler {
 	aibus_handler: Arc<Mutex<AIBusHandler>>,
 
 	multi_cache: Vec<AIBusMessage>,
+
+	process_active: bool,
 }
 
 impl ClientAIBusHandler {
@@ -33,11 +35,13 @@ impl ClientAIBusHandler {
 		let client_handler = if path.len() <= 0 {
 			ClientAIBusHandler { socket: init_default_socket(),
 								aibus_handler: ai_handler,
-								multi_cache: Vec::new() }
+								multi_cache: Vec::new(),
+								process_active: false }
 		} else {
 			ClientAIBusHandler { socket: init_socket(path.to_string()),
 								aibus_handler: ai_handler,
-								multi_cache: Vec::new() }
+								multi_cache: Vec::new(),
+								process_active: false }
 		};
 
 		return client_handler;
@@ -83,6 +87,10 @@ impl ClientAIBusHandler {
 				std::mem::drop(aibus_handler);
 				return;
 			}
+		}
+
+		if !self.process_active {
+			return;
 		}
 
 		let ai_rx = aibus_handler.get_ai_rx();
@@ -154,6 +162,11 @@ impl ClientAIBusHandler {
 		}
 	
 		std::mem::drop(aibus_handler);
+	}
+
+	///Activate the socket handler.
+	pub fn activate(&mut self) {
+		self.process_active = true;
 	}
 
 	///Get an AIBus message from a socket message.

@@ -33,6 +33,8 @@ pub struct MpvVideo {
 	process: Child,
 	mpv_ipc: Option<UnixStream>,
 
+	output_locked: bool,
+
 	w: u16,
 	h: u16,
 
@@ -64,8 +66,9 @@ impl MpvVideo {
 
 		//Check these for crashes.
 		mpv_cmd.arg("--video-sync=display-resample");
+		//mpv_cmd.arg("--override-display-fps=60");
 		mpv_cmd.arg("--interpolation");
-		mpv_cmd.arg("--tscale=oversample");
+		//mpv_cmd.arg("--tscale=oversample");
 
 		if fullscreen {
 			
@@ -106,6 +109,8 @@ impl MpvVideo {
 			process: process.unwrap(),
 			mpv_ipc: ctl_sock,
 
+			output_locked: false,
+
 			w: width,
 			h: height,
 
@@ -130,6 +135,19 @@ impl MpvVideo {
 		if data.len() > 0 {
 			let mut child_stdin = self.process.stdin.as_ref().unwrap();
 			let _ = child_stdin.write(&data);
+		}
+		
+		if self.output_locked {
+			self.output_locked = false;
+
+			let mut mpv_ipc = match &self.mpv_ipc {
+				Some(mpv_ipc) => mpv_ipc,
+				None => return,
+			};
+
+			let _ = mpv_ipc.write("set vid auto\n".as_bytes());
+
+			self.refresh_video();
 		}
 	}
 
@@ -257,10 +275,46 @@ impl MpvVideo {
 			}
 		}
 	}
+
+	///Refresh the video.
+	pub fn refresh_video(&mut self) {
+		let mut mpv_ipc = match &self.mpv_ipc {
+			Some(mpv_ipc) => mpv_ipc,
+			None => return,
+		};
+
+		let refresh_str = "seek -0.001 absolute\n";
+		match mpv_ipc.write(refresh_str.as_bytes()) {
+			Ok(_) => {
+				
+			}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
+	}
 	
 	///Start video playback.
 	pub fn start(&mut self) {
 		//Start video playback.
+	}
+
+	///Turn the video off for a disconnected phone.
+	pub fn video_disconnect(&mut self) {
+		let mut mpv_ipc = match &self.mpv_ipc {
+			Some(mpv_ipc) => mpv_ipc,
+			None => return,
+		};
+
+		let stop_str = "set vid no\n";
+		match mpv_ipc.write(stop_str.as_bytes()) {
+			Ok(_) => {
+				self.output_locked = true;
+			}
+			Err(e) => {
+				println!("Error: {}", e);
+			}
+		}
 	}
 	
 	///Stop video playback.

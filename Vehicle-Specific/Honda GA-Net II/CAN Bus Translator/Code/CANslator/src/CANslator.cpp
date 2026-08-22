@@ -52,6 +52,7 @@ void CANslator::setup() {
 
 	ai_handler.addID(ID_CANSLATOR);
 	ai_handler.addID(ID_GPS_ANTENNA);
+	ai_handler.addID(ID_CAMERA);
 
 	bcan_handler.init();
 	bcan_handler.setWiperTimer(&wiper_timer);
@@ -102,6 +103,8 @@ void CANslator::loop() {
 
 	const ambient_state_t last_ambient = parameters.ambient_state;
 
+	const bool last_reverse = parameters.reverse_on;
+
 	elapsedMillis ai_timer;
 	AIData ai_msg;
 
@@ -118,9 +121,6 @@ void CANslator::loop() {
 
 			if(ai_msg.sender == ID_CANSLATOR)
 				continue;
-
-			if(ai_msg.receiver == ID_CANSLATOR && !(ai_msg.l >= 1 && ai_msg[0] == 0x80))
-				ai_handler.sendAcknowledgement(ID_CANSLATOR, ai_msg.sender);
 
 			if(ai_msg.sender == ID_NAV_COMPUTER && !parameters.computer_connected && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg)) {
 				parameters.computer_connected = true;
@@ -205,14 +205,38 @@ void CANslator::loop() {
 		}
 	}
 
-	//LaneWatch. @TODO: Only do this if the car has the LaneWatch option and the backup camera is not in use.
-	if(last_right_signal_on != bcan_handler.getRightSignalOn()) {
-		if(bcan_handler.getRightSignalOn()) {
-			peripheral_mcp.digitalWriteIO(PERIPHERAL_VIDEO_SELECT, true);
+	//Backup camera.
+	parameters.reverse_on = !peripheral_mcp2.digitalReadIO(PERIPHERAL_REVERSE_SW);
+	const bool last_camera_power = peripheral_mcp.digitalReadIO(PERIPHERAL_VIDEO_POWER), last_camera_select = peripheral_mcp.digitalReadIO(PERIPHERAL_VIDEO_SELECT);
+
+	if(parameters.reverse_on != last_reverse) {
+		if(parameters.reverse_on) {
+			peripheral_mcp.digitalWriteIO(PERIPHERAL_VIDEO_SELECT, false);
 			peripheral_mcp.digitalWriteIO(PERIPHERAL_VIDEO_POWER, true);
 		} else {
 			peripheral_mcp.digitalWriteIO(PERIPHERAL_VIDEO_POWER, false);
 			peripheral_mcp.digitalWriteIO(PERIPHERAL_VIDEO_SELECT, false);
+		}
+	}
+
+	//LaneWatch. @TODO: Only do this if the car has the LaneWatch option.
+	if(last_right_signal_on != bcan_handler.getRightSignalOn()) {
+		if(bcan_handler.getRightSignalOn()) {
+			if(!parameters.reverse_on) {
+				peripheral_mcp.digitalWriteIO(PERIPHERAL_VIDEO_SELECT, true);
+				peripheral_mcp.digitalWriteIO(PERIPHERAL_VIDEO_POWER, true);
+			}
+		} else {
+			peripheral_mcp.digitalWriteIO(PERIPHERAL_VIDEO_POWER, false);
+			peripheral_mcp.digitalWriteIO(PERIPHERAL_VIDEO_SELECT, false);
+		}
+	}
+	
+	//Camera messages.
+	{
+		const bool camera_power = peripheral_mcp.digitalReadIO(PERIPHERAL_VIDEO_POWER), camera_select = peripheral_mcp.digitalReadIO(PERIPHERAL_VIDEO_SELECT);
+		if(camera_power != last_camera_power || camera_select != last_camera_select) {
+			
 		}
 	}
 

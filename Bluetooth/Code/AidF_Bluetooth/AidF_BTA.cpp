@@ -15,6 +15,8 @@ AidFBTA::AidFBTA() {
 	for(int i=0;i<sizeof(pi_mac);i+=1)
 		pi_mac[i] = 0;
 
+	socket_parameters.process = true;
+
 	bt_handler.init(&elapsed_millis.time);
 
 	ping_timer = elapsed_millis.time + RADIO_PING_TIMER;
@@ -23,6 +25,24 @@ AidFBTA::AidFBTA() {
 	audio_handler.setTimer(&elapsed_millis.time);
 
 	createMenuNoPhone(true);
+	
+	vector<IniList> file_settings = loadIniFile(BLUETOOTH_SETTING_FILE_PATH);
+	bool split = true, autostart = true, flash = true;
+	for(auto list: file_settings) {
+		if(list.title.compare("AidF_BTA") != 0)
+			continue;
+			
+		for(int s=0;s<list.l_n;s+=1) {
+			if(list.num_vars[s].compare("Autostart") == 0)
+				autostart = list.num_values[s] != 0;
+			else if(list.num_vars[s].compare("Split") == 0)
+				split = list.num_values[s] != 0;
+			else if(list.num_vars[s].compare("Flash") == 0)
+				flash = list.num_values[s] != 0;
+		}
+	}
+	
+	audio_handler.setSaveSettings(split, autostart, flash);
 }
 
 AidFBTA::~AidFBTA() {
@@ -109,13 +129,29 @@ void AidFBTA::loop() {
 		aibus_handler.writeAIData(&screen_ping_msg, parameter_list.screen_connected);
 	}
 
+	if(!parameter_list.dimensions_set && elapsed_millis.time - dimension_ping_timer > SCREEN_PING_TIMER) {
+		dimension_ping_timer = elapsed_millis.time;
+		uint8_t dim_ping_data[] = {0x2C, 0xF0};
+		AIData dim_ping_msg(sizeof(dim_ping_data), ID_PHONE, ID_NAV_COMPUTER, dim_ping_data);
+		aibus_handler.writeAIData(&dim_ping_msg);
+	}
+
 	usleep(1000);
 }
 
 //Handle an AIBus message.
 void AidFBTA::handleAIBusMessage(AIData* ai_msg) {
 	if(ai_msg->sender == ID_NAV_COMPUTER && ai_msg->l >= 1 && ai_msg->data[0] == 0x2B) { //Menu operation.
-		if(ai_msg->l >= 3 && ai_msg->data[1] == 0x6C) { //Side menu selection.
+		if(ai_msg->l >= 2 && ai_msg->data[1] == 0x40) { //Menu closed.
+			parameter_list.current_menu = BTA_MENU_NONE;
+		} else if(ai_msg->l >= 3 && ai_msg->data[1] == 0x60) { //Main menu selection.
+			const int selection = ai_msg->data[2] - 1;
+
+			if(parameter_list.current_menu == BTA_MENU_DEVICES) {
+				bt_handler.connectDevice(selection);
+				text_handler.clearMenu();
+			}
+		} else if(ai_msg->l >= 3 && ai_msg->data[1] == 0x6C) { //Side menu selection.
 			const int selected = ai_msg->data[2] - 1;
 			if(selected < 0)
 				return;
@@ -131,7 +167,7 @@ void AidFBTA::handleAIBusMessage(AIData* ai_msg) {
 					createMenuNoPhone(false);
 					break;
 				case MENU_INDEX_MAIN_NC_DEVICE_LIST:
-					bt_handler.getObjectList();
+					bt_handler.createDeviceListMenu();
 					break;
 				default:
 					break;
@@ -187,6 +223,10 @@ void AidFBTA::handleAIBusMessage(AIData* ai_msg) {
 			if(ai_msg->receiver == ID_PHONE && parameter_list.imid_native_phone)
 				audio_handler.refreshIMIDConnection();
 		}
+	} else if(ai_msg->sender == ID_NAV_COMPUTER && ai_msg->l >= 5 && ai_msg->data[0] == 0x2C) { //Dimensions.
+		parameter_list.screen_w = (ai_msg->data[1]<<8) | ai_msg->data[2];
+		parameter_list.screen_h = (ai_msg->data[3]<<8) | ai_msg->data[4];
+		parameter_list.dimensions_set = true;
 	}
 }
 

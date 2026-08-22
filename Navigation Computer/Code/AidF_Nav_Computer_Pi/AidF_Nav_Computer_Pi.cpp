@@ -1,4 +1,5 @@
 #include "AidF_Nav_Computer_Pi.h"
+#include <SDL2/SDL_render.h>
 //Must be compiled with options -lSDL2 -lSDL2_ttf -lrt
 
 AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, string port, const uint16_t lw, const uint16_t lh) {
@@ -6,7 +7,8 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, string port, const uint
 	this->lh = lh;
 
 	this->renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-	this->video_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, lw, lh);
+	this->amirror_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, lw, lh);
+	this->camera_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBX8888, SDL_TEXTUREACCESS_STREAMING, lw, lh);
 	
 	this->night_profile.background = DEFAULT_BACKGROUND_NIGHT;
 	this->night_profile.background2 = DEFAULT_BACKGROUND_NIGHT;
@@ -97,19 +99,27 @@ AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, string port, const uint
 	
 	this->elapsed_millis.run = &this->running;
 
-	this->video_socket_parameters.socket_handler = new ClientVideoSocketHandler(renderer, VIDEO_SOCKET_PATH, this->lw, this->lh);
-	this->video_socket_parameters.running = &this->running;
-	this->video_socket_parameters.socket_path = VIDEO_SOCKET_PATH;
+	this->amirror_video_socket_parameters.socket_handler = new ClientVideoSocketHandler(renderer, AMIRROR_VIDEO_IPC_PATH, AMIRROR_VIDEO_SOCKET_PATH, this->lw, this->lh);
+	this->amirror_video_socket_parameters.running = &this->running;
+	this->amirror_video_socket_parameters.socket_path = AMIRROR_VIDEO_SOCKET_PATH;
 
-	VideoCache* video_cache = this->video_socket_parameters.socket_handler->getVideoCache();
-	SDL_LockTexture(video_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
-	SDL_UnlockTexture(video_texture);
+	VideoCache* video_cache = this->amirror_video_socket_parameters.socket_handler->getVideoCache();
+	SDL_LockTexture(amirror_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
+	SDL_UnlockTexture(amirror_texture);
+
+	const string camera_path = getCameraPath();
+	if(camera_path.empty())
+		camera_video_socket_parameters.socket_path = CAMERA_VIDEO_SOCKET_PATH + string("0");
+	else
+		camera_video_socket_parameters.socket_path = camera_path;
+
+	camera_handler = new CameraHandler(renderer, attribute_list, &camera_video_socket_parameters, window_handler);
 
 	pthread_create(&amirror_socket_thread, NULL, socketThread, (void *)&amirror_socket_parameters);
 	pthread_create(&abta_socket_thread, NULL, socketThread, (void *)&abta_socket_parameters);
 	pthread_create(&frame_thread, NULL, frameThread, (void*)&frame_parameters);
 	pthread_create(&timer_thread, NULL, millisThread, (void*)&elapsed_millis);
-	pthread_create(&video_thread, NULL, videoPlayThread, (void*)&video_socket_parameters);
+	pthread_create(&amirror_video_thread, NULL, videoPlayThread, (void*)&amirror_video_socket_parameters);
 
 	#ifdef RPI_UART
 	uint8_t init_data[] = {0x4A, 0x1F};
@@ -132,7 +142,8 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	pthread_cancel(abta_socket_thread);
 	pthread_cancel(frame_thread);
 	pthread_cancel(timer_thread);
-	pthread_cancel(video_thread);
+	pthread_cancel(amirror_video_thread);
+	pthread_cancel(camera_video_thread);
 	#ifndef RPI_UART
 	std::cout<<"Threads exited!\n";
 	#endif
@@ -140,14 +151,20 @@ AidF_Nav_Computer::~AidF_Nav_Computer() {
 	if(this->amirror_socket_parameters.socket_ptr != nullptr)
 		delete this->amirror_socket_parameters.socket_ptr;
 
-	if(this->video_socket_parameters.socket_handler != nullptr)
-		delete this->video_socket_parameters.socket_handler;
+	if(this->amirror_video_socket_parameters.socket_handler != nullptr)
+		delete this->amirror_video_socket_parameters.socket_handler;
+
+	if(this->camera_video_socket_parameters.socket_handler != nullptr)
+		delete this->camera_video_socket_parameters.socket_handler;
+
+	delete camera_handler;
 
 	#ifdef RPI_UART
 	gpiod_line_release(line_nav_mute);
 	#endif
 
-	SDL_DestroyTexture(video_texture);
+	SDL_DestroyTexture(amirror_texture);
+	SDL_DestroyTexture(camera_texture);
 	SDL_DestroyRenderer(this->renderer);
 	delete this->br;
 	delete this->aibus_handler;
@@ -222,24 +239,50 @@ void AidF_Nav_Computer::loop() {
 	if(audio_window != NULL)
 		audio_window->loop();
 
-	ClientVideoSocketHandler* video_socket_handler = video_socket_parameters.socket_handler;
+	if(camera_video_socket_parameters.socket_handler == nullptr) {
+		const string socket_path = camera_video_socket_parameters.socket_path;
+		if(exists(path(socket_path))) {
+			camera_video_socket_parameters.socket_handler = new ClientVideoSocketHandler(renderer, CAMERA_VIDEO_IPC_PATH, socket_path, this->lw, this->lh);
+			camera_video_socket_parameters.running = &this->running;
+		}
+	}
+
+	ClientVideoSocketHandler* amirror_video_socket_handler = amirror_video_socket_parameters.socket_handler;
 		
-	const unsigned long video_start = elapsed_millis.time;
+	unsigned long video_start = elapsed_millis.time;
 	do {
-		VideoCache *video_cache = video_socket_handler->getVideoCache();
+		VideoCache *video_cache = amirror_video_socket_handler->getVideoCache();
 		
-		SDL_LockTexture(video_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
-		video_socket_handler->render();
+		SDL_LockTexture(amirror_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
+		amirror_video_socket_handler->render();
 
-		SDL_UnlockTexture(video_texture);
-	} while(video_socket_handler->getRefresh() && elapsed_millis.time - video_start < 17);
+		SDL_UnlockTexture(amirror_texture);
+	} while(amirror_video_socket_handler->getRefresh() && elapsed_millis.time - video_start < 15);
 
-	if(!attribute_list->phone_active || attribute_list->phone_type == 0 || !video_socket_handler->getVideoInit()) {
+	video_start = elapsed_millis.time;
+	ClientVideoSocketHandler* camera_video_socket_handler = camera_video_socket_parameters.socket_handler;
+	if(camera_video_socket_handler != nullptr) {
+		do {
+			VideoCache* video_cache = camera_video_socket_handler->getVideoCache();
+
+			SDL_LockTexture(camera_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
+			camera_video_socket_handler->render();
+
+			SDL_UnlockTexture(camera_texture);
+		} while(camera_video_socket_handler->getRefresh() && elapsed_millis.time - video_start < 15);
+	}
+
+	if(attribute_list->phone_active && attribute_list->phone_type != 0 && amirror_video_socket_handler->getVideoInit()) {
+		SDL_Rect dest = {0, 0, lw, lh};
+		SDL_RenderCopy(renderer, amirror_texture, NULL, &dest);
+	} else if(attribute_list->camera_active && camera_video_socket_handler != nullptr && camera_video_socket_handler->getVideoInit()) {
+		SDL_Rect dest = {0, 0, lw, lh};
+		SDL_RenderCopy(renderer, camera_texture, NULL, &dest);
+
+		camera_handler->overlayCameraInfo(camera_texture);
+	} else {
 		this->br->drawBackground(renderer, 0, 0, lw, lh);
 		this->window_handler->drawWindow();
-	} else {
-		SDL_Rect dest = {0, 0, lw, lh};
-		SDL_RenderCopy(renderer, video_texture, NULL, &dest);
 	}
 
 	SDL_RenderPresent(renderer);
@@ -454,11 +497,11 @@ void AidF_Nav_Computer::loop() {
 								attribute_list->phone_type = type;
 
 								if(type == 0) {
-									SDL_SetRenderTarget(renderer, video_texture);
+									SDL_SetRenderTarget(renderer, amirror_texture);
 									SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 									SDL_RenderClear(renderer);
 									SDL_SetRenderTarget(renderer, NULL);
-									video_socket_handler->clearVideoInit();
+									amirror_video_socket_handler->clearVideoInit();
 								}
 
 								//TODO: Only if the window is the mirror window.
@@ -478,6 +521,44 @@ void AidF_Nav_Computer::loop() {
 							} else if(ai_msg.l >= 3 && ai_msg[0] == 0x7F && ai_msg[1] == 0x6) { //Mute/unmute.
 								attribute_list->nav_prompt_active = ai_msg[2] != 0;
 							}
+						} else if(ai_msg.sender == ID_CAMERA) {
+							if(ai_msg.l >= 3 && ai_msg[0] == 0x48 && ai_msg[1] == 0x61) {
+								attribute_list->camera_active = ai_msg[2] != 0;
+								//TODO: Lots more.
+
+								if(camera_video_socket_parameters.socket_handler != nullptr)  {
+									if(attribute_list->phone_active) {
+										uint8_t mirror_set_data[] = {0x48, 0x8E, uint8_t(attribute_list->camera_active ? 0 : 1)};
+										AIData mirror_set_msg(sizeof(mirror_set_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO, mirror_set_data);
+
+										aibus_handler->writeAIData(&mirror_set_msg, attribute_list->mirror_connected);
+									}
+
+									if(!attribute_list->monitor_on)
+										setMonitorOn(true);
+								}
+
+								if(!attribute_list->camera_active)
+									camera_handler->resetCameraMessage();
+							} else if(ai_msg.l >= 3 && ai_msg[0] == 0x25 && ai_msg[1] == 0x57) {
+								if(ai_msg[2] == 0x61) { //Camera message.
+									string new_camera_msg = "";
+									for(int i=3;i<ai_msg.l;i+=1)
+										new_camera_msg += char(ai_msg[i]);
+
+									if(new_camera_msg.length() > 0)
+										camera_handler->setCameraMessage(new_camera_msg.c_str());
+									else
+										camera_handler->resetCameraMessage();
+								} else if(ai_msg[2] == 0x62) { //Camera path.
+									string new_camera_path = "";
+									for(int i=3;i<ai_msg.l;i+=1)
+										new_camera_path += char(ai_msg[i]);
+
+									const string camera_socket_path = new_camera_path.length() > 0 ? new_camera_path : CAMERA_VIDEO_SOCKET_PATH + string("0");
+									camera_handler->setCameraPath(camera_socket_path.c_str());
+								}
+							}
 						}
 					}
 
@@ -494,17 +575,17 @@ void AidF_Nav_Computer::loop() {
 			}
 		}
 
-	 	if(video_socket_handler->getRefresh()) {
-			VideoCache *video_cache = video_socket_handler->getVideoCache();
+	 	if(amirror_video_socket_handler->getRefresh()) {
+			VideoCache *video_cache = amirror_video_socket_handler->getVideoCache();
 			
-			SDL_LockTexture(video_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
-			video_socket_handler->render();
+			SDL_LockTexture(amirror_texture, NULL, &video_cache->pixels, (int*)&video_cache->pitch);
+			amirror_video_socket_handler->render();
 
-			SDL_UnlockTexture(video_texture);
+			SDL_UnlockTexture(amirror_texture);
 
-			if(attribute_list->phone_active && attribute_list->phone_type != 0 && video_socket_handler->getVideoInit()) {
+			if(attribute_list->phone_active && attribute_list->phone_type != 0 && amirror_video_socket_handler->getVideoInit()) {
 				SDL_Rect dest = {0, 0, lw, lh};
-				SDL_RenderCopy(renderer, video_texture, NULL, &dest);
+				SDL_RenderCopy(renderer, amirror_texture, NULL, &dest);
 				SDL_RenderPresent(renderer);
 			}
 		}

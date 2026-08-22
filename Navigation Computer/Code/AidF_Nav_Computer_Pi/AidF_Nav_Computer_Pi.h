@@ -7,6 +7,7 @@
 
 #include <string>
 #include <fstream>
+#include <filesystem>
 #include <vector>
 #include <cstdlib>
 
@@ -26,6 +27,8 @@
 #include "Background/Nav_Background.h"
 #include "Background/Nav_Solid_Background.h"
 #include "Background/Nav_Gradient_Background.h"
+
+#include "Camera/Camera_Handler.h"
 
 #include "Window/Nav_Window.h"
 #include "Window/Audio_Window.h"
@@ -63,6 +66,9 @@
 #define GPIO_USB_PWR 26
 #define GPIO_NAV_MUTE 12
 #endif
+
+using namespace std;
+using namespace filesystem;
 
 struct FrameParameters {
 	int* frame;
@@ -113,7 +119,7 @@ private:
 	bool* canslator_connected, *radio_connected, *mirror_connected;
 
 	SDL_Renderer* renderer;
-	SDL_Texture* video_texture;
+	SDL_Texture* amirror_texture, *camera_texture;
 	AidFColorProfile active_color_profile, day_profile, night_profile;
 
 	SerialAIBusHandler* aibus_handler;
@@ -132,10 +138,12 @@ private:
 	Main_Menu_Window* main_window;
 	NavWindow* misc_window;
 
-	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread, video_thread;
+	CameraHandler* camera_handler;
+
+	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread, amirror_video_thread, camera_video_thread;
 
 	SocketHandlerParameters amirror_socket_parameters, abta_socket_parameters;
-	VideoSocketParameters video_socket_parameters;
+	VideoSocketParameters amirror_video_socket_parameters, camera_video_socket_parameters;
 	FrameParameters frame_parameters;
 	ElapsedMillis elapsed_millis;
 

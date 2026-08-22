@@ -207,7 +207,8 @@ void TextHandler::sendLongRDSMessage(String text) {
 			if(i >= 4 && rds_message.l>=2)
 				rds_message.data[1] |= 0x10;
 			
-			ai_handler->writeAIData(&rds_message, parameter_list->computer_connected);
+			if(!ai_handler->writeAIData(&rds_message, parameter_list->computer_connected))
+				parameter_list->computer_connected = false;
 		}
 
 		if(parameter_list->header_rds_setting == HEADER_RDS_ALWAYS || (parameter_list->info_mode && parameter_list->header_rds_setting == HEADER_RDS_INFO_MODE)) {
@@ -223,7 +224,8 @@ void TextHandler::sendLongRDSMessage(String text) {
 
 			AIData clear_msg(sizeof(clear_data), ID_RADIO, ID_NAV_COMPUTER, clear_data);
 
-			ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected);
+			if(!ai_handler->writeAIData(&clear_msg, parameter_list->computer_connected))
+				parameter_list->computer_connected = false;
 		}
 	}
 }

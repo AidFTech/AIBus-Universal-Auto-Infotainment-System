@@ -135,6 +135,15 @@ void ClientAIBusHandler::writeSocketMessage(SocketMessage* msg) {
 
 	data[byte_l-1] = checksum;
 
+	int avail = rx_cache.size();
+	unsigned long last_read = *timer;
+	while(*timer - last_read < 5) {
+		if(rx_cache.size() > avail)
+			last_read = *timer;
+
+		avail = rx_cache.size();
+	}
+
 	send(network_socket, data, byte_l, 0);
 }
 
@@ -157,25 +166,48 @@ int ClientAIBusHandler::readSocketMessage(SocketMessage* msg) {
 			return -1;
 	}
 
-	const uint8_t opcode = data[strlen(SOCKET_START)], msg_length = data[strlen(SOCKET_START) + 1]-1;
-	if(msg_length > message_size - strlen(SOCKET_START) - 2)
-		return -1;
-	
-	uint8_t msg_data[msg_length];
-	for(int i=0;i<msg_length;i+=1)
-		msg_data[i] = data[i+strlen(SOCKET_START) + 2];
+	int start = 0;
+	vector<uint8_t> full_data_vec(0);
 
-	uint8_t checksum = 0;
-	for(int i=0;i<message_size - 1;i+=1)
-		checksum ^= data[i];
+	uint8_t main_opcode = 0;
 
-	if(checksum != data[message_size - 1])
-		return -1;
+	while(start < message_size - (strlen(SOCKET_START) + 2)) {
+		const uint8_t opcode = data[strlen(SOCKET_START) + start], msg_length = data[strlen(SOCKET_START) + 1 + start]-1;
+		if(msg_length > message_size - strlen(SOCKET_START) - 2 - start)
+			break;
 
-	msg->refreshSocketData(opcode, msg_length);
-	msg->refreshSocketData(msg_data);
+		if(main_opcode != 0 && opcode != main_opcode) {
+			start += strlen(SOCKET_START) + 3 + msg_length;
+			continue;
+		}
 
-	return msg_length;
+		main_opcode = opcode;
+		
+		uint8_t msg_data[msg_length];
+		for(int i=0;i<msg_length;i+=1)
+			msg_data[i] = data[i+strlen(SOCKET_START) + 2 + start];
+
+		uint8_t checksum = 0;
+		for(int i=0;i<strlen(SOCKET_START) + 2 + msg_length;i+=1)
+			checksum ^= data[i + start];
+
+		if(checksum != data[strlen(SOCKET_START) + 2 + start + msg_length])
+			break;
+
+		for(int i=0;i<sizeof(msg_data);i+=1)
+			full_data_vec.push_back(msg_data[i]);
+
+		start += strlen(SOCKET_START) + 3 + msg_length;
+	}
+
+	uint8_t full_data[full_data_vec.size()];
+	for(int i=0;i<sizeof(full_data);i+=1)
+		full_data[i] = full_data_vec[i];
+
+	msg->refreshSocketData(main_opcode, sizeof(full_data));
+	msg->refreshSocketData(full_data);
+
+	return message_size;
 }
 
 //Cache AIBus data from a socket message if valid.
@@ -183,48 +215,69 @@ void ClientAIBusHandler::cacheAIData(uint8_t* data, const int l) {
 	if(l < 4)
 		return;
 
-	uint8_t chex = 0;
-	for(int i=0;i<l-1;i+=1)
-		chex ^= data[i];
+	vector<uint8_t> data_vec(0);
+	for(int i=0;i<l;i+=1)
+		data_vec.push_back(data[i]);
 
-	if(chex != data[l-1]) //Invalid message.
-		return;
+	while(data_vec.size() > 0) {
+		if(data_vec.size() < 4)
+			return;
 
-	const uint8_t s = data[0], r = data[2];
+		const uint8_t s = data_vec[0], r = data_vec[2];
+		const int expected_length = data_vec[1] + 2;
 
-	while(!cache_ok);
-	check_ok = false;
-	if((r==my_id || r==0xFF) && s != my_id) {
-		uint8_t ai_data[l - 4];
-		for(int i=3;i<l-1;i+=1)
-			ai_data[i-3] = data[i];
+		if(data_vec.size() < expected_length)
+			return;
 
-		AIData new_msg(sizeof(ai_data), s, r, ai_data);
+		uint8_t chex = 0;
+		for(int i=0;i<expected_length-1;i+=1)
+			chex ^= data_vec[i];
 
-		if(r == my_id && new_msg.l > 0 && new_msg[0] != 0x80)
-			sendAcknowledgement(r, s);
-
-		if(new_msg.l >= 3 && new_msg[0] == 0x91 && (new_msg.receiver == my_id || new_msg.receiver == 0xFF)) {
-			const int expected_size = new_msg[1];
-			multi_cache.push_back(new_msg);
-
-			if(multi_cache.size() >= expected_size) {
-				vector<uint8_t> full_data(0);
-				for(int m=0;m<expected_size;m+=1) {
-					for(int i=0;i<multi_cache[m].l-3;i+=1)
-						full_data.push_back(multi_cache[m][i+3]);
-				}
-
-				multi_cache.clear();
-
-				AIData final_message(full_data.size(), s, r, full_data.data());
-				rx_cache.push_back(final_message);
-			}
+		if(chex != data_vec[expected_length-1]) { //Invalid message.
+			for(int i=0;i<expected_length;i+=1)
+				data_vec.erase(data_vec.begin());
+			
+			continue;
 		}
-		else
-			rx_cache.push_back(new_msg);
+		
+		if((r==my_id || r==0xFF) && s != my_id) {
+			while(!cache_ok);
+			check_ok = false;
+			uint8_t ai_data[expected_length - 4];
+			for(int i=3;i<expected_length-1;i+=1)
+				ai_data[i-3] = data_vec[i];
+
+			AIData new_msg(sizeof(ai_data), s, r, ai_data);
+
+			if(r == my_id && new_msg.l > 0 && new_msg[0] != 0x80)
+				sendAcknowledgement(r, s);
+
+			if(new_msg.l >= 3 && new_msg[0] == 0x91 && (new_msg.receiver == my_id || new_msg.receiver == 0xFF)) {
+				const int expected_size = new_msg[1];
+				multi_cache.push_back(new_msg);
+
+				if(multi_cache.size() >= expected_size) {
+					vector<uint8_t> full_data(0);
+					for(int m=0;m<expected_size;m+=1) {
+						for(int i=0;i<multi_cache[m].l-3;i+=1)
+							full_data.push_back(multi_cache[m][i+3]);
+					}
+
+					multi_cache.clear();
+
+					AIData final_message(full_data.size(), s, r, full_data.data());
+					rx_cache.push_back(final_message);
+				}
+			}
+			else
+				rx_cache.push_back(new_msg);
+			
+			check_ok = true;
+		}
+
+		for(int i=0;i<expected_length;i+=1)
+			data_vec.erase(data_vec.begin());
 	}
-	check_ok = true;
 }
 
 //Read AIBus data.
@@ -289,6 +342,7 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 	ai_socket_msg.refreshSocketData(data);
 
 	this->writeSocketMessage(&ai_socket_msg);
+
 	if(!ack || ai_d->receiver == 0xFF || (ai_d->l > 0 && ai_d->data[0] == 0x80) || timer == nullptr || timer == NULL)
 		return true;
 
@@ -296,12 +350,22 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 	bool rec_ack = false;
 	int tries = 0;
 
-	unsigned long last_send = *timer;
+	unsigned long last_send = *timer, last_read = *timer;
+	const unsigned long first_read = *timer;
 	
-	while(!rec_ack) {
+	while(!rec_ack && tries < 25) {
+		if(*timer - first_read <= 1)
+			continue;
+
+		if(*timer - last_read <= 2)
+			continue;
+
+		last_read = *timer;
+
 		vector<AIData> current_rx;
-		while(!check_ok);
+		while(!check_ok || !cache_ok);
 		cache_ok = false;
+		check_ok = false;
 		for(int i=0;i<rx_cache.size();i+=1) {
 			AIData check_msg = rx_cache[i];
 			current_rx.push_back(check_msg);
@@ -315,18 +379,16 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 			}
 		}
 		cache_ok = true;
+		check_ok = true;
 
 		if(rec_ack)
 			break;
 
-		if(*timer - last_send > 100) {
+		if(*timer - last_send > (tries > 0 ? 100 : 200)) {
 			writeSocketMessage(&ai_socket_msg);
 			last_send = *timer;
 			tries += 1;
 		}
-
-		if(tries >= 25)
-			break;
 	}
 
 	return rec_ack;
@@ -342,6 +404,11 @@ void ClientAIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t
 //Get the client socket.
 int ClientAIBusHandler::getClient() {
 	return this->network_socket;
+}
+
+//Get the handler ID.
+uint8_t ClientAIBusHandler::getID() {
+	return my_id;
 }
 
 //Determine whether a message is the initialization message.
@@ -387,11 +454,14 @@ void *socketThread(void* parameters_v) {
 				for(int i=0;i<rx_msg.l;i+=1)
 					data[i] = rx_msg.data[i];
 
-				socket_ptr->cacheAIData(data, sizeof(data));
+				if(parameters->process)
+					socket_ptr->cacheAIData(data, sizeof(data));
 			}
 		} else if(socket_byte_count == 0) { //Socket closed.
 			socket_ptr ->clearSocket();
 		}
+
+		usleep(1000);
 	}
 	
 	void* result;

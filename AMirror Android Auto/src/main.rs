@@ -63,6 +63,15 @@ fn main() {
 		}
 	});
 
+	match client_handler.lock() {
+		Ok(mut client_handler) => {
+			client_handler.activate();
+		}
+		Err(_) => {
+			
+		}
+	}
+
 	let fullscreen = is_rpi();
 
 	let mut resolution_response = false;

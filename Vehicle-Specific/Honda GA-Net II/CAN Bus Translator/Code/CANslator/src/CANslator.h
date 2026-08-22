@@ -120,6 +120,7 @@ private:
 	void writeAIBusTripDistanceMessage();
 };
 
-int main();
+void setup();
+void loop();
 
 #endif

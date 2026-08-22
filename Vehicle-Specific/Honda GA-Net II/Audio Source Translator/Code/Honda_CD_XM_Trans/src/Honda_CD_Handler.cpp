@@ -10,6 +10,9 @@ HondaCDHandler::HondaCDHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_drive
 	this->clearCDText(true, true, true, true, true);
 
 	getCDSettings(&this->autostart, &this->use_function_timer, &this->split);
+
+	resend_cache_vec.setStorage(resend_cache);
+	resend_field_cache_vec.setStorage(resend_field_cache);
 }
 
 //CDC handler loop function.
@@ -21,7 +24,8 @@ void HondaCDHandler::loop() {
 				function_timer = FUNCTION_CHANGE_TIMER - 10;
 			} else {
 				imid_handler->setIMIDSource(ID_CDC, 0);
-				imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status));
+				if(!imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status)))
+					imid_cmd |= COMMAND_WRITE_IMID_TRACK_MSG;
 			}
 		}
 		setting_changed = true;
@@ -32,6 +36,9 @@ void HondaCDHandler::loop() {
 		setting_changed = false;
 		setCDSettings(this->autostart, this->use_function_timer, this->split);
 	}
+
+	if(!source_established)
+		return;
 
 	if(this->source_sel) {
 		if(second_timer > 800 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff) {
@@ -215,8 +222,31 @@ void HondaCDHandler::loop() {
 		}
 
 		if((imid_cmd&IMID_REFRESH_CLEAR) != 0) { //Clear the IMID.
-			imid_handler->clearIMIDCDText();
-			imid_cmd &= ~(IMID_REFRESH_CLEAR);
+			if(imid_handler->clearIMIDCDText())
+				imid_cmd &= ~(IMID_REFRESH_CLEAR);
+		}
+
+		if((imid_cmd&COMMAND_WRITE_IMID_TRACK_MSG) != 0) { //Write the track to the IMID.
+			if(imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status)))
+				imid_cmd &= ~COMMAND_WRITE_IMID_TRACK_MSG;
+		}
+
+		if(resend_cache_vec.size() > 0 && resend_field_cache_vec.size() > 0) { //Rewrite text to the IMID.
+			const String text = resend_cache_vec[0];
+			const uint8_t field = resend_field_cache_vec[0];
+
+			resend_field_cache_vec.remove(0);
+			resend_cache_vec.remove(0);
+
+			if(!imid_handler->writeIMIDCDCTextMessage(field, text)) {
+				resend_field_cache_vec.push_back(field);
+				resend_cache_vec.push_back(text);
+			}
+		}
+
+		if(resend_text.length() > 0) {
+			if(imid_handler->writeIMIDTextMessage(resend_text))
+				resend_text = "";
 		}
 
 		if((track_cmd&COMMAND_WRITE_RADIO_TRACK_MSG) != 0) {
@@ -1270,7 +1300,8 @@ void HondaCDHandler::sendCDLoadWaitMessage(const uint8_t message_type) {
 		
 		if(parameter_list->imid_connected) {
 			if(display_parameter == TEXT_NONE) {
-				imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status));
+				if(!imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status)))
+					imid_cmd |= COMMAND_WRITE_IMID_TRACK_MSG;
 			}
 		} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
 			if(message_type == 0x18) {
@@ -1408,20 +1439,31 @@ void HondaCDHandler::sendCDIMIDTextMessage(const uint8_t field, String meta_text
 
 	if(parameter_list->imid_connected) {
 		if(display_parameter == TEXT_NONE) {
+			bool set = true;
+			uint8_t new_field = field;
+
 			if(text_mode == TEXT_MODE_WITH_TEXT) {
-				imid_handler->writeIMIDCDCTextMessage(field, meta_text);
+				set = imid_handler->writeIMIDCDCTextMessage(field, meta_text);
 			} else if(text_mode == TEXT_MODE_MP3) {
 				switch(field) {
 					case 2:
-						imid_handler->writeIMIDCDCTextMessage(TEXT_SONG, meta_text);
+						new_field = TEXT_SONG;
+						set = imid_handler->writeIMIDCDCTextMessage(TEXT_SONG, meta_text);
 						break;
 					case 4:
-						imid_handler->writeIMIDCDCTextMessage(TEXT_ARTIST, meta_text);
+						new_field = TEXT_ARTIST;
+						set = imid_handler->writeIMIDCDCTextMessage(TEXT_ARTIST, meta_text);
 						break;
 					case 3:
-						imid_handler->writeIMIDCDCTextMessage(TEXT_ALBUM, meta_text);
+						new_field = TEXT_ALBUM;
+						set = imid_handler->writeIMIDCDCTextMessage(TEXT_ALBUM, meta_text);
 						break;
 				}
+			}
+
+			if(!set) {
+				resend_cache_vec.push_back(meta_text);
+				resend_field_cache_vec.push_back(new_field);
 			}
 		} else {
 			display_timer_enabled = false;
@@ -1553,7 +1595,9 @@ void HondaCDHandler::incrementInfo() {
 		
 		if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0)
 			clearExternalIMID();
-		sendIMIDInfoMessage();
+
+		if(!parameter_list->imid_connected)
+			sendIMIDInfoMessage();
 
 		String nav_header = "";
 		switch(display_parameter) {
@@ -1576,6 +1620,9 @@ void HondaCDHandler::incrementInfo() {
 
 		if(nav_header.length() > 0)
 			setNavHeader(nav_header);
+
+		if(parameter_list->imid_connected)
+			sendIMIDInfoMessage();
 	} else {
 		if(use_function_timer && parameter_list->imid_connected && text_mode != TEXT_MODE_BLANK) {
 			imid_handler->setIMIDSource(ID_CD, 0);
@@ -1600,7 +1647,8 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 	if(!mode_timer_enabled) {
 		if(parameter_list->imid_connected) {
 			if(display_parameter == TEXT_NONE) {
-				imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status));
+				if(!imid_handler->writeIMIDCDCTrackMessage(disc, track, 0xFF, timer, getIECDStatus(ai_cd_status), getIECDRepeat(ai_cd_status)))
+					imid_cmd |= COMMAND_WRITE_IMID_TRACK_MSG;
 			}
 		} else if(parameter_list->external_imid_cd) {
 			sendAICDStatusMessage(ID_IMID_SCR);
@@ -1705,7 +1753,8 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 			function_text = "CD PLAY";
 
 		if(parameter_list->imid_connected) {
-			imid_handler->writeIMIDTextMessage(function_text);
+			if(!imid_handler->writeIMIDTextMessage(function_text))
+				resend_text = function_text;
 		} else {
 			AIData function_msg(4+function_text.length(), ID_CDC, ID_IMID_SCR);
 			function_msg.data[0] = 0x23;
@@ -1834,7 +1883,8 @@ void HondaCDHandler::sendIMIDInfoMessage(const bool resend) {
 //Send an info message to the IMID.
 void HondaCDHandler::sendIMIDInfoMessage(String text) {
 	if(parameter_list->imid_connected) {
-		imid_handler->writeIMIDTextMessage(text);
+		if(!imid_handler->writeIMIDTextMessage(text))
+			resend_text = text;
 	} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
 		uint8_t line = 1;
 		if(parameter_list->external_imid_lines > 1)

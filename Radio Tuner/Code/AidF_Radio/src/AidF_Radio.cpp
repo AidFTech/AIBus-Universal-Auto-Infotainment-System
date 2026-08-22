@@ -1,5 +1,4 @@
 #include "AidF_Radio.h"
-#include "Arduino.h"
 
 AidFRadio aidf_radio;
 
@@ -48,7 +47,7 @@ void AidFRadio::setup() {
 	digitalWrite(POWER_ON_SW, HIGH);
 
 	digitalWrite(DAC_FILTER_MODE, LOW);
-	digitalWrite(DAC_MUTE, HIGH);
+	digitalWrite(DAC_MUTE, LOW);
 	digitalWrite(ADC_CS, HIGH);
 
 	digitalWrite(RAM_CS, HIGH);
@@ -161,6 +160,8 @@ void AidFRadio::setup() {
 		 	source_handler.setSource(index);
 
 		source_handler.setAudioOn(start_params.audio_on);
+		if(start_params.audio_on)
+			digitalWrite(DAC_MUTE, HIGH);
 		
 		parameters.am_tune = start_params.am_freq;
 		parameters.fm1_tune = start_params.fm1_freq;
@@ -281,6 +282,10 @@ void AidFRadio::loop() {
 	if(power_switched) {
 		digitalWrite(POWER_ON_SW, HIGH);
 		adc_handler.init();
+		
+		if(source_handler.getAudioOn())
+			digitalWrite(DAC_MUTE, HIGH);
+		
 		source_handler.sendRadioHandshake();
 	}
 
@@ -553,6 +558,9 @@ void AidFRadio::loop() {
 			const uint16_t current_source_num = source_handler.getCurrentSource();
 			const bool connected = source_handler.source_list[current_source_num].connected;
 			text_handler.sendSourceTextControl(current_source, current_source, connected);
+
+			const uint8_t sub_id = source_handler.source_list[current_source_num].sub_id;
+			text_handler.sendIMIDSourceMessage(current_source, sub_id);
 		}
 	}
 
@@ -948,7 +956,7 @@ void AidFRadio::loop() {
 			if(source_handler.source_list[i].connected)
 				continue;
 			else
-				inactive_source = true;;
+				inactive_source = true;
 
 			uint8_t ping_data[] = {0x4, 0xE6, 0x10};
 			AIData ping_msg(sizeof(ping_data), ID_RADIO, target_id, ping_data);

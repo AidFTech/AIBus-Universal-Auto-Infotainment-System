@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 pub const MAC_ADDR_LEN: usize = 6;
 
 pub struct Context {
@@ -27,6 +29,8 @@ pub struct Context {
 	pub phone_req_off: bool, //True if the phone has requested a return to the factory UI.
 	pub home_held: bool, //True if "home" was held by the user.
 
+	pub last_connection_change: Instant,
+
 	//IMID Parameters:
 	pub imid_row_count: u8,
 	pub imid_text_len: u8,
@@ -47,6 +51,8 @@ pub struct Context {
 	pub aibt_audio: bool, //Audio button present.
 	pub aibt_map: bool, //Nav/map button present.
 	pub aibt_phone: bool, //Phone button present.
+	pub aibt_pause: bool, //Pause button present.
+	pub aibt_function: bool, //Function button present.
 
 	//Devices:
 	pub radio_connected: bool,
@@ -77,6 +83,8 @@ impl Context {
 
 			track_time: -1,
 
+			last_connection_change: Instant::now(),
+
 			night: false,
 
 			notification: false,
@@ -102,6 +110,8 @@ impl Context {
 			aibt_audio: false,
 			aibt_map: false,
 			aibt_phone: false,
+			aibt_function: false,
+			aibt_pause: false,
 			
 			radio_connected: false,
 			screen_connected: false,

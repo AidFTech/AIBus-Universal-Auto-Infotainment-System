@@ -120,6 +120,27 @@ std::string getMapPath() {
 	return map_path;
 }
 
+//Get the camera path.
+std::string getCameraPath() {
+	std::vector<IniList> camera_file = loadIniFile(CAMERA_FILE);
+	std::string camera_path = "";
+
+	for(int i=0;i<camera_file.size();i+=1) {
+		if(camera_file[i].title.compare("AidF_Camera") == 0) {
+			for(int n=0;n<camera_file[i].l_s;n+=1) {
+				if(camera_file[i].str_vars[n].compare("Path") == 0) {
+					camera_path = camera_file[i].str_values[n];
+					break;
+				}
+			}
+			if(!camera_path.empty())
+				break;
+		}
+	}
+
+	return camera_path;
+}
+
 //Get vehicle info parameters from a saved file.
 void getVehicleInfoParams(bool* display_cruise, bool* display_charge_assist, uint8_t* displayed_params, const int param_count) {
 	std::vector<IniList> info_file = loadIniFile(INFO_FILE);

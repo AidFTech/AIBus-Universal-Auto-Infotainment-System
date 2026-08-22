@@ -54,10 +54,8 @@ bool CANMenuHandler::startMenu(const uint8_t count, const uint8_t rows, const bo
 		if(ai_handler->dataAvailable() > 0) {
 			if(ai_handler->readAIData(&ai_msg, false)) {
 				if(ai_msg.l >= 2 && ai_msg.sender == ID_NAV_COMPUTER && ai_msg.receiver == ID_CANSLATOR && ai_msg.data[0] == 0x2B && ai_msg.data[1] == 0x40) { //No menu available.
-					ai_handler->sendAcknowledgement(ID_CANSLATOR, ai_msg.sender);
 					return false;
 				} else if(ai_msg.receiver == ID_CANSLATOR) {
-					ai_handler->sendAcknowledgement(ID_CANSLATOR, ai_msg.sender);
 					ai_handler->cacheMessage(&ai_msg);
 				}
 			}

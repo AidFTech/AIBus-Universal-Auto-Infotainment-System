@@ -12,6 +12,7 @@
 #define TIMEKEEPER_FILE "./AidF_Timekeeper.ini"
 #define MAP_FILE "./AidF_Map.ini"
 #define INFO_FILE "./AidF_Info.ini"
+#define CAMERA_FILE "./AidF_Camera.ini"
 
 void getResolution(int* w, int* h);
 void saveResolution(const int w, const int h);
@@ -23,5 +24,6 @@ void getVehicleInfoParams(bool* display_cruise, bool* display_charge_assist, uin
 void saveVehicleInfoParams(const bool display_cruise, const bool display_charge_assist, uint8_t* displayed_params, const int param_count);
 
 std::string getMapPath();
+std::string getCameraPath();
 
 #endif

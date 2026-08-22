@@ -30,6 +30,9 @@ void EnAIBusHandler::setCacheAck(const bool cache_ack) {
 
 //Cache pending messages for all IDs and the provided ID.
 bool EnAIBusHandler::cachePending(const uint8_t cache_id) {
+	if(cached_vec.size() >= cached_vec.max_size())
+		return false;
+
 	if(ai_serial->available() > 0) {
 		AIData ai_msg;
 		if(readAIData(&ai_msg, false)) {
@@ -48,11 +51,12 @@ bool EnAIBusHandler::cachePending(const uint8_t cache_id) {
 			
 			if(ai_msg.sender == cache_id)
 				id = false;
-
-			for(unsigned int i=0;i<id_vec.size();i+=1) {
-				if((ai_msg.sender == id_vec[i]) && id_vec[i] != 0x0) {
-					id = false;
-					break;
+			else {
+				for(unsigned int i=0;i<id_vec.size();i+=1) {
+					if((ai_msg.sender == id_vec[i]) && id_vec[i] != 0x0) {
+						id = false;
+						break;
+					}
 				}
 			}
 
@@ -69,29 +73,20 @@ bool EnAIBusHandler::cachePending(const uint8_t cache_id) {
 
 //Cache all pending AIBus messages for all IDs.
 bool EnAIBusHandler::cacheAllPending() {
+	if(cached_vec.size() >= cached_vec.max_size())
+		return false;
+
 	if(ai_serial->available() >= 2) {
 		AIData ai_msg;
 		const aibus_read_result_t ai_err = readAIDataErr(&ai_msg, false);
 		if(ai_err == AIBUS_READ_OK_SERIAL || ai_err == AIBUS_READ_OK_MULTIPLE) {
 			bool id = false;
 
-			if(ai_msg.receiver == 0xFF)
+			if(ai_msg.receiver == 0xFF || getID(ai_msg.receiver))
 				id = true;
-			else {
-				for(unsigned int i=0;i<id_vec.size();i+=1) {
-					if((ai_msg.receiver == id_vec[i]) && id_vec[i] != 0x0) {
-						id = true;
-						break;
-					}
-				}
-			}
 
-			for(unsigned int i=0;i<id_vec.size();i+=1) {
-				if((ai_msg.sender == id_vec[i]) && id_vec[i] != 0x0) {
-					id = false;
-					break;
-				}
-			}
+			if(getID(ai_msg.sender))
+				id = false;
 
 			if(id) {
 				if((ai_msg.l >= 1 && ai_msg.data[0] != 0x80) || cache_ack) {			
@@ -122,25 +117,16 @@ bool EnAIBusHandler::getPending(uint8_t* ids, const int id_l, AIData* msg) {
 				}
 			}
 
+			if(cached_vec.size() >= cached_vec.max_size())
+				return false;
+
 			bool id = false;
 
-			if(ai_msg.receiver == 0xFF)
+			if(ai_msg.receiver == 0xFF || getID(ai_msg.receiver))
 				id = true;
-			else {
-				for(unsigned int i=0;i<id_vec.size();i+=1) {
-					if((ai_msg.receiver == id_vec[i]) && id_vec[i] != 0x0) {
-						id = true;
-						break;
-					}
-				}
-			}
 
-			for(unsigned int i=0;i<id_vec.size();i+=1) {
-				if((ai_msg.sender == id_vec[i]) && id_vec[i] != 0x0) {
-					id = false;
-					break;
-				}
-			}
+			if(getID(ai_msg.sender))
+				id = false;
 
 			if(id) {
 				if((ai_msg.l >= 1 && ai_msg.data[0] != 0x80) || cache_ack) {			

@@ -55,8 +55,12 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 		return AIBUS_READ_OK_CACHED;
 	}
 
-	if(ai_serial->available() < 4)
+	if(ai_serial->available() < 4) {
+		//if(ai_serial->available() > 0)
+		//	clearSerial();
+
 		return ai_serial->available() > 0 ? AIBUS_READ_INCOMPLETE : AIBUS_READ_NODATA;
+	}
 
 	int avail = ai_serial->available();
 	elapsedMicros wait_micros = 0;
@@ -101,7 +105,6 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 					}
 				}
 
-				clearSerial();
 				return AIBUS_READ_TIMEOUT;
 			}
 		}
@@ -361,7 +364,7 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 				if(msg.sender == ai_d->receiver && msg.receiver == ai_d->sender && msg.data[0] == 0x80) {
 					ack_sent = true;
 				} else if(msg.sender != ai_d->sender) {
-					if((msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
+					if((getID(msg.receiver) || msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
 						cacheMessage(&msg);
 					}
 				}
@@ -410,7 +413,7 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 					acknowledge = true;
 					break;
 				} else if(new_msg.sender != ai_d->sender) {
-					if((new_msg.receiver == ai_d->sender || new_msg.receiver == 0xFF) && new_msg.l >= 1 && new_msg.data[0] != 0x80) {
+					if((getID(new_msg.receiver) || new_msg.receiver == ai_d->sender || new_msg.receiver == 0xFF) && new_msg.l >= 1 && new_msg.data[0] != 0x80) {
 						cacheMessage(&new_msg);
 					}
 					repeat_time = 0;
@@ -446,8 +449,8 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 	AIData ai_msg;
 	if(ai_serial->available() > 0 && cached_vec.size() < cached_vec.max_size()) {
 		if(readAIData(&ai_msg, false)) {
-			if(ai_msg.sender != id) {
-				if(ai_msg.receiver == id || ai_msg.receiver == 0xFF) {
+			if(!getID(ai_msg.sender) && ai_msg.sender != id) {
+				if(getID(ai_msg.receiver) || ai_msg.receiver == id || ai_msg.receiver == 0xFF) {
 					if(ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
 						cacheMessage(&ai_msg);
 						return true;

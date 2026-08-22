@@ -87,6 +87,8 @@ pub struct AMirror<'a> {
 	radio_ping_timer: Instant,
 	scroll_timer: Instant,
 
+	last_flash: Instant,
+
 	overlay_timer: Instant,
 	overlay_on: bool,
 	vol_overlay: bool,
@@ -232,6 +234,7 @@ impl <'a> AMirror<'a> {
 			source_request_timer: Instant::now(),
 			radio_ping_timer: Instant::now(),
 			scroll_timer: Instant::now(),
+			last_flash: Instant::now(),
 
 			overlay_timer: Instant::now(),
 			overlay_on: false,
@@ -363,6 +366,8 @@ impl <'a> AMirror<'a> {
 				data: [0x30, context.phone_type].to_vec(),
 			};
 
+			context.last_connection_change = Instant::now();
+
 			if context.phone_type == 0 {
 				context.phone_name = "".to_string();
 				context.song_title = "".to_string();
@@ -395,6 +400,15 @@ impl <'a> AMirror<'a> {
 						receiver: AIBUS_DEVICE_NAV_SCREEN,
 						data: [0x77, AIBUS_DEVICE_NAV_COMPUTER, 0x10].to_vec(), //TODO: If another device has requested control, send that instead.
 					});
+				}
+
+				match self.mpv_video.try_lock() {
+					Ok(mut mpv_video) => {
+						mpv_video.video_disconnect();
+					}
+					Err(_) => {
+						println!("AMirror Process: MPV handler locked.")
+					}
 				}
 			} else {
 				if context.night {
@@ -571,6 +585,19 @@ impl <'a> AMirror<'a> {
 					self.write_nav_text("||".to_string(), 1, 1, true);
 					context.track_time = -1;
 				}
+
+				if Instant::now() - self.last_flash > Duration::from_millis(3000) {
+					let mirror_name = (match context.phone_type {
+						3 => "Carplay",
+						5 => "Android Auto",
+						_ => "",
+					}).to_owned() + match context.playing {
+						true => " #FWD",
+						false => " ||",
+					};
+
+					self.write_nav_overlay(mirror_name);
+				}
 			}
 		}
 	
@@ -582,6 +609,7 @@ impl <'a> AMirror<'a> {
 
 					if self.flash_song_title {
 						self.write_nav_overlay(context.song_title.clone());
+						self.last_flash = Instant::now();
 					}
 
 					if context.imid_native_mirror && self.imid_scroll < 0 && context.phone_type != 0 {
@@ -2017,6 +2045,14 @@ impl <'a> AMirror<'a> {
 					} else if state == 0x1 {
 						self.audio_held = true;
 					}
+				} else if ((button == 0x46 && context.aibt_pause) || (button == 0x16 && !context.aibt_pause)) && state == 0x0 {
+					if context.audio_selected {
+						if context.phone_type == 5 {
+							self.aa_handler.play_pause_audio();
+						} else if context.phone_type == 3 {
+							self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAYPAUSE);
+						}
+					}
 				}
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x31 && ai_msg.data[1] == 0x30 { //Button list.
 				let features = ai_msg.data[2];
@@ -2031,6 +2067,8 @@ impl <'a> AMirror<'a> {
 				context.aibt_map = false;
 				context.aibt_menu = false;
 				context.aibt_phone = false;
+				context.aibt_function = false;
+				context.aibt_pause = false;
 
 				for i in 3..ai_msg.l() {
 					let d = ai_msg.data[i];
@@ -2048,6 +2086,10 @@ impl <'a> AMirror<'a> {
 						context.aibt_phone = true;
 					} else if d == 0x55 {
 						context.aibt_map = true;
+					} else if d == 0x16 {
+						context.aibt_function = true;
+					} else if d == 0x46 {
+						context.aibt_pause = true;
 					}
 				}
 
@@ -2485,6 +2527,10 @@ impl <'a> AMirror<'a> {
 		self.write_nav_text(context.artist.clone(), 2, 0, false);
 		self.write_nav_text(context.album.clone(), 3, 0, false);
 		self.write_nav_text(context.app.clone(), 4, 0, true);
+
+		if !context.aibt_pause {
+			self.write_nav_text("#FWD / ||".to_string(), 5, 2, true);
+		}
 
 		if context.playing {
 			self.write_nav_text("#FWD".to_string(), 1, 1, true);

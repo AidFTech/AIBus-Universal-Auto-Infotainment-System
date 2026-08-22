@@ -15,6 +15,7 @@ public:
 
 	void drawWindow();
 	void refreshWindow();
+	void exitWindow();
 
 	bool handleAIBus(AIData* msg);
 	void setText(const uint8_t group, const uint8_t area, std::string text);
@@ -33,11 +34,15 @@ private:
 
 	SDL_Texture* phone_texture = NULL;
 
+	unsigned long last_exit = 0;
+
 	void interpretPhoneScreenChange(AIData* ai_b);
 	void refreshPhoneScreen();
 
 	void interpretMenuChange(AIData* ai_b);
 	void handleEnterButton();
+
+	void initializeSettingsMenu(AIData* ai_b);
 
 	void sendMenuClose();
 	void sendMenuClose(const uint8_t receiver);

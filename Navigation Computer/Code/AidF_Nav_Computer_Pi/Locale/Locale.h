@@ -38,6 +38,9 @@ enum nav_text_index: unsigned int {
 	LOCALE_STRING_MIRROR_WAITING_2,
 	LOCALE_STRING_MIRROR_WAITING_GENERIC,
 	LOCALE_STRING_MIRROR_NOT_CONNECTED,
+
+	//Camera Messages
+	LOCALE_STRING_REAR_CAMERA_MESSAGE,
 };
 
 static const char* TEXT_ENG[] {
@@ -73,6 +76,9 @@ static const char* TEXT_ENG[] {
 	".",
 	"Waiting for phone to connect.",
 	"Phone not connected.",
+
+	//Camera Messages
+	"Please Check Surroundings for Safety",
 };
 
 enum nav_menu_index : menu_index_t {

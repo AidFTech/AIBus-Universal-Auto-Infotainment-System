@@ -55,17 +55,17 @@ public:
 	bool writeIMIDTextMessage(String text);
 	bool setIMIDSource(const uint8_t source, const uint8_t subsource);
 
-	void writeIMIDRadioMessage(const uint16_t frequency, const int8_t decimal, const uint8_t preset, const uint8_t stereo_mode, const bool acknowledge = true);
-	void writeIMIDRDSMessage(String msg);
-	void writeIMIDCallsignMessage(String msg);
-	void writeIMIDVolumeMessage(const uint8_t volume);
+	bool writeIMIDRadioMessage(const uint16_t frequency, const int8_t decimal, const uint8_t preset, const uint8_t stereo_mode, const bool acknowledge = true);
+	bool writeIMIDRDSMessage(String msg);
+	bool writeIMIDCallsignMessage(String msg);
+	bool writeIMIDVolumeMessage(const uint8_t volume);
 
-	void writeIMIDSiriusNumberMessage(const uint8_t preset, const uint16_t channel, const bool xm2);
-	void writeIMIDSiriusTextMessage(const uint8_t position, String text);
+	bool writeIMIDSiriusNumberMessage(const uint8_t preset, const uint16_t channel, const bool xm2);
+	bool writeIMIDSiriusTextMessage(const uint8_t position, String text);
 
-	void writeIMIDCDCTrackMessage(const uint8_t disc, const uint8_t track, const uint8_t track_count, const uint16_t time, const uint8_t state1, const uint8_t state2);
-	void writeIMIDCDCTextMessage(const uint8_t position, String text);
-	void clearIMIDCDText();
+	bool writeIMIDCDCTrackMessage(const uint8_t disc, const uint8_t track, const uint8_t track_count, const uint16_t time, const uint8_t state1, const uint8_t state2);
+	bool writeIMIDCDCTextMessage(const uint8_t position, String text);
+	bool clearIMIDCDText();
 
 	uint16_t getMode();
 
@@ -80,8 +80,9 @@ private:
 	uint8_t requestor_list[16];
 	Vector<uint8_t> requestor_vec;
 
-	/*AIData ai_cache[16];
-	Vector<AIData> ai_cache_vec;*/
+	AIData ai_cache[16];
+	Vector<AIData> ai_cache_vec;
+	int16_t imid_next_source = 0, imid_next_subsource = 0;
 
 	elapsedMillis last_change;
 	
@@ -106,16 +107,17 @@ private:
 	bool xm2 = false;
 
 	void sendSourceRequest(const uint8_t source);
+	bool setIMIDSource(const uint8_t source, const uint8_t subsource, const bool force_set);
 	bool getTuningMessage(uint8_t* frequency_bytes, uint8_t* subsource_byte, uint8_t* stereo_byte, uint8_t* hd_byte);
 
 	void setUSBMode();
 	void clearUSBText(const uint8_t field);
 	void setUSBText(const uint8_t field, String text);
 
-	void setBTMode();
-	void setBTModeNotConnected();
-	void setBTTimer(const long time);
-	void setBTText(const uint8_t field, String text);
+	bool setBTMode();
+	bool setBTModeNotConnected();
+	bool setBTTimer(const long time);
+	bool setBTText(const uint8_t field, String text);
 
 	void writeScreenLayoutMessage(const uint8_t receiver);
 

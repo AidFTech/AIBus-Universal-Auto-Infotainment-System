@@ -74,10 +74,11 @@ void ButtonHandler::checkButtonPress() {
 			if(button_index[b] != BT_EJECT)
 				sendButtonMessage(getButtonCode(button_index[b]), BUTTON_STATE_PRESSED, recipient);
 			else {
-				if(open_close_handler->getClosed())
-					open_close_handler->setOpen();
-				else
-					open_close_handler->setClosed();
+				//if(open_close_handler->getClosed())
+					if(parameters->allow_open)
+						open_close_handler->setOpen();
+				//else
+				//	open_close_handler->setClosed();
 			}
 		} else if(!state && button_states[b] != BUTTON_STATE_RELEASED) { //Button released.
 			button_states[b] = BUTTON_STATE_RELEASED;
@@ -87,7 +88,7 @@ void ButtonHandler::checkButtonPress() {
 	}
 
 	if(debounce_timer < 50)
-			return;
+		return;
 
 	debounce_timer = 0;
 

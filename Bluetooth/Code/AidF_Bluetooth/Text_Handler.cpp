@@ -79,3 +79,85 @@ void TextHandler::writeMetadata(string data, const uint8_t recipient, const uint
 
 	aibus_handler->writeAIData(&meta_msg, ack);
 }
+
+//Clear the current menu.
+void TextHandler::clearMenu() {
+	uint8_t clear_menu_data[] = {0x2B, 0x40};
+	AIData clear_menu_msg(sizeof(clear_menu_data), ID_PHONE, ID_NAV_COMPUTER, clear_menu_data);
+
+	aibus_handler->writeAIData(&clear_menu_msg);
+
+	parameters->current_menu = BTA_MENU_NONE;
+}
+
+//Create the list of paired devices.
+void TextHandler::createDeviceListMenu(vector<string> device_names) {
+	MenuList device_menu = getMenu(MENU_INDEX_DEVICE_LIST, parameters->locale);
+
+	const uint8_t device_count = device_names.size() <= 255 ? device_names.size() : 255;
+
+	this->createMenu(false, device_count, device_count, false, device_menu.title);
+
+	for(int i=0;i<device_count;i+=1)
+		this->appendMenu(i, device_names[i]);
+
+	displayMenu(1);
+	parameters->current_menu = BTA_MENU_DEVICES;
+}
+
+//Create a new menu.
+void TextHandler::createMenu(const bool audio, const uint8_t count, const uint8_t rows, const bool loop, string title) {
+	uint8_t start_menu_data[title.length() + 12];
+	
+	unsigned int div = count/rows;
+	if(count%rows != 0)
+		div += 1;
+
+	const uint16_t x = 0, y = audio ? 140 : 40, width = parameters->screen_w/div;
+	
+	start_menu_data[0] = 0x2B;
+	start_menu_data[1] = audio ? 0x5A : 0x50;
+	start_menu_data[2] = rows&0x7F;
+	start_menu_data[3] = count;
+	start_menu_data[4] = (x&0xFF00) >> 8;
+	start_menu_data[5] = x&0xFF;
+	start_menu_data[6] = (y&0xFF00) >> 8;
+	start_menu_data[7] = y&0xFF;
+	start_menu_data[8] = (width&0xFF00)>>8;
+	start_menu_data[9] = width&0xFF;
+	start_menu_data[10] = 0x0;
+	start_menu_data[11] = audio ? 0x23 : 40;
+	
+	for(unsigned int i=0;i<title.length();i+=1)
+		start_menu_data[i+12] = uint8_t(title[i]);
+	
+	if(loop)
+		start_menu_data[2] |= 0x80;
+	
+	AIData start_menu_msg(sizeof(start_menu_data), ID_PHONE, ID_NAV_COMPUTER, start_menu_data);
+	aibus_handler->writeAIData(&start_menu_msg);
+}
+
+//Append to the displayed menu.
+void TextHandler::appendMenu(const uint8_t position, const string text) {
+	uint8_t append_menu_data[text.length() + 3];
+	
+	append_menu_data[0] = 0x2B;
+	append_menu_data[1] = 0x51;
+	append_menu_data[2] = position;
+	
+	for(unsigned int i=0;i<text.length();i+=1)
+		append_menu_data[i+3] = uint8_t(text[i]);
+	
+	AIData append_menu_msg(sizeof(append_menu_data), ID_PHONE, ID_NAV_COMPUTER, append_menu_data);
+	
+	aibus_handler->writeAIData(&append_menu_msg);
+}
+
+//Display the menu.
+void TextHandler::displayMenu(const uint8_t selected) {
+	uint8_t display_menu_data[] = {0x2B, 0x52, selected};
+	AIData display_menu_msg(sizeof(display_menu_data), ID_PHONE, ID_NAV_COMPUTER, display_menu_data);
+
+	aibus_handler->writeAIData(&display_menu_msg);
+}

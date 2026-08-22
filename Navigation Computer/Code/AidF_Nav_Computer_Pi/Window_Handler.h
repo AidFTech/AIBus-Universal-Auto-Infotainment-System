@@ -41,6 +41,7 @@ public:
 
 	void drawWindow();
 	void clearWindow();
+	void drawClockHeader();
 
 	Background* getBackground();
 	uint16_t getWidth();
@@ -67,7 +68,6 @@ public:
 
 	void checkNextWindow(NavWindow* misc_window, NavWindow* audio_window, NavWindow* phone_window, NavWindow* main_window);
 private:
-	void drawClockHeader();
 
 	bool delete_last = true, delete_active = true;
 

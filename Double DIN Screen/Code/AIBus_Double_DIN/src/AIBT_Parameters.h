@@ -58,6 +58,7 @@ struct ParameterList {
 	bool radio_connected = false, computer_connected = false;
 
 	uint8_t key_position = 0, door_position = 0;
+	bool allow_open = false; //True if the screen can be opened, i.e. the car is on.
 
 	uint8_t all_dest = ID_NAV_COMPUTER, audio_dest = ID_NAV_COMPUTER, source_dest = ID_NAV_COMPUTER;
 };

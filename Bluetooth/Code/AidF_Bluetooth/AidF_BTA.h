@@ -1,4 +1,5 @@
 #include <iostream>
+#include <vector>
 
 #include <pthread.h>
 #include <unistd.h>
@@ -6,6 +7,7 @@
 #include "Parameter_List.h"
 #include "Text_Handler.h"
 #include "BT_Handler.h"
+#include "Ini_Context.h"
 
 #include "AIBus/AIBus.h"
 #include "AIBus/Client_AIBus_Handler.h"
@@ -65,7 +67,7 @@ private:
 	pthread_t aibus_thread, millis_thread;
 
 	//Timers
-	unsigned long ping_timer = 0, screen_ping_timer = 0;
+	unsigned long ping_timer = 0, screen_ping_timer = 0, dimension_ping_timer = 0;
 
 	void handleAIBusMessage(AIData* ai_msg);
 

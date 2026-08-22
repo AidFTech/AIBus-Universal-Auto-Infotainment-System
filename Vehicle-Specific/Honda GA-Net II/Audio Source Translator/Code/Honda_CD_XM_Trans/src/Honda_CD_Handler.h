@@ -19,10 +19,13 @@
 
 #include <stdint.h>
 #include <Arduino.h>
+#include <Vector.h>
 #include <elapsedMillis.h>
 
 #ifndef honda_cd_handler
 #define honda_cd_handler
+
+#define RESEND_CACHE_SIZE 4
 
 #define BUTTON_FF 0x90
 #define BUTTON_FR 0x91
@@ -66,6 +69,7 @@
 #define MENU_SELECT_DISC 0x16
 
 #define IMID_REFRESH_CLEAR (1<<0)
+#define COMMAND_WRITE_IMID_TRACK_MSG (1<<1)
 
 #define COMMAND_WRITE_RADIO_TRACK_MSG (1<<0)
 #define COMMAND_WRITE_NAV_TRACK_MSG (1<<1)
@@ -118,6 +122,15 @@ private:
 
 	bool autostart = false;
 	bool setting_changed = false;
+
+	//IMID text resend cache.
+	String resend_cache[RESEND_CACHE_SIZE];
+	Vector<String> resend_cache_vec;
+
+	String resend_text = "";
+
+	uint8_t resend_field_cache[RESEND_CACHE_SIZE];
+	Vector<uint8_t> resend_field_cache_vec;
 
 	//Timer to send all CD-text info to the IMID if it is connected, to prevent hanging.
 	bool text_timer_enabled = false, text_timer_song = false, text_timer_artist = false, text_timer_album = false, text_timer_folder = false, text_timer_file = false;

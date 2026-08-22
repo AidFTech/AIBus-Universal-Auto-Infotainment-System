@@ -1499,6 +1499,9 @@ void SourceHandler::clearOpenMenu() {
 
 //Clear any open audio menu.
 bool SourceHandler::clearMenu(const bool audio) {
+	if(menu_open == NO_MENU)
+		return true;
+
 	uint8_t data[] = {0x2B, (uint8_t)(audio ? 0x4A : 0x40)};
 	AIData clear_msg(sizeof(data), ID_RADIO, ID_NAV_COMPUTER, data);
 

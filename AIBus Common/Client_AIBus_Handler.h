@@ -67,6 +67,7 @@ public:
 	void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
 
 	int getClient();
+	uint8_t getID();
 private:
 	vector<AIData> rx_cache = vector<AIData>(0);
 	vector<AIData> multi_cache = vector<AIData>(0); //Cache for multi-block messages.
@@ -83,6 +84,7 @@ private:
 struct ClientHandlerParameters {
 	ClientAIBusHandler* ai_handler;
 	bool* running;
+	bool process = false;
 
 	string socket_path;
 };

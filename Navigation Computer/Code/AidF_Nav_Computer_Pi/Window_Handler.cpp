@@ -213,7 +213,7 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 	}
 }
 
-//Draw the clock header.
+//Draw the clock/audio header.
 void Window_Handler::drawClockHeader() {
 	uint8_t last_r, last_g, last_b, last_a;
 	SDL_GetRenderDrawColor(renderer, &last_r, &last_g, &last_b, &last_a);

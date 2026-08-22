@@ -100,12 +100,92 @@ void PhoneWindow::refreshWindow() {
 	SDL_FreeSurface(phone_surface);
 }
 
+//Exit window function.
+void PhoneWindow::exitWindow() {
+	if(this->settings_menu_active) {
+		this->settings_menu_active = false;
+		this->settings_menu_prep = false;
+
+		if(settings_menu != NULL) {
+			delete this->settings_menu;
+			this->settings_menu = NULL;
+		}
+
+		sendMenuClose();
+	}
+
+	if(attribute_list->timer != nullptr)
+		last_exit = *attribute_list->timer;
+}
+
 //Handle an AIBus message. Return true if the message is meant for the phone screen.
 bool PhoneWindow::handleAIBus(AIData* msg) {
 	SerialAIBusHandler* aibus_handler = this->attribute_list->aibus_handler;
 
 	if(msg->data[0] == 0x21 && msg->data[1] == 0xA5) { //Write data.
 		this->interpretPhoneScreenChange(msg);
+		return true;
+	} else if(msg->sender == ID_PHONE && msg->l >= 2 && msg->data[0] == 0x2B) { //Menu command.
+		if(!active)
+			return false;
+
+		if(msg->data[1] == 0x50) { //Initialize a new phone menu.
+			if(this->settings_menu_active) {
+				uint8_t data[] = {0x2B, 0x40};
+				AIData no_menu_msg(2, ID_NAV_COMPUTER, msg->sender, data);
+
+				aibus_handler->writeAIData(&no_menu_msg);
+			} else {
+				if(active || (*attribute_list->timer - last_exit) > 300)
+					this->initializeSettingsMenu(msg);
+				else { //Deny.
+					uint8_t data[] = {0x2B, 0x40};
+					AIData no_menu_msg(sizeof(data), ID_NAV_COMPUTER, msg->sender, data);
+
+					aibus_handler->writeAIData(&no_menu_msg);
+				}
+			}
+		} else if(msg->l >= 3 && msg->data[1] == 0x51 && this->settings_menu != NULL) { //Add a menu entry.
+			if(!this->settings_menu_active && !this->settings_menu_prep)
+				return false;
+
+			const uint8_t entry = msg->data[2];
+			std::string entry_name = "";
+			
+			for(uint8_t i=0;i<msg->l-3;i+=1)
+				entry_name += msg->data[i+3];
+			
+			this->settings_menu->setItem(entry_name, entry);
+		} else if(msg->l >= 3 && msg->data[1] == 0x52 && this->settings_menu != NULL) { //Display the menu.
+			if(!this->settings_menu_active && !this->settings_menu_prep)
+				return false;
+				
+			if(!active) {
+				if(attribute_list->phone_active && attribute_list->phone_type != 0 && attribute_list->mirror_connected) {
+					uint8_t mirror_off_data[] = {0x48, 0x8E, 0x0};
+					AIData mirror_off_msg(sizeof(mirror_off_data), ID_NAV_COMPUTER, ID_ANDROID_AUTO);
+
+					mirror_off_msg.refreshAIData(mirror_off_data);
+					aibus_handler->writeAIData(&mirror_off_msg, attribute_list->mirror_connected);
+
+					attribute_list->phone_active = false;
+				}
+			}
+
+			const uint8_t selection = msg->data[2];
+			this->settings_menu->setSelected(selection);
+			this->settings_menu->setTextItems();
+			this->settings_menu_active = true;
+			this->settings_menu_prep = false;
+		} else if(msg->data[1] == 0x40 && this->settings_menu != NULL) { //Clear the menu.
+			this->settings_menu_active = false;
+			this->settings_menu_prep = false;
+
+			delete this->settings_menu;
+			this->settings_menu = NULL;
+
+			sendMenuClose(msg->sender);
+		} 
 		return true;
 	} else if(msg->sender == ID_NAV_SCREEN) { //Button pressed on screen.
 		if(!this->active)
@@ -123,6 +203,12 @@ bool PhoneWindow::handleAIBus(AIData* msg) {
 				if(this->settings_menu_active) {
 					this->settings_menu_active = false;
 					this->settings_menu_prep = false;
+
+					if(this->settings_menu != NULL) {
+						delete this->settings_menu;
+						this->settings_menu = NULL;
+					}
+
 					sendMenuClose();
 					return true;
 				} else
@@ -323,17 +409,39 @@ void PhoneWindow::handleEnterButton() {
 
 	if(this->settings_menu_active && this->settings_menu != NULL) {
 		uint8_t data[] = {0x2B, 0x60, uint8_t(this->settings_menu->getSelected())};
-		AIData enter_msg(3, ID_NAV_COMPUTER, this->settings_menu_sender);
-		enter_msg.refreshAIData(data);
+		AIData enter_msg(sizeof(data), ID_NAV_COMPUTER, this->settings_menu_sender, data);
 
 		aibus_handler->writeAIData(&enter_msg);
 	} else {
 		uint8_t data[] = {0x2B, 0x6C, uint8_t(this->side_menu->getSelected())};
-		AIData enter_msg(3, ID_NAV_COMPUTER, ID_PHONE);
-		enter_msg.refreshAIData(data);
+		AIData enter_msg(sizeof(data), ID_NAV_COMPUTER, ID_PHONE, data);
 
 		aibus_handler->writeAIData(&enter_msg);
 	}
+}
+
+//Initialize the settings menu.
+void PhoneWindow::initializeSettingsMenu(AIData* ai_b) {
+	if(ai_b->l < 12)
+		return;
+
+	const uint8_t count = ai_b->data[3], rows = ai_b->data[2]&0x7F;
+	const bool loop = (ai_b->data[2]&0x80) != 0;
+	const int16_t x = (ai_b->data[4]<<8)|ai_b->data[5], y = (ai_b->data[6]<<8)|ai_b->data[7];
+	const uint16_t w = (ai_b->data[8]<<8)|ai_b->data[9], h = (ai_b->data[10]<<8)|ai_b->data[11];
+	std::string title = "";
+	if(ai_b->l > 12) {
+		for(uint8_t i=0;i<ai_b->l-12;i+=1)
+			title += char(ai_b->data[i+12]);
+	}
+
+	this->settings_menu_sender = ai_b->sender;
+
+	if(this->settings_menu != NULL && this->settings_menu != nullptr)
+		delete this->settings_menu;
+
+	this->settings_menu = new NavMenu(attribute_list, x, y, w, h, count, -1, h*6/7, rows, loop, title);
+	settings_menu_prep = true;
 }
 
 void PhoneWindow::sendMenuClose() {

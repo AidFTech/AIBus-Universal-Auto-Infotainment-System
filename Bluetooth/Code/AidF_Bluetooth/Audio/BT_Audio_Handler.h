@@ -6,6 +6,7 @@
 #include "../BT_Handler.h"
 #include "../Parameter_List.h"
 #include "../Text_Handler.h"
+#include "../Ini_Context.h"
 
 #include "../Text_Split.h"
 
@@ -14,6 +15,7 @@
 #include <stdint.h>
 
 #include <string>
+#include <cstdlib>
 
 #ifndef bt_audio_handler_h
 #define bt_audio_handler_h
@@ -60,6 +62,8 @@ public:
 	void refreshDeviceConnection();
 
 	void refreshIMIDConnection();
+	
+	void setSaveSettings(bool split, bool autostart, bool flash);
 private:
 	ClientAIBusHandler* aibus_handler;
 
@@ -80,8 +84,13 @@ private:
 
 	bta_imid_scroll_t imid_scroll = BTA_IMID_SCROLL_NONE;
 	uint8_t imid_scroll_position = 0;
-	bool imid_split = true, imid_scroll_header = false, imid_scroll_wrap = false;
+	bool imid_scroll_header = false, imid_scroll_wrap = false;
 	unsigned long scroll_timer;
+
+	unsigned long last_title_time = 0;
+
+	bool imid_split = true, autostart = true, flash_title = true;
+	bool open_audio_menu = false;
 
 	bool display_header: 1, display_track: 1, display_artist: 1, display_album: 1, refresh_imid: 1;
 
@@ -109,10 +118,17 @@ private:
 
 	void writeFunctionButtons();
 
+	void writeAudioSettingsMenu();
+	void writeAudioSettingsMenuItem(const unsigned int index);
+	void saveSettings();
+
 	void incRepeat();
 	void incRandom();
 	void setRepeat(const repeat_random_status_t status);
 	void setRandom(const repeat_random_status_t status);
+
+	void setPlayPause();
+	void setPlayPause(const bool play);
 };
 
 #endif

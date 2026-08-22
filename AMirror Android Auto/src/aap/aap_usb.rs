@@ -149,7 +149,7 @@ impl AndroidUSBConnection {
 		let handle = self.device_handle.as_mut().unwrap();
 
 		let mut data = vec![0;131800];
-		match handle.read_bulk(0x81, &mut data, Duration::from_millis(100)) {
+		match handle.read_bulk(0x81, &mut data, Duration::from_millis(5)) {
 			Ok(len) => {
 				return data[0..len].to_vec();
 			}

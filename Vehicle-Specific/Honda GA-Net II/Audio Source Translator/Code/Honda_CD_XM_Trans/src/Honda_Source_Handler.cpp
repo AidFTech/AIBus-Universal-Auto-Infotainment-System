@@ -301,6 +301,7 @@ inline void HondaSourceHandler::listenForIEBus(const unsigned long wait, const b
 
 	while(ie_timer < wait) {
 		if(ie_driver->getInputOn()) {
+			ai_driver->clearSerial();
 			const int res = ie_driver->readMessage(&new_msg, true, IE_ID_RADIO);
 			if(res == 0 && ie_cache_vec.size() < ie_cache_vec.max_size()) {
 				parameter_list->last_iebus_msg = 0;
@@ -320,6 +321,7 @@ inline void HondaSourceHandler::listenForIEBus(const unsigned long wait, const b
 					ie_cache_vec.push_back(new_msg);
 				}
 			}
+			ai_driver->clearSerial();
 		}
 
 		if(allow_recursive_aibus) {
@@ -335,6 +337,7 @@ inline void HondaSourceHandler::listenForIEBus(const unsigned long wait, const b
 					allow_recursive_aibus = false;
 					handleIMIDAIBus(&pending);
 					allow_recursive_aibus = true;
+					break;
 				}
 			} else {
 				uint8_t id_l[] = {device_ai_id};
@@ -356,8 +359,9 @@ inline void HondaSourceHandler::listenForIEBus(const unsigned long wait, const b
 		}
 	}
 
-	if(ai_cache.l > 0)
+	if(ai_cache.l > 0) {
 		handleAIBus(&ai_cache);
+	}
 }
 
 //Generic AIBus read function.

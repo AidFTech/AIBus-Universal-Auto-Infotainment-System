@@ -105,7 +105,7 @@ struct ParameterList {
 
 	svc_setting_t svc = SVC_OFF;
 
-	header_rds_setting_t header_rds_setting = HEADER_RDS_INFO_MODE;
+	header_rds_setting_t header_rds_setting = HEADER_RDS_ALWAYS;
 
 	uint8_t last_sub = 0;
 

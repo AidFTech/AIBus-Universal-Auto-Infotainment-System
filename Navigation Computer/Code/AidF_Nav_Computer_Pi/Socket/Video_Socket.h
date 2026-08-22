@@ -29,7 +29,11 @@
 #ifndef video_socket_h
 #define video_socket_h
 
-#define VIDEO_SOCKET_PATH "/tmp/amirror_mpv"
+#define AMIRROR_VIDEO_SOCKET_PATH "/tmp/amirror_mpv"
+#define AMIRROR_VIDEO_IPC_PATH "/tmp/mka_cmd"
+
+#define CAMERA_VIDEO_SOCKET_PATH "/dev/video"
+#define CAMERA_VIDEO_IPC_PATH "/tmp/camera_cmd"
 
 using namespace std;
 
@@ -40,7 +44,7 @@ struct VideoCache {
 
 class ClientVideoSocketHandler {
 public:
-	ClientVideoSocketHandler(SDL_Renderer* renderer, string socket_path, const int w, const int h);
+	ClientVideoSocketHandler(SDL_Renderer* renderer, string ipc_path, string socket_path, const int w, const int h);
 	~ClientVideoSocketHandler();
 
 	void loop();

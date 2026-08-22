@@ -133,6 +133,9 @@ TextBox* NavMenu::getSliderTextBox(const uint16_t index) {
 
 //Set the selected index.
 void NavMenu::setSelected(const uint16_t selected) {
+	if(selected > this->length)
+		return;
+
 	this->selected = selected;
 }
 
@@ -193,6 +196,11 @@ void NavMenu::decrementSelected() {
 
 //Increment the selected option.
 void NavMenu::incrementSelected(const bool two_row_support) {
+	if(this->length == 0) {
+		setSelected(0);
+		return;
+	}
+
 	if(this->rows == this->length || this->rows != 2 || this->loop || !two_row_support) {
 		uint16_t new_selected = this->selected + 1;
 
@@ -225,6 +233,9 @@ void NavMenu::incrementSelected(const bool two_row_support) {
 		else if(new_selected > this->length)
 			new_selected = this->length - 1;
 
+		if(new_selected <= 0 || new_selected > this->length)
+			return;
+
 		bool loop = false;
 
 		while((items[new_selected - 1].compare("") == 0 || items[new_selected - 1].compare(" ") == 0) && new_selected <= this->length) {
@@ -250,6 +261,11 @@ void NavMenu::incrementSelected(const bool two_row_support) {
 
 //Decrement the selected option.
 void NavMenu::decrementSelected(const bool two_row_support) {
+	if(this->length == 0) {
+		setSelected(0);
+		return;
+	}
+
 	if(this->rows == this->length || this->rows != 2 || this->loop || !two_row_support) {
 		uint16_t new_selected = this->selected - 1;
 
@@ -278,6 +294,9 @@ void NavMenu::decrementSelected(const bool two_row_support) {
 			new_selected = 1;
 		else if(new_selected > this->length)
 			new_selected = this->length;
+
+		if(new_selected <= 0 || new_selected > this->length)
+			return;
 
 		bool loop = false;
 
@@ -490,6 +509,9 @@ bool NavMenu::handleAIBus(AIData *ai_d) {
 }
 
 void NavMenu::drawMenu() {
+	if(this->w <= 0 || this->h <= 0)
+		return;
+
 	//First figure out if item text was changed.
 	if(item_text_changed && (clock()-text_change_time)/(CLOCKS_PER_SEC/1000000) > 1000) {
 		item_text_changed = false;
@@ -503,6 +525,9 @@ void NavMenu::drawMenu() {
 		title_height = text_h*7/5;
 
 	const uint16_t row_fit_count = ((this->h-this->y-title_height)/this->text_h)*(this->length/this->rows);
+
+	if(row_fit_count == 0 || this->length < this->rows)
+		return;
 
 	for(uint16_t i=0;i<this->item_text_box.size();i+=1) {
 		if((this->selected - 1)/row_fit_count != i/row_fit_count)

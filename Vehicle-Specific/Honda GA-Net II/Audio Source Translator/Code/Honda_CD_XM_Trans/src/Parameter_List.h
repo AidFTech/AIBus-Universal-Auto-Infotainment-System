@@ -20,7 +20,7 @@
 #define LAST_IEBUS_WAIT 500
 
 struct ParameterList {
-	bool power_on = true;
+	bool power_on = false;
 
 	uint8_t hour = 0, minute = 0, date = 0, month = 0;
 	uint16_t year = 2011;

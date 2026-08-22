@@ -143,11 +143,14 @@ bool BTAudioHandler::handleAIBusMessage(AIData* ai_msg) {
 		const uint8_t source = ai_msg->data[2];
 		if(source == ID_PHONE) { //Selected!
 			parameter_list->audio_selected = true;
-			bluetooth_handler->sendMediaControl(MEDIA_CONTROL_PLAY); //TODO: Only in autostart mode.
+
+			bluetooth_handler->sendMediaControl(MEDIA_CONTROL_PLAY);
 
 			uint8_t screen_ctl_data[] = {0x77, ID_PHONE, 0x80};
 			AIData screen_ctl_msg(sizeof(screen_ctl_data), ID_PHONE, ID_NAV_SCREEN, screen_ctl_data);
 			aibus_handler->writeAIData(&screen_ctl_msg, parameter_list->screen_connected);
+
+			system("bluealsa-aplay --pcm=myplugdmix &");
 		} else { //Deselected.
 			parameter_list->audio_selected = false;
 			parameter_list->text_allowed = false;
@@ -166,7 +169,13 @@ bool BTAudioHandler::handleAIBusMessage(AIData* ai_msg) {
 			parameter_list->text_allowed = true;
 			writeAllMetadata();
 			writeFunctionButtons();
+
+			if(parameter_list->audio_selected)
+				bluetooth_handler->sendMediaControl(MEDIA_CONTROL_PLAY);
 		}
+		return true;
+	} else if(ai_msg->sender == ID_RADIO && ai_msg->l >= 2 && ai_msg->data[0] == 0x2B && (ai_msg->data[1] == 0x4A || ai_msg->data[1] == 0x45) && parameter_list->audio_selected) { //Audio settings menu.
+		writeAudioSettingsMenu();
 		return true;
 	} else if(ai_msg->sender == ID_NAV_SCREEN) {
 		if(ai_msg->l >= 3 && ai_msg->data[0] == 0x30) { //Button press.
@@ -217,12 +226,65 @@ bool BTAudioHandler::handleAIBusMessage(AIData* ai_msg) {
 						break;
 					}
 				}
+			} else if(((button == 0x16 && !parameter_list->screen_play_pause) || button == 0x46) && state == 2) { //Play/pause.
+				setPlayPause();
 			} else if(button == 0x53 && state == 2) { //Info.
 				incrementInfo();
 			}
 			
 			return true;
 		}
+		return false;
+	} else if(ai_msg->sender == ID_NAV_COMPUTER && ai_msg->l >= 2 && ai_msg->data[0] == 0x2B) { //Menu operation.
+		if(ai_msg->l >= 2 && ai_msg->data[1] == 0x40 && open_audio_menu) { //Menu closed.
+			parameter_list->current_menu = BTA_MENU_NONE;
+
+			open_audio_menu = false;
+			uint8_t setting_request_data[] = {0x2B, 0x45};
+			AIData setting_request_msg(sizeof(setting_request_data), ID_PHONE, ID_RADIO, setting_request_data);
+			aibus_handler->writeAIData(&setting_request_msg, parameter_list->radio_connected);
+
+			return true;
+		} else if(ai_msg->data[1] == 0x60 && ai_msg->l >= 3) { //Item selected.
+			const int selection = ai_msg->data[2] - 1;
+			if(selection < 0)
+				return false;
+
+			if(parameter_list->current_menu == BTA_MENU_AUDIO) {
+				MenuList audio_menu = getMenu(MENU_INDEX_AUDIO, parameter_list->locale);
+				switch(audio_menu.getGlobalIndex(selection)) {
+				case MENU_INDEX_AUDIO_AUTOSTART:
+					this->autostart = !this->autostart;
+					writeAudioSettingsMenuItem(audio_menu.getLocalIndex(MENU_INDEX_AUDIO_AUTOSTART));
+					saveSettings();
+					break;
+				case MENU_INDEX_AUDIO_FLASH:
+					this->flash_title = !this->flash_title;
+					writeAudioSettingsMenuItem(audio_menu.getLocalIndex(MENU_INDEX_AUDIO_FLASH));
+					saveSettings();
+					break;
+				case MENU_INDEX_AUDIO_SCROLL_INFO:
+					this->imid_split = !this->imid_split;
+					writeAudioSettingsMenuItem(audio_menu.getLocalIndex(MENU_INDEX_AUDIO_SCROLL_INFO));
+					saveSettings();
+					break;
+				case MENU_INDEX_AUDIO_EXT_SETTINGS:
+					{
+						uint8_t clear_data[] = {0x2B, 0x4A};
+						AIData clear_msg(sizeof(clear_data), ID_PHONE, ID_NAV_COMPUTER, clear_data);
+						aibus_handler->writeAIData(&clear_msg);
+
+						parameter_list->current_menu = BTA_MENU_NONE;
+						
+						open_audio_menu = true;
+					}
+					break;
+				}
+
+				return true;
+			}
+		}
+
 		return false;
 	} else return false;
 }
@@ -245,8 +307,15 @@ void BTAudioHandler::refreshIMIDConnection() {
 
 //Refresh the device connection.
 void BTAudioHandler::refreshDeviceConnection() {
-	if(!parameter_list->audio_selected || !parameter_list->text_allowed)
+	if(!parameter_list->audio_selected || !parameter_list->text_allowed) {
+		BTADevice* device = bluetooth_handler->getConnectedDevice();
+		if(autostart && device != nullptr && device != NULL) {
+			uint8_t request_data[] = {0x10, 0x10, ID_PHONE};
+			AIData request_msg(sizeof(request_data), ID_PHONE, ID_RADIO, request_data);
+			aibus_handler->writeAIData(&request_msg, parameter_list->radio_connected);
+		}
 		return;
+	}
 
 	string device_name = "";
 	BTADevice* device = bluetooth_handler->getConnectedDevice();
@@ -416,9 +485,14 @@ void BTAudioHandler::handleBTProperties(map<string, Variant> properties) {
 		}
 	}
 
-	if(last_title.compare(song_title) != 0)
+	if(last_title.compare(song_title) != 0) {
 		writeTitleMetadata();
-	if(last_artist.compare(artist) != 0)
+		
+		if(parameter_list->text_allowed && flash_title) {
+			text_handler->writeNavHeaderText(song_title);
+			last_title_time = *timer;
+		}
+	} if(last_artist.compare(artist) != 0)
 		writeArtistMetadata();
 	if(last_album.compare(album) != 0)
 		writeAlbumMetadata();
@@ -727,6 +801,9 @@ void BTAudioHandler::writeStatus() {
 
 	text_handler->writeAudioWindowText(window_text, 1, 1);
 
+	if(window_text.length() > 0 && *timer - last_title_time > 3000)
+		text_handler->writeNavHeaderText("Bluetooth " + window_text);
+
 	if(imid_scroll < 0) { 
 		if(parameter_list->imid_native_phone) {
 			//TODO: Something.
@@ -844,6 +921,86 @@ void BTAudioHandler::writeFunctionButtons() {
 	text_handler->writeAudioWindowText("Random", 2, 1, false);
 	text_handler->writeAudioWindowText("#REW", 2, 2, false);
 	text_handler->writeAudioWindowText("#FF ", 2, 3);
+
+	if(!parameter_list->screen_play_pause)
+		text_handler->writeAudioWindowText("#FWD / ||", 2, 5);
+}
+
+//Create the audio settings menu.
+void BTAudioHandler::writeAudioSettingsMenu() {
+	MenuList audio_menu = getMenu(MENU_INDEX_AUDIO, parameter_list->locale);
+
+	text_handler->createMenu(true, audio_menu.size(), audio_menu.size(), false, audio_menu.title);
+
+	for(int i=0;i<audio_menu.size();i+=1)
+		writeAudioSettingsMenuItem(i);
+
+	text_handler->displayMenu(1);
+	parameter_list->current_menu = BTA_MENU_AUDIO;
+}
+
+//Write an item in the audio settings menu.
+void BTAudioHandler::writeAudioSettingsMenuItem(const unsigned int index) {
+	MenuList audio_menu = getMenu(MENU_INDEX_AUDIO, parameter_list->locale);
+	string item_text = "";
+
+	switch(audio_menu.getGlobalIndex(index)) {
+	case MENU_INDEX_AUDIO_AUTOSTART:
+		item_text += autostart ? "#RON " : "#ROF ";
+		break;
+	case MENU_INDEX_AUDIO_FLASH:
+		item_text += flash_title ? "#RON " : "#ROF ";
+		break;
+	case MENU_INDEX_AUDIO_SCROLL_INFO:
+		item_text += imid_split ? "#ROF " : "#RON ";
+		break;
+	}
+
+	item_text += audio_menu[index];
+
+	text_handler->appendMenu(index&0xFF, item_text);
+}
+
+//Save the internal audio settings.
+void BTAudioHandler::saveSettings() {
+	vector<IniList> audio_file = loadIniFile(BLUETOOTH_SETTING_FILE_PATH);
+	if(audio_file.size() <= 0) {
+		IniList audio_list(3, 0);
+		audio_list.title = "AidF_BTA";
+		audio_list.num_vars[0] = "Autostart";
+		audio_list.num_values[0] = autostart ? 1 : 0;
+		audio_list.num_vars[1] = "Split";
+		audio_list.num_values[1] = imid_split ? 1 : 0;
+		audio_list.num_vars[2] = "Flash";
+		audio_list.num_values[2] = flash_title ? 1 : 0;
+		
+		audio_file.push_back(audio_list);
+	} else {
+		for(int l=0;l<audio_file.size();l+=1) {
+			IniList* list = &audio_file.at(l);
+			if(list->title.compare("AidF_BTA") != 0)
+				continue;
+				
+			for(int s=0;s<list->l_n;s+=1) {
+				if(list->num_vars[s].compare("Autostart") == 0) {
+					list->num_values[s] = autostart ? 1 : 0;
+				} else if(list->num_vars[s].compare("Split") == 0) {
+					list->num_values[s] = imid_split ? 1 : 0;
+				} else if(list->num_vars[s].compare("Flash") == 0) {
+					list->num_values[s] = flash_title ? 1 : 0;
+				}
+			}
+		}
+	}
+	
+	saveIniFile(BLUETOOTH_SETTING_FILE_PATH, audio_file);
+}
+
+//Set the internal split, autostart, and flash settings.
+void BTAudioHandler::setSaveSettings(bool split, bool autostart, bool flash) {
+	this->imid_split = split;
+	this->autostart = autostart;
+	this->flash_title = flash;
 }
 
 //Increment the repeat status.
@@ -938,4 +1095,20 @@ void BTAudioHandler::setRandom(const repeat_random_status_t status) {
 	}
 
 	writeStatus();
+}
+
+//Toggle play/pause.
+void BTAudioHandler::setPlayPause() {
+	if(playback_status == PLAYBACK_STATUS_PAUSED || playback_status == PLAYBACK_STATUS_STOPPED)
+		setPlayPause(true);
+	else
+		setPlayPause(false);
+}
+
+//Toggle play/pause.
+void BTAudioHandler::setPlayPause(const bool play) {
+	if(play)
+		bluetooth_handler->sendMediaControl(MEDIA_CONTROL_PLAY);
+	else
+		bluetooth_handler->sendMediaControl(MEDIA_CONTROL_PAUSE);
 }

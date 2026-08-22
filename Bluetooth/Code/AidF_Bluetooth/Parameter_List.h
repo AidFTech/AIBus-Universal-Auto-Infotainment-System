@@ -5,7 +5,15 @@
 #ifndef parameter_list_h
 #define parameter_list_h
 
+#define BLUETOOTH_SETTING_FILE_PATH "./AidF_BTA.ini"
+
 using namespace std;
+
+enum bta_menu_t: uint8_t {
+	BTA_MENU_NONE,
+	BTA_MENU_DEVICES,
+	BTA_MENU_AUDIO,
+};
 
 enum bta_side_menu_t : uint8_t {
 	SIDE_MENU_PHONE_NC,
@@ -27,7 +35,13 @@ struct ParameterList {
 	bool imid_native_phone = false;
 	uint8_t imid_char = 0, imid_lines = 0;
 
+	bool screen_play_pause = false;
+
 	bta_side_menu_t side_menu; //The current side menu.
+	bta_menu_t current_menu;
+
+	uint16_t screen_w = 800, screen_h = 480;
+	bool dimensions_set = false;
 };
 
 #endif

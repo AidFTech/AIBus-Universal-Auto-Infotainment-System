@@ -11,6 +11,9 @@ HondaXMHandler::HondaXMHandler(EnIEBusHandler* ie_driver, AIBusHandler* ai_drive
 
 //XM handler loop function.
 void HondaXMHandler::loop() {
+	if(!source_established)
+		return;
+
 	if(preset_received) {
 		preset_request_increment += 1;
 		preset_received = false;
@@ -26,20 +29,20 @@ void HondaXMHandler::loop() {
 			text_timer_enabled = false;
 			if(parameter_list->imid_connected) {
 				if(text_timer_channel) {
-					imid_handler->writeIMIDSiriusTextMessage(N_CHANNEL_NAME, this->channel_name);
-					text_timer_channel = false;
+					if(imid_handler->writeIMIDSiriusTextMessage(N_CHANNEL_NAME, this->channel_name))
+						text_timer_channel = false;
 				} 
 				if(text_timer_song) {
-					imid_handler->writeIMIDSiriusTextMessage(N_SONG_NAME, this->song);
-					text_timer_song = false;
+					if(imid_handler->writeIMIDSiriusTextMessage(N_SONG_NAME, this->song))
+						text_timer_song = false;
 				}
 				if(text_timer_artist) { 
-					imid_handler->writeIMIDSiriusTextMessage(N_ARTIST_NAME, this->artist);
-					text_timer_artist = false;
+					if(imid_handler->writeIMIDSiriusTextMessage(N_ARTIST_NAME, this->artist))
+						text_timer_artist = false;
 				}
 				if(text_timer_genre) {
-					imid_handler->writeIMIDSiriusTextMessage(N_GENRE, this->genre);
-					text_timer_genre = false;
+					if(imid_handler->writeIMIDSiriusTextMessage(N_GENRE, this->genre))
+						text_timer_genre = false;
 				}
 			} else {
 				if(text_timer_channel) {
@@ -108,6 +111,16 @@ void HondaXMHandler::loop() {
 			
 			if(!ack)
 				parameter_list->radio_connected = false;
+		}
+
+		if(resend_number) {
+			if(imid_handler->writeIMIDSiriusNumberMessage(current_preset, *channel, xm2))
+				resend_number = false;
+		}
+
+		if(resend_text.length() > 0) {
+			if(imid_handler->writeIMIDTextMessage(resend_text))
+				resend_text = "";
 		}
 	}
 
@@ -424,7 +437,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 					
 					if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0)
 						clearExternalIMID();
-					sendIMIDInfoMessage();
+
+					if(!parameter_list->imid_connected)
+						sendIMIDInfoMessage();
 					
 					String nav_header = "";
 					switch(display_parameter) {
@@ -444,6 +459,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 
 					if(nav_header.length() > 0)
 						setNavHeader(nav_header);
+
+					if(parameter_list->imid_connected)
+						sendIMIDInfoMessage();
 				} else {
 					if(parameter_list->imid_connected) {
 						if(xm2)
@@ -1293,8 +1311,10 @@ void HondaXMHandler::sendAITextMessage(const uint8_t receiver, const uint8_t fie
 //Send an IMID channel number message.
 void HondaXMHandler::sendIMIDNumberMessage() {
 	if(parameter_list->imid_connected) {
-		if(display_parameter == N_TEXT_NONE)
-			imid_handler->writeIMIDSiriusNumberMessage(current_preset, *channel, xm2);
+		if(display_parameter == N_TEXT_NONE) {
+			if(!imid_handler->writeIMIDSiriusNumberMessage(current_preset, *channel, xm2))
+				resend_number = true;
+		}
 	} else if(parameter_list->external_imid_xm) {
 		sendAINumberMessage(ID_IMID_SCR);
 	} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
@@ -1510,7 +1530,8 @@ void HondaXMHandler::sendIMIDInfoHeader(String text) {
 //Send a full IMID info message.
 void HondaXMHandler::sendIMIDInfoMessage(String text) {
 	if(parameter_list->imid_connected) {
-		imid_handler->writeIMIDTextMessage(text);
+		if(!imid_handler->writeIMIDTextMessage(text))
+			resend_text = text;
 	} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {
 		uint8_t line = 1;
 		if(parameter_list->external_imid_lines > 1)

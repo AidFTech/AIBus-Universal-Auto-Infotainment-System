@@ -166,8 +166,8 @@ impl DongleUSBConnection {
 		let handle = self.device_handle.as_mut().unwrap();
 
 		let mut buffer: [u8;HEADERSIZE] = [0;HEADERSIZE];
-		let len = match handle.read_bulk(self.rx, &mut buffer, Duration::from_millis(100)) {
-			//TODO: This sends an empty USB message to the dongle every 100ms according to Wireshark.
+		let len = match handle.read_bulk(self.rx, &mut buffer, Duration::from_millis(20)) {
+			//TODO: This sends an empty USB message to the dongle every 20ms according to Wireshark.
 			// Is it possible to check the size of what can be read first?
 			Ok(len) => len,
 			Err(err) => {
@@ -197,7 +197,7 @@ impl DongleUSBConnection {
 			}
 
 			let mut data_buffer: Vec<u8> = vec![0;data_len];
-			let buf_len = match handle.read_bulk(self.rx, &mut data_buffer, Duration::from_millis(100)) {
+			let buf_len = match handle.read_bulk(self.rx, &mut data_buffer, Duration::from_millis(20)) {
 				Ok(len) => len,
 				Err(err) => {
 					match err {

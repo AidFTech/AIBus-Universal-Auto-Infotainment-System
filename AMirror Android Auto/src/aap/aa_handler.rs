@@ -116,6 +116,13 @@ pub struct AapHandler <'a> {
 	connection_start: Instant,
 	ping_timer: Instant,
 
+	rotary_count: i32,
+	rotary_timer: Instant,
+
+	last_video: Instant,
+
+	ping_duration: u64,
+
 	android_start: i64,
 }
 
@@ -153,6 +160,12 @@ impl<'a> AapHandler <'a> {
 			home_hold: false,
 
 			connection_start: Instant::now(),
+			ping_duration: 2000,
+
+			rotary_count: 0,
+			rotary_timer: Instant::now(),
+
+			last_video: Instant::now(),
 
 			android_start: 0,
 			ping_timer: Instant::now(),
@@ -205,12 +218,30 @@ impl<'a> AapHandler <'a> {
 			}
 		}
 
-		if phone_type == 5 && Instant::now() - self.ping_timer > Duration::from_millis(2000) {
+		if phone_type == 5 && Instant::now() - self.ping_timer > Duration::from_millis(self.ping_duration) {
 			self.ping_timer = Instant::now();
+			self.ping_duration = 2000;
 			
 			let mut ping_msg = PingRequest::new();
 			ping_msg.set_timestamp(self.get_timestamp() as i64);
 			self.write_message(true, ServiceChannels::ControlChannel as u8, ping_msg, ControlMessageType::MESSAGE_PING_REQUEST as u16, Duration::from_millis(5000), true);
+		}
+
+		if phone_type == 5 && self.rotary_count != 0 && Instant::now() - self.rotary_timer > Duration::from_millis(5) {
+			self.send_rotary_knob_message(self.rotary_count);
+			self.rotary_count = 0;
+		}
+
+		if Instant::now() - self.last_video > Duration::from_millis(100) {
+			self.last_video = Instant::now();
+			match self.mpv_video.try_lock() {
+				Ok(mut mpv) => {
+					mpv.refresh_video();
+				}
+				Err(_) => {
+					return;
+				}
+			}
 		}
 	}
 
@@ -905,9 +936,9 @@ impl<'a> AapHandler <'a> {
 				if button == 0x2A || button == 0x2B || button == 0x28 || button == 0x29 || button == 0x7 { //Directional pad, handle differently depending on configuration.
 					if !nav_knob && vertical_toggle && horizontal_toggle { //No nav knob but 4-way toggle.
 						if button == 0x2A && state == 0x0 { //Toggle left.
-							self.send_scroll_message(false);
+							self.increment_rotary_count(false);
 						} else if button == 0x2B && state == 0x0 { //Toggle right.
-							self.send_scroll_message(true);
+							self.increment_rotary_count(true);
 						} else if button == 0x28 { //Toggle up.
 							self.send_button_message(KeyCode::KEYCODE_DPAD_UP as u32, state);
 						} else if button == 0x29 { //Toggle down.
@@ -927,9 +958,9 @@ impl<'a> AapHandler <'a> {
 						}
 					} else if !nav_knob && (vertical_toggle || horizontal_toggle) { //No nav knob, simple directional controls.
 						if (button == 0x28 || button == 0x2A) && state == 0x0 { //Toggle left or up.
-							self.send_scroll_message(false);
+							self.increment_rotary_count(false);
 						} else if (button == 0x29 || button == 0x2B) && state == 0x0 { //Toggle right or down.
-							self.send_scroll_message(true);
+							self.increment_rotary_count(true);
 						} else if button == 0x7 && state == 0x2 { //Enter.
 							if !self.enter_hold {
 								self.send_button_message(KeyCode::KEYCODE_DPAD_CENTER as u32, 0x0);
@@ -1023,7 +1054,7 @@ impl<'a> AapHandler <'a> {
 				let steps = ai_msg.data[2]&0xF;
 
 				for _i in 0..steps {
-					self.send_scroll_message(clockwise);
+					self.increment_rotary_count(clockwise);
 				}
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_ANTENNA {
@@ -1069,6 +1100,16 @@ impl<'a> AapHandler <'a> {
 			self.send_button_message(KeyCode::KEYCODE_MEDIA_PAUSE as u32, 0x0);
 			self.send_button_message(KeyCode::KEYCODE_MEDIA_PAUSE as u32, 0x2);
 		}
+	}
+
+	///Send a play/pause toggle message.
+	pub fn play_pause_audio(&mut self) {
+		if !self.usb_handler.get_connected() {
+			return;
+		}
+
+		self.send_button_message(KeyCode::KEYCODE_MEDIA_PLAY_PAUSE as u32, 0x0);
+		self.send_button_message(KeyCode::KEYCODE_MEDIA_PLAY_PAUSE as u32, 0x2);
 	}
 
 	///Show the audio source window.
@@ -1238,21 +1279,33 @@ impl<'a> AapHandler <'a> {
 		press_msg.set_timestamp(self.get_timestamp());
 
 		println!("Sent: {:X?}", press_msg.write_to_bytes());
-		self.write_message(true, ServiceChannels::TouchChannel as u8, press_msg, InputMessageId::INPUT_MESSAGE_INPUT_REPORT as u16, Duration::from_millis(5000), true);
+		self.write_message(true, ServiceChannels::TouchChannel as u8, press_msg, InputMessageId::INPUT_MESSAGE_INPUT_REPORT as u16, Duration::from_millis(20), true);
 	}
 
-	///Send a scroll wheel message- clockwise if cw is true.
-	fn send_scroll_message(&mut self, cw: bool) {
+	///Increment the scroll wheel count.
+	fn increment_rotary_count(&mut self, cw: bool) {
+		if cw {
+			self.rotary_count += 1;
+		} else {
+			self.rotary_count -= 1;
+		}
+
+		self.rotary_timer = Instant::now();
+
+		//self.ping_duration = 16;
+	}
+
+	///Send a full rotary knob message.
+	fn send_rotary_knob_message(&mut self, pulses: i32) {
 		let mut scroll_data = Vec::new();
 
 		let mut os = CodedOutputStream::vec(&mut scroll_data);
 		let _ = os.write_uint32(1, KeyCode::KEYCODE_ROTARY_CONTROLLER as u32);
 
-		if cw {
-			let _ = os.write_int32(2, 1);
-		} else {
-			let _ = os.write_int32(2, -1);
-		}
+		let _ = os.write_int32(2, match pulses >= 0 {
+			true => 1,
+			false => -1,
+		});
 
 		std::mem::drop(os);
 
@@ -1270,7 +1323,11 @@ impl<'a> AapHandler <'a> {
 		std::mem::drop(os);
 
 		println!("Sent: {:X?}", send_data);
-		self.write_block(true, ServiceChannels::TouchChannel as u8, send_data, InputMessageId::INPUT_MESSAGE_INPUT_REPORT as u16, Duration::from_millis(5000), true);
+
+		let abs_pulses = pulses.abs();
+		for _i in 0..abs_pulses {
+			self.write_block(true, ServiceChannels::TouchChannel as u8, send_data.clone(), InputMessageId::INPUT_MESSAGE_INPUT_REPORT as u16, Duration::from_millis(20), true);
+		}
 	}
 
 	///Send latitude, longitude, and altitude to the phone.
@@ -1481,7 +1538,7 @@ impl<'a> AapHandler <'a> {
 
 		video_sink.video_configs.push(video_config);
 
-		video_sink.set_available_type(MediaCodecType::MEDIA_CODEC_VIDEO_H264_BP);
+		video_sink.set_available_type(MediaCodecType::MEDIA_CODEC_VIDEO_AV1);
 		video_sink.set_available_while_in_call(true);
 	
 		let mut video_sink_wrapper = Service::new();
@@ -1729,6 +1786,7 @@ impl<'a> AapHandler <'a> {
 
 		match self.mpv_video.try_lock() {
 			Ok(mut mpv_video) => {
+				self.last_video = Instant::now();
 				mpv_video.push_video(&mpv_data);
 			}
 			Err(_) => {
