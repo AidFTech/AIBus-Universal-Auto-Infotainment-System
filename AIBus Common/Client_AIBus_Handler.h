@@ -66,12 +66,17 @@ public:
 
 	void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
 
+	void requestResend(const uint8_t r);
+	void requestResend(const uint8_t s, const uint8_t r);
+
 	int getClient();
 	uint8_t getID();
 private:
 	vector<AIData> rx_cache = vector<AIData>(0);
 	vector<AIData> multi_cache = vector<AIData>(0); //Cache for multi-block messages.
 	vector<SocketMessage> tx_cache = vector<SocketMessage>(0);
+
+	vector<AIData> recent_tx;
 
 	unsigned long* timer = nullptr;
 

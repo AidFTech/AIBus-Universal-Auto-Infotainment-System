@@ -164,6 +164,7 @@ private:
 
 	//Timer to check for second count.
 	elapsedMillis second_timer;
+	bool auto_increment = false; //True if to increment the second counter if not readable.
 
 	HondaIMIDHandler* imid_handler;
 

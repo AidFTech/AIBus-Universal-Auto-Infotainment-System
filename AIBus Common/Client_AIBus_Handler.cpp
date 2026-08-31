@@ -137,7 +137,7 @@ void ClientAIBusHandler::writeSocketMessage(SocketMessage* msg) {
 
 	int avail = rx_cache.size();
 	unsigned long last_read = *timer;
-	while(*timer - last_read < 5) {
+	while(*timer - last_read < 20) {
 		if(rx_cache.size() > avail)
 			last_read = *timer;
 
@@ -252,7 +252,15 @@ void ClientAIBusHandler::cacheAIData(uint8_t* data, const int l) {
 			if(r == my_id && new_msg.l > 0 && new_msg[0] != 0x80)
 				sendAcknowledgement(r, s);
 
-			if(new_msg.l >= 3 && new_msg[0] == 0x91 && (new_msg.receiver == my_id || new_msg.receiver == 0xFF)) {
+			if(new_msg.l >= 1 && new_msg[0] == 0x92) { //Resend.
+				check_ok = true;
+				for(auto tx_msg: recent_tx) {
+					if(tx_msg.receiver == s && tx_msg.sender == r) {
+						writeAIData(&tx_msg);
+						break;
+					}
+				}
+			} else if(new_msg.l >= 3 && new_msg[0] == 0x91 && (new_msg.receiver == my_id || new_msg.receiver == 0xFF)) {
 				const int expected_size = new_msg[1];
 				multi_cache.push_back(new_msg);
 
@@ -292,6 +300,7 @@ bool ClientAIBusHandler::readAIData(AIData* ai_d) {
 	ai_d->refreshAIData(rx_cache[0]);
 	rx_cache.erase(rx_cache.begin());
 	check_ok = true;
+
 	return true;
 }
 
@@ -302,6 +311,23 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d) {
 
 //Write an AIBus message.
 bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
+	//Something that may need to be resent later?
+	if(ai_d->receiver != 0xFF && ai_d->l >= 1 && ai_d->data[0] != 0x80) {
+		int index = -1;
+		for(int i=0;i<recent_tx.size();i+=1) {
+			AIData tx_msg = recent_tx[i];
+			if(tx_msg.receiver == ai_d->receiver && tx_msg.sender == ai_d->sender) {
+				index = i;
+				break;
+			}
+		}
+
+		if(index >= 0)
+			recent_tx.erase(recent_tx.begin() + index);
+
+		recent_tx.push_back(*ai_d);
+	}
+
 	if(ai_d->l > AIDATA_LIMIT + 3) {
 		const int count = ai_d->l/AIDATA_LIMIT, r = ai_d->l%AIDATA_LIMIT;
 		AIData ai_group[count + (r == 0 ? 0 : 1)];
@@ -324,6 +350,9 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 			rec_ack = writeAIData(&ai_group[i], ack);
 			if(!rec_ack && ack)
 				return false;
+
+			const unsigned long start = *timer;
+			while(*timer - start < 5);
 		}
 		return rec_ack;
 	}

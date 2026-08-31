@@ -154,6 +154,8 @@ private:
 
 	bool vol_timer_enabled = false;
 	unsigned long vol_timer = 0;
+
+	unsigned long all_ping_timer = 0;
 };
 
 void setup(AidF_Nav_Computer* nav_computer);

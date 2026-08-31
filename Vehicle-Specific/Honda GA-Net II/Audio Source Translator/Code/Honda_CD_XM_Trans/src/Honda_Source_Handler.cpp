@@ -81,7 +81,7 @@ bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 		} else if(message_result < -1 || message_result > 0) {
 			if(tries < 0) {
 				delay_timer = 0;
-				ie_driver->cacheAIBus();
+				//ie_driver->cacheAIBus();
 			}
 			tries += 1;
 		}
@@ -103,6 +103,7 @@ bool HondaSourceHandler::getIEAckMessage(IE_Message* msg, const uint16_t sender)
 		if(!ack)
 			ie_driver->sendMessage(msg, true, true);
 		
+		ie_driver->cacheAIBus();
 		tries += 1;
 	}
 
@@ -123,7 +124,7 @@ bool HondaSourceHandler::getIEAckMessageStrict(const uint16_t sender) {
 			}
 		} else if(message_result < -1 || message_result > 0) {
 			delay_timer = 0;
-			ie_driver->cacheAIBus();
+			//ie_driver->cacheAIBus();
 		}
 	}
 

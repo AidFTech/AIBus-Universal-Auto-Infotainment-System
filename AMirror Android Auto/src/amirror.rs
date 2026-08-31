@@ -547,7 +547,7 @@ impl <'a> AMirror<'a> {
 			self.write_aibus_message(phone_name_msg);
 
 			if context.audio_selected && context.audio_text {
-				self.write_nav_text(context.phone_name.clone(), 2, 1, true);
+				self.write_nav_text(context.phone_name.replace("#", "##  "), 2, 1, true);
 
 				std::mem::drop(context);
 
@@ -605,10 +605,10 @@ impl <'a> AMirror<'a> {
 			if context.audio_selected {
 				self.write_radio_metadata(context.song_title.clone(), SONG_NAME);
 				if context.audio_text {
-					self.write_nav_text(context.song_title.clone(), 1, 0, true);
+					self.write_nav_text(context.song_title.replace("#", "##  "), 1, 0, true);
 
 					if self.flash_song_title {
-						self.write_nav_overlay(context.song_title.clone());
+						self.write_nav_overlay(context.song_title.replace("#", "##  "));
 						self.last_flash = Instant::now();
 					}
 
@@ -627,7 +627,7 @@ impl <'a> AMirror<'a> {
 							}
 	
 							if imid_y <= context.imid_row_count {
-								self.write_imid_text(context.song_title.clone(), imid_x as u8, imid_y);
+								self.write_imid_text(context.song_title.replace("#", "##  "), imid_x as u8, imid_y);
 							}
 						} else if self.imid_scroll >= 0 {
 							change_imid = true;
@@ -641,7 +641,7 @@ impl <'a> AMirror<'a> {
 			if context.audio_selected {
 				self.write_radio_metadata(context.artist.clone(), ARTIST_NAME);
 				if context.audio_text {
-					self.write_nav_text(context.artist.clone(), 2, 0, true);
+					self.write_nav_text(context.artist.replace("#", "##  "), 2, 0, true);
 
 					if context.imid_native_mirror && self.imid_scroll < 0 && context.phone_type != 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.artist.clone(), ARTIST_NAME);
@@ -661,7 +661,7 @@ impl <'a> AMirror<'a> {
 							}
 	
 							if imid_y <= context.imid_row_count {
-								self.write_imid_text(context.artist.clone(), imid_x as u8, imid_y);
+								self.write_imid_text(context.artist.replace("#", "##  "), imid_x as u8, imid_y);
 							}
 						} else if self.imid_scroll >= 0 {
 							change_imid = true;
@@ -675,7 +675,7 @@ impl <'a> AMirror<'a> {
 			if context.audio_selected {
 				self.write_radio_metadata(context.album.clone(), ALBUM_NAME);
 				if context.audio_text {
-					self.write_nav_text(context.album.clone(), 3, 0, true);
+					self.write_nav_text(context.album.replace("#", "##  "), 3, 0, true);
 
 					if context.imid_native_mirror && self.imid_scroll < 0 && context.phone_type != 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.album.clone(), ALBUM_NAME);
@@ -698,7 +698,7 @@ impl <'a> AMirror<'a> {
 							}
 	
 							if imid_y <= context.imid_row_count {
-								self.write_imid_text(context.album.clone(), imid_x as u8, imid_y);
+								self.write_imid_text(context.album.replace("#", "##  "), imid_x as u8, imid_y);
 							}
 						} else if self.imid_scroll >= 0 {
 							change_imid = true;
@@ -712,7 +712,7 @@ impl <'a> AMirror<'a> {
 			if context.audio_selected {
 				self.write_radio_metadata(context.app.clone(), APP_NAME);
 				if context.audio_text {
-					self.write_nav_text(context.app.clone(), 4, 0, true);
+					self.write_nav_text(context.app.replace("#", "##  "), 4, 0, true);
 
 					if context.imid_native_mirror && self.imid_scroll < 0 && context.phone_type != 0 {
 						self.write_metadata(AIBUS_DEVICE_IMID, context.app.clone(), APP_NAME);
@@ -738,7 +738,7 @@ impl <'a> AMirror<'a> {
 							}
 	
 							if imid_y <= context.imid_row_count {
-								self.write_imid_text(context.app.clone(), imid_x as u8, imid_y);
+								self.write_imid_text(context.app.replace("#", "##  "), imid_x as u8, imid_y);
 							}
 						} else if self.imid_scroll >= 0 {
 							change_imid = true;
@@ -1230,7 +1230,13 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
-		if ai_msg.l() >= 2 && ai_msg.data[0] == 0x20 { //Clear overlay.
+		if ai_msg.l() >= 1 && ai_msg.data[0] == 0x1 && ai_msg.sender != AIBUS_DEVICE_AMIRROR && ai_msg.receiver == 0xFF { //Wide ping.
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: ai_msg.sender,
+				data: [0x1].to_vec(),
+			});
+		} else if ai_msg.l() >= 2 && ai_msg.data[0] == 0x20 { //Clear overlay.
 			if ai_msg.sender == self.overlay_device || ai_msg.sender == AIBUS_DEVICE_RADIO {
 				let set_overlay = (ai_msg.data[1]&0x10) != 0;
 
@@ -2012,7 +2018,7 @@ impl <'a> AMirror<'a> {
 					}
 					
 					if overlay_text.len() > 0 {
-						self.write_nav_overlay(overlay_text);
+						self.write_nav_overlay(overlay_text.replace("#", "##  "));
 					}
 				} else if button == 0x26 { //Audio button.
 					if state == 0x2 {
@@ -2440,8 +2446,8 @@ impl <'a> AMirror<'a> {
 
 		let text_bytes = text.as_bytes();
 
-		for i in 0..text_bytes.len() {
-			meta_data.push(text_bytes[i]);
+		for t in text_bytes {
+			meta_data.push(*t);
 		}
 
 		let meta_msg = AIBusMessage {
@@ -2458,8 +2464,8 @@ impl <'a> AMirror<'a> {
 		let mut text_data = [0x22, 0x61].to_vec();
 		let text_bytes = text.as_bytes();
 
-		for i in 0..text_bytes.len() {
-			text_data.push(text_bytes[i]);
+		for t in text_bytes {
+			text_data.push(*t);
 		}
 
 		self.write_aibus_message(AIBusMessage {
@@ -2475,8 +2481,8 @@ impl <'a> AMirror<'a> {
 
 		let text_bytes = text.as_bytes();
 
-		for i in 0..text_bytes.len() {
-			meta_data.push(text_bytes[i]);
+		for t in text_bytes {
+			meta_data.push(*t);
 		}
 
 		let meta_msg = AIBusMessage {
@@ -2591,7 +2597,7 @@ impl <'a> AMirror<'a> {
 					}
 
 					if row <= context.imid_row_count {
-						self.write_imid_text(context.phone_name.clone(), imid_x as u8, row);
+						self.write_imid_text(context.phone_name.replace("#", "##  "), imid_x as u8, row);
 						row += 1;
 					}
 				}
@@ -2603,7 +2609,7 @@ impl <'a> AMirror<'a> {
 					}
 
 					if row <= context.imid_row_count {
-						self.write_imid_text(context.song_title.clone(), imid_x as u8, row);
+						self.write_imid_text(context.song_title.replace("#", "##  "), imid_x as u8, row);
 						row += 1;
 					}
 				}
@@ -2615,7 +2621,7 @@ impl <'a> AMirror<'a> {
 					}
 
 					if row <= context.imid_row_count {
-						self.write_imid_text(context.artist.clone(), imid_x as u8, row);
+						self.write_imid_text(context.artist.replace("#", "##  "), imid_x as u8, row);
 						row += 1;
 					}
 				}
@@ -2627,7 +2633,7 @@ impl <'a> AMirror<'a> {
 					}
 
 					if row <= context.imid_row_count {
-						self.write_imid_text(context.album.clone(), imid_x as u8, row);
+						self.write_imid_text(context.album.replace("#", "##  "), imid_x as u8, row);
 						row += 1;
 					}
 				}
@@ -2639,7 +2645,7 @@ impl <'a> AMirror<'a> {
 					}
 
 					if row <= context.imid_row_count {
-						self.write_imid_text(context.app.clone(), imid_x as u8, row);
+						self.write_imid_text(context.app.replace("#", "##  "), imid_x as u8, row);
 					}
 				} else {
 					row -= 1;

@@ -50,6 +50,7 @@ void HondaIMIDHandler::loop() {
 	}
 
 	if(parameter_list->power_on && imid_change_timer >= IMID_CHANGE_TIMER_LOCAL && ai_cache_vec.size() > 0) {
+		ie_driver->cacheAIBus();
 		readAIBusMessage(&ai_cache_vec[0]);
 		ai_cache_vec.remove(0);
 
@@ -238,6 +239,10 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x40 && the_message->data[1] == 0x10 && the_message->sender == ID_RADIO) { //Function change.
 		const uint8_t source = the_message->data[2];
 		bool set = false;
+
+		ai_driver->setAllowStaggeredMulti((parameter_list->first_cd && source == ID_CDC) ||
+												(parameter_list->first_tape && source == ID_TAPE) ||
+												(parameter_list->first_xm && source == ID_XM));
 
 		imid_next_subsource = -1;
 
@@ -1183,7 +1188,9 @@ bool HondaIMIDHandler::setBTText(const uint8_t field, String text) {
 		for(int i=0;i<limit;i+=1)
 			text_data2[i+8] = uint8_t(text.charAt(i));
 	}
+	//ie_driver->cacheAIBus(true);
 
+	text_msg.refreshIEData(sizeof(text_data2));
 	text_msg.refreshIEData(text_data2);
 
 	ie_driver->sendMessage(&text_msg, true, true);

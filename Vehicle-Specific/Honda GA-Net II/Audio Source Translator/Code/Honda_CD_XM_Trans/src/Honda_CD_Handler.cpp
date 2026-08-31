@@ -41,12 +41,20 @@ void HondaCDHandler::loop() {
 		return;
 
 	if(this->source_sel) {
-		if(second_timer > 800 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff) {
-			second_timer = 0;
-			this->listenForIEBus(450, false);
+		if(!auto_increment) {
+			if(second_timer > 800 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff) {
+				second_timer = 0;
+				this->listenForIEBus(450, false);
 
-			if(text_timer >= TEXT_REFRESH_TIMER/2)
-				text_timer = 0;
+				if(text_timer >= TEXT_REFRESH_TIMER/2)
+					text_timer = 0;
+			}
+		} else {
+			if(second_timer > 1000 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff && !fr) {
+				second_timer = 0;
+				timer += 1;
+				track_cmd |= COMMAND_WRITE_TIME_MESSAGES;
+			}
 		}
 
 		if(text_timer_enabled && text_timer >= TEXT_REFRESH_TIMER) {
@@ -331,7 +339,7 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 			ack = false;
 			sendIEAckMessage(IE_ID_CDC);
 
-			if(this->parameter_list->first_cd) {
+			if(!this->parameter_list->first_cd) {
 				this->parameter_list->first_cd = true;
 
 				uint8_t handshake_data[] = {0x0, 0x30};
@@ -638,7 +646,6 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 			ie_driver->sendMessage(&function_message, true, true);
 			getIEAckMessage(&function_message, device_ie_id);
 
-
 			function_message = getFunctionMessage(false, IE_ID_CDC, function, sizeof(function));
 			ie_driver->sendMessage(&function_message, true, true);
 			getIEAckMessage(&function_message, device_ie_id);
@@ -852,6 +859,11 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 					parameter_list->cd_text_changed = true;
 
 					createCDMainMenuOption(3);
+					break;
+				case MENU_INDEX_CDC_SETTINGS_AUTOINCREMENT:
+					this->auto_increment = !this->auto_increment;
+					setting_changed = true;
+					createCDMainMenuOption(cd_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_AUTOINCREMENT));
 					break;
 				case MENU_INDEX_CDC_SETTINGS_SCROLL: //Scrolling.
 					this->split = !this->split;
@@ -2112,6 +2124,8 @@ void HondaCDHandler::createCDMainMenuOption(const uint8_t option) {
 		item_txt = use_function_timer ? "#RON " : "#ROF ";
 	} else if(option==main_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_SCROLL))
 		item_txt = split ? "#ROF " : "#RON ";
+	else if(option == main_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_AUTOINCREMENT))
+		item_txt = auto_increment ? "#RON " : "#ROF ";
 
 	item_txt += main_menu[option];
 	appendMenu(option, item_txt);

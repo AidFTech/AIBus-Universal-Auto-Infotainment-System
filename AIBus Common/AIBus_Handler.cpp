@@ -1,6 +1,10 @@
 #include "AIBus_Handler.h"
 
-AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size) {
+AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size) : 
+	AIBusHandler(serial, rx_pin, id, ai_cache_size, ai_cache_size) {
+}
+
+AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size, const unsigned int tx_cache_size) {
 	this->ai_serial = serial;
 	this->rx_pin = rx_pin;
 
@@ -10,13 +14,20 @@ AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id
 	this->id = id;
 
 	cached_byte = new AIData[ai_cache_size];
-
 	cached_vec.setStorage(cached_byte, ai_cache_size, 0);
+
+	cached_tx = new AIData[tx_cache_size];
+	tx_vec.setStorage(cached_tx, tx_cache_size, 0);
+
 	this->ai_serial->setTimeout(1);
 }
 
 AIBusHandler::~AIBusHandler() {
 	delete[] cached_byte;
+	delete[] cached_tx;
+
+	if(multi_cache != NULL)
+		delete[] multi_cache;
 }
 
 //The amount of AIBus data available.
@@ -33,8 +44,8 @@ bool AIBusHandler::readAIData(AIData* ai_d) {
 }
 
 //Read AIBus data from the main stream.
-bool AIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool multiple) {
-	const aibus_read_result_t result = readAIDataErr(ai_d, cache, multiple);
+bool AIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool multi) {
+	const aibus_read_result_t result = readAIDataErr(ai_d, cache, multi);
 	return result == AIBUS_READ_OK_SERIAL || result == AIBUS_READ_OK_CACHED || result == AIBUS_READ_OK_MULTIPLE;
 }
 
@@ -44,7 +55,21 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d) {
 }
 
 //Read AIBus data from the main stream.
-aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, const bool multiple) {
+aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, const bool multi) {
+	if(multi_cache_len > 0 && multi_cache_pos > 0 && last_multi_message > 500) {
+		const uint8_t sender = multi_cache[0].sender, receiver = multi_cache[0].receiver;
+
+		multi_cache_len = -1;
+
+		if(multi_cache != NULL) {
+			delete[] multi_cache;
+			multi_cache = nullptr;
+		}
+
+		if(getID(receiver))
+			requestResend(receiver, sender);
+	}
+	
 	if(cache && cached_vec.size() > 0) {
 		ai_d->refreshAIData(cached_vec[0]);
 
@@ -159,53 +184,144 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 		for(uint8_t i=0;i<ai_d->l && i<sizeof(d);i+=1)
 			ai_d->data[i] = d[i];
 
+		if(ai_d->l >= 3 && ai_d->data[0] == 0x91 && multi_cache_len > 0 && multi_cache_pos > 0 && (multi_cache[0].sender != s || multi_cache[0].receiver != r))
+			return getID(r) ? AIBUS_READ_INVALID_MULTIPLE : AIBUS_READ_NODATA;
+
 		if(getID(r) && ai_d->l > 0 && ai_d->data[0] != 0x80)
 			sendAcknowledgement(r, s);
 
-		if(multiple && ai_d->l >= 3 && ai_d->data[0] == 0x91 && (getID(ai_d->receiver) || ai_d->receiver == 0xFF)) { //Multiple messages are on the way.
-			if(ai_d->data[2] != 0)
-				return AIBUS_READ_INVALID_MULTIPLE;
-
-			const int msg_count = ai_d->data[1];
-			uint8_t full_data[msg_count*AIDATA_LIMIT];
-			int full_length = ai_d->l - 3;
-
-			if(msg_count <= 0)
-				return AIBUS_READ_INVALID_MULTIPLE;
-
-			for(int i=0;i<ai_d->l - 3 && i < sizeof(full_data);i+=1)
-				full_data[i] = ai_d->data[i+3];
-			int m = 1;
-			elapsedMillis ai_timer;
-
-			AIData test_msg;
-			while(m < msg_count && ai_timer < 200) {
-				if(readAIData(&test_msg, true, false)) {
-					if(test_msg.l < 3 || test_msg.receiver != ai_d->receiver || test_msg.sender != ai_d->sender || test_msg.data[0] != 0x91 || test_msg.data[1] != msg_count) {
-						if((test_msg.receiver == ai_d->receiver || test_msg.receiver == 0xFF) && test_msg.l > 0 && test_msg.data[0] != 0x80)
-							cacheMessage(&test_msg); 
-						continue;
-					}
-
-					const uint8_t index = test_msg[2];
-					if(index < m)
-						continue;
-
-					for(int i=0;i<test_msg.l-3 && i + AIDATA_LIMIT*m < sizeof(full_data);i+=1)
-						full_data[(AIDATA_LIMIT)*index + i] = test_msg[i+3];
-
-					full_length += test_msg.l - 3;
-
-					m += 1;
-					ai_timer = 0;
+		if(getID(r) && ai_d->l >= 1 && ai_d->data[0] == 0x92) { //Resend.
+			for(int i=0;i<tx_vec.size();i+=1) {
+				AIData tx_msg = tx_vec[i];
+				if(tx_msg.receiver == s && tx_msg.sender == r) {
+					writeAIData(&tx_msg);
+					break;
 				}
-				if(ai_timer > 200)
-					return AIBUS_READ_INVALID_MULTIPLE;
 			}
 
-			ai_d->refreshAIData(full_length, ai_d->sender, ai_d->receiver);
-			ai_d->refreshAIData(full_data);
-			return AIBUS_READ_OK_MULTIPLE;
+			return AIBUS_READ_NODATA;
+		}
+
+		if(ai_d->l >= 3 && ai_d->data[0] == 0x91 && ai_d->data[1] > ai_d->data[2] && (getID(ai_d->receiver) || ai_d->receiver == 0xFF))
+			last_multi_message = 0;
+
+		if(multi && ai_d->l >= 3 && ai_d->data[0] == 0x91 && ai_d->data[1] > ai_d->data[2] && (getID(ai_d->receiver) || ai_d->receiver == 0xFF)) { //Multiple messages are on the way.
+			if(multi_cache_len <= 0) {
+				const int cache_len = ai_d->data[1]&0xFF;
+				if(cache_len <= 0)
+					return AIBUS_READ_INVALID_MULTIPLE;
+
+				//Read through a while loop.
+				if(!allow_staggered_multi || (multi_cache_limit >= 0 && cache_len > multi_cache_limit) || !cache || ai_serial->available() > AIDATA_LIMIT*3/2) {
+					if((ai_d->data[2]&0xFF) != 0 || (ai_d->data[1]&0xFF) == 0)
+						return AIBUS_READ_INVALID_MULTIPLE;
+
+					const int msg_count = ai_d->data[1];
+					uint8_t full_data[msg_count*AIDATA_LIMIT];
+					int full_length = ai_d->l - 3;
+
+					if(msg_count <= 0)
+						return AIBUS_READ_INVALID_MULTIPLE;
+
+					for(int i=0;i<ai_d->l - 3 && i < sizeof(full_data);i+=1)
+						full_data[i] = ai_d->data[i+3];
+					int m = 1;
+					elapsedMillis ai_timer;
+
+					AIData test_msg;
+					while(m < msg_count && ai_timer < 200) {
+						if(readAIData(&test_msg, true, false)) {
+							if(test_msg.l < 3 || test_msg.receiver != ai_d->receiver || test_msg.sender != ai_d->sender || test_msg.data[0] != 0x91 || test_msg.data[1] != msg_count) {
+								if((test_msg.receiver == ai_d->receiver || test_msg.receiver == 0xFF) && test_msg.l > 0 && test_msg.data[0] != 0x80)
+									cacheMessage(&test_msg); 
+								continue;
+							}
+
+							const uint8_t index = test_msg[2]&0xFF;
+							if(index < m)
+								continue;
+
+							for(int i=0;i<test_msg.l-3 && i + AIDATA_LIMIT*m < sizeof(full_data);i+=1)
+								full_data[(AIDATA_LIMIT)*index + i] = test_msg[i+3];
+
+							full_length += test_msg.l - 3;
+
+							m += 1;
+							ai_timer = 0;
+						}
+						if(ai_timer > 200) {
+							requestResend(ai_d->receiver, ai_d->sender);
+							return AIBUS_READ_INVALID_MULTIPLE;
+						}
+					}
+
+					ai_d->refreshAIData(full_length, ai_d->sender, ai_d->receiver);
+					ai_d->refreshAIData(full_data);
+					return AIBUS_READ_OK_MULTIPLE;
+				}
+
+				multi_cache_len = cache_len;
+
+				if(multi_cache != NULL && multi_cache != nullptr) {
+					delete[] multi_cache;
+					multi_cache = nullptr;
+				}
+
+				multi_cache = new AIData[multi_cache_len];
+				multi_cache_pos = 0;
+			}
+
+			if(multi_cache_pos < multi_cache_len) {
+				multi_cache[multi_cache_pos] = *ai_d;
+				multi_cache_pos += 1;
+			}
+
+			if(multi_cache_pos >= multi_cache_len && multi_cache_len > 0) {
+				uint8_t bytes_full[multi_cache_len*AIDATA_LIMIT];
+				Vector<uint8_t> bytes_vec;
+				bytes_vec.setStorage(bytes_full, sizeof(bytes_full), 0);
+
+				for(int m=0;m<multi_cache_len;m+=1) {
+					AIData msg;
+					for(int t=0;t<multi_cache_len && t < multi_cache_pos;t+=1) {
+						AIData test_msg = multi_cache[t];
+						if(test_msg.l < 3 || test_msg[0] != 0x91)
+							continue;
+
+						if((test_msg[2]&0xFF) != m)
+							continue;
+
+						if(test_msg.sender != ai_d->sender || test_msg.receiver != ai_d->receiver)
+							continue;
+
+						msg = test_msg;
+					}
+
+					for(int i=3;i<msg.l;i+=1)
+						bytes_vec.push_back(msg[i]);
+				}
+
+				if(bytes_vec.size() <= 0) {
+					multi_cache_pos = 0;
+					multi_cache_len = -1;
+					return AIBUS_READ_INVALID_MULTIPLE;
+				}
+
+				ai_d->refreshAIData(bytes_vec.size(), ai_d->sender, ai_d->receiver);
+				ai_d->refreshAIData(bytes_full);
+
+				multi_cache_pos = 0;
+				multi_cache_len = -1;
+
+				if(multi_cache != NULL) {
+					delete[] multi_cache;
+					multi_cache = nullptr;
+				}
+
+				return AIBUS_READ_OK_MULTIPLE;
+			}
+
+			return AIBUS_READ_NODATA;
 		}
 
 		return AIBUS_READ_OK_SERIAL;
@@ -243,6 +359,23 @@ bool AIBusHandler::writeAIData(AIData* ai_d) {
 
 //Write an AIBus message.
 bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
+	//Something we will need to resend?
+	if(ai_d->receiver != 0xFF && ai_d->l >= 1 && ai_d->data[0] != 0x80) {
+		int index = -1;
+		for(int i=0;i<tx_vec.size();i+=1) {
+			AIData tx_msg = tx_vec[i];
+			if(tx_msg.receiver == ai_d->receiver && tx_msg.sender == ai_d->sender) {
+				index = i;
+				break;
+			}
+		}
+
+		if(index >= 0)
+			tx_vec.remove(index);
+
+		tx_vec.push_back(*ai_d);
+	}
+
 	if(ai_d->l > AIDATA_LIMIT + 3) {
 		const int count = ai_d->l/AIDATA_LIMIT, r = ai_d->l%AIDATA_LIMIT;
 		AIData ai_group[count + (r == 0 ? 0 : 1)];
@@ -390,6 +523,21 @@ void AIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t recei
 	writeAIData(&ack_msg, false);
 }
 
+//Send a resend request.
+void AIBusHandler::requestResend(const uint8_t r) {
+	requestResend(id, r);
+}
+
+//Send a resend request.
+void AIBusHandler::requestResend(const uint8_t s, const uint8_t r) {
+	if(r == 0xFF)
+		return;
+
+	uint8_t resend_data[] = {0x92};
+	AIData resend_msg(sizeof(resend_data), s, r, resend_data);
+	writeAIData(&resend_msg);
+}
+
 //Flush the serial port.
 void AIBusHandler::flush() {
 	ai_serial->flush();
@@ -460,6 +608,16 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 		}
 	}
 	return false;
+}
+
+//Set the hard limit for long message caching.
+void AIBusHandler::setMultiCacheLimit(const int limit) {
+	this->multi_cache_limit = limit;
+}
+
+//Set whether to allow long, split messages to be read in the background (true) or all at once.
+void AIBusHandler::setAllowStaggeredMulti(const bool allow) {
+	this->allow_staggered_multi = allow;
 }
 
 //Clear any pending data in the serial port.

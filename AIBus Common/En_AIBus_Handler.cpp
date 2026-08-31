@@ -1,6 +1,13 @@
 #include "En_AIBus_Handler.h"
 
-EnAIBusHandler::EnAIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int id_count, const unsigned int ai_cache_size) : AIBusHandler(serial, rx_pin, 0, ai_cache_size) {
+EnAIBusHandler::EnAIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int id_count, const unsigned int ai_cache_size) :
+EnAIBusHandler(serial, rx_pin, id_count, ai_cache_size, AI_CACHE_SIZE)
+{
+
+}
+
+EnAIBusHandler::EnAIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int id_count, const unsigned int ai_cache_size, const unsigned int tx_cache_size) :
+	AIBusHandler(serial, rx_pin, 0, ai_cache_size, tx_cache_size) {
 	this->id_list = new uint8_t[id_count];
 
 	this->id_vec.setStorage(id_list, id_count, 0);

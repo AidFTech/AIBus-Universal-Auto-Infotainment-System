@@ -85,7 +85,7 @@ public:
 private:
 	ParameterList parameters;
 
-	EnAIBusHandler ai_handler = EnAIBusHandler(&AISerial, AI_RX, 8);
+	EnAIBusHandler ai_handler = EnAIBusHandler(&AISerial, AI_RX, 8, EN_AI_CACHE_SIZE, 0);
 	EnIEBusHandler ie_handler = EnIEBusHandler(IEBUS_RX, IEBUS_TX);
 
 	HondaIMIDHandler imid_handler = HondaIMIDHandler(&ie_handler, &ai_handler, &parameters);
@@ -95,7 +95,7 @@ private:
 
 	BrightnessHandler brightness_handler = BrightnessHandler(ILL_CS, ILL_ANODE);
 
-	elapsedMillis function_timer, screen_request_timer, ping_timer, power_ping_timer, dimension_request_timer;
+	elapsedMillis function_timer, screen_request_timer, ping_timer, power_ping_timer, dimension_request_timer, memory_timer;
 
 	elapsedMillis door_timer;
 	bool door_timer_enabled = false;
@@ -107,5 +107,7 @@ private:
 
 void setup();
 void loop();
+
+int freeMemory();
 
 #endif

@@ -40,15 +40,16 @@ enum aibus_read_result_t : int8_t {
 class AIBusHandler {
 public:
 	AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size = AI_CACHE_SIZE);
+	AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size, const unsigned int tx_cache_size);
 	~AIBusHandler();
 
 	virtual int dataAvailable(const bool cache = true);
 
 	virtual bool readAIData(AIData* ai_d);
-	virtual bool readAIData(AIData* ai_d, const bool cache, const bool multiple = true);
+	virtual bool readAIData(AIData* ai_d, const bool cache, const bool multi = true);
 
 	virtual aibus_read_result_t readAIDataErr(AIData* ai_d);
-	virtual aibus_read_result_t readAIDataErr(AIData* ai_d, const bool cache, const bool multiple = true);
+	virtual aibus_read_result_t readAIDataErr(AIData* ai_d, const bool cache, const bool multi = true);
 
 	virtual bool readAIData(AIData* ai_d, uint8_t* data, const uint8_t d_l);
 
@@ -56,17 +57,32 @@ public:
 	virtual bool writeAIData(AIData* ai_d, const bool acknowledge);
 	virtual void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
 	virtual void flush();
+
+	virtual void requestResend(const uint8_t r);
+	virtual void requestResend(const uint8_t s, const uint8_t r);
 	
 	virtual void cacheMessage(AIData* ai_msg);
 	virtual bool cachePending(const uint8_t id);
 
 	void clearSerial();
+	void setMultiCacheLimit(const int limit);
+	void setAllowStaggeredMulti(const bool allow);
 protected:
 	Stream* ai_serial;
 	int8_t rx_pin = -1;
 
+	AIData* cached_tx;
+	Vector<AIData> tx_vec;
+
 	AIData* cached_byte;
 	Vector<AIData> cached_vec;
+
+	AIData* multi_cache = nullptr;
+	int multi_cache_len = -1, multi_cache_pos = 0;
+	elapsedMillis last_multi_message;
+	int multi_cache_limit = 5;
+
+	bool allow_staggered_multi = true;
 	
 	uint8_t id;
 

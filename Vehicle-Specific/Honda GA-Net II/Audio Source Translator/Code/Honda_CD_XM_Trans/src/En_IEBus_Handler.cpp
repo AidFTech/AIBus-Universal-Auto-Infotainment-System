@@ -59,10 +59,16 @@ void EnIEBusHandler::init(EnIEBusParams* ie_params) {
 	}
 }
 
-bool EnIEBusHandler::cacheAIBus() {
-	if(this->ai_handler != NULL)
-		return this->ai_handler->cacheAllPending();
-	else
+bool EnIEBusHandler::cacheAIBus(const bool repeat) {
+	if(this->ai_handler != NULL) {
+		if(repeat) {
+			elapsedMillis ai_timer;
+			while(ai_timer < 100) {
+				if(this->ai_handler->cacheAllPending())
+					return true;
+			}
+		} else return this->ai_handler->cacheAllPending();
+	} else
 		return false;
 }
 
@@ -90,27 +96,27 @@ AIData EnIEBusHandler::getAIBus(const uint8_t* id, const int id_l) {
 
 void EnIEBusHandler::sendMessageStrict(IE_Message* ie_d, const bool ack_response, const bool checksum) {
 	IEBusHandler::sendMessage(ie_d, ack_response, checksum);
-	ai_handler->clearSerial();
+	//ai_handler->clearSerial();
 
 	*rec_clear_register &= ~rec_clear_bitmask;
 	*rec_clear_register |= rec_clear_bitmask;
 }
 
 void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum) {
-	//ai_handler->cacheAllPending();
-	ai_handler->clearSerial();
+	ai_handler->cacheAllPending();
+	//ai_handler->clearSerial();
 	IEBusHandler::sendMessage(ie_d, ack_response, checksum);
-	ai_handler->clearSerial();
+	//ai_handler->clearSerial();
 
 	*rec_clear_register &= ~rec_clear_bitmask;
 	*rec_clear_register |= rec_clear_bitmask;
 }
 
 void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) {
-	//ai_handler->cacheAllPending();
-	ai_handler->clearSerial();
+	ai_handler->cacheAllPending();
+	//ai_handler->clearSerial();
 	IEBusHandler::sendMessage(ie_d, ack_response, checksum, wait);
-	ai_handler->clearSerial();
+	//ai_handler->clearSerial();
 
 	*rec_clear_register &= ~rec_clear_bitmask;
 	*rec_clear_register |= rec_clear_bitmask;
@@ -128,24 +134,24 @@ int EnIEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint1
 		}
 	}*/
 	
-	//ai_handler->cacheAllPending();
-	ai_handler->clearSerial();
+	ai_handler->cacheAllPending();
+	//ai_handler->clearSerial();
 	const int result = IEBusHandler::readMessage(ie_d, ack_response, id);
-	ai_handler->clearSerial();
+	//ai_handler->clearSerial();
 	
 	if(result == 0) {
 		*rec_clear_register &= ~rec_clear_bitmask;
 		*rec_clear_register |= rec_clear_bitmask;
 	}
-	/*ai_handler->waitForAIBus();
-	ai_handler->cacheAllPending();*/
+	//ai_handler->waitForAIBus();
+	ai_handler->cacheAllPending();
 
 	return result;
 }
 
 int EnIEBusHandler::readMessageStrict(IE_Message* ie_d, bool ack_response, const uint16_t id) {
 	const int result = IEBusHandler::readMessage(ie_d, ack_response, id);
-	ai_handler->clearSerial();
+	//ai_handler->clearSerial();
 
 	if(result == 0) {
 		*rec_clear_register &= ~rec_clear_bitmask;

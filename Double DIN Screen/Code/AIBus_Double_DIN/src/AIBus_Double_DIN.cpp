@@ -139,17 +139,21 @@ void AIBusDoubleDIN::loop() {
 	do {
 		bool message_read = false;
 		if(ai_handler.dataAvailable() > 0) {
-			if(msg.sender == ID_RADIO && !parameters.radio_connected)
-				parameters.radio_connected = true;
-			
-			if(msg.sender == ID_NAV_COMPUTER && !parameters.computer_connected)
-				parameters.computer_connected = true;
-
 			if(ai_handler.readAIData(&msg)) {
 				if(msg.sender == ID_NAV_SCREEN)
 					continue;
 
-				if(msg.receiver == ID_NAV_SCREEN && msg.l >= 1 && msg.data[0] != 0x80)
+				if(msg.sender == ID_RADIO && !parameters.radio_connected)
+					parameters.radio_connected = true;
+				
+				if(msg.sender == ID_NAV_COMPUTER && !parameters.computer_connected)
+					parameters.computer_connected = true;
+
+				if(msg.receiver == 0xFF && msg.l == 1 && msg[0] == 0x1) { //Ping.
+					uint8_t ping_data[] = {0x1};
+					AIData ping_msg(sizeof(ping_data), ID_NAV_SCREEN, msg.sender, ping_data);
+					ai_handler.writeAIData(&ping_msg);
+				} else if(msg.receiver == ID_NAV_SCREEN && msg.l >= 1 && msg.data[0] != 0x80)
 					message_read = true;
 				else if(msg.receiver == 0xFF && msg.l >= 1 && msg.data[0] == 0xA1) {
 					if(msg.sender == ID_CANSLATOR && msg.l >= 0x4 && msg.data[1] == 0x10) { //Light control.

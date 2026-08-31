@@ -598,11 +598,34 @@ void AidF_Nav_Computer::loop() {
 		cout<<"Nav mute "<<(attribute_list->nav_prompt_active ? "active" : "incative")<<endl;
 		#endif
 	}
+
+	if(elapsed_millis.time - all_ping_timer > 30000) {
+		all_ping_timer = elapsed_millis.time;
+		vector<uint8_t> ping_devices;
+
+		for(auto dev: attribute_list->ping_device_list)
+			ping_devices.push_back(dev);
+
+		attribute_list->ping_device_list.clear();
+		uint8_t ping_data[] = {0x1};
+
+		for(auto dev: ping_devices) {
+			AIData ping_msg(sizeof(ping_data), ID_NAV_COMPUTER, dev, ping_data);
+			aibus_handler->writeAIData(&ping_msg, false);
+		}
+
+		AIData all_ping_msg(sizeof(ping_data), ID_NAV_COMPUTER, 0xFF, ping_data);
+		aibus_handler->writeAIData(&all_ping_msg, false);
+	}
 }
 
 //Handle a broadcast AIBus message.
 bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
-	if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 3 && ai_d->data[1] == 0x2) { //Key position message.
+	if(ai_d->sender != ID_NAV_COMPUTER && ai_d->receiver == 0xFF && ai_d->l == 1 && ai_d->data[0] == 1) { //Universal ping.
+		uint8_t ping_data[] = {0x1};
+		AIData ping_msg(sizeof(ping_data), ID_NAV_COMPUTER, ai_d->sender, ping_data);
+		aibus_handler->writeAIData(&ping_msg);
+	} else if(ai_d->sender == ID_CANSLATOR && ai_d->l >= 3 && ai_d->data[1] == 0x2) { //Key position message.
 		this->key_position = ai_d->data[2]&0xF;
 		
 		if(this->key_position == 0x0 && (this->door_position&0xC) != 0) {

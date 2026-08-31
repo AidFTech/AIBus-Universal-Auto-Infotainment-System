@@ -117,6 +117,29 @@ void HondaCDXMTrans::loop() {
 	Serial.flush();
 	#endif
 
+	if(memory_timer > 1200) {
+		memory_timer = 0;
+		int mem = freeMemory();
+
+		if(mem > (8192 - 4848))
+			mem = 0;
+
+		const int cache_limit = mem/4/(sizeof(AIData) + AIDATA_LIMIT);
+
+		ai_handler.setMultiCacheLimit(cache_limit);
+
+		#ifdef MEMORY_CHECK
+		const String mem_str = String(mem) + ": " + cache_limit;
+		AIData mem_msg(mem_str.length() + 2, ID_IMID_SCR, 0xFF);
+		mem_msg[0] = 0xA1;
+		mem_msg[1] = 0xFF;
+		for(int i=0;i<mem_str.length();i+=1)
+			mem_msg[i+2] = uint8_t(mem_str[i]);
+
+		ai_handler.writeAIData(&mem_msg, false);
+		#endif
+	}
+
 	IE_Message ie_msg;
 
 	elapsedMillis message_timer;
@@ -268,7 +291,25 @@ void HondaCDXMTrans::loop() {
 					parameters.mirror_connected = false;
 			}
 
-			if (ai_msg.sender == ID_IMID_SCR && !imid_handler.getEstablished()) { //An external IMID is available.
+			if(ai_msg.receiver == 0xFF && ai_msg.l == 1 && ai_msg[0] == 0x1) { //Ping.
+				uint8_t ping_data[] = {0x1};
+				if(cd_handler.getEstablished()) {
+					AIData ping_msg(sizeof(ping_data), ID_CDC, ai_msg.sender, ping_data);
+					ai_handler.writeAIData(&ping_msg);
+				}
+				if(imid_handler.getEstablished()) {
+					AIData ping_msg(sizeof(ping_data), ID_IMID_SCR, ai_msg.sender, ping_data);
+					ai_handler.writeAIData(&ping_msg);
+				}
+				if(tape_handler.getEstablished()) {
+					AIData ping_msg(sizeof(ping_data), ID_TAPE, ai_msg.sender, ping_data);
+					ai_handler.writeAIData(&ping_msg);
+				}
+				if(xm_handler.getEstablished()) {
+					AIData ping_msg(sizeof(ping_data), ID_XM, ai_msg.sender, ping_data);
+					ai_handler.writeAIData(&ping_msg);
+				}
+			} else if (ai_msg.sender == ID_IMID_SCR && !imid_handler.getEstablished()) { //An external IMID is available.
 				if (ai_msg.l >= 2 && ai_msg.data[0] == 0x3B) { // External IMID is announcing itself.
 					if (ai_msg.data[1] == 0x23 && ai_msg.l >= 4) { // Custom text field.
 						parameters.external_imid_char = ai_msg.data[2];
@@ -658,7 +699,7 @@ void HondaCDXMTrans::powerOff() {
 	door_timer_enabled = false;
 }
 
-#ifdef MEMORY_CHECK
+//Get the available memory.
 int freeMemory() {
 	int size = 8192;
 	byte *buf;
@@ -666,4 +707,3 @@ int freeMemory() {
 	free(buf);
 	return size;
 }
-#endif

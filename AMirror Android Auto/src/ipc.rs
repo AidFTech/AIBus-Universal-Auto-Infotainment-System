@@ -25,6 +25,10 @@ pub struct ClientAIBusHandler {
 	aibus_handler: Arc<Mutex<AIBusHandler>>,
 
 	multi_cache: Vec<AIBusMessage>,
+	multi_expected_len: i32,
+	last_multi_message: Instant,
+
+	recent_tx: Vec<AIBusMessage>,
 
 	process_active: bool,
 }
@@ -36,11 +40,17 @@ impl ClientAIBusHandler {
 			ClientAIBusHandler { socket: init_default_socket(),
 								aibus_handler: ai_handler,
 								multi_cache: Vec::new(),
+								recent_tx: Vec::new(),
+								multi_expected_len: -1,
+								last_multi_message: Instant::now(),
 								process_active: false }
 		} else {
 			ClientAIBusHandler { socket: init_socket(path.to_string()),
 								aibus_handler: ai_handler,
+								multi_expected_len: -1,
 								multi_cache: Vec::new(),
+								recent_tx: Vec::new(),
+								last_multi_message: Instant::now(),
 								process_active: false }
 		};
 
@@ -96,9 +106,18 @@ impl ClientAIBusHandler {
 		let ai_rx = aibus_handler.get_ai_rx();
 
 		for ai_data in ai_data_list {
+			if self.multi_expected_len > 0 && self.multi_cache.len() > 0 && Instant::now() - self.last_multi_message > Duration::from_millis(500) {
+				self.multi_expected_len = -1;
+				self.multi_cache.clear();
+			}
+
 			println!("{:X?}", ai_data.get_bytes());
 
 			if ai_data.receiver != 0xFF && ai_data.receiver != AIBUS_DEVICE_AMIRROR {
+				continue;
+			}
+
+			if ai_data.l() >= 3 && ai_data.data[0] == 0x91 && self.multi_cache.len() > 0 && (self.multi_cache[0].sender != ai_data.sender || self.multi_cache[0].receiver != ai_data.receiver) {
 				continue;
 			}
 
@@ -114,47 +133,58 @@ impl ClientAIBusHandler {
 				let _ = stream.write(&ack_bytes);
 			}
 
-			if ai_data.l() > 3 && ai_data.data[0] == 0x91 { //Multi message.
+			if ai_data.l() >= 1 && ai_data.data[0] == 0x92 { //Resend request.
+				for last_tx in &self.recent_tx {
+					if last_tx.sender == ai_data.receiver && last_tx.receiver == ai_data.sender {
+						let resend_bytes = get_full_bytes(last_tx);
+						let _ = stream.write(&resend_bytes); //TODO: Acknowledge?
+
+						break;
+					}
+				}
+			} else if ai_data.l() >= 3 && ai_data.data[0] == 0x91 { //Multi message.
+				self.last_multi_message = Instant::now();
+
+				if self.multi_expected_len <= 0 {
+					self.multi_expected_len = ai_data.data[1] as i32;
+				}
+
 				self.multi_cache.push(ai_data.clone());
 
-				let expected_len = ai_data.data[1] as usize;
-
-				if ai_data.data[2] + 1 >= ai_data.data[1] {
-					let mut pos = 0;
+				if self.multi_cache.len() as i32 >= self.multi_expected_len {
 					let mut full_data = Vec::new();
 
-					while pos < self.multi_cache.len() {
-						let mut found = false;
-						for m in &self.multi_cache {
-
-							if m.l() > 3 && m.data[2] == pos as u8 {
-								for i in 3..m.l() {
-									full_data.push(m.data[i]);
-								}
-								found = true;
-								pos += 1;
+					for m in 0..self.multi_expected_len {
+						for test_msg in &self.multi_cache {
+							if test_msg.l() < 3 || test_msg.data[0] != 0x91 || test_msg.data[1] as i32 != self.multi_expected_len {
+								continue;
 							}
 
-							if !found {
-								break;
+							if test_msg.data[2] as i32 != m {
+								continue;
 							}
-						}
 
-						if !found {
-							break;
+							if test_msg.sender != ai_data.sender || test_msg.receiver != ai_data.receiver {
+								continue;
+							}
+
+							let mut i = 3;
+							while i < test_msg.l() {
+								full_data.push(test_msg.data[i]);
+								i += 1;
+							}
 						}
 					}
 
-					if pos >= expected_len {
-						let full_msg = AIBusMessage {
-							sender: ai_data.sender,
-							receiver: ai_data.receiver,
-							data: full_data,
-						};
-						ai_rx.push(full_msg);
+					let full_msg = AIBusMessage {
+						sender: ai_data.sender,
+						receiver: ai_data.receiver,
+						data: full_data,
+					};
+					ai_rx.push(full_msg);
 
-						self.multi_cache.clear();
-					}
+					self.multi_cache.clear();
+					self.multi_expected_len = -1;
 				}
 			} else {
 				ai_rx.push(ai_data);
@@ -167,6 +197,19 @@ impl ClientAIBusHandler {
 	///Activate the socket handler.
 	pub fn activate(&mut self) {
 		self.process_active = true;
+	}
+
+	///Cache a message to be sent in case it needs to be resent later.
+	pub fn cache_tx(&mut self, ai_msg: AIBusMessage) {
+		for i in 0..self.recent_tx.len() {
+			let test_msg = &self.recent_tx[i];
+			if test_msg.sender == ai_msg.sender && test_msg.receiver == ai_msg.receiver {
+				self.recent_tx.remove(i);
+				break;
+			}
+		}
+
+		self.recent_tx.push(ai_msg);
 	}
 
 	///Get an AIBus message from a socket message.

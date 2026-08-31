@@ -14,7 +14,8 @@
 //An enhanced AIBus handler capable of caching messages from multiple IDs.
 class EnAIBusHandler : public AIBusHandler { //Enhanced AIBus handler.
 public:
-	EnAIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int id_count, const unsigned int ai_cache_size = EN_AI_CACHE_SIZE);
+	EnAIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int id_count, const unsigned int ai_cache_size = AI_CACHE_SIZE);
+	EnAIBusHandler(Stream* serial, const int8_t rx_pin, const unsigned int id_count, const unsigned int ai_cache_size, const unsigned int tx_cache_size);
 	~EnAIBusHandler();
 
 	void addID(const uint8_t id);

@@ -183,7 +183,7 @@ void *socketThread(void* parameters_v) {
 					if(parameters->timer != nullptr) {
 						unsigned long start = *parameters->timer;
 						int current_cached_bytes = aiserialBytesAvailable(*parameters->ai_serial);
-						while(*parameters->timer - start < 2) {
+						while(*parameters->timer - start < 5) {
 							if(current_cached_bytes != aiserialBytesAvailable(*parameters->ai_serial)) {
 								current_cached_bytes = aiserialBytesAvailable(*parameters->ai_serial);
 								start = *parameters->timer;

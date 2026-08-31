@@ -156,6 +156,8 @@ bool BTAudioHandler::handleAIBusMessage(AIData* ai_msg) {
 			parameter_list->text_allowed = false;
 			bluetooth_handler->sendMediaControl(MEDIA_CONTROL_STOP);
 
+			imid_scroll = BTA_IMID_SCROLL_NONE;
+
 			if(source != 0x0) {
 				uint8_t screen_ctl_data[] = {0x77, source, 0x80};
 				AIData screen_ctl_msg(sizeof(screen_ctl_data), ID_PHONE, ID_NAV_SCREEN, screen_ctl_data);
@@ -302,6 +304,21 @@ void BTAudioHandler::refreshIMIDConnection() {
 		BTADevice* device = bluetooth_handler->getConnectedDevice();
 		if(device != nullptr && device != NULL) 
 			text_handler->writeMetadata(device->getDeviceName(), ID_IMID_SCR, 4);
+	} else if(imid_scroll >= 0) {
+		switch(imid_scroll) {
+		case BTA_IMID_SCROLL_TRACK:
+			writeIMIDTitle();
+			break;
+		case BTA_IMID_SCROLL_ARTIST:
+			writeIMIDArtist();
+			break;
+		case BTA_IMID_SCROLL_ALBUM:
+			writeIMIDAlbum();
+			break;
+		default:
+			imid_scroll_header = false;
+			break;
+		}
 	}
 }
 
@@ -369,7 +386,15 @@ void BTAudioHandler::writeTitleMetadata() {
 	if(!parameter_list->text_allowed)
 		return;
 
-	text_handler->writeAudioWindowText(song_title, 0, 1);
+	string meta = "";
+	for(auto c: song_title) {
+		if(c == '#')
+			meta += "##  ";
+		else
+			meta += c;
+	}
+
+	text_handler->writeAudioWindowText(meta, 0, 1);
 
 	writeIMIDTitle();
 }
@@ -384,7 +409,15 @@ void BTAudioHandler::writeArtistMetadata() {
 	if(!parameter_list->text_allowed)
 		return;
 
-	text_handler->writeAudioWindowText(artist, 0, 2);
+	string meta = "";
+	for(auto c: artist) {
+		if(c == '#')
+			meta += "##  ";
+		else
+			meta += c;
+	}
+
+	text_handler->writeAudioWindowText(meta, 0, 2);
 
 	writeIMIDArtist();
 }
@@ -399,7 +432,15 @@ void BTAudioHandler::writeAlbumMetadata() {
 	if(!parameter_list->text_allowed)
 		return;
 
-	text_handler->writeAudioWindowText(album, 0, 3);
+	string meta = "";
+	for(auto c: album) {
+		if(c == '#')
+			meta += "##  ";
+		else
+			meta += c;
+	}
+
+	text_handler->writeAudioWindowText(meta, 0, 3);
 
 	writeIMIDAlbum();
 }
@@ -489,6 +530,13 @@ void BTAudioHandler::handleBTProperties(map<string, Variant> properties) {
 		writeTitleMetadata();
 		
 		if(parameter_list->text_allowed && flash_title) {
+			string new_title = "";
+			for(auto s: song_title) {
+				if(s == '#')
+					new_title += "##  ";
+				else
+					new_title += s;
+			}
 			text_handler->writeNavHeaderText(song_title);
 			last_title_time = *timer;
 		}
@@ -518,7 +566,13 @@ void BTAudioHandler::writeIMIDTitle() {
 	if(parameter_list->imid_native_phone && imid_scroll < 0)
 		text_handler->writeMetadata(song_title, ID_IMID_SCR, 1);
 	else if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && imid_scroll < 0 && display_track) {
-		string imid_text = song_title;
+		string imid_text = "";
+		for(auto c: song_title) {
+			if(c == '#')
+				imid_text += "##  ";
+			else
+				imid_text += c;
+		}
 
 		if(imid_text.length() > parameter_list->imid_char)
 			imid_text = imid_text.substr(0, parameter_list->imid_char);
@@ -571,7 +625,13 @@ void BTAudioHandler::writeIMIDArtist() {
 	if(parameter_list->imid_native_phone && imid_scroll < 0)
 		text_handler->writeMetadata(artist, ID_IMID_SCR, 2);
 	else if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && imid_scroll < 0 && display_artist) {
-		string imid_text = artist;
+		string imid_text = "";
+		for(auto c: album) {
+			if(c == '#')
+				imid_text += "##  ";
+			else
+				imid_text += c;
+		}
 
 		if(imid_text.length() > parameter_list->imid_char)
 			imid_text = imid_text.substr(0, parameter_list->imid_char);
@@ -626,7 +686,13 @@ void BTAudioHandler::writeIMIDAlbum() {
 	if(parameter_list->imid_native_phone && imid_scroll < 0)
 		text_handler->writeMetadata(album, ID_IMID_SCR, 3);
 	else if(parameter_list->imid_char > 0 && parameter_list->imid_lines > 0 && imid_scroll < 0 && display_album) {
-		string imid_text = album;
+		string imid_text = "";
+		for(auto c: album) {
+			if(c == '#')
+				imid_text += "##  ";
+			else
+				imid_text += c;
+		}
 
 		if(imid_text.length() > parameter_list->imid_char)
 			imid_text = imid_text.substr(0, parameter_list->imid_char);

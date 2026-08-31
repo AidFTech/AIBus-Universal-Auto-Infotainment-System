@@ -45,9 +45,6 @@ SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned 
 
 	this->timer = timer;
 	this->id = id;
-
-	multi_thread_params = (void*)(new MultiMessageThreadParameters);
-	((MultiMessageThreadParameters*)(multi_thread_params))->ai_handler = this;
 }
 
 SerialAIBusHandler::~SerialAIBusHandler() {
@@ -61,8 +58,6 @@ SerialAIBusHandler::~SerialAIBusHandler() {
 	#ifdef SOCKET_SERVER
 	delete[] this->socket_list;
 	#endif
-
-	delete (MultiMessageThreadParameters*)multi_thread_params;
 }
 
 #ifndef RPI_UART
@@ -113,6 +108,15 @@ bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool m
 			main_locked = last_main_locked;
 			return true;
 		} else if(aiserialBytesAvailable(this->ai_port) >= 4) {
+			if(multiple && multi_expected_size > 0 && multi_cache.size() > 0 && *timer - last_multi_message > 500) {
+				const uint8_t sender = multi_cache[0].sender;
+
+				multi_cache.clear();
+				multi_expected_size = -1;
+
+				requestResend(sender);
+			}
+
 			const uint8_t s = uint8_t(aiserialReadByte(this->ai_port));
 			const uint8_t l = uint8_t(aiserialReadByte(this->ai_port));
 
@@ -188,55 +192,90 @@ bool SerialAIBusHandler::readAIData(AIData* ai_d, const bool cache, const bool m
 			for(uint8_t i=0;i<ai_d->l;i+=1)
 				ai_d->data[i] = d[i];
 
+			if(multi_cache.size() > 0 && multiple && ai_d->l >= 3 && ai_d->data[0] == 0x91) {
+				if(multi_cache[0].sender != ai_d->sender || multi_cache[0].receiver != ai_d->receiver)
+					return false;
+			}
+
 			if(getID(r) && ai_d->l > 0 && ai_d->data[0] != 0x80)
 				sendAcknowledgement(r, s);
 
-			if(multiple && ai_d->l >= 3 && ai_d->data[0] == 0x91 && (getID(ai_d->receiver) || ai_d->receiver == 0xFF)) { //Multiple messages are on the way.
-				if(ai_d->data[2] != 0) {
-					main_locked = last_main_locked;
+			if(ai_d->l >= 1 && ai_d->data[0] == 0x92) { //Resend.
+				writeToSocket(ai_d);
+
+				if(!getID(ai_d->receiver))
 					return false;
+				
+				for(auto tx_msg: recent_tx) {
+					if(tx_msg.receiver == s && tx_msg.sender == r) {
+						writeAIData(&tx_msg);
+						break;
+					}
 				}
 
-				const int msg_count = ai_d->data[1];
-				uint8_t full_data[msg_count*AIDATA_LIMIT];
-				int full_length = ai_d->l - 3;
+				return false;
+			}
 
-				if(msg_count <= 0) {
-					main_locked = last_main_locked;
-					return true;
+			if(multiple && ai_d->l >= 3 && ai_d->data[0] == 0x91 && (getID(ai_d->receiver) || ai_d->receiver == 0xFF)) { //Multiple messages are on the way.
+				last_multi_message = *timer;
+				if(multi_expected_size <= 0) {
+					const int msg_count = ai_d->data[1];
+
+					if(msg_count <= 0) {
+						main_locked = last_main_locked;
+						return false;
+					}
+					
+					multi_expected_size = msg_count;
 				}
 
 				writeToSocket(ai_d);
-
-				for(int i=0;i<ai_d->l - 3;i+=1)
-					full_data[i] = ai_d->data[i+3];
-				int m = 1;
-				unsigned long ai_timer = *timer;
-
-				MultiMessageThreadParameters* thread_params = (MultiMessageThreadParameters*)multi_thread_params;
-				thread_params->message_count = msg_count;
-				thread_params->sender = ai_d->sender;
-				thread_params->receiver = ai_d->receiver;
-
-				{
-					vector<uint8_t> msg_data(0);
-					for(int i=3;i<ai_d->l;i+=1)
-						msg_data.push_back(ai_d->data[i]);
-
-					thread_params->loaded_data = msg_data;
-				}
-
-				if(!multi_thread_enabled) {
-					multi_thread_enabled = true,
-					pthread_create(&multi_thread, NULL, readMultiThread, multi_thread_params);
-				}
 
 				#if !defined(RPI_UART) && defined(AIBUS_PRINT)
 				printBytes(ai_d);
 				#endif
 
+				multi_cache.push_back(*ai_d);
+
+				if(multi_cache.size() >= multi_expected_size) {
+					vector<uint8_t> bytes_vec;
+
+					for(int m=0; m<multi_expected_size;m+=1) {
+						AIData msg;
+						for(auto test_msg: multi_cache) {
+							if(test_msg.l < 3 || test_msg[0] != 0x91 || test_msg[1] != multi_expected_size)
+								continue;
+
+							if(test_msg[2] != m)
+								continue;
+
+							if(test_msg.sender != ai_d->sender || test_msg.receiver != ai_d->receiver)
+								continue;
+
+							msg = test_msg;
+						}
+
+						for(int i=3;i<msg.l;i+=1)
+							bytes_vec.push_back(msg[i]);
+					}
+
+					uint8_t bytes[bytes_vec.size()];
+					for(int i=0;i<bytes_vec.size();i+=1)
+						bytes[i] = bytes_vec[i];
+
+					AIData msg(sizeof(bytes), ai_d->sender, ai_d->receiver, bytes);
+					//cached_rx.push_back(msg);
+
+					multi_cache.clear();
+					multi_expected_size = -1;
+
+					ai_d->refreshAIData(msg);
+					main_locked = last_main_locked;
+					return true;
+				}
+
 				main_locked = last_main_locked;
-				return true;
+				return false;
 			}
 
 			#if !defined(RPI_UART) && defined(AIBUS_PRINT)
@@ -356,6 +395,23 @@ void SerialAIBusHandler::writeToCache(AIData* ai_d, const bool acknowledge) {
 bool SerialAIBusHandler::writeAIBusToSerial(AIData* ai_d, const bool acknowledge) {
 	bool sent = true;
 
+	//Something that may need to be resent later?
+	if(ai_d->receiver != 0xFF && ai_d->l >= 1 && ai_d->data[0] != 0x80) {
+		int index = -1;
+		for(int i=0;i<recent_tx.size();i+=1) {
+			AIData tx_msg = recent_tx[i];
+			if(tx_msg.receiver == ai_d->receiver && tx_msg.sender == ai_d->sender) {
+				index = i;
+				break;
+			}
+		}
+
+		if(index >= 0)
+			recent_tx.erase(recent_tx.begin() + index);
+
+		recent_tx.push_back(*ai_d);
+	}
+
 	if(ai_d->l > AIDATA_LIMIT + 3) {
 		const int count = ai_d->l/AIDATA_LIMIT, r = ai_d->l%AIDATA_LIMIT;
 		AIData ai_group[count + (r == 0 ? 0 : 1)];
@@ -421,7 +477,7 @@ bool SerialAIBusHandler::writeAIBusToSerial(AIData* ai_d, const bool acknowledge
 		{
 			unsigned long start = *this->timer;
 			int current_cached_bytes = aiserialBytesAvailable(this->ai_port);
-			while((*this->timer - start) < 1) {
+			while((*this->timer - start) < 5) {
 				#ifdef RPI_UART
 				//if(!chip) {
 				//	if(!readPin(chip, AI_RX))
@@ -481,6 +537,21 @@ void SerialAIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t
 	ack_msg.data[0] = 0x80;
 
 	writeAIBusToSerial(&ack_msg, false);
+}
+
+//Send a resend request.
+void SerialAIBusHandler::requestResend(const uint8_t r) {
+	requestResend(id, r);
+}
+
+//Send a resend request.
+void SerialAIBusHandler::requestResend(const uint8_t s, const uint8_t r) {
+	if(r == 0xFF)
+		return;
+
+	uint8_t resend_data[] = {0x92};
+	AIData resend_msg(sizeof(resend_data), s, r, resend_data);
+	writeAIData(&resend_msg);
 }
 
 //Wait for the acknowledgement message.
@@ -673,7 +744,6 @@ void SerialAIBusHandler::readMultiple(const uint8_t sender, const uint8_t receiv
 	}
 	
 	thread_locked = false;
-	multi_thread_enabled = false;
 }
 
 //Write a message to a socket.
@@ -836,15 +906,6 @@ int writePin(gpiod_line* line, const bool state) {
 void* flushCacheThread(void* v_aibus_handler) {
 	SerialAIBusHandler* aibus_handler = (SerialAIBusHandler*)v_aibus_handler;
 	aibus_handler->flushCached();
-
-	void* the_return;
-	return the_return;
-}
-
-void* readMultiThread(void* multi_thread_params) {
-	MultiMessageThreadParameters* thread_params = (MultiMessageThreadParameters*)multi_thread_params;
-	SerialAIBusHandler* handler = thread_params->ai_handler;
-	handler->readMultiple(thread_params->sender, thread_params->receiver, thread_params->loaded_data, thread_params->message_count);
 
 	void* the_return;
 	return the_return;

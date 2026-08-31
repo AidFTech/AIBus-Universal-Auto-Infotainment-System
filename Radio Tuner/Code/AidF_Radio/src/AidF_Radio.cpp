@@ -290,6 +290,14 @@ void AidFRadio::loop() {
 	}
 
 	const bool last_power = *power_on;
+
+	//To fix the mute bug maybe.
+	if(!last_power && *power_on) {
+		adc_handler.init();
+		
+		if(source_handler.getAudioOn())
+			digitalWrite(DAC_MUTE, HIGH);
+	}
 	
 	const uint8_t last_active_source_id = source_handler.getCurrentSourceID();
 	const uint16_t last_active_source = source_handler.getCurrentSource();
@@ -1020,7 +1028,11 @@ void AidFRadio::handleAIBus(AIData* msg) {
 		}
 	}
 
-	if(msg->receiver == ID_RADIO && msg->l >= 2 && msg->data[0] == 0x1D) { //Clock message.
+	if (msg->receiver == 0xFF && msg->l == 1 && msg->data[0] == 0x1) { //Ping.
+		uint8_t ping_data[] = {0x1};
+		AIData ping_msg(sizeof(ping_data), ID_RADIO, msg->sender, ping_data);
+		aibus_handler.writeAIData(&ping_msg);
+	} else if(msg->receiver == ID_RADIO && msg->l >= 2 && msg->data[0] == 0x1D) { //Clock message.
 		parameters.send_time = (msg->data[1]) != 0;
 		if((msg->data[1]&0x01) != 0)
 			parameters.auto_clock = true;

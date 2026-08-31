@@ -141,7 +141,11 @@ void AidFBTA::loop() {
 
 //Handle an AIBus message.
 void AidFBTA::handleAIBusMessage(AIData* ai_msg) {
-	if(ai_msg->sender == ID_NAV_COMPUTER && ai_msg->l >= 1 && ai_msg->data[0] == 0x2B) { //Menu operation.
+	if(ai_msg->receiver == 0xFF && ai_msg->l == 1 && ai_msg->data[0] == 0x1) { //Ping.
+		uint8_t ping_data[] = {0x1};
+		AIData ping_msg(sizeof(ping_data), ID_PHONE, ai_msg->sender, ping_data);
+		aibus_handler.writeAIData(&ping_msg);	
+	} else if(ai_msg->sender == ID_NAV_COMPUTER && ai_msg->l >= 1 && ai_msg->data[0] == 0x2B) { //Menu operation.
 		if(ai_msg->l >= 2 && ai_msg->data[1] == 0x40) { //Menu closed.
 			parameter_list.current_menu = BTA_MENU_NONE;
 		} else if(ai_msg->l >= 3 && ai_msg->data[1] == 0x60) { //Main menu selection.
@@ -206,12 +210,16 @@ void AidFBTA::handleAIBusMessage(AIData* ai_msg) {
 		}
 
 		if(ai_msg->data[1] == 0x23 && ai_msg->l >= 4) { //Generic string length and height.
+			const uint8_t last_char = parameter_list.imid_char, last_lines = parameter_list.imid_lines;
+
 			parameter_list.imid_char = ai_msg->data[2];
 			parameter_list.imid_lines = ai_msg->data[3];
 
-			if(ai_msg->receiver == ID_PHONE && parameter_list.imid_char > 0 && parameter_list.imid_lines > 0)
+			if(ai_msg->receiver == ID_PHONE && (parameter_list.imid_char != last_char || parameter_list.imid_lines != last_lines) && parameter_list.imid_char > 0 && parameter_list.imid_lines > 0)
 				audio_handler.refreshIMIDConnection();
 		} else if(ai_msg->data[1] == 0x57) {
+			const bool last_native = parameter_list.imid_native_phone;
+
 			parameter_list.imid_native_phone = false;
 			for(int i=2;i<ai_msg->l;i+=1) {
 				if(ai_msg->data[i] == ID_PHONE) {
@@ -220,7 +228,7 @@ void AidFBTA::handleAIBusMessage(AIData* ai_msg) {
 				}
 			}
 
-			if(ai_msg->receiver == ID_PHONE && parameter_list.imid_native_phone)
+			if(ai_msg->receiver == ID_PHONE && !last_native && parameter_list.imid_native_phone)
 				audio_handler.refreshIMIDConnection();
 		}
 	} else if(ai_msg->sender == ID_NAV_COMPUTER && ai_msg->l >= 5 && ai_msg->data[0] == 0x2C) { //Dimensions.

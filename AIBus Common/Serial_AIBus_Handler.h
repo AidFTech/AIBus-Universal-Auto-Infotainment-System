@@ -63,6 +63,9 @@ public:
 
 	void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
 
+	void requestResend(const uint8_t r);
+	void requestResend(const uint8_t s, const uint8_t r);
+
 	int getAvailableBytes();
 	int getAvailableBytes(const bool cache);
 	
@@ -106,21 +109,22 @@ private:
 	bool port_connected = false;
 	#endif
 
+	vector<AIData> recent_tx;
+
 	vector<AIData> cached_rx, cached_tx;
 	vector<bool> cached_ack;
 	pthread_t cache_thread;
 	bool cache_thread_enabled = false;
 
-	void* multi_thread_params;
-	pthread_t multi_thread;
-	bool multi_thread_enabled = false;
+	vector<AIData> multi_cache = vector<AIData>(0);
+	int multi_expected_size = -1;
 
 	#ifdef SOCKET_SERVER
 	int** socket_list;
 	int socket_l = 0;
 	#endif
 
-	unsigned long *timer;
+	unsigned long *timer, last_multi_message = 0;
 	uint8_t id;
 	
 	bool thread_locked = false, main_locked = false; //If true, the serial port is locked by another object.
@@ -137,7 +141,6 @@ bool getPowerOffMessage(AIData* ai_d);
 void printBytes(AIData* ai_d);
 
 void* flushCacheThread(void* v_aibus_handler);
-void* readMultiThread(void* multi_thread_params);
 
 #ifdef RPI_UART
 gpiod_line* getGPIOLine(gpiod_chip* chip, const int pin);

@@ -18,7 +18,7 @@ public:
 
 	void init(EnIEBusParams* ie_params);
 
-	bool cacheAIBus();
+	bool cacheAIBus(const bool repeat = false);
 	AIData getAIBus(const uint8_t id);
 	AIData getAIBus(const uint8_t* id, const int id_l);
 

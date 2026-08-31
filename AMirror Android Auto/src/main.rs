@@ -244,7 +244,9 @@ fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mut
 	let tx_list = aibus_handler.get_ai_tx();
 	let mut rx_list = Vec::new();
 
-	let client_handler = match handler_ptr.try_lock() {
+	let mut sent_list = Vec::new();
+
+	let mut client_handler = match handler_ptr.try_lock() {
 		Ok(handler) => handler,
 		Err(_) => {
 			std::mem::drop(aibus_handler);
@@ -312,6 +314,8 @@ fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mut
 		let _ = stream.write(&socket_data);
 		println!("Wrote {:X?}", socket_data);
 
+		sent_list.push(ai_msg.clone());
+
 		let (radio_connected, screen_connected, bluetooth_connected, imid_connected) = match context.try_lock() {
 			Ok(context) => {
 				(context.radio_connected, context.screen_connected, context.bluetooth_connected, context.imid_connected)
@@ -351,6 +355,10 @@ fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mut
 
 	for r in rx_list {
 		aibus_handler.get_ai_rx().push(r);
+	}
+
+	for ai_msg in sent_list {
+		client_handler.cache_tx(ai_msg);
 	}
 
 	std::mem::drop(aibus_handler);
