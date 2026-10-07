@@ -33,6 +33,8 @@ enum radio_menu_t : uint8_t {
 	FM_INC_MENU,
 	AM_BAND_MENU,
 	RDS_CALLSIGN_MENU,
+	RADIO_CLOCK_MENU,
+	SECRET_DEV_MENU,
 };
 
 #define TONE_OPTION_BASS 0
@@ -145,6 +147,9 @@ private:
 	void createRadioSettingsMenu();
 	void createRadioSettingsMenuItem(const int item);
 
+	void createRadioClockSettingsMenu();
+	void createRadioClockSettingsMenuItem(const int item);
+
 	void createFMBandMenu();
 	void createFMIncMenu();
 	void createAMBandMenu();
@@ -153,6 +158,9 @@ private:
 	void createRDSFlashMenu();
 	void createRDSCallsignMenu();
 	void createSteeringControlMenu();
+
+	void createSecretMenu();
+	void createSecretMenuItem(const int item);
 
 	void sendManualTuneMessage();
 	

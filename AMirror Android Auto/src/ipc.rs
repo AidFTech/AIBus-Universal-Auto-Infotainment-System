@@ -30,6 +30,10 @@ pub struct ClientAIBusHandler {
 
 	recent_tx: Vec<AIBusMessage>,
 
+	use_ack_cache: bool,
+	auto_ack_cache_off: bool,
+	ack_cache: Vec<(AIBusMessage, u32)>,
+
 	process_active: bool,
 }
 
@@ -43,6 +47,11 @@ impl ClientAIBusHandler {
 								recent_tx: Vec::new(),
 								multi_expected_len: -1,
 								last_multi_message: Instant::now(),
+
+								use_ack_cache: false,
+								auto_ack_cache_off: false,
+								ack_cache: Vec::new(),
+
 								process_active: false }
 		} else {
 			ClientAIBusHandler { socket: init_socket(path.to_string()),
@@ -51,6 +60,11 @@ impl ClientAIBusHandler {
 								multi_cache: Vec::new(),
 								recent_tx: Vec::new(),
 								last_multi_message: Instant::now(),
+
+								use_ack_cache: false,
+								auto_ack_cache_off: false,
+								ack_cache: Vec::new(),
+
 								process_active: false }
 		};
 
@@ -76,7 +90,7 @@ impl ClientAIBusHandler {
 
 		let ai_data_list;
 
-		let _ = stream.set_read_timeout(Some(Duration::from_millis(5)));
+		let _ = stream.set_read_timeout(Some(Duration::from_millis(12)));
 
 		let mut aibus_handler = match self.aibus_handler.try_lock() {
 			Ok(aibus_handler) => aibus_handler,
@@ -194,6 +208,30 @@ impl ClientAIBusHandler {
 		std::mem::drop(aibus_handler);
 	}
 
+	///Set the acknowledgment cache.
+	pub fn set_ack_cache(&mut self, use_ack_cache: bool, auto_off: bool) {
+		self.use_ack_cache = use_ack_cache;
+		self.auto_ack_cache_off = auto_off;
+
+		if !self.use_ack_cache {
+			self.ack_cache.clear();
+		}
+	}
+
+	///Get whether the acknowledgment cache is in use.
+	pub fn get_ack_cache(&self) -> bool {
+		return self.use_ack_cache;
+	}
+
+	///Add a message to the acknowledgment cache.
+	pub fn add_ack_cache(&mut self, ai_msg: AIBusMessage) {
+		if !self.use_ack_cache {
+			return;
+		}
+
+		self.ack_cache.push((ai_msg, 0));
+	}
+
 	///Activate the socket handler.
 	pub fn activate(&mut self) {
 		self.process_active = true;
@@ -282,7 +320,13 @@ impl ClientAIBusHandler {
 		let mut ai_data_list = Vec::new();
 		let mut rec_data_list = Vec::new();
 
-		while !ack && tries < 20 {
+		let limit = if self.use_ack_cache {
+			2
+		} else {
+			20
+		};
+
+		while !ack && tries < limit {
 			let mut buffer = [0;1024];
 			match receiver.read(&mut buffer) {
 				Ok(size) => {
@@ -334,6 +378,138 @@ impl ClientAIBusHandler {
 		}
 
 		return (ack, rec_data_list);
+	}
+
+	///Call during the main loop- send all cached messages awaiting acknowledgment and wait for acknowledgment in the specified wait period in ms.
+	pub fn await_cached_acknowledgment(&mut self, wait: Duration) {
+		if !self.use_ack_cache {
+			return;
+		}
+
+		let mut stream = match &self.socket {
+			Some(stream) => stream,
+			None => {
+				return;
+			}
+		};
+
+		let aibus_rx = match self.aibus_handler.try_lock() {
+			Ok(mut handler) => {
+				let dyn_rx = handler.get_ai_rx();
+				dyn_rx.clone()
+			}	
+			Err(_) => {
+				return;
+			}
+		};
+
+		for new_msg in &aibus_rx {
+			if new_msg.sender == AIBUS_DEVICE_AMIRROR {
+				continue;
+			}
+
+			if new_msg.l() <= 0 || new_msg.data[0] != 0x80 {
+				continue;
+			}
+
+			for i in 0..self.ack_cache.len() {
+				let test_msg = &self.ack_cache[i].0;
+
+				if test_msg.sender == new_msg.receiver && test_msg.receiver == new_msg.sender {
+					self.ack_cache.remove(i);
+					break;
+				}
+			}
+		}
+
+		if self.ack_cache.len() <= 0 {
+			if self.auto_ack_cache_off {
+				self.use_ack_cache = false;
+			}
+			return;
+		}
+
+		std::mem::drop(aibus_rx);
+
+		let start = Instant::now();
+		while Instant::now() - start < wait {
+			let mut i = 0;
+			while i < self.ack_cache.len() {
+				let tx = self.ack_cache[i].0.clone();
+
+				let tx_bytes = tx.get_bytes();
+				let _ = stream.write(&tx_bytes);
+
+				let ack = self.await_acknowledgment(tx.clone());
+				let add_rx = ack.1;
+
+				match self.aibus_handler.lock() {
+					Ok(mut aibus_handler) => {
+						let rx = aibus_handler.get_ai_rx();
+						for msg in add_rx {
+							rx.push(msg);
+						}
+					}
+					Err(_) => {
+
+					}
+				}
+
+				if ack.0 {
+					self.ack_cache.remove(i);
+					continue;
+				} else {
+					self.ack_cache[i].1 += 1;
+				}
+
+				let read_start = Instant::now();
+				let mut found = false;
+				while Instant::now() - read_start < wait {
+					let aibus_rx = match self.aibus_handler.try_lock() {
+						Ok(mut handler) => {
+							let dyn_rx = handler.get_ai_rx();
+							dyn_rx.clone()
+						}	
+						Err(_) => {
+							continue;
+						}
+					};
+
+					for new_msg in &aibus_rx {
+						if new_msg.sender == AIBUS_DEVICE_AMIRROR {
+							continue;
+						}
+
+						if new_msg.sender == tx.receiver && new_msg.receiver == tx.sender && new_msg.l() > 0 && new_msg.data[0] == 0x80 {
+							found = true;
+							break;
+						}
+					}
+
+					if found {
+						break;
+					}
+				}
+
+				if found || self.ack_cache[i].1 > 25 {
+					self.ack_cache.remove(i);
+					continue;
+				}
+
+				if Instant::now() - start >= wait {
+					break;
+				}
+
+				i += 1;
+			}
+
+			if self.ack_cache.len() <= 0 {
+				if self.auto_ack_cache_off {
+					self.use_ack_cache = false;
+				}
+				break;
+			}
+		}
 	}
 }
 

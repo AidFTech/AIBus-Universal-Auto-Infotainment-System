@@ -19,32 +19,105 @@ BackgroundTuneHandler::~BackgroundTuneHandler() {
 void BackgroundTuneHandler::loop() {
 	br_tuner->loop();
 
-	if(parameter_list->clock_freq >= 0 &&
-		((!parameter_list->received_time_change_message && (parameter_list->minute_timer >= FIVE_SEC_LIMIT || parameter_list->minute_timer < 5000))
-	 	|| (parameter_list->received_time_change_message && clock_timer > CLOCK_START_TIME))) { //Reset the clock as needed.
-		if(!time_set) {
-			time_set = true;
+	const bool last_time_set = time_set;
+	time_set = parameter_list->auto_clock && parameter_list->clock_freq >= 0 &&
+		((!parameter_list->received_time_change_message && getMinuteInRange(parameter_list->minute_timer))
+	 	|| (parameter_list->received_time_change_message && clock_timer > CLOCK_START_TIME)
+		|| parameter_list->clock_wait);
 
+	if(time_set != last_time_set) {
+		if(time_set) {
 			last_checked_freq = br_tuner->getFrequency();
 			last_seek_timer = seek_timer;
 
+			if(br_tuner->getQueued()) {
+				if(!parameter_list->radio_on)
+					parameter_list->clock_set_success = false;
+				last_min = parameter_list->min;
+				time_set = false;
+				goto after_time_set;
+			}
+
+			if(parameter_list->clock_debug) {
+				const String clock_freq = "Checking " + String(parameter_list->clock_freq/100) + '.' + String(parameter_list->clock_freq%100) + "MHz";
+				AIData clock_msg(clock_freq.length() + 2, ID_RADIO, 0xFF);
+				clock_msg[0] = 0xA1;
+				clock_msg[1] = 0xFF;
+				for(int i=0;i<clock_freq.length();i+=1)
+					clock_msg[i+2] = char(clock_freq[i]);
+
+				uint8_t clock_data[clock_msg.l + 4];
+				clock_msg.getBytes(clock_data);
+				Serial.write(clock_data, sizeof(clock_data));
+			}
+
 			br_tuner->setFrequency(parameter_list->clock_freq);
-		}
 
-		if(br_tuner->getRSSI() >= FM_STEREO_THRESH)
-			br_tuner->getDateTime();
-		else
-			parameter_list->clock_freq = -1;
+			if(!parameter_list->radio_on)
+				parameter_list->clock_set_success = false;
 
-		if(clock_timer > CLOCK_END_TIME)
-			clock_timer = 0;
-	} else if(station_seek) {
-		if(time_set) {
-			time_set = false;
-
+			last_min = parameter_list->min;
+		} else {
 			seek_timer = last_seek_timer;
 			br_tuner->setFrequency(last_checked_freq);
+
+			int failure_limit = 15;
+			switch(parameter_list->clock_freq_type) {
+			case CLOCK_FREQ_BACKGROUND:
+				failure_limit = 3;
+				break;
+			case CLOCK_FREQ_INIT:
+			case CLOCK_FREQ_ACTIVE_STATION:
+				failure_limit = 6;
+				break;
+			default:
+				break;
+			}
+
+			if(!parameter_list->clock_set_success && !parameter_list->clock_wait) {
+				clock_set_failures += 1;
+				last_min = parameter_list->min;
+			}
+
+			if(!parameter_list->clock_wait && !parameter_list->clock_set_success && clock_set_failures >= failure_limit && parameter_list->auto_clock_frequency) {
+				parameter_list->clock_freq = -1;
+				clock_set_failures = 0;
+			} else if(parameter_list->clock_set_success)
+				clock_set_failures = 0;
+
+			if(parameter_list->clock_debug) {
+				const String success = parameter_list->clock_set_success ? "Signal Received!" : (String(failure_limit - clock_set_failures) + " attempts remaining");
+				AIData clock_msg(success.length() + 2, ID_RADIO, 0xFF);
+				clock_msg[0] = 0xA1;
+				clock_msg[1] = 0xFF;
+				for(int i=0;i<success.length();i+=1)
+					clock_msg[i+2] = char(success[i]);
+
+				uint8_t clock_data[clock_msg.l + 4];
+				clock_msg.getBytes(clock_data);
+				Serial.write(clock_data, sizeof(clock_data));
+			}
 		}
+	}
+
+	if(time_set) { //Reset the clock as needed.
+		if(!parameter_list->clock_set_success) {
+			const bool clock_wait = parameter_list->clock_wait;
+			const bool success = br_tuner->getDateTime(true);	
+
+			if(!success && clock_wait)
+				parameter_list->clock_wait = true;
+
+			if(clock_timer > CLOCK_END_TIME)
+				clock_timer = 0;
+
+			if(success) {
+				clock_set_failures = 0;
+				parameter_list->clock_set_success = true;
+			}
+		}
+	} else if(station_seek) { //Seek stations.
+		parameter_list->clock_set_success = false;
 
 		const uint16_t freq = br_tuner->getFrequency();
 
@@ -59,9 +132,11 @@ void BackgroundTuneHandler::loop() {
 		if(callsign_broadcast)
 			rds_mean += 2;
 
-		if(parameter_list->clock_freq < 0) {
-			if(br_tuner->getDateTimePresent() && rssi >= FM_STEREO_THRESH)
+		if(parameter_list->last_rds_change > 12000 && (parameter_list->clock_freq < 0 || parameter_list->clock_freq_type == CLOCK_FREQ_BACKGROUND) && !parameter_list->clock_set_success && parameter_list->auto_clock_frequency && !parameter_list->clock_wait) {
+			if(br_tuner->getDateTimePresent() && rssi >= FM_STEREO_THRESH) {
 				parameter_list->clock_freq = br_tuner->getFrequency();
+				parameter_list->clock_freq_type = CLOCK_FREQ_BACKGROUND;
+			}
 		}
 		
 		if(seek_timer > seek_timer_limit) {
@@ -97,6 +172,8 @@ void BackgroundTuneHandler::loop() {
 		}
 	}
 
+	after_time_set:
+	{}
 }
 
 //Add a frequency to the station list. If the fequency already exists, set the station name.
@@ -157,6 +234,11 @@ void BackgroundTuneHandler::setSeekMode(const bool seek) {
 		seek_timer = 0;
 		seek_timer_limit = SEEK_TIME;
 	}
+}
+
+//Get whether the background handler is in time set mode.
+bool BackgroundTuneHandler::getTimeSetMode() {
+	return this->time_set;
 }
 
 //Get the list of station names. Return the total count.

@@ -41,20 +41,14 @@ void HondaCDHandler::loop() {
 		return;
 
 	if(this->source_sel) {
-		if(!auto_increment) {
-			if(second_timer > 800 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff) {
-				second_timer = 0;
-				this->listenForIEBus(450, false);
+		if(second_timer > 800 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff && !fr) {
+			second_timer = 0;
+			#ifndef HW_IEBUS
+			this->listenForIEBus(450, false);
+			#endif
 
-				if(text_timer >= TEXT_REFRESH_TIMER/2)
-					text_timer = 0;
-			}
-		} else {
-			if(second_timer > 1000 && (ai_cd_status&AI_CD_STATUS_PLAY) == AI_CD_STATUS_PLAY && !ff && !fr) {
-				second_timer = 0;
-				timer += 1;
-				track_cmd |= COMMAND_WRITE_TIME_MESSAGES;
-			}
+			if(text_timer >= TEXT_REFRESH_TIMER/2)
+				text_timer = 0;
 		}
 
 		if(text_timer_enabled && text_timer >= TEXT_REFRESH_TIMER) {
@@ -186,10 +180,12 @@ void HondaCDHandler::loop() {
 		if(mode_timer_enabled && mode_timer > MODE_FLASH_TIMER) {
 			mode_timer_enabled = false;
 
-			if(use_function_timer && parameter_list->imid_connected && text_mode != TEXT_MODE_BLANK) {
-				imid_handler->setIMIDSource(ID_CD, 0);
-			} else if(parameter_list->imid_connected) {
-				imid_handler->setIMIDSource(ID_CDC, 0);
+			if(parameter_list->imid_connected) {
+				if(use_function_timer && parameter_list->imid_connected && text_mode != TEXT_MODE_BLANK) {
+					imid_handler->setIMIDSource(ID_CD, 0);
+				} else if(parameter_list->imid_connected) {
+					imid_handler->setIMIDSource(ID_CDC, 0);
+				}
 			}
 
 			sendCDIMIDTrackandTimeMessage();
@@ -332,13 +328,10 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 		ai_driver->writeAIData(&test_msg, false);
 	}*/
 
-	bool ack = true;
+	sendIEAckMessage(IE_ID_CDC);
 	
 	if(the_message->l == 4) { //Handshake message.
 		if(the_message->data[0] == 0x1 && the_message->data[1] == 0x1) {
-			ack = false;
-			sendIEAckMessage(IE_ID_CDC);
-
 			if(!this->parameter_list->first_cd) {
 				this->parameter_list->first_cd = true;
 
@@ -351,9 +344,6 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 				ie_driver->sendMessage(&handshake_msg, false, false);
 			}
 		} else if(the_message->data[0] == 0x5 && the_message->data[2] == 0x3) {
-			ack = false;
-			sendIEAckMessage(IE_ID_CDC);
-
 			delay(2);
 			
 			const bool handshake_rec = sendHandshakeAckMessage();
@@ -368,13 +358,12 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 			}
 		}
 	} else if(the_message->l >= 16 && the_message->data[0] == 0x60 && the_message->data[1] == 0x6) { //Display change message.
-		ack = false;
-		sendIEAckMessage(IE_ID_CDC);
-
 		if(!source_sel) {
 			uint8_t function[] = {0x0, 0x1};
 			sendFunctionMessage(ie_driver, true, IE_ID_CDC, function, sizeof(function));
+			#ifndef HW_IEBUS
 			getIEAckMessageStrict(device_ie_id);
+			#endif
 			return;
 		}
 
@@ -484,8 +473,10 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 				sendCDLoadWaitMessage(message_type);
 			}
 
+			#ifndef HW_IEBUS
 			if(listen && track_changed)
 				listenForIEBus(300, false);
+			#endif
 		} else if((str == 0x80 || str == 0x81 || str == 0x82 || (str >= 0x70 && str < 0x80)) && (message_type == 3 || message_type == 2)) {
 			char* affected;
 			uint8_t* stage;
@@ -598,9 +589,6 @@ void HondaCDHandler::interpretCDMessage(IE_Message* the_message, const bool list
 
 		}
 	}
-	
-	if(ack)
-		ie_driver->sendAcknowledgement(the_message->receiver, the_message->sender);
 }
 
 //Refresh the source.
@@ -644,11 +632,15 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 			
 			IE_Message function_message = getFunctionMessage(true, IE_ID_CDC, function, sizeof(function));
 			ie_driver->sendMessage(&function_message, true, true);
+			#ifndef HW_IEBUS
 			getIEAckMessage(&function_message, device_ie_id);
+			#endif
 
 			function_message = getFunctionMessage(false, IE_ID_CDC, function, sizeof(function));
 			ie_driver->sendMessage(&function_message, true, true);
+			#ifndef HW_IEBUS
 			getIEAckMessage(&function_message, device_ie_id);
+			#endif
 			
 			*parameter_list->screen_request_timer = SCREEN_REQUEST_TIMER;
 			sendAICDStatusMessage(ID_RADIO);
@@ -678,13 +670,17 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 				}
 			}
 
+			#ifndef HW_IEBUS
 			listenForIEBus();
+			#endif
 		} else {
 			if(source_sel) {
 				source_sel = false;
 				uint8_t function[] = {0x0, 0x1};
 				sendFunctionMessage(ie_driver, true, IE_ID_CDC, function, sizeof(function));
+				#ifndef HW_IEBUS
 				getIEAckMessageStrict(device_ie_id);
+				#endif
 				requestControl(active_source);
 			}
 
@@ -859,11 +855,6 @@ void HondaCDHandler::readAIBusMessage(AIData* the_message) {
 					parameter_list->cd_text_changed = true;
 
 					createCDMainMenuOption(3);
-					break;
-				case MENU_INDEX_CDC_SETTINGS_AUTOINCREMENT:
-					this->auto_increment = !this->auto_increment;
-					setting_changed = true;
-					createCDMainMenuOption(cd_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_AUTOINCREMENT));
 					break;
 				case MENU_INDEX_CDC_SETTINGS_SCROLL: //Scrolling.
 					this->split = !this->split;
@@ -1077,9 +1068,11 @@ void HondaCDHandler::sendButtonMessage(const uint8_t button) {
 
 	button_message.refreshIEData(button_data);
 	ie_driver->sendMessage(&button_message, true, true);
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
-
+	
 	listenForIEBus(300, button != BUTTON_DISC_CHANGE && button != BUTTON_UP && button != BUTTON_DOWN);
+	#endif
 }
 
 //Send a multi-byte button IEBus message.
@@ -1089,9 +1082,11 @@ void HondaCDHandler::sendButtonMessage(const uint8_t button, const uint8_t state
 
 	button_message.refreshIEData(button_data);
 	ie_driver->sendMessage(&button_message, true, true);
+	
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
-
 	listenForIEBus(300, button != BUTTON_DISC_CHANGE && button != BUTTON_UP && button != BUTTON_DOWN);
+	#endif
 }
 
 //Send an AIBus track message.
@@ -1439,9 +1434,11 @@ void HondaCDHandler::sendTextRequest() {
 	uint8_t function_data[] = {0x6, 0x0};
 	IE_Message function_msg = getFunctionMessage(true, IE_ID_CDC, function_data, sizeof(function_data));
 	ie_driver->sendMessage(&function_msg, true, true);
-	getIEAckMessage(&function_msg, device_ie_id);
 
+	#ifndef HW_IEBUS
+	getIEAckMessage(&function_msg, device_ie_id);
 	listenForIEBus();
+	#endif
 }
 
 //Send text to the IMID.
@@ -2124,8 +2121,6 @@ void HondaCDHandler::createCDMainMenuOption(const uint8_t option) {
 		item_txt = use_function_timer ? "#RON " : "#ROF ";
 	} else if(option==main_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_SCROLL))
 		item_txt = split ? "#ROF " : "#RON ";
-	else if(option == main_menu.getLocalIndex(MENU_INDEX_CDC_SETTINGS_AUTOINCREMENT))
-		item_txt = auto_increment ? "#RON " : "#ROF ";
 
 	item_txt += main_menu[option];
 	appendMenu(option, item_txt);
@@ -2208,6 +2203,7 @@ void HondaCDHandler::createCDChangeDiscMenuOption(const uint8_t option) {
 	appendMenu(option, disc_menu[0] + String(option+1));
 }
 
+#ifndef HW_IEBUS
 //Listen for IEBus data.
 void HondaCDHandler::listenForIEBus(const unsigned long wait, const bool single_msg) {
 	if(ff || fr)
@@ -2238,3 +2234,4 @@ void HondaCDHandler::handleIEBus(IE_Message* msg, const bool listen) {
 void HondaCDHandler::handleIMIDAIBus(AIData* msg) {
 	imid_handler->readAIBusMessage(msg);
 }
+#endif

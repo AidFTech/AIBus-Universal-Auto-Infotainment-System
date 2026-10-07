@@ -6,8 +6,7 @@ Settings_Ext_Window::Settings_Ext_Window(AttributeList *attribute_list) : Settin
 
 void Settings_Ext_Window::exitWindow() {
 	uint8_t back_data[] = {0x2B, 0x40};
-	AIData back_msg(sizeof(back_data), ID_NAV_COMPUTER, this->ext_menu_sender);
-	back_msg.refreshAIData(back_data);
+	AIData back_msg(sizeof(back_data), ID_NAV_COMPUTER, this->ext_menu_sender, back_data);
 
 	if(ext_menu_sender != ID_NAV_COMPUTER)
 		attribute_list->aibus_handler->writeAIData(&back_msg);

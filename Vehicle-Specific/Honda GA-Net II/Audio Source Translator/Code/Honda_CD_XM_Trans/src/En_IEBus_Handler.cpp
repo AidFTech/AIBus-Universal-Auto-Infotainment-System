@@ -1,9 +1,16 @@
 #include "En_IEBus_Handler.h"
 
+#ifdef HW_IEBUS
+EnIEBusHandler::EnIEBusHandler(Stream* ie_serial, const int8_t active_pin) : IEBusHandler(ie_serial, active_pin) {
+	
+}
+#else
 EnIEBusHandler::EnIEBusHandler(const int8_t rx_pin, const int8_t tx_pin) : IEBusHandler(rx_pin, tx_pin) {
 	
 }
+#endif
 
+#ifndef HW_IEBUS
 //Initialize the handler.
 void EnIEBusHandler::init(EnIEBusParams* ie_params) {
 	this->ai_handler = ie_params->ai_handler;
@@ -58,6 +65,7 @@ void EnIEBusHandler::init(EnIEBusParams* ie_params) {
 		}
 	}
 }
+#endif
 
 bool EnIEBusHandler::cacheAIBus(const bool repeat) {
 	if(this->ai_handler != NULL) {
@@ -94,6 +102,7 @@ AIData EnIEBusHandler::getAIBus(const uint8_t* id, const int id_l) {
 	return ai_return;
 }
 
+#ifndef HW_IEBUS
 void EnIEBusHandler::sendMessageStrict(IE_Message* ie_d, const bool ack_response, const bool checksum) {
 	IEBusHandler::sendMessage(ie_d, ack_response, checksum);
 	//ai_handler->clearSerial();
@@ -103,7 +112,7 @@ void EnIEBusHandler::sendMessageStrict(IE_Message* ie_d, const bool ack_response
 }
 
 void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum) {
-	ai_handler->cacheAllPending();
+	//ai_handler->cacheAllPending();
 	//ai_handler->clearSerial();
 	IEBusHandler::sendMessage(ie_d, ack_response, checksum);
 	//ai_handler->clearSerial();
@@ -113,7 +122,7 @@ void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, cons
 }
 
 void EnIEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) {
-	ai_handler->cacheAllPending();
+	//ai_handler->cacheAllPending();
 	//ai_handler->clearSerial();
 	IEBusHandler::sendMessage(ie_d, ack_response, checksum, wait);
 	//ai_handler->clearSerial();
@@ -134,7 +143,7 @@ int EnIEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint1
 		}
 	}*/
 	
-	ai_handler->cacheAllPending();
+	//ai_handler->cacheAllPending();
 	//ai_handler->clearSerial();
 	const int result = IEBusHandler::readMessage(ie_d, ack_response, id);
 	//ai_handler->clearSerial();
@@ -160,6 +169,7 @@ int EnIEBusHandler::readMessageStrict(IE_Message* ie_d, bool ack_response, const
 
 	return result;
 }
+#endif
 
 //Add an AIBus ID.
 void EnIEBusHandler::addID(const uint8_t id) {
@@ -167,6 +177,7 @@ void EnIEBusHandler::addID(const uint8_t id) {
 		this->ai_handler->addID(id);
 }
 
+#ifndef HW_IEBUS
 //Read bits with hardware.
 inline int EnIEBusHandler::readBitsH(const int length, const bool with_parity, const bool with_ack, bool send_ack) {
 	bool dummy_d;
@@ -366,3 +377,4 @@ int EnIEBusHandler::readMessageH(IE_Message* ie_d, bool ack_response, const uint
 
 	return 0;
 }
+#endif

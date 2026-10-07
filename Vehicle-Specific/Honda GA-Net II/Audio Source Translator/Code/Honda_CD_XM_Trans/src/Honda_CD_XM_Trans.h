@@ -17,13 +17,13 @@
 #ifndef honda_cd_xm_trans_h
 #define honda_cd_xm_trans_h
 
-// #define AI_DEBUG
-
-#ifndef AI_RX
-#define AI_RX 2
+#if defined(DXCORE) || defined(MEGACOREX)
+#define HW_IEBUS
 #endif
 
-#if defined(HAVE_HWSERIAL1) && !defined(AI_DEBUG)
+// #define AI_DEBUG
+
+#if defined(HAVE_HWSERIAL1) && !defined(AI_DEBUG) && !defined(DXCORE) && !defined(MEGACOREX)
 #define AISerial Serial1
 #else
 #define AISerial Serial
@@ -32,6 +32,25 @@
 #ifndef AI_DEBUG
 // #define AI_DEBUG
 #endif
+
+#ifdef HW_IEBUS
+#define AI_RX PIN_PA7
+
+#define GA_ON PIN_PD1
+#define ILL_ANODE PIN_PD2
+
+#define IEBUS_ACTIVE PIN_PC2
+
+#define ILL_CS PIN_PD4
+#define AUDIO_ON PIN_PD3
+#define MAIN_POWER PIN_PD5
+
+#define TRUNK_OPEN PIN_PD0
+#define SPDIF_RESET PIN_PD6
+
+#define IESerial Serial1
+#else
+#define AI_RX 2
 
 #define GA_ON 4
 #define ILL_ANODE 5
@@ -64,6 +83,7 @@
 #define GAH_COUNT_CLEAR 40
 
 #define SPDIF_RESET A8
+#endif
 
 #define FUNCTION_DELAY 4500
 #define SOURCE_DELAY 5000
@@ -86,7 +106,11 @@ private:
 	ParameterList parameters;
 
 	EnAIBusHandler ai_handler = EnAIBusHandler(&AISerial, AI_RX, 8, EN_AI_CACHE_SIZE, 0);
+	#ifdef HW_IEBUS
+	EnIEBusHandler ie_handler = EnIEBusHandler(&IESerial, IEBUS_ACTIVE);
+	#else
 	EnIEBusHandler ie_handler = EnIEBusHandler(IEBUS_RX, IEBUS_TX);
+	#endif
 
 	HondaIMIDHandler imid_handler = HondaIMIDHandler(&ie_handler, &ai_handler, &parameters);
 	HondaTapeHandler tape_handler = HondaTapeHandler(&ie_handler, &ai_handler, &parameters, &imid_handler);
@@ -99,6 +123,8 @@ private:
 
 	elapsedMillis door_timer;
 	bool door_timer_enabled = false;
+
+	bool keyed_on = false; //True if the key has been on at any time during this power cycle.
 	
 	void interpretIEData(IE_Message ie_msg);
 	void sendIMIDRequest();

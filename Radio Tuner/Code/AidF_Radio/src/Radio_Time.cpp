@@ -47,3 +47,8 @@ bool getTimePlausible(int16_t h, int16_t m, const int16_t lh, const int16_t lm, 
 	
 	return hour_in_range && min_in_range;
 }
+
+//Determine whether the provided minute timer is within the 5sec check range.
+bool getMinuteInRange(const unsigned long minute_timer) {
+	return minute_timer < CHECK_LIMIT || minute_timer >= 60000 - CHECK_LIMIT;
+}

@@ -29,6 +29,7 @@ fn main() {
 
 	let client_handler = Arc::new(Mutex::new(ClientAIBusHandler::get("", aibus_thread)));
 	let client_thread = Arc::clone(&client_handler);
+	let client_amirror = Arc::clone(&client_handler);
 
 	let mut mpv_video = None;
 	let mut rd_audio = None;
@@ -53,13 +54,14 @@ fn main() {
 			match client_thread.try_lock() {
 				Ok(mut client_handler) => {
 					client_handler.process();
+					client_handler.await_cached_acknowledgment(Duration::from_millis(10));
 				}
 				Err(_) => {
 					continue;
 				}
 			}
 
-			thread::sleep(Duration::from_millis(10));
+			thread::sleep(Duration::from_millis(2));
 		}
 	});
 
@@ -176,7 +178,7 @@ fn main() {
 	let mutex_rdaudio = Arc::new(Mutex::new(rd_audio.unwrap()));
 	let mutex_navaudio = Arc::new(Mutex::new(nav_audio.unwrap()));
 
-	let mut amirror = AMirror::new(&mutex_context, aibus_handler, &mutex_mpv, &mutex_rdaudio, &mutex_navaudio, w, h);
+	let mut amirror = AMirror::new(&mutex_context, aibus_handler, client_amirror, &mutex_mpv, &mutex_rdaudio, &mutex_navaudio, w, h);
 
 	amirror.write_init_ping();
 
@@ -309,10 +311,25 @@ fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mut
 		}
 	}
 
-	for ai_msg in &ai_tx_list {
+	let use_ack_cache = client_handler.get_ack_cache();
+	let mut ack_cache = Vec::new();
+	let mut long_indices = Vec::new();
+
+	let mut first_long = 0;
+	let mut long_set = false;
+
+	for m in 0..ai_tx_list.len() {
+		let ai_msg = &ai_tx_list[m];
 		let socket_data = get_full_bytes(ai_msg);
 		let _ = stream.write(&socket_data);
 		println!("Wrote {:X?}", socket_data);
+
+		if !long_set && ai_msg.l() > 0 && ai_msg.data[0] == 0x91 {
+			first_long = m;
+			long_set = true;
+		} else if ai_msg.l() <= 0 || ai_msg.data[0] != 0x91 {
+			long_set = false;
+		}
 
 		sent_list.push(ai_msg.clone());
 
@@ -341,7 +358,20 @@ fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mut
 		if ack {
 			let (rec_ack, rec_msg) = client_handler.await_acknowledgment(ai_msg.clone());
 
-			if !rec_ack {
+			if !rec_ack && use_ack_cache {
+				if ai_msg.l() > 0 && ai_msg.data[0] == 0x91 && long_indices.len() <= 0 {
+					for i in first_long..ai_tx_list.len() {
+						if ai_tx_list[i].l() > 0 && ai_tx_list[i].data[0] == 0x91 {
+							long_indices.push(i);
+						}
+					}
+				} else {
+					if long_indices.len() > 0 {
+						long_indices.clear();
+					}
+					ack_cache.push(ai_msg.clone());
+				}
+			} else if !rec_ack {
 				//TODO: If the intended recipient was radio, Bluetooth, or screen, turn connection mode off.
 			}
 
@@ -353,6 +383,10 @@ fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mut
 
 	tx_list.clear();
 
+	for l in long_indices {
+		ack_cache.push(ai_tx_list[l].clone());
+	}
+
 	for r in rx_list {
 		aibus_handler.get_ai_rx().push(r);
 	}
@@ -362,6 +396,12 @@ fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mut
 	}
 
 	std::mem::drop(aibus_handler);
+
+	if use_ack_cache {
+		for msg in ack_cache {
+			client_handler.add_ack_cache(msg);
+		}
+	}
 }
 
 #[cfg(not(target_arch = "aarch64"))]

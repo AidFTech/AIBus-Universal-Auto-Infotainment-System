@@ -14,7 +14,10 @@ enum active_menu_t : uint8_t {
 	ACTIVE_MENU_NONE,
 	ACTIVE_MENU_SETTINGS_MAIN,
 	ACTIVE_MENU_SETTINGS_COMFORT_CONVENIENCE,
-	ACTIVE_MENU_SETTINGS_HEADLIGHT_INTEGRATION
+	ACTIVE_MENU_SETTINGS_HEADLIGHT_INTEGRATION,
+	ACTIVE_MENU_SETTINGS_AMBIENT_LIGHTING,
+
+	ACTIVE_MENU_SECRET_MAIN,
 };
 
 class CANMenuHandler {
@@ -27,6 +30,8 @@ public:
 	void createMainSettingsMenu();
 	void createComfortConvenienceMenu(const bool light_sensor_connected, const bool rain_sensor_connected);
 	void createHeadlightTempereatureMenu();
+	void createAmbientLightingMenu(const bool slider_only = false);
+	void createSecretMenu();
 private:
 	AIBusHandler* ai_handler;
 	ParameterList* parameter_list;
@@ -36,6 +41,7 @@ private:
 	bool startMenu(const uint8_t count, const uint8_t rows, const bool loop, String title);
 	void appendMenu(const uint8_t position, String text);
 	void displayMenu(const uint8_t selected);
+	void addSlider(const uint8_t position, String text, const uint8_t slider_pos, const uint8_t slider_max, const bool selected);
 	bool clearMenu();
 };
 

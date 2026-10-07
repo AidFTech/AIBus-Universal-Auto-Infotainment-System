@@ -1,4 +1,5 @@
 #include "Client_AIBus_Handler.h"
+#include <vector>
 
 SocketMessage::SocketMessage() : SocketMessage(0,0) {
 
@@ -56,6 +57,12 @@ void SocketMessage::refreshSocketData(uint8_t* data) {
 ClientAIBusHandler::ClientAIBusHandler(const char* socket_path, uint8_t id) {
 	my_id = id;
 	refreshSocket(socket_path);
+
+	check_ok = true;
+	cache_ok = true;
+
+	use_ack_cache = false;
+	auto_ack_cache_off = false;
 }
 
 ClientAIBusHandler::~ClientAIBusHandler() {
@@ -137,7 +144,7 @@ void ClientAIBusHandler::writeSocketMessage(SocketMessage* msg) {
 
 	int avail = rx_cache.size();
 	unsigned long last_read = *timer;
-	while(*timer - last_read < 20) {
+	while(*timer - last_read < 5) {
 		if(rx_cache.size() > avail)
 			last_read = *timer;
 
@@ -311,8 +318,13 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d) {
 
 //Write an AIBus message.
 bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
+	return writeAIDataToSocket(ai_d, ack);
+}
+
+//Write an AIBus message to the socket.
+bool ClientAIBusHandler::writeAIDataToSocket(AIData* ai_d, const bool ack, const bool ack_cache_allowed) {
 	//Something that may need to be resent later?
-	if(ai_d->receiver != 0xFF && ai_d->l >= 1 && ai_d->data[0] != 0x80) {
+	if(ai_d->receiver != 0xFF && ai_d->l >= 1 && ai_d->data[0] != 0x80 && (ai_d->data[0] != 0x91 || ai_d->l > AIDATA_LIMIT + 3)) {
 		int index = -1;
 		for(int i=0;i<recent_tx.size();i+=1) {
 			AIData tx_msg = recent_tx[i];
@@ -345,15 +357,27 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 		}
 
 		while(!check_ok);
-		bool rec_ack = false;
+		bool rec_ack = true;
 		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
-			rec_ack = writeAIData(&ai_group[i], ack);
-			if(!rec_ack && ack)
-				return false;
+			rec_ack &= writeAIDataToSocket(&ai_group[i], ack, false);
+			if(!rec_ack && ack) {
+				if(!use_ack_cache || !ack_cache_allowed)
+					return false;
+				else
+					break;
+			}
 
 			const unsigned long start = *timer;
 			while(*timer - start < 5);
 		}
+
+		if(!ack && use_ack_cache && ack_cache_allowed) {
+			for(auto msg: ai_group) {
+				ack_cache.push_back(msg);
+				ack_cache_count.push_back(0);
+			}
+		}
+
 		return rec_ack;
 	}
 
@@ -381,8 +405,10 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 
 	unsigned long last_send = *timer, last_read = *timer;
 	const unsigned long first_read = *timer;
+
+	const int limit = use_ack_cache ? 1 : 25;
 	
-	while(!rec_ack && tries < 25) {
+	while(!rec_ack && tries < limit) {
 		if(*timer - first_read <= 1)
 			continue;
 
@@ -420,6 +446,11 @@ bool ClientAIBusHandler::writeAIData(AIData* ai_d, const bool ack) {
 		}
 	}
 
+	if(!rec_ack && use_ack_cache && ack_cache_allowed) {
+		ack_cache.push_back(*ai_d);
+		ack_cache_count.push_back(0);
+	}
+
 	return rec_ack;
 }
 
@@ -428,6 +459,130 @@ void ClientAIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t
 	uint8_t ack_data[] = {0x80};
 	AIData ack_msg(sizeof(ack_data), sender, receiver, ack_data);
 	writeAIData(&ack_msg, false);
+}
+
+//Set whether to use a staggered acknowledgment.
+void ClientAIBusHandler::setAckCache(const bool ack_cache, const bool auto_off) {
+	use_ack_cache = ack_cache;
+	auto_ack_cache_off = auto_off;
+	if(!use_ack_cache) {
+		this->ack_cache.clear();
+		this->ack_cache_count.clear();
+	}
+}
+
+//Call during the main loop- send all cached messages awaiting acknowledgment and wait for acknowledgment in the specified wait period in ms.
+void ClientAIBusHandler::awaitCachedAcknowledgment(const unsigned long wait) {
+	if(!use_ack_cache)
+		return;
+
+	if(timer == nullptr || timer == NULL)
+		return;
+
+	{
+		vector<AIData> rx_cache;
+
+		while(!cache_ok);
+		cache_ok = false;
+		check_ok = false;
+		for(AIData new_msg: this->rx_cache)
+			rx_cache.push_back(new_msg);
+		cache_ok = true;
+		check_ok = true;
+
+		for(AIData new_msg: rx_cache) {
+			if(new_msg.sender == my_id)
+				continue;
+
+			if(new_msg.l <= 0 || new_msg[0] != 0x80)
+				continue;
+
+			for(int i=0;i<ack_cache.size();i+=1) {
+				AIData* ai_d = &ack_cache[i];
+				if(new_msg.sender == ai_d->receiver && new_msg.receiver == ai_d->sender) {
+					ack_cache.erase(ack_cache.begin() + i);
+					ack_cache_count.erase(ack_cache_count.begin() + i);
+					break;
+				}
+			}
+		}
+	}
+
+	if(ack_cache.size() <= 0) {
+		if(auto_ack_cache_off)
+			use_ack_cache = false;
+		return;
+	}
+
+	const unsigned long start = *timer;
+	while(*timer - start < wait) {
+		for(int i=0;i<ack_cache.size();i+=1) {
+			AIData tx = ack_cache[i];
+
+			while(!check_ok);
+			const bool ack = writeAIDataToSocket(&tx, true, false);
+			if(ack) {
+				ack_cache.erase(ack_cache.begin() + i);
+				ack_cache_count.erase(ack_cache_count.begin() + i);
+				i -= 1;
+				continue;
+			} else {
+				ack_cache_count[i] += 1;
+			}
+
+			AIData new_msg;
+			bool found = false;
+			const unsigned long read_start = *timer;
+			while(*timer - read_start < wait) {
+				vector<AIData> rx_cache;
+
+				if(!cache_ok)
+					continue;
+				cache_ok = false;
+				check_ok = false;
+				for(AIData new_msg: this->rx_cache)
+					rx_cache.push_back(new_msg);
+				cache_ok = true;
+				check_ok = true;
+
+				for(AIData new_msg: rx_cache) {
+					if(new_msg.sender == my_id)
+						continue;
+
+					if(new_msg.sender == tx.receiver && new_msg.receiver == tx.sender && new_msg.l > 0 && new_msg[0] == 0x80) {
+						found = true;
+						break;
+					}
+				}
+
+				if(found)
+					break;
+			}
+
+			if(found || ack_cache_count[i] > 25) {
+				ack_cache.erase(ack_cache.begin() + i);
+				ack_cache_count.erase(ack_cache_count.begin() + i);
+				i -= 1;
+			}
+
+			if(*timer - start >= wait)
+				break;
+		}
+
+		if(ack_cache.size() <= 0) {
+			if(auto_ack_cache_off)
+				use_ack_cache = false;
+			break;
+		}
+	}
+
+	for(int i=0;i<ack_cache.size() && i<ack_cache_count.size();i+=1) {
+		if(ack_cache_count[i] > 25) {
+			ack_cache_count.erase(ack_cache_count.begin() + i);
+			ack_cache.erase(ack_cache.begin() + i);
+			i -= 1;
+		}
+	}
 }
 
 //Get the client socket.

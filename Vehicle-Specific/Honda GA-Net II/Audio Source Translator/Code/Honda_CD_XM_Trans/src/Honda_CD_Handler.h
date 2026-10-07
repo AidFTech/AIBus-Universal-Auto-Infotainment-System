@@ -164,7 +164,6 @@ private:
 
 	//Timer to check for second count.
 	elapsedMillis second_timer;
-	bool auto_increment = false; //True if to increment the second counter if not readable.
 
 	HondaIMIDHandler* imid_handler;
 
@@ -211,11 +210,13 @@ private:
 	void createCDChangeDiscMenu();
 	void createCDChangeDiscMenuOption(const uint8_t option);
 
+	#ifndef HW_IEBUS
 	//Internal:
 	void handleAIBus(AIData* msg);
 	void handleIEBus(IE_Message* msg, const bool listen = true);
 	void listenForIEBus(const unsigned long wait = 500, const bool single_msg = true);
 	void handleIMIDAIBus(AIData* msg);
+	#endif
 };
 
 #endif

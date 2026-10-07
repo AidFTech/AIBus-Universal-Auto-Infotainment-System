@@ -69,13 +69,30 @@ void BCAN_Handler::init() {
 
 //Interpret an AIBus message. Return whether the message is relevant.
 bool BCAN_Handler::handleAIBus(AIData* ai_msg) {
-	if(ai_msg->l >= 2 && ai_msg->data[0] == 0x2B && ai_msg->data[1] == 0x45) { //Settings menu request.
-		if(menu_handler.getActiveMenu() != ACTIVE_MENU_SETTINGS_MAIN) 
-			menu_handler.createMainSettingsMenu();
-		return true;
-	} else if(ai_msg->l >= 3 && ai_msg->data[0] == 0x2B && ai_msg->data[1] == 0x60) { //Option selected.
-		handleSelection((*ai_msg)[2]);
-		return true;
+	if(ai_msg->sender == ID_NAV_COMPUTER && ai_msg->l >= 2 && ai_msg->data[0] == 0x2B) { //Menu operation.
+		const uint8_t command = ai_msg->data[1];
+		if(command == 0x45) { //Settings menu request.
+			if(menu_handler.getActiveMenu() != ACTIVE_MENU_SETTINGS_MAIN) 
+				menu_handler.createMainSettingsMenu();
+			return true;
+		} else if(command == 0x60) { //Option selected.
+			handleSelection((*ai_msg)[2]);
+			return true;
+		} else if(command == 0x55 || command == 0x56 || command == 0x57) { //Menu request by name.
+			String request = "";
+			for(int i=2;i<ai_msg->l;i+=1)
+				request += char(ai_msg->data[i]);
+
+			if(command == 0x55) {
+				if(request.equalsIgnoreCase("SETTINGS"))
+					menu_handler.createMainSettingsMenu();
+				else if(request.equalsIgnoreCase("DEVSET"))
+					menu_handler.createSecretMenu();
+			} else {
+				const bool open = command == 0x57;
+				
+			}
+		}
 	} else if(ai_msg->l >= 2 && ai_msg->data[0] == 0x4A && ai_msg->data[1] == 0x18) { //Add this device to the broadcast list.
 		bool device_exists = false;
 		for(int i=0;i<rec_device_vec.size();i+=1) {
@@ -175,8 +192,8 @@ void BCAN_Handler::readCANMessage() {
 				brake_light_on = (can_msg.data[0]&0x10) != 0;
 
 				if(last_left_signal_illum != left_signal_illum || last_right_signal_illum != right_signal_illum) {
-					light_state_a &= ~0x60;
-					light_state_a |= (left_signal_illum ? 0x20 : 0x0) | (right_signal_illum ? 0x40 : 0x0);
+					light_state.data.left_turn = left_signal_illum;
+					light_state.data.right_turn = right_signal_illum;
 					writeAIBusLightMessage(0xFF);
 
 					aux_light_controller->setLeftTurn(left_signal_illum);
@@ -203,11 +220,11 @@ void BCAN_Handler::readCANMessage() {
 				if(e_brake != last_ebrake) {
 					writeAIBusSignalMessage();
 
-					if(!e_brake && (light_state_a&0x8) == 0 && parameter_list->drl_setting != DRL_SETTING_OFF) {
+					if(!e_brake && !light_state.data.parking && parameter_list->drl_setting != DRL_SETTING_OFF) {
 						ext_drl_on = true;
 						setDRLs(ext_drl_on);
 
-						light_state_a |= 0x1;
+						light_state.data.drl = true;
 						writeAIBusLightMessage(0xFF);
 					}
 				}
@@ -273,8 +290,8 @@ void BCAN_Handler::readCANMessage() {
 						parameter_list->ambient_state = AMBIENT_LIGHTS_OFF;
 				}
 			} else if(can_msg.can_id == BCAN_ID_LIGHTS && can_msg.can_dlc == 2) { //Light state and hood.
-				const uint8_t last_state_a = light_state_a, last_state_b = light_state_b;
-				const bool last_hood = (this->parameter_list->doors_open&0x20) != 0, last_tail = (light_state_b&0x20) != 0, last_low_beam = (light_state_a&0x2) != 0;
+				const aibus_ext_light_status last_state = light_state;
+				const bool last_hood = (this->parameter_list->doors_open&0x20) != 0, last_tail = light_state.data.taillight, last_low_beam = light_state.data.low_beam;
 
 				const bool side = (can_msg.data[0]&0x40) != 0;
 				const bool low_beam = (can_msg.data[0]&0x2) != 0;
@@ -295,18 +312,15 @@ void BCAN_Handler::readCANMessage() {
 
 				const bool hood = (can_msg.data[0]&0x80) != 0;
 
-				light_state_a = (drl ? 0x1 : 0x0) |
-								(side ? 0x8 : 0x0) |
-								(low_beam ? 0x2 : 0x0) |
-								(front_fog ? 0x10 : 0x0) |
-								(left_signal_illum ? 0x20 : 0x0) |
-								(right_signal_illum ? 0x40 : 0x0) |
-								(high_beam ? 0x4 : 0x0);
+				light_state.data.drl = drl;
+				light_state.data.parking = side;
+				light_state.data.low_beam = low_beam;
+				light_state.data.front_fog = front_fog;
+				light_state.data.left_turn = left_signal_illum;
+				light_state.data.right_turn = right_signal_illum;
+				light_state.data.high_beam = high_beam;
 
-				light_state_b = (tail ? 0x20 : 0x0) |
-								(license ? 0x10 : 0x0);
-
-				if(light_state_a != last_state_a || light_state_b != last_state_b)
+				if(last_state.raw[0] != light_state.raw[0] || last_state.raw[1] != light_state.raw[1])
 					writeAIBusLightMessage(0xFF);
 
 				if(last_tail != tail)
@@ -327,10 +341,10 @@ void BCAN_Handler::readCANMessage() {
 					writeAIBusDoorMessage();
 				}
 
-				if(drl != ((last_state_a&0x1) != 0))
+				if(drl != last_state.data.drl)
 					setDRLs(drl);
 
-				if(parameter_list->parking_light_drl && side != ((last_state_a&0x2) != 0))
+				if(parameter_list->parking_light_drl && side != last_state.data.parking)
 					setDRLs(drl || side);
 			} else if(can_msg.can_id == BCAN_ID_LIGHTSTALKPOS && can_msg.can_dlc == 2) { //Headlight stalk position.
 				const bool last_left_signal_on = left_signal_on, last_right_signal_on = right_signal_on, last_highbeam_on = high_beam_full;
@@ -342,14 +356,14 @@ void BCAN_Handler::readCANMessage() {
 				if(last_left_signal_on != left_signal_on || last_right_signal_on != right_signal_on) {
 					writeAIBusSignalMessage();
 
-					if(parameter_list->drl_setting == DRL_SETTING_WINK && ((light_state_a&(parameter_list->parking_light_drl ? 0xA : 0x2)) == 0)) {
+					if(parameter_list->drl_setting == DRL_SETTING_WINK && !(parameter_list->parking_light_drl ? (light_state.data.low_beam || light_state.data.parking) : light_state.data.low_beam)) {
 						parameter_list->left_drl_on = !left_signal_on;
 						parameter_list->right_drl_on = !right_signal_on;
 					}
 				}
 
 				if(high_beam_full != last_highbeam_on) {
-					if((light_state_a&0x2) != 0)
+					if(light_state.data.low_beam)
 						aux_light_controller->setProjector(high_beam_full);
 					else
 						aux_light_controller->setProjector(false);
@@ -380,21 +394,24 @@ void BCAN_Handler::readCANMessage() {
 				if(vehicle_speed != last_speed) {
 					writeAIBusSpeedMessage(0xFF);
 
-					if(parameter_list->trim == TRIM_HYBRID) {
+					if(parameter_list->special_trim == TRIM_HYBRID) {
 						if(vehicle_speed > 0) {
-							if((hybrid_status&0x40) != 0 && (hybrid_status&0x2) == 0) { //Engine to motor but not battery.
-								hybrid_status = 0x20;
+							if(hybrid_status.data.engine_to_motor && !hybrid_status.data.motor_to_bat) { //Engine to motor but not battery.
+								hybrid_status.raw[0] = 0;
+								hybrid_status.data.engine_to_wheels = true;
 								writeAIBusHybridStatusMessage();
-							} else if((hybrid_status&0x40) != 0 && (hybrid_status&0x2) != 0) { //Engine to motor and battery.
-								hybrid_status = 0x62;
+							} else if(hybrid_status.data.engine_to_motor && hybrid_status.data.motor_to_bat) { //Engine to motor and battery.
+								hybrid_status.data.engine_to_wheels = true;
 								writeAIBusHybridStatusMessage();
 							}
 						} else {
-							if((hybrid_status&0x20) != 0 && (hybrid_status&0x2) == 0) { //Engine to wheels but not battery.
-								hybrid_status = 0x40;
+							if(hybrid_status.data.engine_to_wheels && !hybrid_status.data.motor_to_bat) { //Engine to wheels but not battery.
+								hybrid_status.raw[0] = 0;
+								hybrid_status.data.engine_to_motor = true;
 								writeAIBusHybridStatusMessage();
-							} else if((hybrid_status&0x20) != 0 && (hybrid_status&0x2) != 0) { //Engine to wheels and battery.
-								hybrid_status = 0x42;
+							} else if(hybrid_status.data.engine_to_wheels && hybrid_status.data.motor_to_bat) { //Engine to wheels and battery.
+								hybrid_status.data.engine_to_wheels = false;
+								hybrid_status.data.engine_to_motor = true;
 								writeAIBusHybridStatusMessage();
 							}
 						}
@@ -444,8 +461,13 @@ void BCAN_Handler::readCANMessage() {
 
 				parameter_list->display_miles = range_miles;
 			} else if(can_msg.can_id == BCAN_ID_AC_AUTOSTOP && can_msg.can_dlc == 4) { //A/C operation and auto stop.
+				const bool last_auto_stop = this->auto_stop;
+
 				this->electric_ac_power = (can_msg.data[0] << 8) | can_msg.data[1];
 				this->auto_stop = (can_msg.data[3]&0x80) != 0;
+
+				if(this->auto_stop != last_auto_stop)
+					writeAIBusAutoStopMessage();
 			} else if(can_msg.can_id == BCAN_ID_COOLANT && can_msg.can_dlc == 4) { //Coolant temperature.
 				const uint8_t last_temp = coolant_temp;
 				coolant_temp = can_msg.data[0];
@@ -453,32 +475,37 @@ void BCAN_Handler::readCANMessage() {
 				if(last_temp != coolant_temp)
 					writeAIBusCoolantTempMessage(0xFF);
 			} else if(can_msg.can_id == BCAN_ID_HYBRID_SYSTEM && can_msg.can_dlc == 7) { //Hybrid status.
-				if(parameter_list->trim == TRIM_HYBRID) { // @ TODO: This message may mean something different in other trims.
-					const uint8_t last_hybrid_status = hybrid_status, last_hybrid_battery = hybrid_battery, last_charge_assist = charge_assist;
+				if(parameter_list->special_trim == TRIM_HYBRID) { // @ TODO: This message may mean something different in other trims.
+					const uint8_t last_hybrid_status = hybrid_status.raw[0], last_hybrid_battery = hybrid_battery, last_charge_assist = charge_assist;
+					hybrid_status.raw[0] = 0;
 
 					switch(can_msg.data[2]&0xF) {
 					case 0x1: //Battery only.
-						hybrid_status = 0x9;
+						hybrid_status.data.bat_to_motor = true;
+						hybrid_status.data.motor_to_wheels = true;
 						break;
 					case 0x2: //Regenerative charging.
-						hybrid_status = 0x14;
+						hybrid_status.data.wheels_to_motor = true;
+						hybrid_status.data.regen_to_bat = true;
 						break;
 					case 0x3: //Engine and battery both providing power.
-						hybrid_status = 0x29;
+						hybrid_status.data.bat_to_motor = true;
+						hybrid_status.data.motor_to_wheels = true;
+						hybrid_status.data.engine_to_wheels = true;
 						break;
 					case 0x4: //Engine only.
 						if(vehicle_speed > 0)
-							hybrid_status = 0x20;
+							hybrid_status.data.engine_to_motor = true;
 						else
-						 	hybrid_status = 0x40;
+						 	hybrid_status.data.engine_to_wheels = true;
 						break;
 					case 0x5: //Engine charging battery.
-						hybrid_status = 0x42;
+						hybrid_status.data.engine_to_motor = true;
+						hybrid_status.data.bat_to_motor = true;
 						if(vehicle_speed > 0)
-							hybrid_status |= 0x20;
+							hybrid_status.data.engine_to_wheels = true;
 						break;
 					default:
-						hybrid_status = 0;
 						break;
 					}
 
@@ -499,7 +526,7 @@ void BCAN_Handler::readCANMessage() {
 						break;
 					}
 
-					if(hybrid_init && (hybrid_status != last_hybrid_status || hybrid_battery != last_hybrid_battery || charge_assist != last_charge_assist))
+					if(hybrid_init && (hybrid_status.raw[0] != last_hybrid_status || hybrid_battery != last_hybrid_battery || charge_assist != last_charge_assist))
 						writeAIBusHybridStatusMessage();
 				}
 			} else if(can_msg.can_id == BCAN_ID_AVG_ECONOMY && can_msg.can_dlc == 8) { //Average economy.
@@ -655,32 +682,54 @@ void BCAN_Handler::broadcastBCAN(can_frame* can_msg) {
 }
 
 //Write the battery voltage message.
-void BCAN_Handler::sendBatteryVoltage(const uint16_t voltage) {
-	uint8_t bv_data[] = {0xA1, 0x1F, 0x6, 0x22, (voltage>>8)&0xFF, voltage&0xFF};
-	AIData bv_msg(sizeof(bv_data), ID_CANSLATOR, 0xFF, bv_data);
-	ai_handler->writeAIData(&bv_msg, false);
+void BCAN_Handler::sendBatteryVoltage(const uint16_t voltage, const uint8_t receiver) {
+	aibus_voltage_config voltage_config;
+	voltage_config.data.negative = false;
+	voltage_config.data.decimal_count = 2;
+
+	int bytes = 1;
+	uint64_t data_measure = 0x100;
+
+	while(voltage >= data_measure && bytes < 7) {
+		data_measure <<= 8;
+		bytes += 1;
+	}
+
+	voltage_config.data.byte_count = bytes;
+
+	AIData bv_msg(4+bytes, ID_CANSLATOR, receiver);
+	bv_msg[0] = 0xA1;
+	bv_msg[1] = 0x1F;
+	bv_msg[2] = 0x6;
+	bv_msg[3] = voltage_config.raw[0];
+	for(int i=0;i<bytes;i+=1)
+		bv_msg[i+4] = (voltage>>(8*(bytes-i-1)))&0xFF;
+
+	ai_handler->writeAIData(&bv_msg, receiver != 0xFF);
 }
 
 //Write all common CAN-derived parameters.
-void BCAN_Handler::sendCommonParameters() {
-	writeAIBusKeyMessage(0xFF);
-	writeAIBusDoorMessage(0xFF);
-	writeAIBusBrightnessMessage(0xFF);	
-	writeAIBusLightMessage(0xFF);
-	writeAIBusTempMessage(0xFF);
-	writeAIBusSpeedMessage(0xFF);
+void BCAN_Handler::sendCommonParameters(const uint8_t receiver) {
+	writeAIBusKeyMessage(receiver);
+	writeAIBusDoorMessage(receiver);
+	writeAIBusBrightnessMessage(receiver);	
+	writeAIBusLightMessage(receiver);
+	writeAIBusTempMessage(receiver);
+	writeAIBusSpeedMessage(receiver);
 }
 
 //Write info parameters.
-void BCAN_Handler::sendInfoParameters() {
-	if(parameter_list->trim == TRIM_HYBRID) {
-		writeAIBusHybridHandshake();
-		writeAIBusHybridStatusMessage();
+void BCAN_Handler::sendInfoParameters(const uint8_t receiver) {
+	if(parameter_list->special_trim == TRIM_HYBRID) {
+		writeAIBusHybridHandshake(receiver);
+		writeAIBusHybridStatusMessage(receiver);
 	}
 
-	writeAIBusTempMessage(0xFF);
-	writeAIBusCoolantTempMessage(0xFF);
-	writeAIBusRangeMessage();
+	writeAIBusTempMessage(receiver);
+	writeAIBusCoolantTempMessage(receiver);
+	writeAIBusRangeMessage(receiver);
+	writeAIBusLightMessage(receiver);
+	writeAIBusAutoStopMessage(receiver);
 }
 
 //Write the key state message to all requesting devices.
@@ -755,12 +804,12 @@ void BCAN_Handler::writeAIBusLightMessage(const uint8_t receiver) {
 	if(receiver == 0xFF) {
 		light_data[0] = 0xA1;
 		light_data[1] = 0x11;
-		light_data[2] = light_state_a;
-		light_data[3] = light_state_b;
+		light_data[2] = light_state.raw[0];
+		light_data[3] = light_state.raw[1];
 	} else {
 		light_data[0] = 0x11;
-		light_data[1] = light_state_a;
-		light_data[2] = light_state_b;
+		light_data[1] = light_state.raw[0];
+		light_data[2] = light_state.raw[1];
 	}
 	AIData light_msg(sizeof(light_data), ID_CANSLATOR, receiver, light_data);
 
@@ -768,18 +817,17 @@ void BCAN_Handler::writeAIBusLightMessage(const uint8_t receiver) {
 }
 
 //Write the light signal message.
-void BCAN_Handler::writeAIBusSignalMessage() {
-	const uint8_t signal_byte = 0x0 |
-								(left_signal_on ? 0x1 : 0x0) |
-								(right_signal_on ? 0x2 : 0x0) |
-								(hazard_on ? 0x4 : 0x0) | 
-								(brake_light_on ? 0x8 : 0x0) |
-								(e_brake ? 0x10 : 0x0);
+void BCAN_Handler::writeAIBusSignalMessage(const uint8_t receiver) {
+	aibus_signal_status signal_status;
+	signal_status.data.left_signal = left_signal_on;
+	signal_status.data.right_signal = right_signal_on;
+	signal_status.data.hazard = hazard_on;
+	signal_status.data.brake_light = brake_light_on;
+	signal_status.data.e_brake = e_brake;
 
-
-	uint8_t signal_data[] = {0xA1, 0x13, signal_byte};
-	AIData signal_msg(sizeof(signal_data), ID_CANSLATOR, 0xFF, signal_data);
-	ai_handler->writeAIData(&signal_msg, false);
+	uint8_t signal_data[] = {0xA1, 0x13, signal_status.raw[0]};
+	AIData signal_msg(sizeof(signal_data), ID_CANSLATOR, receiver, signal_data);
+	ai_handler->writeAIData(&signal_msg, receiver != 0xFF);
 }
 
 //Write the speed message.
@@ -792,31 +840,44 @@ void BCAN_Handler::writeAIBusSpeedMessage(const uint8_t receiver) {
 
 //Write the temperature message.
 void BCAN_Handler::writeAIBusTempMessage(const uint8_t receiver) {
-	uint8_t temp_data[] = {0xA1, 0x1F, 0x3, 0x12, 0x0, 0x0};
+	aibus_temperature_config temp_config;
+	temp_config.data.decimal_count = 1;
+	temp_config.data.fahrenheit = !parameter_list->display_celsius;
+	temp_config.data.negative = outside_temp < 0;
 
-	if(outside_temp < 0)
-		temp_data[3] |= 0x8;
-
-	if(!parameter_list->display_celsius)
-		temp_data[3] |= 0x80;
+	int bytes = 1;
+	uint64_t data_measure = 0x100;
 
 	const uint16_t norm_temp = abs(outside_temp);
-	temp_data[4] = uint8_t(norm_temp>>8);
-	temp_data[5] = uint8_t(norm_temp&0xFF);
+	while(norm_temp >= data_measure && bytes < 7) {
+		data_measure <<= 8;
+		bytes += 1;
+	}
 
-	AIData temp_msg(sizeof(temp_data), ID_CANSLATOR, receiver, temp_data);
+	temp_config.data.byte_count = bytes;
+
+	AIData temp_msg(4 + bytes, ID_CANSLATOR, receiver);
+	temp_msg[0] = 0xA1;
+	temp_msg[1] = 0x1F;
+	temp_msg[2] = 0x3;
+	temp_msg[3] = temp_config.raw[0];
+	for(int i=0;i<bytes;i+=1)
+		temp_msg[i+4] = (norm_temp>>(8*(bytes-i-1)))&0xFF;
 
 	ai_handler->writeAIData(&temp_msg, receiver != 0xFF && receiver != ID_CANSLATOR);
 }
 
 //Write the coolant temp message.
 void BCAN_Handler::writeAIBusCoolantTempMessage(const uint8_t receiver) {
-	uint8_t temp_data[] = {0xA1, 0x1F, 0x5, 0x1, 0x0};
-	
 	const int norm_temp = coolant_temp - 0x28;
-	
-	if(norm_temp < 0)
-		temp_data[3] |= 0x8;
+
+	aibus_temperature_config temp_config;
+	temp_config.data.decimal_count = 0;
+	temp_config.data.fahrenheit = false;
+	temp_config.data.negative = norm_temp < 0;
+	temp_config.data.byte_count = 1;
+
+	uint8_t temp_data[] = {0xA1, 0x1F, 0x5, temp_config.raw[0], 0x0};
 	
 	const uint16_t abs_temp = abs(norm_temp);
 	temp_data[4] = uint8_t(abs_temp&0xFF);
@@ -827,51 +888,87 @@ void BCAN_Handler::writeAIBusCoolantTempMessage(const uint8_t receiver) {
 }
 
 //Write the range message.
-void BCAN_Handler::writeAIBusRangeMessage() {
-	uint8_t range_data[] = {0xA1, 0x1F, 0x7, 0x2, 0x0, 0x0};
+void BCAN_Handler::writeAIBusRangeMessage(const uint8_t receiver) {
+	aibus_speed_distance_config range_config;
+	range_config.data.decimal_count = 0;
+	range_config.data.miles = range_miles;
 
-	if(range_miles)
-		range_data[3] |= 0x80;
+	int bytes = 1;
+	uint64_t data_measure = 0x100;
+	while(range >= data_measure && bytes < 7) {
+		data_measure <<= 8;
+		bytes += 1;
+	}
 
-	range_data[4] = range>>8;
-	range_data[5] = range&0xFF;
+	range_config.data.byte_count = bytes;
 
-	AIData range_msg(sizeof(range_data), ID_CANSLATOR, 0xFF, range_data);
-	ai_handler->writeAIData(&range_msg, false);
+	AIData range_msg(4 + bytes, ID_CANSLATOR, receiver);
+
+	range_msg[0] = 0xA1;
+	range_msg[1] = 0x1F;
+	range_msg[2] = 0x7;
+	range_msg[3] = range_config.raw[0];
+	for(int i=0;i<bytes;i+=1)
+		range_msg[i+4] = (range<<(8*(bytes-i-1)))&0xFF;
+
+	ai_handler->writeAIData(&range_msg, receiver != 0xFF);
 }
 
 //Write the average fuel economy.
-void BCAN_Handler::writeAIBusAverageEconomyMessage() {
-	uint8_t econ_data[] = {0xA1,
-							0x1F,
-							0x9,
-							((economy_mpg ? 0b10 : 0b00) << 6) | (current_economy < 0 ? bit(5) : 0) | 0x1,
-							current_economy>>24,
-							(current_economy>>16)&0xFF,
-							(current_economy>>8)&0xFF,
-							current_economy&0xFF};
+void BCAN_Handler::writeAIBusAverageEconomyMessage(const uint8_t receiver) {
+	aibus_fuel_economy_config economy_config;
+	economy_config.data.decimal_count = 1;
+	economy_config.data.units = economy_mpg ? AIBUS_FUEL_ECONOMY_MPG_US : AIBUS_FUEL_ECONOMY_L_100KM;
+	economy_config.data.undefined = current_economy < 0;
 
-	AIData econ_msg(sizeof(econ_data), ID_CANSLATOR, 0xFF, econ_data);
-	ai_handler->writeAIData(&econ_msg, false);
+	int bytes = 1;
+	if(current_economy >= 0) {
+		uint64_t data_measure = 0x100;
+		while(abs(current_economy) >= data_measure && bytes < 7) {
+			data_measure <<= 8;
+			bytes += 1;
+		}
+	}
+
+	AIData econ_msg(4+bytes, ID_CANSLATOR, receiver);
+	econ_msg[0] = 0xA1;
+	econ_msg[1] = 0x1F;
+	econ_msg[2] = 0x9;
+	econ_msg[3] = economy_config.raw[0];
+	if(current_economy >= 0) {
+		for(int i=0;i<bytes;i+=1)
+			econ_msg[i+4] = (current_economy>>(8*(bytes-i-1)))&0xFF;
+	} else
+		econ_msg[4] = 0xFF;
+
+	ai_handler->writeAIData(&econ_msg, receiver != 0xFF);
+}
+
+//Write auto stop status.
+void BCAN_Handler::writeAIBusAutoStopMessage(const uint8_t receiver) {
+	uint8_t auto_stop_data[] = {0xA1, 0x14, auto_stop ? 0xFF : 0x0};
+
+	AIData auto_stop_msg(sizeof(auto_stop_data), ID_CANSLATOR, receiver, auto_stop_data);
+	ai_handler->writeAIData(&auto_stop_msg, receiver != 0xFF);
 }
 
 //Write the hybrid system handshake.
-void BCAN_Handler::writeAIBusHybridHandshake() {
+void BCAN_Handler::writeAIBusHybridHandshake(const uint8_t receiver) {
 	uint8_t hybrid_data[] = {0xA1, 0x33, 0x1, 0x12, 0x30};
-	AIData hybrid_msg(sizeof(hybrid_data), ID_CANSLATOR, 0xFF, hybrid_data);
-	ai_handler->writeAIData(&hybrid_msg, false);
+	AIData hybrid_msg(sizeof(hybrid_data), ID_CANSLATOR, receiver, hybrid_data);
+	ai_handler->writeAIData(&hybrid_msg, receiver != 0xFF);
 
 	hybrid_init = true;
 }
 
 //Write the hybrid system status.
-void BCAN_Handler::writeAIBusHybridStatusMessage() {
+void BCAN_Handler::writeAIBusHybridStatusMessage(const uint8_t receiver) {
 	if(!hybrid_init)
 		return;
 
-	uint8_t hybrid_data[] = {0xA1, 0x33, 0x2, hybrid_status, hybrid_battery, charge_assist};
-	AIData hybrid_msg(sizeof(hybrid_data), ID_CANSLATOR, 0xFF, hybrid_data);
-	ai_handler->writeAIData(&hybrid_msg, false);
+	uint8_t hybrid_data[] = {0xA1, 0x33, 0x2, hybrid_status.raw[0], hybrid_battery, charge_assist};
+	AIData hybrid_msg(sizeof(hybrid_data), ID_CANSLATOR, receiver, hybrid_data);
+	ai_handler->writeAIData(&hybrid_msg, receiver != 0xFF);
 }
 
 //Forward a message from the IMID to the rest of the system.
@@ -960,8 +1057,8 @@ void BCAN_Handler::setDRLs(const bool drl) {
 		parameter_list->left_drl_on = false;
 		parameter_list->right_drl_on = false;
 	} else if(drl_setting == DRL_SETTING_WINK) {
-		parameter_list->left_drl_on = (drl & !left_signal_on) || (parameter_list->parking_light_drl && (light_state_a&0x2) != 0);
-		parameter_list->right_drl_on = (drl & !right_signal_on) || (parameter_list->parking_light_drl && (light_state_a&0x2) != 0);
+		parameter_list->left_drl_on = (drl & !left_signal_on) || (parameter_list->parking_light_drl && light_state.data.parking);
+		parameter_list->right_drl_on = (drl & !right_signal_on) || (parameter_list->parking_light_drl && light_state.data.parking);
 	} else if(drl_setting == DRL_SETTING_FULL) {
 		parameter_list->left_drl_on = drl;
 		parameter_list->right_drl_on = drl;
@@ -988,16 +1085,19 @@ void BCAN_Handler::handleSelection(const uint8_t selection) {
 		return;
 
 	if(menu_handler.getActiveMenu() == ACTIVE_MENU_SETTINGS_MAIN) {
-		MenuList menu = getMenu(MENU_INDEX_SETTINGS_MAIN, parameter_list->locale);
+		const MenuList menu = getMenu(MENU_INDEX_SETTINGS_MAIN, parameter_list->locale);
 		switch(menu.getGlobalIndex(selected)) {
 		case MENU_INDEX_SETTINGS_MAIN_COMFORT_CONVENIENCE:
 			menu_handler.createComfortConvenienceMenu(light_sensor_connected, rain_sensor_connected);
 			break;
+		case MENU_INDEX_SETTINGS_MAIN_AMBIENT_LIGHTING:
+			if(parameter_list->has_ambient_lighting)
+				menu_handler.createAmbientLightingMenu();
 		default:
 			break;
 		}
 	} else if(menu_handler.getActiveMenu() == ACTIVE_MENU_SETTINGS_COMFORT_CONVENIENCE) {
-		MenuList menu = getMenu(MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE, parameter_list->locale);
+		const MenuList menu = getMenu(MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE, parameter_list->locale);
 		switch(menu.getGlobalIndex(selected)) {
 		case MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE_PARKING_LIGHTS:
 			parameter_list->parking_lights = !parameter_list->parking_lights;

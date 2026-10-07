@@ -2,10 +2,10 @@
 #include <Arduino.h>
 #include <elapsedMillis.h>
 
-#include "AIBus_Handler.h"
-
 #ifndef nav_avr_controller_h
 #define nav_avr_controller_h
+
+#include "AIBus_Handler.h"
 
 #ifdef MEGACOREX
 #define PI_POWER PIN_PA2

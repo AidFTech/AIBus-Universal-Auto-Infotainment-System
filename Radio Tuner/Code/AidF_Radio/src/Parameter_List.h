@@ -55,6 +55,13 @@ enum source_button_t : uint8_t {
 	SOURCE_CYCLE
 };
 
+enum clock_freq_type_t : uint8_t {
+	CLOCK_FREQ_INIT,
+	CLOCK_FREQ_MANUAL,
+	CLOCK_FREQ_ACTIVE_STATION,
+	CLOCK_FREQ_BACKGROUND
+};
+
 struct ParameterList {
 	bool power_on = false, audio_on = false;
 	uint8_t key_position = 0, door_position = 0;
@@ -64,7 +71,7 @@ struct ParameterList {
 	uint16_t vehicle_speed = 0;
 	bool computer_connected = false, screen_connected = false, amp_connected = false, mirror_connected = false;
 	
-	bool manual_tune_mode = false, bass_adjust = false, treble_adjust = false, balance_adjust = false, fader_adjust = false, aux_level_adjust = false, nav_cut_adjust = false;
+	bool manual_tune_mode = false, bass_adjust = false, treble_adjust = false, balance_adjust = false, fader_adjust = false, aux_level_adjust = false, nav_cut_adjust = false, clock_freq_adjust = false;
 
 	uint8_t imid_char = 0, imid_lines = 0;
 	bool imid_connected = false, imid_radio = false;
@@ -75,9 +82,11 @@ struct ParameterList {
 	int8_t day = -1, month = -1;
 	uint16_t year = 0;
 	elapsedMillis minute_timer;
-	bool send_time = true, send_12h = false, auto_clock = true;
-	bool received_time_change_message = false; //True if a clock set message has been received.
+	bool send_time: 1, send_12h: 1, auto_clock: 1, auto_clock_frequency: 1;
+	bool received_time_change_message: 1; //True if a clock set message has been received.
+	clock_freq_type_t clock_freq_type: 2;
 	
+	bool radio_on = false; //True if the radio is the selected source.
 	uint16_t fm1_tune, fm2_tune, am_tune;
 	bool fm_stereo = false, has_rds = false, info_mode = false;
 
@@ -96,12 +105,17 @@ struct ParameterList {
 	uint16_t am_presets[PRESET_COUNT];
 
 	int16_t clock_freq = -1; //The time-setting frequency.
+	bool clock_wait: 1; //Wait for a clock signal if true.
+	bool clock_set_success: 1, use_clock_wait_timer: 1;
+	bool clock_debug: 1;
+	elapsedMillis clock_wait_timer;
 
 	uint8_t current_preset = 0, preferred_preset = 0;
 	bool tune_changed = false;
 
 	int8_t rds_index = -1;
 	String rds_station_name, rds_program_name;
+	elapsedMillis last_rds_change;
 
 	svc_setting_t svc = SVC_OFF;
 
@@ -131,6 +145,20 @@ struct ParameterList {
 	bool dac_filter_mode = false, steering_control_preset = true;
 
 	uint8_t locale = 0; //Language
+
+	ParameterList() {
+		send_time = true;
+		send_12h = false;
+		auto_clock = true;
+		auto_clock_frequency = true;
+		received_time_change_message = false;
+		clock_freq_type = CLOCK_FREQ_INIT;
+
+		clock_wait = false;
+		clock_set_success = false;
+		use_clock_wait_timer = false;
+		clock_debug = false;
+	}
 };
 
 #endif

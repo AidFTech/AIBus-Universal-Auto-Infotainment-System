@@ -20,6 +20,9 @@ public:
 
 	void addID(const uint8_t id);
 
+	int getIDCount();
+	void getIDs(uint8_t* ids, const int l);
+
 	void setCacheAck(const bool cache_ack);
 
 	bool getValidMessage(AIData* ai_d);

@@ -2,31 +2,54 @@
 
 //Save CANslator settings to EEPROM.
 void setCanslatorSettings(ParameterList* parameter_list) {
-	EEPROM.write(TRIM_SETTING, parameter_list->trim);
-	
-	uint8_t main_settings = parameter_list->headlight_temp_setting;
-	
-	if(parameter_list->parking_lights)
-		main_settings |= CANSLATOR_SETTINGS_PARKING_LIGHTS;
-	if(parameter_list->auto_wiper)
-		main_settings |= CANSLATOR_SETTINGS_AUTO_WIPER;
-	if(parameter_list->display_celsius)
-		main_settings |= CANSLATOR_SETTINGS_CELSIUS;
-	if(parameter_list->wiper_door_off)
-		main_settings |= CANSLATOR_SETTINGS_WIPER_DOOR_OFF;
+	canslator_eeprom_setting settings;
+	settings.data.trim = parameter_list->special_trim;
+	settings.data.transmission = parameter_list->transmission;
 
-	EEPROM.write(COMFORT_SETTINGS_1, main_settings);
+	settings.data.pushbutton = parameter_list->pushbutton;
+	settings.data.drl_setting = parameter_list->drl_setting;
+
+	settings.data.headlight_temp = parameter_list->headlight_temp_setting;
+
+	settings.data.parking_lights = parameter_list->parking_lights;
+	settings.data.auto_wiper = parameter_list->auto_wiper;
+	settings.data.celsius = parameter_list->display_celsius;
+	settings.data.wiper_door_off = parameter_list->wiper_door_off;
+
+	settings.data.ambient_lighting = parameter_list->has_ambient_lighting;
+
+	settings.data.ambient_light_brightness = parameter_list->ambient_light_brightness;
+	settings.data.ambient_light_enable_door = parameter_list->ambient_light_enable_door;
+	settings.data.ambient_light_enable_int = parameter_list->ambient_light_enable_int;
+
+	settings.data.lanewatch_camera = parameter_list->has_lanewatch;
+	settings.data.rearview_camera = parameter_list->has_rearview_camera;
+
+	for(int i=0;i<sizeof(settings.raw);i+=1)
+		EEPROM.write(i, settings.raw[i]);
 }
 
 //Load CANslator settings from EEPROM.
 void getCanslatorSettings(ParameterList* parameter_list) {
-	const uint8_t trim = EEPROM.read(TRIM_SETTING);
-	parameter_list->trim = (trim_t)trim;
+	canslator_eeprom_setting settings;
+	for(int i=0;i<sizeof(settings.raw);i+=1)
+		settings.raw[i] = EEPROM.read(i);
 
-	const uint8_t comfort_settings_1 = EEPROM.read(COMFORT_SETTINGS_1);
-	parameter_list->headlight_temp_setting = (headlight_temp_t)(comfort_settings_1&CANSLATOR_SETTINGS_HEADLIGHT_TEMP);
-	parameter_list->parking_lights = (comfort_settings_1&CANSLATOR_SETTINGS_PARKING_LIGHTS) != 0;
-	parameter_list->auto_wiper = (comfort_settings_1&CANSLATOR_SETTINGS_AUTO_WIPER) != 0;
-	parameter_list->display_celsius = (comfort_settings_1&CANSLATOR_SETTINGS_CELSIUS) != 0;
-	parameter_list->wiper_door_off = (comfort_settings_1&CANSLATOR_SETTINGS_WIPER_DOOR_OFF) != 0;
+	parameter_list->special_trim = settings.data.trim;
+	parameter_list->transmission = settings.data.transmission;
+
+	parameter_list->pushbutton = settings.data.pushbutton;
+	parameter_list->drl_setting = settings.data.drl_setting;
+
+	parameter_list->headlight_temp_setting = settings.data.headlight_temp;
+	parameter_list->parking_lights = settings.data.parking_lights;
+	parameter_list->auto_wiper = settings.data.auto_wiper;
+	parameter_list->display_celsius = settings.data.celsius;
+	parameter_list->wiper_door_off = settings.data.wiper_door_off;
+
+	parameter_list->has_ambient_lighting = settings.data.ambient_lighting;
+
+	parameter_list->ambient_light_brightness = settings.data.ambient_light_brightness;
+	parameter_list->ambient_light_enable_int = settings.data.ambient_light_enable_int;
+	parameter_list->ambient_light_enable_door = settings.data.ambient_light_enable_door;
 }

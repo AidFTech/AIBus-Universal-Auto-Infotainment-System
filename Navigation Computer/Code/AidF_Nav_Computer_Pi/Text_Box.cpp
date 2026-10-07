@@ -98,6 +98,8 @@ void TextBox::renderText() {
 		return;
 	
 	SDL_Surface* text_surface = TTF_RenderUTF8_Solid(AidF_Font, text.c_str(), getSDLColor(*color));
+	if(text_surface == nullptr || text_surface == NULL)
+		return;
 
 	this->texture = SDL_CreateTextureFromSurface(renderer, text_surface);
 	this->text_w = text_surface->w;
@@ -106,6 +108,8 @@ void TextBox::renderText() {
 	while(this->text_w > this->w) {
 		text.pop_back();
 		text_surface = TTF_RenderUTF8_Solid(AidF_Font, (text).c_str(), getSDLColor(*color));
+		if(text_surface == nullptr || text_surface == NULL)
+			return;
 		this->texture = SDL_CreateTextureFromSurface(renderer, text_surface);
 		this->text_w = text_surface->w;
 		this->text_h = text_surface->h;
@@ -187,6 +191,9 @@ void WrapTextBox::renderText() {
 	TTF_Font* AidF_Font = TTF_OpenFont("AidF Font.ttf", this->size);
 	SDL_Surface* text_surface = TTF_RenderUTF8_Solid(AidF_Font, text.c_str(), getSDLColor(*color));
 
+	if(text_surface == NULL || text_surface == nullptr)
+		return;
+
 	int text_w = text_surface->w;
 	int text_h = text_surface->h;
 	string newline = "";
@@ -199,6 +206,8 @@ void WrapTextBox::renderText() {
 			text.pop_back();
 
 			text_surface =  TTF_RenderUTF8_Solid(AidF_Font, (text).c_str(), getSDLColor(*color));
+			if(text_surface == NULL || text_surface == nullptr)
+				return;
 
 			text_w = text_surface->w;
 			text_h = text_surface->h;

@@ -80,6 +80,10 @@ impl MpvVideo {
 		mpv_cmd.arg("--profile=low-latency");
 		//mpv_cmd.arg("--no-correct-pts");
 		mpv_cmd.arg("--video-unscaled=yes");
+
+		mpv_cmd.arg("--framedrop=decoder+vo");
+		mpv_cmd.arg("--speed=1.01");
+
 		mpv_cmd.arg("-");
 
 		match mpv_cmd.stdin(Stdio::piped()).spawn() {
@@ -637,11 +641,11 @@ pub struct RdAudio {
 	//_handler: OutputStreamHandle,
 	//sink: Sink,
 	process: Child,
-	data: Vec<u8>,
 	sample: u32,
 	bits: u16,
 	channels: u16,
 	send_header: bool,
+	send_zero: bool,
 }
 
 impl RdAudio {
@@ -662,6 +666,8 @@ impl RdAudio {
 		let data = Vec::new();
 		return Ok(RdAudio{_stream: stream, _handler: handler, sink, data, sample: 48000, bits: 16, channels: 2});*/
 
+		start_pulse();
+		
 		let mut mpv_cmd = Command::new("mpv");
 		let process;
 		
@@ -669,9 +675,15 @@ impl RdAudio {
 		mpv_cmd.arg("--no-config");
 		mpv_cmd.arg("--profile=low-latency");
 		mpv_cmd.arg("--audio-samplerate=48000");
-		mpv_cmd.arg("--audio-format=s32");
+		mpv_cmd.arg("--audio-format=s16");
 		mpv_cmd.arg("--audio-channels=2");
 		mpv_cmd.arg("--ao=pulse");
+		mpv_cmd.arg("--pulse-allow-suspended=yes");
+		mpv_cmd.arg("--no-cache");
+		mpv_cmd.arg("--no-video");
+		mpv_cmd.arg("--untimed");
+		mpv_cmd.arg("--keep-open=always");
+		mpv_cmd.arg("--idle=yes");
 		match mpv_cmd.stdin(Stdio::piped()).spawn() {
 			Err(e) => return Err(format!("Could not start audio Mpv: {} ", e)),
 			Ok(match_process) => {
@@ -679,29 +691,40 @@ impl RdAudio {
 			}
 		}
 
-		let mut this = RdAudio { process: process.unwrap(), data: Vec::new(), sample: 48000, bits: 32, channels: 2, send_header: true };
-		this.send_audio(&[0; 8]);
+		let mut this = RdAudio { process: process.unwrap(), sample: 48000, bits: 32, channels: 2, send_header: true, send_zero: false };
+		this.send_audio(&[]);
 
 		return Ok(this);
 	}
 
 	///Send audio bytes.
 	pub fn send_audio(&mut self, data: &[u8]) {
-		for i in 0..data.len() {
-			self.data.push(data[i]);
-		}
-
 		let mut new_data = if self.send_header {
 			self.send_header = false;
-			get_wav_header(self.data.len(), self.sample, self.channels, self.bits)
+			get_wav_header(data.len(), self.sample, self.channels, self.bits)
 		} else {
 			Vec::new()
 		};
 
-		for i in 0..self.data.len() {
-			new_data.push(self.data[i]);
+		for d in data {
+			new_data.push(*d);
+		} 
+
+		if !self.send_zero {
+			let mut nonzero_found = false;
+			for d in data {
+				if *d != 0 {
+					nonzero_found = true;
+					break;
+				}
+			}
+
+			if nonzero_found {
+				self.send_zero = true;
+			} else {
+				//return;
+			}
 		}
-		self.data.clear(); 
 
 		/*let cursor = Cursor::new(new_data);
 		let source = match AudioDecoder::new_wav(cursor) {
@@ -713,8 +736,14 @@ impl RdAudio {
 		};*/
 		
 		//self.sink.append(source);
-		let mut child_stdin = self.process.stdin.as_ref().unwrap();
-		let _ = child_stdin.write(&new_data);
+		match self.process.stdin.as_ref() {
+			Some(mut child_stdin) => {
+				let _ = child_stdin.write(&new_data);
+			}
+			None => {
+
+			}
+		}
 	}
 	
 	///Set the audio sample rate, bits, and channel count. Restart the audio stream as needed.
@@ -731,6 +760,8 @@ impl RdAudio {
 			self.send_header = true;
 
 			let _ = self.process.kill();
+
+			start_pulse();
 
 			let process = match self.get_audio_process() {
 				Some(process) => process,
@@ -754,24 +785,21 @@ impl RdAudio {
 		let mut mpv_cmd = Command::new("mpv");
 		let process;
 
-		let mut audio_format = "".to_string();
-		if self.bits == 8 {
-			audio_format = "--audio-format=u8".to_string();
-		} else if self.bits == 16 {
-			audio_format = "--audio-format=s16".to_string();
-		} else if self.bits == 32 {
-			audio_format = "--audio-format=s32".to_string();
-		} else if self.bits == 64 {
-			audio_format = "--audio-format=s64".to_string();
-		}
+		let audio_format = "--audio-format=s16".to_string();
 
 		mpv_cmd.arg("-");
 		mpv_cmd.arg("--no-config");
 		mpv_cmd.arg("--profile=low-latency");
 		mpv_cmd.arg("--ao=pulse");
-		mpv_cmd.arg(format!("--audio-samplerate={}", self.sample));
+		mpv_cmd.arg("--pulse-allow-suspended=yes");
+		mpv_cmd.arg("--audio-samplerate=48000");
 		mpv_cmd.arg(audio_format);
-		mpv_cmd.arg(format!("--audio-channels={}", self.channels));
+		mpv_cmd.arg("--audio-channels=2");
+		mpv_cmd.arg("--no-cache");
+		mpv_cmd.arg("--no-video");
+		mpv_cmd.arg("--untimed");
+		mpv_cmd.arg("--keep-open=always");
+		mpv_cmd.arg("--idle=yes");
 		match mpv_cmd.stdin(Stdio::piped()).spawn() {
 			Err(e) => {
 				println!("Error: {}", e);
@@ -783,6 +811,35 @@ impl RdAudio {
 		}
 
 		return process;
+	}
+}
+
+///Check that Pulse is running and start it if not.
+fn start_pulse() {
+	let check_cmd = Command::new("ps").arg("-A").output();
+	match check_cmd {
+		Ok(output) => {
+			let output_str = match String::from_utf8(output.stdout) {
+				Ok(output) => output,
+				Err(_) => "".to_string(),
+			};
+			let output_split = output_str.split('\n');
+			let mut pulse_run = false;
+			for line in output_split {
+				if line.contains("pulse") {
+					pulse_run = true;
+					break;
+				}
+			}
+
+			if !pulse_run {
+				let _ = Command::new("pulseaudio").arg("--system").arg("--start").spawn();
+				let _ = Command::new("pactl").arg("set-sink-volume").arg("@DEFAULT_SINK@").arg("70%").spawn();
+			}
+		}
+		Err(e) => {
+			println!("Pulse Check Error: {}", e);
+		}
 	}
 }
 

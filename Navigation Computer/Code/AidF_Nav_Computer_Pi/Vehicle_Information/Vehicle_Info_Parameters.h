@@ -5,43 +5,134 @@
 #ifndef vehicle_info_parameters_h
 #define vehicle_info_parameters_h
 
-#define INFO_LIGHTS_A_AUTO 0x80
-#define INFO_LIGHTS_A_RIGHT_SIGNAL 0x40
-#define INFO_LIGHTS_A_LEFT_SIGNAL 0x20
-#define INFO_LIGHTS_A_FRONT_FOG 0x10
-#define INFO_LIGHTS_A_PARKING 0x8
-#define INFO_LIGHTS_A_HIGH_BEAM 0x4
-#define INFO_LIGHTS_A_LOW_BEAM 0x2
-#define INFO_LIGHTS_A_DRL 0x1
+//Exterior light status:
+union aibus_ext_light_status {
+	struct data {
+		bool drl: 1;
+		bool low_beam: 1;
+		bool high_beam: 1;
+		bool parking: 1;
+		bool front_fog: 1;
+		bool left_turn: 1;
+		bool right_turn: 1;
+		bool auto_light: 1;
 
-#define INFO_LIGHTS_B_REVERSE 0x80
-#define INFO_LIGHTS_B_REAR_FOG 0x40
-#define INFO_LIGHTS_B_TAIL 0x20
-#define INFO_LIGHTS_B_LICENSE 0x10
-#define INFO_LIGHTS_B_OFFROAD 0x8
-#define INFO_LIGHTS_B_BED 0x4
+		uint8_t spacer: 2;
+		bool bed_light: 1;
+		bool off_road: 1;
+		bool license_plate: 1;
+		bool taillight: 1;
+		bool rear_fog: 1;
+		bool reverse: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+	
+	aibus_ext_light_status() {
+		raw[0] = 0;
+		raw[1] = 0;
+	}
+};
 
-#define INFO_HYBRID_TYPE_SERIES 1
-#define INFO_HYBRID_TYPE_PARALLEL 2
-#define INFO_HYBRID_TYPE_SERIES_PARALLEL 3
-#define INFO_HYBRID_TYPE_POWER_SPLIT 4
+//Time:
+#define AIBUS_TIME_12H 0x80
+#define AIBUS_TIME_AUTO 0x40
 
-#define INFO_HYBRID_FEATURE_CHARGE_ASSIST 0x10
-#define INFO_HYBRID_FEATURE_PLUG 0x1
-#define INFO_HYBRID_FEATURE_REAR_MOTOR 0x2
-#define INFO_HYBRID_FEATURE_FRONT_MOTOR 0x40
-#define INFO_HYBRID_FEATURE_E_AC 0x10
-#define INFO_HYBRID_FEATURE_CONV_AC 0x20
-#define INFO_HYBRID_FEATURE_E_HEAT 0x40
+//Outside or coolant temperature:
+union aibus_temperature_config {
+	struct data {
+		uint8_t byte_count: 3;
+		bool negative: 1;
+		uint8_t decimal_count: 3;
+		bool fahrenheit: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
 
-#define INFO_HYBRID_MODE_BAT_TO_MOTOR 0x1
-#define INFO_HYBRID_MODE_MOTOR_TO_BAT 0x2
-#define INFO_HYBRID_MODE_REGEN_TO_BAT 0x4
-#define INFO_HYBRID_MODE_MOTOR_TO_WHEELS 0x8
-#define INFO_HYBRID_MODE_WHEELS_TO_MOTOR 0x10
-#define INFO_HYBRID_MODE_ENGINE_TO_WHEELS 0x20
-#define INFO_HYBRID_MODE_ENGINE_TO_MOTOR 0x40
-#define INFO_HYBRID_MODE_PLUG_TO_BAT 0x80
+//Speed or distance:
+union aibus_speed_distance_config {
+	struct data {
+		uint8_t byte_count: 4;
+		uint8_t decimal_count: 3;
+		bool miles: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+//Voltage:
+union aibus_voltage_config {
+	struct data {
+		uint8_t byte_count: 3;
+		bool negative: 1;
+		uint8_t decimal_count: 4;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+//Fuel economy:
+enum aibus_fuel_economy_units : uint8_t {
+	AIBUS_FUEL_ECONOMY_L_100KM,
+	AIBUS_FUEL_ECONOMY_KM_L,
+	AIBUS_FUEL_ECONOMY_MPG_US,
+	AIBUS_FUEL_ECONOMY_MPG_IMP,
+};
+
+union aibus_fuel_economy_config {
+	struct data {
+		uint8_t decimal_count: 5;
+		bool undefined: 1;
+		aibus_fuel_economy_units units: 2;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+//Trip time:
+union aibus_trip_time_config {
+	struct data {
+		uint8_t byte_count: 7;
+		bool minutes: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+enum hybrid_system_type_t : uint8_t {
+	INFO_HYBRID_TYPE_NONE,
+	INFO_HYBRID_TYPE_SERIES = 1,
+	INFO_HYBRID_TYPE_PARALLEL,
+	INFO_HYBRID_TYPE_SERIES_PARALLEL,
+	INFO_HYBRID_TYPE_POWER_SPLIT
+};
+
+union hybrid_params_t {
+	struct data {
+		hybrid_system_type_t system_type: 3;
+		bool spacer: 1;
+		bool charge_assist: 1;
+		uint8_t spacer2: 3;
+
+		bool hybrid_feature_plug: 1;
+		bool hybrid_feature_rear_motor: 1;
+		bool hybrid_feature_front_motor: 1;
+		bool spacer3: 1;
+		bool hybrid_feature_e_ac: 1;
+		bool hybrid_feature_conv_ac: 1;
+		bool hybrid_feature_e_heat: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+union hybrid_mode_t {
+	struct data {
+		bool bat_to_motor: 1;
+		bool motor_to_bat: 1;
+		bool regen_to_bat: 1;
+		bool motor_to_wheels: 1;
+		bool wheels_to_motor: 1;
+		bool engine_to_wheels: 1;
+		bool engine_to_motor: 1;
+		bool plug_to_bat: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
 
 #define PARAM_COUNT 4
 
@@ -100,7 +191,7 @@ struct InfoParameters {
 	uint8_t supported_a = 0xF, supported_b = 0xFF;
 		
 	//Lights:
-	uint8_t light_state_a = 0, light_state_b = 0; 
+	aibus_ext_light_status light_state;
 
 	//Battery voltage:
 	uint16_t battery_voltage = 0;
@@ -141,16 +232,23 @@ struct InfoParameters {
 	bool hybrid_system_present = false; //True if a hybrid system exists.
 	bool draw_charge_assist = true; //True if we should draw the charge/assist meter.
 	
-	uint8_t hybrid_system_type = 0; //The type of hybrid system.
-	bool charge_assist_meter = false; //True if a charge/assist meter is provided.
-	uint8_t hybrid_features = 0; //The hybrid features present.
-	uint8_t hybrid_status_main = 0; //The hybrid system status.
+	hybrid_params_t hybrid_params; //The hybrid system type and features present.
+	hybrid_mode_t hybrid_status_main; //The hybrid system status.
 
 	uint8_t hybrid_battery_state = 0; //The hybrid battery state of charge.
 	uint8_t charge_assist_pos = 0x7F; //The position of the charge/assist meter, centered at 0x7F.
 
 	//Displayed parameters:
 	info_param param_index[PARAM_COUNT] = {INFO_PARAM_NONE, INFO_PARAM_NONE, INFO_PARAM_NONE, INFO_PARAM_NONE};
+
+	InfoParameters() {
+		hybrid_params.raw[0] = 0;
+		hybrid_params.raw[1] = 0;
+		hybrid_status_main.raw[0] = 0;
+
+		light_state.raw[0] = 0;
+		light_state.raw[1] = 0;
+	}
 };
 
 void setLightState(AIData* light_msg, InfoParameters* info_parameters);

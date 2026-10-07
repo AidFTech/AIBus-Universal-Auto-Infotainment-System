@@ -26,6 +26,8 @@ private:
 
 	void addNestedRequestOption(const string option_name, const uint8_t device_id);
 	void sendSettingsMenuRequest(const uint8_t receiver);
+
+	bool home_held = false, menu_held = false, enter_held = false;
 };
 
 #endif

@@ -71,9 +71,14 @@ void AidFRadio::setup() {
 
 	br_tuner.setPower(true, SUB_FM1);
 
+	tuner.setLimits();
+	background_tuner.setLimits();
+
 	parameters.fm1_tune = tuner.getFrequency();
 	parameters.fm2_tune = tuner.getFrequency();
 	parameters.am_tune = parameters.am_start;
+
+	br_tuner.setFrequency(parameters.fm1_tune);
 
 	getEEPROMPresets(&parameters);
 	normalizePresets();
@@ -156,8 +161,10 @@ void AidFRadio::setup() {
 				index = s;
 		}
 
-		if(index >= 0)
+		if(index >= 0) {
 		 	source_handler.setSource(index);
+			parameters.radio_on = source_handler.source_list[index].source_id == ID_RADIO && source_handler.source_list[index].sub_id <= 2 && start_params.audio_on;
+		}
 
 		source_handler.setAudioOn(start_params.audio_on);
 		if(start_params.audio_on)
@@ -168,6 +175,17 @@ void AidFRadio::setup() {
 		parameters.fm2_tune = start_params.fm2_freq;
 
 		parameters.clock_freq = start_params.clock_freq;
+		if(parameters.clock_freq >= parameters.fm_lower_limit && parameters.clock_freq <= parameters.fm_upper_limit) {
+			parameters.clock_wait = true;
+			parameters.clock_wait_timer = 0;
+			parameters.use_clock_wait_timer = true;
+
+			br_tuner.setFrequency(parameters.clock_freq);
+		} else {
+			parameters.clock_freq = -1;
+			br_tuner.setFrequency(parameters.fm1_tune);
+		}
+		parameters.clock_freq_type = CLOCK_FREQ_INIT;
 
 		parameters.send_time = false;
 		if((start_params.clock_mode&CLOCK_MODE_BROADCAST_AUTO) != 0) {
@@ -183,6 +201,9 @@ void AidFRadio::setup() {
 
 		if((start_params.clock_mode&CLOCK_MODE_12H) != 0)
 			parameters.send_12h = true;
+
+		if((start_params.clock_mode&CLOCK_MODE_AUTO_FREQ) != 0)
+			parameters.auto_clock_frequency = true;
 
 		parameters.header_rds_setting = start_params.rds_setting;
 		
@@ -220,8 +241,10 @@ void AidFRadio::setup() {
 		rtc_on = true;
 	}
 
-	tuner.setLimits();
-	background_tuner.setLimits();
+	if(!parameters.radio_on && parameters.clock_freq >= 0) {
+		tuner.setFrequency(parameters.clock_freq);
+		br_tuner.setFrequency(parameters.clock_freq);
+	}
 
 	phone_active_vec.setStorage(phone_active_list);
 
@@ -469,6 +492,8 @@ void AidFRadio::loop() {
 						parameters.tune_changed = true;
 				}
 			}
+
+			const bool last_radio = parameters.radio_on;
 		
 			//Set audio switch.
 			if(current_source_id == 0 || (source_change_timer_enable && (source_handler.getCurrentSourceID() != last_active_source_id || source_handler.getCurrentSource() != last_active_source))) { //Audio off or waiting.
@@ -478,6 +503,7 @@ void AidFRadio::loop() {
 				digitalWrite(AUDIO_SW, LOW);
 				digitalWrite(DAC_MUTE, LOW);
 				adc_handler.powerOff();
+				parameters.radio_on = false;
 			} else if(current_source_id == ID_RADIO) {
 				analog_source = true;
 				pi_source = false;
@@ -488,12 +514,15 @@ void AidFRadio::loop() {
 				const uint8_t sub_id = source_handler.source_list[current_source_index].sub_id;
 				if(sub_id < 3) { //Tuner.
 					digitalWrite(AUDIO_SW, LOW);
+					parameters.radio_on = true;
 				} else { //Aux.
 					digitalWrite(AUDIO_SW, HIGH);
+					parameters.radio_on = false;
 				}
 			} else if(current_source_id == ID_PHONE || current_source_id == ID_ANDROID_AUTO) { //Pi. TODO: Use an AIBus flag.
 				analog_source = false;
 				pi_source = true;
+				parameters.radio_on = false;
 				if(volume_handler.getVolume() > 0)
 					digitalWrite(DAC_MUTE, HIGH);
 				digitalWrite(AUDIO_ON_SW, HIGH);
@@ -501,11 +530,15 @@ void AidFRadio::loop() {
 			} else { //External audio.
 				analog_source = false;
 				pi_source = false;
+				parameters.radio_on = false;
 				if(volume_handler.getVolume() > 0)
 					digitalWrite(DAC_MUTE, HIGH);
 				digitalWrite(AUDIO_ON_SW, nav_mute ? LOW : HIGH);
 				adc_handler.setExtOut();
 			}
+
+			if(parameters.clock_freq >= 0 && !parameters.radio_on && last_radio)
+				tuner.setFrequency(parameters.clock_freq);
 		} else {
 			parameters.audio_on = true;
 
@@ -573,6 +606,9 @@ void AidFRadio::loop() {
 	}
 
 	parameters.timer_active = info_timer_enabled || source_text_timer_enabled || imid_timer_enabled || MINUTE_TIMER - parameters.minute_timer <= 100 || SCREEN_PING_DELAY - screen_ping_timer <= 100;
+
+	if(background_tuner.getTimeSetMode())
+		last_time_set = 0;
 
 	if(parameters.handshake_timer_active && parameters.handshake_timer > 200) {
 		parameters.handshake_timer_active = false;
@@ -718,6 +754,7 @@ void AidFRadio::loop() {
 
 				if(!seeking && (parameter_timer >= PARAMETER_DELAY)) {
 					parameter_timer = 0;
+					const bool last_clock_success = parameters.clock_set_success;
 
 					if(!tuner.getQueued())
 						tuner.getParameters(&parameters, sub_id);
@@ -725,6 +762,12 @@ void AidFRadio::loop() {
 						for(int i=0;i<RDS_SEGMENT_COUNT;i+=1)
 							rds_program_split[i] = "";
 					}
+
+					if(parameters.clock_freq < 0 && parameters.auto_clock && parameters.auto_clock_frequency && parameters.has_rds && tuner.getRSSI() > FM_STEREO_THRESH) {
+						parameters.clock_freq = tuner.getFrequency();
+						parameters.clock_freq_type = CLOCK_FREQ_ACTIVE_STATION;
+					}
+
 
 					if(!tuner.getQueued() && *current_frequency != tuner.getFrequency()) {
 						*current_frequency = tuner.getFrequency();
@@ -738,6 +781,13 @@ void AidFRadio::loop() {
 
 					String current_rds = parameters.rds_program_name;
 					if(parameters.has_rds && current_rds.compareTo(last_rds) != 0) {
+						if(parameters.radio_on && (background_tuner.getTimeSetMode() || last_time_set < 15000 || parameters.clock_freq < 0)) { //Don't clear RDS if it was unintentionally clared.
+							if((last_rds.length() > 0 && current_rds.length() <= 0) || last_rds.indexOf(current_rds) == 0) {
+								parameters.rds_program_name = last_rds;
+								goto rds_end;
+							}
+						}
+
 						if(current_rds.substring(0,8).indexOf(last_rds.substring(0,8)) < 0) {
 							tuner.clearRds();
 							current_rds = "";
@@ -781,6 +831,20 @@ void AidFRadio::loop() {
 
 						text_handler.sendIMIDCallsignMessage(parameters.rds_station_name);
 						text_handler.sendMirrorMessage(parameters.rds_station_name, 3, false);
+					}
+					rds_end:
+
+					if(last_rds.compareTo(parameters.rds_program_name) != 0)
+						parameters.last_rds_change = 0;
+
+					if(!last_clock_success && parameters.clock_set_success) {
+						if(parameters.clock_freq_type != CLOCK_FREQ_MANUAL && parameters.auto_clock_frequency && (!parameters.clock_wait || parameters.use_clock_wait_timer))
+							parameters.clock_freq = *current_frequency;
+
+						if(parameters.use_clock_wait_timer) {
+							parameters.use_clock_wait_timer = false;
+							parameters.clock_wait = false;
+						}
 					}
 				}
 
@@ -918,11 +982,17 @@ void AidFRadio::loop() {
 																|| parameters.fader_adjust
 																|| parameters.nav_cut_adjust
 																|| parameters.aux_level_adjust
+																|| parameters.clock_freq_adjust
 																|| !parameters.monitor_on);
 
-	if(background_tune_timer >= 100) {
+	if(background_tune_timer >= ((parameters.clock_wait || getMinuteInRange(parameters.minute_timer)) ? 10 : 100)) {
 		background_tuner.loop();
 		background_tune_timer = 0;
+	}
+
+	if(parameters.use_clock_wait_timer && parameters.clock_wait_timer > 180000) {
+		parameters.use_clock_wait_timer = false;
+		parameters.clock_wait = false;
 	}
 
 	//Check the control timer.
@@ -1040,6 +1110,9 @@ void AidFRadio::handleAIBus(AIData* msg) {
 			parameters.auto_clock = false;
 
 		parameters.send_12h = (msg->data[1]&0x80) != 0;
+
+		if(parameters.min >= 0 && parameters.hour >= 0)
+			text_handler.sendTime();
 	} else if(msg->receiver == ID_RADIO && (msg->sender == ID_PHONE || msg->sender == ID_ANDROID_AUTO) && msg->l >= 1 && msg->data[0] == 0x21) { //Phone message.
 		if(msg->l >= 3 && msg->data[0] == 0x21 && msg->data[1] == 0x6) {
 			const bool phone_active = msg->data[2] != 0x0;
@@ -1191,6 +1264,9 @@ void AidFRadio::handleAIBus(AIData* msg) {
 	if(*power_on && !parameters.computer_connected && msg->sender == ID_NAV_COMPUTER && !getInitMessage(msg) && !getPoweroffMessage(msg)) {
 		parameters.computer_connected = true;
 		screenInit();
+
+		//if(parameters.min >= 0 && parameters.hour >= 0)
+		//	text_handler.sendTime();
 		
 		{
 			uint8_t data[] = {0x77, parameters.last_control, 0x10};
@@ -1631,7 +1707,7 @@ void AidFRadio::powerOff() {
 	start_params.fm2_freq = parameters.fm2_tune;
 	start_params.am_freq = parameters.am_tune;
 
-	start_params.clock_freq = parameters.clock_freq;
+	start_params.clock_freq = parameters.clock_freq >= 0 ? parameters.clock_freq : 0;
 	
 	start_params.clock_mode = 0;
 	if(parameters.auto_clock && parameters.send_time)
@@ -1644,6 +1720,9 @@ void AidFRadio::powerOff() {
 
 	if(parameters.send_12h)
 		start_params.clock_mode |= CLOCK_MODE_12H;
+
+	if(parameters.auto_clock_frequency)
+		start_params.clock_mode |= CLOCK_MODE_AUTO_FREQ;
 
 	const uint16_t index = source_handler.getCurrentSource();
 

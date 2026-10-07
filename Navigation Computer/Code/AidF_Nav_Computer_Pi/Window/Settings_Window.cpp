@@ -88,7 +88,7 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 
 			this->title_block->setText(menu_title);
 			return true;
-		} else if(ai_d->data[1] == 0x54) { //Slider.
+		} else if(ai_d->l >= 6 && ai_d->data[1] == 0x54) { //Slider.
 			const uint8_t index = ai_d->data[2];
 			const uint8_t max = ai_d->data[4], value = ai_d->data[3];
 			const bool sel = ai_d->data[5] != 0;
@@ -116,7 +116,7 @@ bool Settings_Window::handleAIBus(AIData* ai_d) {
 			}
 			return true;
 		} else if(ai_d->data[1] == 0x40) { //Clear the menu.
-			attribute_list->next_window = NEXT_WINDOW_SETTINGS_MAIN;
+			attribute_list->next_window = back_index;
 
 			return true;
 		}

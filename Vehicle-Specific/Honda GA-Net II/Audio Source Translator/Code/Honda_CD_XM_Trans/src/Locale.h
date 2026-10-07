@@ -47,7 +47,6 @@ enum translator_menu_index : menu_index_t {
 	MENU_INDEX_CDC_SETTINGS_TRACK_LIST,
 	MENU_INDEX_CDC_SETTINGS_CHANGE_DISC,
 	MENU_INDEX_CDC_SETTINGS_AUTOSTART,
-	MENU_INDEX_CDC_SETTINGS_AUTOINCREMENT,
 	MENU_INDEX_CDC_SETTINGS_TEXT_IMID,
 	MENU_INDEX_CDC_SETTINGS_SCROLL,
 	MENU_INDEX_CDC_SETTINGS_AUDIO,
@@ -91,6 +90,17 @@ enum translator_menu_index : menu_index_t {
 	MENU_INDEX_IMID_CHARACTER_10,
 	MENU_INDEX_IMID_CHARACTER_12,
 
+	//Secret IMID settings.
+	MENU_INDEX_SECRET,
+	MENU_INDEX_SECRET_VEHICLE,
+
+	//Vehicle setting.
+	MENU_INDEX_VEHICLE,
+	MENU_INDEX_VEHICLE_CIVIC_CRV,
+	MENU_INDEX_VEHICLE_ACCORD,
+	MENU_INDEX_VEHICLE_PILOT_RIDGELINE,
+	MENU_INDEX_VEHICLE_OLD,
+
 	MENU_INDEX_LEN
 };
 
@@ -103,6 +113,8 @@ static const translator_menu_index MENU_START_INDEX[] = {
 	MENU_INDEX_XM_DIRECT,
 	MENU_INDEX_IMID_SETTINGS,
 	MENU_INDEX_IMID_CHARACTER,
+	MENU_INDEX_SECRET,
+	MENU_INDEX_VEHICLE,
 };
 
 static const char* MENUS_ENG[] = {
@@ -111,7 +123,6 @@ static const char* MENUS_ENG[] = {
 	"Track List",
 	"Change Disc",
 	"Auto Start",
-	"Auto Timer Increment",
 	"CD Text on IMID",
 	"Scroll Info Text",
 	"Audio Settings",
@@ -154,6 +165,17 @@ static const char* MENUS_ENG[] = {
 	"8",
 	"10",
 	"12",
+
+	//Secret IMID Settings
+	"IMID Configuration",
+	"Vehicle",
+
+	//Vehicle Settings
+	"Vehicle",
+	"2012-2015 Civic/-2016 CR-V",
+	"2013-2017 Accord/Accord Crosstour with IMID",
+	"2016-2022 Pilot/2017- Ridgeline",
+	"Pre-IMID Honda"
 };
 
 MenuList getMenu(const translator_menu_index index, const uint8_t locale);

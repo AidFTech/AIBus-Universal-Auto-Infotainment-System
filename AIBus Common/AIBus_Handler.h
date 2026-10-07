@@ -40,7 +40,9 @@ enum aibus_read_result_t : int8_t {
 class AIBusHandler {
 public:
 	AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size = AI_CACHE_SIZE);
+	#ifndef AIBUS_HANDLER_COMPACT
 	AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size, const unsigned int tx_cache_size);
+	#endif
 	~AIBusHandler();
 
 	virtual int dataAvailable(const bool cache = true);
@@ -58,6 +60,12 @@ public:
 	virtual void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
 	virtual void flush();
 
+	#ifndef AIBUS_HANDLER_COMPACT
+	void setAckCache(const int limit, const bool auto_off = true);
+	void disableAckCache();
+	virtual void awaitCachcedAcknowledgment(const unsigned long wait = 100);
+	#endif
+
 	virtual void requestResend(const uint8_t r);
 	virtual void requestResend(const uint8_t s, const uint8_t r);
 	
@@ -65,28 +73,45 @@ public:
 	virtual bool cachePending(const uint8_t id);
 
 	void clearSerial();
+	#ifndef AIBUS_HANDLER_COMPACT
 	void setMultiCacheLimit(const int limit);
 	void setAllowStaggeredMulti(const bool allow);
+	#endif
 protected:
 	Stream* ai_serial;
 	int8_t rx_pin = -1;
 
+	#ifndef AIBUS_HANDLER_COMPACT
 	AIData* cached_tx;
 	Vector<AIData> tx_vec;
+	#endif
 
 	AIData* cached_byte;
 	Vector<AIData> cached_vec;
 
+	//Multi-message handling:
+	#ifndef AIBUS_HANDLER_COMPACT
 	AIData* multi_cache = nullptr;
 	int multi_cache_len = -1, multi_cache_pos = 0;
 	elapsedMillis last_multi_message;
 	int multi_cache_limit = 5;
 
 	bool allow_staggered_multi = true;
+
+	//Staggered acknowledgments:
+	AIData* ack_cache = nullptr;
+	Vector<AIData> ack_cache_vec;
+	int* ack_cache_count = nullptr;
+	Vector<int> ack_cache_count_vec;
+	int ack_cache_len = -1;
+
+	bool auto_ack_cache_off = false;
+	#endif
 	
 	uint8_t id;
 
-	virtual bool awaitAcknowledgement(AIData* ai_d);
+	virtual bool awaitAcknowledgement(AIData* ai_d, const int limit = MAX_REPEAT);
+	virtual bool writeAIBusToSerial(AIData* ai_d, const bool acknowledge, const bool allow_ack_cache = true);
 
 	virtual bool getID(const uint8_t id);
 };

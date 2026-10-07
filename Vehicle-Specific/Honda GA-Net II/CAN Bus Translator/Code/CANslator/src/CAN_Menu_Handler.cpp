@@ -88,6 +88,22 @@ void CANMenuHandler::displayMenu(const uint8_t selected) {
 	ai_handler->writeAIData(&display_menu_msg);
 }
 
+//Add a slider to an entry.
+void CANMenuHandler::addSlider(const uint8_t position, String text, const uint8_t slider_pos, const uint8_t slider_max, const bool selected) {
+	uint8_t slider_data[6 + text.length()];
+	slider_data[0] = 0x2B;
+	slider_data[1] = 0x54;
+	slider_data[2] = position&0xFF;
+	slider_data[3] = slider_pos;
+	slider_data[4] = slider_max;
+	slider_data[5] = selected;
+	for(int i=0;i<text.length();i+=1)
+		slider_data[i+6] = uint8_t(text[i]);
+
+	AIData slider_msg(sizeof(slider_data), ID_CANSLATOR, ID_NAV_COMPUTER, slider_data);
+	ai_handler->writeAIData(&slider_msg, parameter_list->computer_connected);
+}
+
 //Clear the menu. Return whether successful.
 bool CANMenuHandler::clearMenu() {
 	uint8_t clear_menu_data[] = {0x2B, 0x40};
@@ -134,19 +150,18 @@ void CANMenuHandler::createMainSettingsMenu() {
 
 	this->setActiveMenu(ACTIVE_MENU_SETTINGS_MAIN);
 
-	for(int i=0;i<setting_count;i+=1)
+	for(int i=0;i<setting_count;i+=1) {
+		if(main_settings.getGlobalIndex(i) == MENU_INDEX_SETTINGS_AMBIENT_LIGHTING && !parameter_list->has_ambient_lighting)
+			continue;
+
 		this->appendMenu(i, main_settings[i]);
+	}
 
 	this->displayMenu(1);
 }
 
 //Create the comfort/convenience settings menu.
 void CANMenuHandler::createComfortConvenienceMenu(const bool light_sensor_connected, const bool rain_sensor_connected) {
-	if(this->getActiveMenu() != ACTIVE_MENU_NONE) {
-		if(!this->clearMenu())
-			return;
-	}
-
 	bool selection_settings[] = {true, parameter_list->parking_lights, parameter_list->wiper_door_off, parameter_list->auto_wiper};
 	bool display_settings[] = {light_sensor_connected, light_sensor_connected, light_sensor_connected&rain_sensor_connected, light_sensor_connected&rain_sensor_connected};
 
@@ -185,13 +200,43 @@ void CANMenuHandler::createComfortConvenienceMenu(const bool light_sensor_connec
 		this->displayMenu(1);
 }
 
-//Create the headlight/temperature integration menu.
-void CANMenuHandler::createHeadlightTempereatureMenu() {
-	if(this->getActiveMenu() != ACTIVE_MENU_NONE) {
-		if(!this->clearMenu())
-			return;
+//Create the ambient lighting menu.
+void CANMenuHandler::createAmbientLightingMenu(const bool slider_only) {
+	const MenuList light_settings = getMenu(MENU_INDEX_SETTINGS_AMBIENT_LIGHTING, parameter_list->locale);
+	const active_menu_t last_menu = this->getActiveMenu();
+	const uint8_t setting_count = uint8_t(light_settings.size());
+
+	if(last_menu != ACTIVE_MENU_SETTINGS_AMBIENT_LIGHTING &&
+		!this->startMenu(setting_count, setting_count, false, light_settings.title))
+		return;
+
+	this->setActiveMenu(ACTIVE_MENU_SETTINGS_AMBIENT_LIGHTING);
+
+	for(int i=0;i<light_settings.size();i+=1) {
+		if(slider_only && light_settings.getGlobalIndex(i) != MENU_INDEX_SETTINGS_AMBIENT_LIGHTING_BRIGHTNESS)
+			continue;
+
+		String setting = light_settings[i];
+
+		if(light_settings.getGlobalIndex(i) == MENU_INDEX_SETTINGS_AMBIENT_LIGHTING_DOOR)
+			setting = parameter_list->ambient_light_enable_door ? "#RON " : "#ROF " + setting;
+		else if(light_settings.getGlobalIndex(i) == MENU_INDEX_SETTINGS_AMBIENT_LIGHTING_INTERIOR)
+			setting = parameter_list->ambient_light_enable_int ? "#RON " : "#ROF " + setting;
+
+		this->appendMenu(i, setting);
+
+		if(light_settings.getGlobalIndex(i) == MENU_INDEX_SETTINGS_AMBIENT_LIGHTING_BRIGHTNESS) {
+			const uint8_t pos = long(parameter_list->ambient_light_brightness)*100/255;
+			addSlider(i, String(pos) + "%", pos, 100, parameter_list->ambient_slide_active);
+		}
 	}
 
+	if(last_menu != ACTIVE_MENU_SETTINGS_AMBIENT_LIGHTING)
+		this->displayMenu(1);
+}
+
+//Create the headlight/temperature integration menu.
+void CANMenuHandler::createHeadlightTempereatureMenu() {
 	MenuList headlight_settings = getMenu(MENU_INDEX_SETTINGS_HEADLIGHT, parameter_list->locale);
 	const active_menu_t last_menu = this->getActiveMenu();
 
@@ -210,5 +255,25 @@ void CANMenuHandler::createHeadlightTempereatureMenu() {
 		this->appendMenu(i, String(selected[i] ? "#CON " : "#COF ") + headlight_settings[i]);
 
 	if(last_menu != ACTIVE_MENU_SETTINGS_HEADLIGHT_INTEGRATION)
+		this->displayMenu(1);
+}
+
+//Create the "secret" dev menu.
+void CANMenuHandler::createSecretMenu() {
+	const MenuList secret_menu = getMenu(MENU_INDEX_SECRET_MAIN, parameter_list->locale);
+	const active_menu_t last_menu = this->getActiveMenu();
+
+	const uint8_t setting_count = uint8_t(secret_menu.size());
+
+	if(last_menu != ACTIVE_MENU_SECRET_MAIN &&
+		!this->startMenu(setting_count, setting_count, false, secret_menu.title))
+		return;
+
+	this->setActiveMenu(ACTIVE_MENU_SECRET_MAIN);
+
+	for(int i=0;i<secret_menu.size();i+=1)
+		appendMenu(i, secret_menu[i]);
+
+	if(last_menu != ACTIVE_MENU_SECRET_MAIN)
 		this->displayMenu(1);
 }

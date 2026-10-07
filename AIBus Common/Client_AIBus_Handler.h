@@ -66,6 +66,9 @@ public:
 
 	void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
 
+	void setAckCache(const bool ack_cache, const bool auto_off = true);
+	void awaitCachedAcknowledgment(const unsigned long wait);
+
 	void requestResend(const uint8_t r);
 	void requestResend(const uint8_t s, const uint8_t r);
 
@@ -80,10 +83,16 @@ private:
 
 	unsigned long* timer = nullptr;
 
-	bool check_ok = true, cache_ok = true;
+	bool check_ok: 1, cache_ok: 1;
+
+	bool use_ack_cache: 1, auto_ack_cache_off: 1;
+	vector<AIData> ack_cache;
+	vector<int> ack_cache_count;
 
 	int network_socket = -1;
 	uint8_t my_id = 0;
+
+	bool writeAIDataToSocket(AIData* ai_d, const bool ack, const bool ack_cache_allowed = true);
 };
 
 struct ClientHandlerParameters {

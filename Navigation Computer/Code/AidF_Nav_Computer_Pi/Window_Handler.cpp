@@ -189,6 +189,12 @@ void Window_Handler::checkNextWindow(NavWindow* misc_window, NavWindow* audio_wi
 	} else if(next_window == NEXT_WINDOW_SETTINGS_EXT) {
 		misc_window = new Settings_Ext_Window(&attribute_list);
 		this->setActiveWindow(misc_window, delete_last);
+	} else if(next_window == NEXT_WINDOW_SETTINGS_SECRET) {
+		misc_window = new Settings_Secret_Window(&attribute_list);
+		this->setActiveWindow(misc_window, delete_last);
+	} else if(next_window == NEXT_WINDOW_SETTINGS_SECRET_EXT) {
+		misc_window = new Settings_Secret_Ext_Window(&attribute_list);
+		this->setActiveWindow(misc_window, delete_last);
 	} else if(next_window == NEXT_WINDOW_VEHICLE_INFO) {
 		misc_window = new VehicleInfoWindow(&attribute_list, &vehicle_info_paramters);
 		this->setActiveWindow(misc_window, delete_last);

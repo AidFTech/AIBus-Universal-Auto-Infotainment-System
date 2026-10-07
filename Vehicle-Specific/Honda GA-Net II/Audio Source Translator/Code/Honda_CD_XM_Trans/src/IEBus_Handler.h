@@ -8,6 +8,11 @@
 #ifndef iebus_handler_h
 #define iebus_handler_h
 
+#if (defined(DXCORE) || defined(MEGACOREX)) && !defined(HW_IEBUS)
+#define HW_IEBUS
+#endif
+
+#ifndef HW_IEBUS
 #ifndef __AVR__
 #define TCNT2 _SFR_MEM8(0xB2)
 #define TCCR2B _SFR_MEM8(0xB1)
@@ -25,6 +30,9 @@
 #define TIMER_SCALER TCCR2B
 #else
 #error Scale Not Defined
+#endif
+#else
+#include "AIBus.h"
 #endif
 
 //Thanks to Greg Nutt for these numbers, adjusted for the 16MHz Arduino Uno.
@@ -53,7 +61,11 @@
 
 class IEBusHandler {
 public:
+	#ifdef HW_IEBUS
+	IEBusHandler(Stream* ie_serial, const int8_t active_pin);
+	#else
 	IEBusHandler(const int8_t rx_pin, const int8_t tx_pin);
+	#endif
 
 	virtual void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum);
 	virtual void sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait);
@@ -66,10 +78,18 @@ public:
 	void clearRX();
 	
 	inline bool getInputOn() {
+		#ifdef HW_IEBUS
+		return ie_serial->available() > 0;
+		#else
 		return((*rx_portregister&rx_bitmask) != 0);
+		#endif
 	}
 
 protected:
+	#ifdef HW_IEBUS
+	Stream* ie_serial;
+	int8_t active_pin = -1;
+	#else
 	inline void sendBit(const bool data);
 	inline void sendAckBit();
 	inline void sendStartBit();
@@ -85,6 +105,7 @@ protected:
 	
 	uint8_t tx_bitmask, rx_bitmask;
 	volatile uint8_t* tx_portregister, *rx_portregister;
+	#endif
 
 	IE_Message rx_cache_array[10];
 	Vector<IE_Message> rx_cache;

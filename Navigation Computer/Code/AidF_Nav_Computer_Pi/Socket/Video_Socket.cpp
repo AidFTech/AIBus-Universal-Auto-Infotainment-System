@@ -29,6 +29,8 @@ ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, strin
 	mpv_set_option_string(mpv_handler, "keep-open", "yes");
 	mpv_set_option_string(mpv_handler, "idle", "yes");
 
+	mpv_set_option_string(mpv_handler, "framedrop", "decoder+vo");
+
 	mpv_set_option_string(mpv_handler, "input-ipc-server", ipc_path.c_str());
 
 	mpv_initialize(mpv_handler);

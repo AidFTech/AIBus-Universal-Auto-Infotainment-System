@@ -39,7 +39,7 @@ void SRAMHandler::setStartParams(StartParams* start_params) {
 	writeUint16(FM1_FREQ, start_params->fm1_freq);
 	writeUint16(FM2_FREQ, start_params->fm2_freq);
 	writeUint16(AM_FREQ, start_params->am_freq);
-	writeInt16(CLOCK_FREQ, start_params->clock_freq);
+	writeUint16(CLOCK_FREQ, start_params->clock_freq);
 
 	sram.writeByte(CLOCK_MODE, start_params->clock_mode);
 
@@ -68,7 +68,7 @@ void SRAMHandler::getStartParams(StartParams* start_params) {
 	start_params->fm1_freq = readUint16(FM1_FREQ);
 	start_params->fm2_freq = readUint16(FM2_FREQ);
 	start_params->am_freq = readUint16(AM_FREQ);
-	start_params->clock_freq = readInt16(CLOCK_FREQ);
+	start_params->clock_freq = readUint16(CLOCK_FREQ);
 
 	start_params->clock_mode = sram.readByte(CLOCK_MODE);
 
@@ -274,7 +274,7 @@ uint16_t SRAMHandler::readUint16(const uint32_t addr) {
 
 //Read a 2B number.
 int16_t SRAMHandler::readInt16(const uint32_t addr) {
-	int16_t num = 0;
+	uint32_t num = 0;
 
 	uint8_t bytes[sizeof(int16_t)];
 
@@ -285,7 +285,7 @@ int16_t SRAMHandler::readInt16(const uint32_t addr) {
 		num |= bytes[i];
 	}
 
-	return num;
+	return int16_t(num&0xFF);
 }
 
 //Write a 2B number.

@@ -1,5 +1,4 @@
 #include "AidF_Nav_Computer_Pi.h"
-#include <SDL2/SDL_render.h>
 //Must be compiled with options -lSDL2 -lSDL2_ttf -lrt
 
 AidF_Nav_Computer::AidF_Nav_Computer(SDL_Window* window, string port, const uint16_t lw, const uint16_t lh) {
@@ -196,6 +195,8 @@ void AidF_Nav_Computer::loop() {
 		}
 	}
 
+	aibus_handler->awaitCachedAcknowledgment(15);
+
 	const bool last_nav_prompt = attribute_list->nav_prompt_active;
 	
 	this->window_handler->checkNextWindow(misc_window, audio_window, phone_window, main_window);
@@ -257,6 +258,9 @@ void AidF_Nav_Computer::loop() {
 		amirror_video_socket_handler->render();
 
 		SDL_UnlockTexture(amirror_texture);
+
+		if(aibus_handler->getAvailableBytes() > 0)
+			aibus_handler->cachePending();
 	} while(amirror_video_socket_handler->getRefresh() && elapsed_millis.time - video_start < 15);
 
 	video_start = elapsed_millis.time;
@@ -269,6 +273,8 @@ void AidF_Nav_Computer::loop() {
 			camera_video_socket_handler->render();
 
 			SDL_UnlockTexture(camera_texture);
+			if(aibus_handler->getAvailableBytes() > 0)
+				aibus_handler->cachePending();
 		} while(camera_video_socket_handler->getRefresh() && elapsed_millis.time - video_start < 15);
 	}
 
@@ -353,7 +359,7 @@ void AidF_Nav_Computer::loop() {
 				}
 
 				//Send clock settings.
-				if(!attribute_list->timekeeper_detected && ai_msg.sender == attribute_list->timekeeper && this->key_position != 0 && !getInitMessage(&ai_msg)) {
+				if(!attribute_list->timekeeper_detected && ai_msg.sender == attribute_list->timekeeper && !getInitMessage(&ai_msg)) {
 					attribute_list->timekeeper_detected = true;
 
 					uint8_t clock_data[] = {0x1D, 0x0};
@@ -418,7 +424,10 @@ void AidF_Nav_Computer::loop() {
 
 								if(attribute_list->mirror_connected && ai_msg.sender != ID_ANDROID_AUTO) {
 									AIData header_fwd(ai_msg.l, ID_NAV_COMPUTER, ID_ANDROID_AUTO, ai_msg.data);
-									aibus_handler->writeAIData(&header_fwd);
+									if(attribute_list->phone_active || typeid(*active_window) == typeid(VehicleInfoWindow))
+										aibus_handler->writeToCache(&header_fwd);
+									else
+										aibus_handler->writeAIData(&header_fwd);
 								}
 							}
 							answered = true;
@@ -599,24 +608,43 @@ void AidF_Nav_Computer::loop() {
 		#endif
 	}
 
-	if(elapsed_millis.time - all_ping_timer > 30000) {
+	if(elapsed_millis.time - all_ping_timer > (ping_pointer <= 0 ? 30000 : 50)) {
+		if(aibus_handler->getCacheEnabled())
+			goto after_ping;
+
 		all_ping_timer = elapsed_millis.time;
-		vector<uint8_t> ping_devices;
+		
+		if(ping_pointer <= 0) {
+			ping_device_list.clear();
+			for(auto dev: attribute_list->ping_device_list)
+				ping_device_list.push_back(dev);
 
-		for(auto dev: attribute_list->ping_device_list)
-			ping_devices.push_back(dev);
-
-		attribute_list->ping_device_list.clear();
-		uint8_t ping_data[] = {0x1};
-
-		for(auto dev: ping_devices) {
-			AIData ping_msg(sizeof(ping_data), ID_NAV_COMPUTER, dev, ping_data);
-			aibus_handler->writeAIData(&ping_msg, false);
+			ping_device_list.push_back(0xFF);
+			ping_pointer = 0;
 		}
 
-		AIData all_ping_msg(sizeof(ping_data), ID_NAV_COMPUTER, 0xFF, ping_data);
-		aibus_handler->writeAIData(&all_ping_msg, false);
+		const uint8_t dev = ping_device_list[ping_pointer];
+		uint8_t ping_data[] = {0x1};
+
+		AIData ping_msg(sizeof(ping_data), ID_NAV_COMPUTER, dev, ping_data);
+		if(!aibus_handler->writeAIData(&ping_msg, dev != 0xFF ? 10 : 0)) {
+			vector<uint8_t>* saved_device_list = &attribute_list->ping_device_list;
+			for(int i=0;i<saved_device_list->size();i+=1) {
+				if(saved_device_list->at(i) == dev) {
+					saved_device_list->erase(saved_device_list->begin() + i);
+					break;
+				}
+			}
+		}
+
+		ping_pointer += 1;
+
+		if(ping_pointer >= ping_device_list.size()) {
+			ping_device_list.clear();
+			ping_pointer = 0;
+		}
 	}
+	after_ping: {}
 }
 
 //Handle a broadcast AIBus message.
@@ -715,8 +743,11 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 			NavWindow* active_window = this->window_handler->getActiveWindow();
 
 			if(ai_d->data[2] == 0x3 && ai_d->l >= 5) { //Outside temp.
-				const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
-				const bool fahrenheit = (ai_d->data[3]&0x80) != 0, neg = (ai_d->data[3]&0x8) != 0;
+				aibus_temperature_config temp_config;
+				temp_config.raw[0] = ai_d->data[3];
+
+				const uint8_t decimal_count = temp_config.data.decimal_count;
+				const bool fahrenheit = temp_config.data.fahrenheit, neg = temp_config.data.negative;
 
 				unsigned int read_temp = 0;
 				for(int i=4;i<ai_d->l;i+=1) {
@@ -748,8 +779,11 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 			} else if (ai_d->data[2] == 0x4 && ai_d->l >= 5) { //Speed.
 				const uint16_t last_speed = attribute_list->vehicle_speed;
 
-				const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
-				const bool mph = (ai_d->data[3]&0x80) != 0;
+				aibus_speed_distance_config speed_config;
+				speed_config.raw[0] = ai_d->data[3];
+
+				const uint8_t decimal_count = speed_config.data.decimal_count;
+				const bool mph = speed_config.data.miles;
 
 				unsigned int read_speed = 0;
 				for(int i=4;i<ai_d->l;i+=1) {
@@ -776,8 +810,11 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 
 				return true;
 			} else if (ai_d->data[2] == 0x5 && ai_d->l >= 5) { //Coolant temp.
-				const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
-				const bool fahrenheit = (ai_d->data[3]&0x80) != 0, neg = (ai_d->data[3]&0x8) != 0;
+				aibus_temperature_config temp_config;
+				temp_config.raw[0] = ai_d->data[3];
+
+				const uint8_t decimal_count = temp_config.data.decimal_count;
+				const bool fahrenheit = temp_config.data.fahrenheit, neg = temp_config.data.negative;
 
 				unsigned int read_temp = 0;
 				for(int i=4;i<ai_d->l;i+=1) {
@@ -807,7 +844,10 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 				
 				return true;
 			} else if(ai_d->data[2] == 0x6 && ai_d->l >= 5) { //Battery voltage.
-				const uint8_t decimal_count = (ai_d->data[3]&0xF0) >> 4;
+				aibus_voltage_config voltage_config;
+				voltage_config.raw[0] = ai_d->data[3];
+
+				const uint8_t decimal_count = voltage_config.data.decimal_count;
 				info_parameters->battery_voltage_precision = decimal_count <= 2 ? decimal_count : 2;
 
 				unsigned long read_vbat = 0;
@@ -832,8 +872,11 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 
 				return true;
 			} else if(ai_d->data[2] == 0x7 && ai_d->l >= 5) { //Range.
-				const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
-				const bool miles = (ai_d->data[3]&0x80) != 0;
+				aibus_speed_distance_config speed_distance_parameters;
+				speed_distance_parameters.raw[0] = ai_d->data[3];
+
+				const uint8_t decimal_count = speed_distance_parameters.data.decimal_count;
+				const bool miles = speed_distance_parameters.data.miles;
 
 				unsigned long read_range = 0;
 				for(int i=4;i<ai_d->l;i+=1) {
@@ -852,12 +895,16 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 
 				return true;
 			} else if((ai_d->data[2] == 0x8 || ai_d->data[2] == 0x9) && ai_d->l >= 5) { //Instantenous or average economy.
-				const uint8_t decimal_count = (ai_d->data[3]&0x1F);
-				const uint8_t unit = (ai_d->data[3]&0xC0) >> 6;
+				aibus_fuel_economy_config fuel_economy_parameters;
+				fuel_economy_parameters.raw[0] = ai_d->data[3];
+				
+				const uint8_t decimal_count = fuel_economy_parameters.data.decimal_count;
+				const uint8_t unit = fuel_economy_parameters.data.units;
+				const bool undefined = fuel_economy_parameters.data.undefined;
 
 				float norm_economy;
 
-				if((ai_d->data[3]&0x20) == 0) {
+				if(!undefined) {
 					unsigned long read_economy = 0;
 					for(int i=4;i<ai_d->l;i+=1) {
 						read_economy <<= 8;
@@ -883,7 +930,10 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 
 				return true;
 			} else if(ai_d->data[2] == 0xA && ai_d->l >= 5) { //Trip timer.
-				info_parameters->trip_time_minutes = (ai_d->data[3]&0x80) != 0;
+				aibus_trip_time_config trip_time_parameters;
+				trip_time_parameters.raw[0] = ai_d->data[3];
+
+				info_parameters->trip_time_minutes = trip_time_parameters.data.minutes;
 				unsigned long read_time = 0;
 				for(int i=4;i<ai_d->l;i+=1) {
 					read_time <<= 8;
@@ -895,8 +945,11 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 				if(typeid(*active_window) == typeid(VehicleInfoWindow))
 					this->window_handler->refresh();
 			} else if(ai_d->data[2] == 0xB && ai_d->l >= 5) { //Trip distance.
-				const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
-				info_parameters->distance_miles = (ai_d->data[3]&0x80) != 0;
+				aibus_speed_distance_config speed_distance_parameters;
+				speed_distance_parameters.raw[0] = ai_d->data[3];
+
+				const uint8_t decimal_count = speed_distance_parameters.data.decimal_count;
+				info_parameters->distance_miles = speed_distance_parameters.data.miles;
 
 				unsigned long read_dist = 0;
 				for(int i=4;i<ai_d->l;i+=1) {
@@ -916,8 +969,11 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 				if(typeid(*active_window) == typeid(VehicleInfoWindow))
 					this->window_handler->refresh();
 			} else if(ai_d->data[2] == 0xC && ai_d->l >= 5) { //Cruise speed.
-				const uint8_t decimal_count = (ai_d->data[3]&0x70) >> 4;
-				info_parameters->cruise_mph = (ai_d->data[3]&0x80) != 0;
+				aibus_speed_distance_config speed_distance_parameters;
+				speed_distance_parameters.raw[0] = ai_d->data[3];
+
+				const uint8_t decimal_count = speed_distance_parameters.data.decimal_count;
+				info_parameters->cruise_mph = speed_distance_parameters.data.miles;
 
 				unsigned long read_speed = 0;
 				for(int i=4;i<ai_d->l;i+=1) {
@@ -969,13 +1025,14 @@ bool AidF_Nav_Computer::handleBroadcastMessage(AIData* ai_d) {
 		InfoParameters* info_parameters = window_handler->getVehicleInfo();
 		
 		if(ai_d->l >= 4 && ai_d->data[2] == 0x1) {
-			info_parameters->hybrid_system_present = (ai_d->data[3]&0x7) != 0;
-			info_parameters->hybrid_system_type = ai_d->data[3]&0xF;
-			info_parameters->charge_assist_meter = (ai_d->data[3]&0x10) != 0;
+			info_parameters->hybrid_params.raw[0] = ai_d->data[3];
+			info_parameters->hybrid_system_present = info_parameters->hybrid_params.data.system_type != INFO_HYBRID_TYPE_NONE;
 			if(ai_d->l >= 5)
-				info_parameters->hybrid_features = ai_d->data[4];
+				info_parameters->hybrid_params.raw[1] = ai_d->data[4];
+			else
+				info_parameters->hybrid_params.raw[1] = 0;
 		} else if(ai_d->l >= 6 && ai_d->data[2] == 0x2) {
-			info_parameters->hybrid_status_main = ai_d->data[3];
+			info_parameters->hybrid_status_main.raw[0] = ai_d->data[3];
 			info_parameters->hybrid_battery_state = ai_d->data[4];
 			info_parameters->charge_assist_pos = ai_d->data[5];
 		}

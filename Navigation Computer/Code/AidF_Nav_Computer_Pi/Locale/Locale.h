@@ -128,6 +128,9 @@ enum nav_menu_index : menu_index_t {
 	MENU_INDEX_SETTINGS_MAIN_VEHICLE,
 	MENU_INDEX_SETTINGS_MAIN_AUDIO,
 
+	//Secret settings menu.
+	MENU_INDEX_SETTINGS_SECRET,
+
 	//Display settings menu.
 	MENU_INDEX_SETTINGS_DISPLAY,
 	MENU_INDEX_SETTINGS_DISPLAY_COLORS,
@@ -182,6 +185,7 @@ static const nav_menu_index MENU_START_INDEX[] = {
 	MENU_INDEX_INFORMATION_MAIN,
 	MENU_INDEX_INFORMATION_PARAM,
 	MENU_INDEX_SETTINGS_MAIN,
+	MENU_INDEX_SETTINGS_SECRET,
 	MENU_INDEX_SETTINGS_DISPLAY,
 	MENU_INDEX_SETTINGS_COLORS,
 	MENU_INDEX_SETTINGS_DAY_NIGHT,
@@ -237,6 +241,9 @@ static const char* MENUS_ENG[] = {
 	"Unit/Format Settings",
 	"Vehicle Settings",
 	"Audio Settings",
+
+	//Secret settings menu.
+	"Factory/Dev Settings",
 
 	//Display settings menu.
 	"Display Settings",

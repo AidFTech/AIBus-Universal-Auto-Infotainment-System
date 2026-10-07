@@ -292,6 +292,7 @@ CompileFlags:
     - "-I/home/aidan/Arduino/libraries/arduino-mcp2515-master"
     - "-I/home/aidan/Arduino/libraries/Adafruit_RA8875"
     - "-I/home/aidan/Arduino/libraries/SRAM_23LC"
+    - "-I/home/aidan/Arduino/libraries/LiquidCrystal_I2C"
     - "-I/home/aidan/Arduino/libraries/elapsedMillis"
     - "-I/home/aidan/Arduino/libraries/Vector"
     - "-I/home/aidan/Arduino/libraries/MCP3201"

@@ -7,11 +7,12 @@ use ini::Ini;
 
 use crate::aap::aa_handler::AapHandler;
 use crate::aibus_handler::AIBusHandler;
+use crate::ipc::ClientAIBusHandler;
 use crate::locale::{Locale, MenuIndex, MenuList};
 use crate::mirror::messages::*;
 use crate::mirror::mpv::{MpvVideo, RdAudio};
 use crate::aibus::*;
-use crate::context::{Context, MAC_ADDR_LEN};
+use crate::context::*;
 use crate::mirror::handler::*;
 
 use crate::text_split::split_text;
@@ -26,6 +27,7 @@ enum AMirrorMenu {
 	MenuNone,
 	MenuSettings,
 	MenuAudioSettings,
+	MenuFlash,
 	MenuDisplay,
 }
 
@@ -44,6 +46,7 @@ const SETTING_SCROLL_PARAM: &str = "ScrollParam";
 const SETTING_SPLIT: &str = "SplitParam";
 const SETTING_AUTOMIRROR: &str = "AutoMirrorStart";
 const SETTING_FLASHSONG: &str = "FlashSongTitle";
+const SETTING_FLASHSONG_MIRROR: &str = "FlashSongTitleMirror";
 const SETTING_AUTOMUSIC: &str = "AutoMusicStart";
 
 pub struct AMirror<'a> {
@@ -51,8 +54,9 @@ pub struct AMirror<'a> {
 	mpv_video: &'a Arc<Mutex<MpvVideo>>,
 
 	dongle_handler: MirrorHandler<'a>,
-	aa_handler: AapHandler<'a>,
+	aa_handler: Arc<Mutex<AapHandler<'a>>>,
 
+	client_aibus_handler: Arc<Mutex<ClientAIBusHandler>>,
 	aibus_handler: Arc<Mutex<AIBusHandler>>,
 
 	display_title: bool,
@@ -70,6 +74,7 @@ pub struct AMirror<'a> {
 
 	auto_music_start: bool,
 	flash_song_title: bool,
+	flash_song_title_mirror: bool,
 	auto_mirror_start: bool,
 
 	local_radio_connected: bool,
@@ -80,10 +85,12 @@ pub struct AMirror<'a> {
 	overlay_device: u8,
 
 	menu_open: AMirrorMenu,
+	next_menu: AMirrorMenu,
 
 	w: u16,
 
 	source_request_timer: Instant,
+	screen_request_timer: Instant,
 	radio_ping_timer: Instant,
 	scroll_timer: Instant,
 
@@ -109,9 +116,9 @@ pub struct AMirror<'a> {
 }
 
 impl <'a> AMirror<'a> {
-	pub fn new(context: &'a Arc<Mutex<Context>>, aibus_handler: Arc<Mutex<AIBusHandler>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, rd_audio: &'a Arc<Mutex<RdAudio>>, nav_audio: &'a Arc<Mutex<RdAudio>>, w: u16, h: u16) -> Self {
+	pub fn new(context: &'a Arc<Mutex<Context>>, aibus_handler: Arc<Mutex<AIBusHandler>>, client_aibus_handler: Arc<Mutex<ClientAIBusHandler>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, rd_audio: &'a Arc<Mutex<RdAudio>>, nav_audio: &'a Arc<Mutex<RdAudio>>, w: u16, h: u16) -> Self {
 		let mutex_mirror_handler = MirrorHandler::new(context, mpv_video, rd_audio, nav_audio, w, h);
-		let mutex_aa_handler = AapHandler::new(context, mpv_video, rd_audio, nav_audio, w, h);
+		let mutex_aa_handler = Arc::new(Mutex::new(AapHandler::new(context, mpv_video, rd_audio, nav_audio, w, h)));
 
 		let mut display_title = false;
 		let mut display_artist = false;
@@ -121,6 +128,7 @@ impl <'a> AMirror<'a> {
 
 		let mut auto_music_start = false;
 		let mut flash_song_title = true;
+		let mut flash_song_title_mirror = true;
 		let mut auto_mirror_start = true;
 		let mut imid_split = true;
 		let mut imid_scroll = -1;
@@ -165,6 +173,10 @@ impl <'a> AMirror<'a> {
 										if value.to_uppercase() == "FALSE" || value == "0" {
 											flash_song_title = false;
 										}
+									} else if key == SETTING_FLASHSONG_MIRROR {
+										if value.to_uppercase() == "FALSE" || value == "0" {
+											flash_song_title_mirror = false;
+										}
 									} else if key == SETTING_SPLIT {
 										if value.to_uppercase() == "FALSE" || value == "0" {
 											imid_split = false;
@@ -193,14 +205,15 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
-		return Self{
+		let this = Self{
 			context,
 			mpv_video,
-
+			
 			dongle_handler: mutex_mirror_handler,
 			aa_handler: mutex_aa_handler,
 
 			aibus_handler,
+			client_aibus_handler,
 
 			display_title,
 			display_artist,
@@ -210,6 +223,7 @@ impl <'a> AMirror<'a> {
 
 			auto_music_start,
 			flash_song_title,
+			flash_song_title_mirror,
 			auto_mirror_start,
 
 			imid_scroll,
@@ -228,10 +242,12 @@ impl <'a> AMirror<'a> {
 			local_imid_rows: 0,
 
 			menu_open: AMirrorMenu::MenuNone,
+			next_menu: AMirrorMenu::MenuNone,
 
 			w,
 
 			source_request_timer: Instant::now(),
+			screen_request_timer: Instant::now(),
 			radio_ping_timer: Instant::now(),
 			scroll_timer: Instant::now(),
 			last_flash: Instant::now(),
@@ -253,24 +269,38 @@ impl <'a> AMirror<'a> {
 			powered_on: false,
 			open_audio_menu: false,
 		};
+
+		return this;
 	}
 
 	pub fn process(&mut self) {
 		if !self.powered_on {
 			let mut ai_rx_list = Vec::new();
 
-			match self.aibus_handler.try_lock() {
-				Ok(mut aibus_handler) => {
-					let ai_rx = aibus_handler.get_ai_rx();
-					for ai_data in &mut *ai_rx {
-						ai_rx_list.push(ai_data.clone());
+			{
+				let mut aibus_handler = match self.aibus_handler.try_lock() {
+					Ok(aibus_handler) => aibus_handler,
+					Err(_) => {
+						let aibus_handler;
+						loop {
+							aibus_handler = match self.aibus_handler.try_lock() {
+								Ok(aibus_handler) => aibus_handler,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						aibus_handler
 					}
+				};
 
-					ai_rx.clear();
+				let ai_rx = aibus_handler.get_ai_rx();
+				for ai_data in &mut *ai_rx {
+					ai_rx_list.push(ai_data.clone());
 				}
-				Err(_) => {
-					
-				}
+
+				ai_rx.clear();
 			}
 
 			for ai_data in ai_rx_list {
@@ -278,15 +308,32 @@ impl <'a> AMirror<'a> {
 			}
 			
 			//thread::sleep(Duration::from_millis(50));
+			if Instant::now() - self.screen_request_timer > Duration::from_millis(3000) && !self.screen_acknowledged {
+				self.screen_request_timer = Instant::now();
+				self.write_aibus_message(AIBusMessage {
+					sender: AIBUS_DEVICE_AMIRROR,
+					receiver: AIBUS_DEVICE_NAV_SCREEN,
+					data: [0x31, 0x30].to_vec(),
+				});
+			}
 
 			return;
 		}
-
+		
 		let mut context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Process Initial: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -308,16 +355,37 @@ impl <'a> AMirror<'a> {
 		let notification = context.notification;
 		let phone_mute = context.phone_mute;
 
+		let headlight_state = context.headlight_state;
+		let speed = context.speed_e3;
+
 		std::mem::drop(context);
 
-		self.dongle_handler.process();
-		self.aa_handler.process();
+		if self.screen_acknowledged {
+			self.dongle_handler.process();
+			match self.aa_handler.try_lock() {
+				Ok(mut aa_handler) => {
+					aa_handler.process();
+				}
+				Err(_) => {
+
+				}
+			}
+		}
 
 		context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Process Post Handler: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -385,7 +453,17 @@ impl <'a> AMirror<'a> {
 							mpv_video.set_minimize(true);
 						}
 						Err(_) => {
-							println!("AMirror Process: MPV handler locked.")
+							let mut mpv_video;
+							loop {
+								mpv_video = match self.mpv_video.try_lock() {
+									Ok(mpv_video) => mpv_video,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							mpv_video.set_minimize(true);
 						}
 					}
 
@@ -407,7 +485,17 @@ impl <'a> AMirror<'a> {
 						mpv_video.video_disconnect();
 					}
 					Err(_) => {
-						println!("AMirror Process: MPV handler locked.")
+						let mut mpv_video;
+						loop {
+							mpv_video = match self.mpv_video.try_lock() {
+								Ok(mpv_video) => mpv_video,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						mpv_video.video_disconnect();
 					}
 				}
 			} else {
@@ -425,7 +513,17 @@ impl <'a> AMirror<'a> {
 							mpv_video.set_minimize(false);
 						}
 						Err(_) => {
-							println!("AMirror Process: MPV handler locked.")
+							let mut mpv_video;
+							loop {
+								mpv_video = match self.mpv_video.try_lock() {
+									Ok(mpv_video) => mpv_video,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							mpv_video.set_minimize(false);
 						}
 					}
 
@@ -481,8 +579,17 @@ impl <'a> AMirror<'a> {
 				context = match self.context.try_lock() {
 					Ok(context) => context,
 					Err(_) => {
-						println!("AMirror Process Phone Type: Context Locked.");
-						return;
+						let context;
+						loop {
+							context = match self.context.try_lock() {
+								Ok(context) => context,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						context
 					}
 				};
 			}
@@ -507,8 +614,17 @@ impl <'a> AMirror<'a> {
 				context = match self.context.try_lock() {
 					Ok(context) => context,
 					Err(_) => {
-						println!("AMirror Process Phone Type: Context Locked.");
-						return;
+						let context;
+						loop {
+							context = match self.context.try_lock() {
+								Ok(context) => context,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						context
 					}
 				};
 			}
@@ -525,7 +641,43 @@ impl <'a> AMirror<'a> {
 				if context.phone_type == 3 {
 					self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAY);
 				} else if context.phone_type == 5 {
-					self.aa_handler.start_stop_audio(true);
+					let mut aa_handler = match self.aa_handler.try_lock() {
+						Ok(aa_handler) => aa_handler,
+						Err(_) => {
+							let aa_handler;
+							loop {
+								aa_handler = match self.aa_handler.try_lock() {
+									Ok(aa_handler) => aa_handler,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							aa_handler
+						}
+					};
+
+					aa_handler.start_stop_audio(true);
+				}
+			}
+
+			match self.client_aibus_handler.try_lock() {
+				Ok(mut client_handler) => {
+					client_handler.set_ack_cache(context.phone_type != 0, false);
+				}
+				Err(_) => {
+					let mut client_handler;
+					loop {
+						client_handler = match self.client_aibus_handler.try_lock() {
+							Ok(client_handler) => client_handler,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					client_handler.set_ack_cache(context.phone_type != 0, false);
 				}
 			}
 		}
@@ -556,8 +708,17 @@ impl <'a> AMirror<'a> {
 				context = match self.context.try_lock() {
 					Ok(context) => context,
 					Err(_) => {
-						println!("AMirror Process Phone Name: Context Locked.");
-						return;
+						let context;
+						loop {
+							context = match self.context.try_lock() {
+								Ok(context) => context,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						context
 					}
 				};
 			}
@@ -570,8 +731,17 @@ impl <'a> AMirror<'a> {
 				context = match self.context.try_lock() {
 					Ok(context) => context,
 					Err(_) => {
-						println!("AMirror Process Phone Name: Context Locked.");
-						return;
+						let context;
+						loop {
+							context = match self.context.try_lock() {
+								Ok(context) => context,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						context
 					}
 				};
 			}
@@ -610,6 +780,29 @@ impl <'a> AMirror<'a> {
 					if self.flash_song_title {
 						self.write_nav_overlay(context.song_title.replace("#", "##  "));
 						self.last_flash = Instant::now();
+					}
+
+					if self.flash_song_title_mirror {
+						let mut mpv_video = match self.mpv_video.try_lock() {
+							Ok(mpv_video) => mpv_video,
+							Err(_) => {
+								let mpv_video;
+								loop {
+									mpv_video = match self.mpv_video.try_lock() {
+										Ok(mpv_video) => mpv_video,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								mpv_video
+							}
+						};
+
+						mpv_video.set_header_overlay(context.song_title.clone());
+						self.header_overlay = true;
+						self.overlay_timer = Instant::now();
 					}
 
 					if context.imid_native_mirror && self.imid_scroll < 0 && context.phone_type != 0 {
@@ -1013,8 +1206,17 @@ impl <'a> AMirror<'a> {
 				context = match self.context.try_lock() {
 					Ok(context) => context,
 					Err(_) => {
-						println!("AMirror Process: Context Locked");
-						return;
+						let context;
+						loop {
+							context = match self.context.try_lock() {
+								Ok(context) => context,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						context
 					}
 				};
 			}
@@ -1037,7 +1239,17 @@ impl <'a> AMirror<'a> {
 					mpv_video.clear_overlay();
 				}
 				Err(_) => {
-					println!("AMirror Process: MPV Locked.")
+					let mut mpv_video;
+					loop {
+						mpv_video = match self.mpv_video.try_lock() {
+							Ok(mpv_video) => mpv_video,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					mpv_video.clear_overlay();
 				}
 			}
 		}
@@ -1061,19 +1273,30 @@ impl <'a> AMirror<'a> {
 		std::mem::drop(context);
 		let mut ai_rx_list = Vec::new();
 
-		match self.aibus_handler.try_lock() {
-			Ok(mut aibus_handler) => {
-				let ai_rx = aibus_handler.get_ai_rx();
-				for ai_data in &mut *ai_rx {
-					ai_rx_list.push(ai_data.clone());
-				}
-
-				ai_rx.clear();
-			}
+		let mut aibus_handler = match self.aibus_handler.try_lock() {
+			Ok(aibus_handler) => aibus_handler,
 			Err(_) => {
-				
+				let aibus_handler;
+				loop {
+					 aibus_handler = match self.aibus_handler.try_lock() {
+						Ok(aibus_handler) => aibus_handler,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				aibus_handler
 			}
+		};
+
+		let ai_rx = aibus_handler.get_ai_rx();
+		for ai_data in &mut *ai_rx {
+			ai_rx_list.push(ai_data.clone());
 		}
+
+		ai_rx.clear();
+		std::mem::drop(aibus_handler);
 
 		for ai_data in ai_rx_list {
 			self.handle_aibus_message(ai_data);
@@ -1082,8 +1305,17 @@ impl <'a> AMirror<'a> {
 		context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Process Post Handler: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -1116,11 +1348,57 @@ impl <'a> AMirror<'a> {
 									}].to_vec() });
 		}
 
+		if phone_type == 0x5 {
+			let mut aa_handler = match self.aa_handler.try_lock() {
+				Ok(aa_handler) => aa_handler,
+				Err(_) => {
+					let aa_handler;
+					loop {
+						aa_handler = match self.aa_handler.try_lock() {
+							Ok(aa_handler) => aa_handler,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					aa_handler
+				}
+			};
+
+			//Headlight state.
+			if context.headlight_state != headlight_state {
+				aa_handler.set_headlight_state(context.headlight_state);
+			}
+
+			//Speed.
+			if context.speed_e3 != speed {
+				aa_handler.set_speed(context.speed_e3);
+			}
+		}
+
 		std::mem::drop(context);
-		
-		if new_latitude != latitude || new_longitude != longitude || new_altitude != altitude {
-			if phone_type == 5 {
-				self.aa_handler.send_coordinates();
+
+		if phone_type == 0x5 {
+			if new_latitude != latitude || new_longitude != longitude || new_altitude != altitude {
+				let mut aa_handler = match self.aa_handler.try_lock() {
+					Ok(aa_handler) => aa_handler,
+					Err(_) => {
+						let aa_handler;
+						loop {
+							aa_handler = match self.aa_handler.try_lock() {
+								Ok(aa_handler) => aa_handler,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						aa_handler
+					}
+				};
+
+				aa_handler.send_coordinates();
 			}
 		}
 
@@ -1139,8 +1417,17 @@ impl <'a> AMirror<'a> {
 		let mut context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Handle AIBus Message: Context Locked");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -1160,8 +1447,17 @@ impl <'a> AMirror<'a> {
 			context = match self.context.try_lock() {
 				Ok(context) => context,
 				Err(_) => {
-					println!("AMirror Process Radio Connection: Context Locked.");
-					return;
+					let context;
+					loop {
+						context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					context
 				}
 			};
 		}
@@ -1243,43 +1539,63 @@ impl <'a> AMirror<'a> {
 				let index = (ai_msg.data[1]&0xF) as usize;
 
 				if index < 5 {
-					match self.mpv_video.try_lock() {
-						Ok(mut mpv) => {		
-							mpv.set_overlay_text("".to_string(), index);
-
-							if set_overlay && !self.vol_overlay {
-								self.overlay_on = true;
-								self.overlay_timer = Instant::now();
-								mpv.show_overlay();
-							} else if self.overlay_on && !self.vol_overlay {
-								mpv.show_overlay();
-							}
-						}
+					let mut mpv = match self.mpv_video.try_lock() {
+						Ok(mpv) => mpv,
 						Err(_) => {
-							println!("Overlay: MPV handler locked.");
+							let mpv;
+							loop {
+								mpv = match self.mpv_video.try_lock() {
+									Ok(mpv) => mpv,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							mpv
 						}
+					};
+
+					mpv.set_overlay_text("".to_string(), index);
+
+					if set_overlay && !self.vol_overlay {
+						self.overlay_on = true;
+						self.overlay_timer = Instant::now();
+						mpv.show_overlay();
+					} else if self.overlay_on && !self.vol_overlay {
+						mpv.show_overlay();
 					}
 				} else if index == 0xE || index == 0xF {
-					match self.mpv_video.try_lock() {
-						Ok(mut mpv) => {		
-							for i in if index == 0xF {
-								0
-							} else {
-								1
-							}..5 {
-								mpv.set_overlay_text("".to_string(), i);
-
-								if set_overlay && !self.vol_overlay {
-									self.overlay_on = true;
-									self.overlay_timer = Instant::now();
-									mpv.show_overlay();
-								} else if self.overlay_on && !self.vol_overlay {
-									mpv.show_overlay();
-								}
-							}
-						}
+					let mut mpv = match self.mpv_video.try_lock() {
+						Ok(mpv) => mpv,
 						Err(_) => {
-							println!("Overlay: MPV handler locked.");
+							let mpv;
+							loop {
+								mpv = match self.mpv_video.try_lock() {
+									Ok(mpv) => mpv,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							mpv
+						}
+					};
+
+					for i in if index == 0xF {
+						0
+					} else {
+						1
+					}..5 {
+						mpv.set_overlay_text("".to_string(), i);
+
+						if set_overlay && !self.vol_overlay {
+							self.overlay_on = true;
+							self.overlay_timer = Instant::now();
+							mpv.show_overlay();
+						} else if self.overlay_on && !self.vol_overlay {
+							mpv.show_overlay();
 						}
 					}
 				}
@@ -1309,16 +1625,26 @@ impl <'a> AMirror<'a> {
 			}
 
 			if !self.vol_overlay && !self.overlay_on {
-				match self.mpv_video.try_lock() {
-					Ok(mut mpv) => {
-						mpv.set_header_overlay(text);
-						self.header_overlay = true;
-						self.overlay_timer = Instant::now();
-					}
+				let mut mpv = match self.mpv_video.try_lock() {
+					Ok(mpv) => mpv,
 					Err(_) => {
-						println!("Header Overlay: MPV handler locked.");
+						let mpv;
+						loop {
+							mpv = match self.mpv_video.try_lock() {
+								Ok(mpv) => mpv,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						mpv
 					}
-				}
+				};
+
+				mpv.set_header_overlay(text);
+				self.header_overlay = true;
+				self.overlay_timer = Instant::now();
 			}
 		} else if ai_msg.l() >= 2 && ai_msg.data[0] == 0x23 { //Overlay.
 			if ai_msg.sender == self.overlay_device || ai_msg.sender == AIBUS_DEVICE_RADIO {
@@ -1345,22 +1671,32 @@ impl <'a> AMirror<'a> {
 
 				let index = (ai_msg.data[1]&0xF) as usize;
 
-				match self.mpv_video.try_lock() {
-					Ok(mut mpv) => {
-						mpv.set_overlay_text(text, index);
-
-						if set_overlay && !self.vol_overlay {
-							self.overlay_on = true;
-							self.header_overlay = false;
-							self.overlay_timer = Instant::now();
-							mpv.show_overlay();
-						} else if self.overlay_on && !self.header_overlay && !self.vol_overlay {
-							mpv.show_overlay();
-						}
-					}
+				let mut mpv = match self.mpv_video.try_lock() {
+					Ok(mut mpv) => mpv,
 					Err(_) => {
-						println!("Overlay: MPV handler locked.");
+						let mpv;
+						loop {
+							mpv = match self.mpv_video.try_lock() {
+								Ok(mpv) => mpv,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						mpv
 					}
+				};
+
+				mpv.set_overlay_text(text, index);
+
+				if set_overlay && !self.vol_overlay {
+					self.overlay_on = true;
+					self.header_overlay = false;
+					self.overlay_timer = Instant::now();
+					mpv.show_overlay();
+				} else if self.overlay_on && !self.header_overlay && !self.vol_overlay {
+					mpv.show_overlay();
 				}
 			} else {
 				self.write_aibus_message(AIBusMessage {
@@ -1375,8 +1711,17 @@ impl <'a> AMirror<'a> {
 			let mut mpv = match self.mpv_video.try_lock() {
 				Ok(mpv) => mpv,
 				Err(_) => {
-					println!("Color changed: MPV handler locked.");
-					return;
+					let mpv;
+					loop {
+						mpv = match self.mpv_video.try_lock() {
+							Ok(mpv) => mpv,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					mpv
 				}
 			};
 
@@ -1398,8 +1743,17 @@ impl <'a> AMirror<'a> {
 				context = match self.context.try_lock() {
 					Ok(context) => context,
 					Err(_) => {
-						println!("AMirror Process Radio Connection: Context Locked.");
-						return;
+						let context;
+						loop {
+							context = match self.context.try_lock() {
+								Ok(context) => context,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						context
 					}
 				};
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x40 && ai_msg.data[1] == 0x10 { //Source change.
@@ -1422,7 +1776,25 @@ impl <'a> AMirror<'a> {
 					
 					if context.phone_type != 0 {
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAY);
-						self.aa_handler.start_stop_audio(true);
+
+						match self.aa_handler.try_lock() {
+							Ok(mut aa_handler) => {
+								aa_handler.start_stop_audio(true);
+							}
+							Err(_) => {
+								let mut aa_handler;
+								loop {
+									aa_handler = match self.aa_handler.try_lock() {
+										Ok(aa_handler) => aa_handler,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								aa_handler.start_stop_audio(true);
+							}
+						}
 					}
 					
 					std::mem::drop(context);
@@ -1431,8 +1803,17 @@ impl <'a> AMirror<'a> {
 					context = match self.context.try_lock() {
 						Ok(context) => context,
 						Err(_) => {
-							println!("AMirror Handle AIBus Message Source Change: Context Locked");
-							return;
+							let context;
+							loop {
+								context = match self.context.try_lock() {
+									Ok(context) => context,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							context
 						}
 					};
 
@@ -1453,7 +1834,25 @@ impl <'a> AMirror<'a> {
 
 					if context.phone_type != 0 {
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_PAUSE);
-						self.aa_handler.start_stop_audio(false);
+
+						match self.aa_handler.try_lock() {
+							Ok(mut aa_handler) => {
+								aa_handler.start_stop_audio(false);
+							}
+							Err(_) => {
+								let mut aa_handler;
+								loop {
+									aa_handler = match self.aa_handler.try_lock() {
+										Ok(aa_handler) => aa_handler,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								aa_handler.start_stop_audio(false);
+							}
+						}
 					}
 					
 					context.audio_selected = false;
@@ -1479,8 +1878,17 @@ impl <'a> AMirror<'a> {
 					context = match self.context.try_lock() {
 						Ok(context) => context,
 						Err(_) => {
-							println!("AMirror Handle AIBus Message Text Control: Context Locked");
-							return;
+							let context;
+							loop {
+								context = match self.context.try_lock() {
+									Ok(context) => context,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							context
 						}
 					};
 				} else {
@@ -1525,27 +1933,46 @@ impl <'a> AMirror<'a> {
 				context = match self.context.try_lock() {
 					Ok(context) => context,
 					Err(_) => {
-						println!("AMirror Handle AIBus Message Create Menu: Context Locked");
-						return;
+						let context;
+						loop {
+							context = match self.context.try_lock() {
+								Ok(context) => context,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						context
 					}
 				};
 			} else if ai_msg.l() >= 2 && ai_msg.data[0] == 0x26 { //Volume control.
 				let new_vol = ai_msg.data[1];
 				let new_max = ai_msg.data[2];
 
-				match self.mpv_video.try_lock() {
-					Ok(mut mpv) => {		
-						mpv.set_volume_overlay(new_vol, new_max);
-
-						self.overlay_on = true;
-						self.vol_overlay = true;
-						self.overlay_timer = Instant::now();
-						mpv.show_volume_overlay();
-					}
+				let mut mpv = match self.mpv_video.try_lock() {
+					Ok(mpv) => mpv,
 					Err(_) => {
-						println!("Overlay: MPV handler locked.");
+						let mpv;
+						loop {
+							mpv = match self.mpv_video.try_lock() {
+								Ok(mpv) => mpv,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						mpv
 					}
-				}
+				};
+
+				mpv.set_volume_overlay(new_vol, new_max);
+
+				self.overlay_on = true;
+				self.vol_overlay = true;
+				self.overlay_timer = Instant::now();
+				mpv.show_volume_overlay();
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_NAV_COMPUTER {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x48 && ai_msg.data[1] == 0x8E { //Turn on/off the interface.
@@ -1567,7 +1994,25 @@ impl <'a> AMirror<'a> {
 					if context.phone_req_off {
 						context.phone_req_off = false;
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_HOME);
-						self.aa_handler.send_start_request();
+
+						match self.aa_handler.try_lock() {
+							Ok(mut aa_handler) => {
+								aa_handler.send_start_request();
+							}
+							Err(_) => {
+								let mut aa_handler;
+								loop {
+									aa_handler = match self.aa_handler.try_lock() {
+										Ok(aa_handler) => aa_handler,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								aa_handler.send_start_request();
+							}
+						};
 					}
 				} else {
 					self.write_aibus_message(AIBusMessage {
@@ -1592,6 +2037,46 @@ impl <'a> AMirror<'a> {
 
 					if self.open_audio_menu {
 						self.request_audio_settings_menu();
+					} else if self.next_menu == AMirrorMenu::MenuDisplay {
+						std::mem::drop(context);
+						self.write_display_menu();
+						
+						context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								let context;
+								loop {
+									context = match self.context.try_lock() {
+										Ok(context) => context,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								context
+							}
+						};
+					} else if self.next_menu == AMirrorMenu::MenuFlash {
+						std::mem::drop(context);
+						self.write_flash_menu();
+
+						context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								let context;
+								loop {
+									context = match self.context.try_lock() {
+										Ok(context) => context,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								context
+							}
+						};
 					}
 				} else if ai_msg.l() >= 3 && ai_msg.data[1] == 0x60 { //Entry selected.
 					if self.menu_open == AMirrorMenu::MenuAudioSettings {
@@ -1638,10 +2123,12 @@ impl <'a> AMirror<'a> {
 
 							self.save_settings();
 						} else if menu_option == MenuIndex::MirrorAudioSettingsFlashTitle {
-							self.flash_song_title = !self.flash_song_title;
+							/*self.flash_song_title = !self.flash_song_title;
 							self.write_audio_settings_menu_option(option as usize);
 
-							self.save_settings();
+							self.save_settings();*/
+
+							self.write_flash_menu();
 						} else if menu_option == MenuIndex::MirrorAudioSettingsAudioSettings {
 							self.clear_menu(false);
 							self.open_audio_menu = true;
@@ -1650,8 +2137,17 @@ impl <'a> AMirror<'a> {
 						context = match self.context.try_lock() {
 							Ok(context) => context,
 							Err(_) => {
-								println!("AMirror Handle AIBus Message Handle Menu Option: Context Locked");
-								return;
+								let context;
+								loop {
+									context = match self.context.try_lock() {
+										Ok(context) => context,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								context
 							}
 						};
 					} else if self.menu_open == AMirrorMenu::MenuDisplay {
@@ -1704,8 +2200,17 @@ impl <'a> AMirror<'a> {
 							context = match self.context.try_lock() {
 								Ok(context) => context,
 								Err(_) => {
-									println!("AMirror Handle AIBus Message Handle Menu Option: Context Locked");
-									return;
+									let context;
+									loop {
+										context = match self.context.try_lock() {
+											Ok(context) => context,
+											Err(_) => {
+												continue;
+											}
+										};
+										break;
+									}
+									context
 								}
 							};
 
@@ -1770,10 +2275,51 @@ impl <'a> AMirror<'a> {
 						context = match self.context.try_lock() {
 							Ok(context) => context,
 							Err(_) => {
-								println!("AMirror Handle AIBus Message Handle Menu Option: Context Locked");
+								let context;
+								loop {
+									context = match self.context.try_lock() {
+										Ok(context) => context,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								context
+							}
+						};
+					} else if self.menu_open == AMirrorMenu::MenuFlash {
+						if ai_msg.data[2] <= 0 {
+							return;
+						}
+
+						let option = ai_msg.data[2] - 1;
+
+						let flash_menu = match MenuList::new(MenuIndex::MirrorFlashSettings, Locale::LocaleEnglishUS) {
+							Some(audio_menu) => audio_menu,
+							None => {
+								println!("Error loading menu option.");
 								return;
 							}
 						};
+						let menu_option = match flash_menu.get_global_index(option as usize) {
+							Some(menu_option) => menu_option,
+							None => {
+								return;
+							}
+						};
+
+						if menu_option == MenuIndex::MirrorFlashSettingsFlashTitle {
+							self.flash_song_title = !self.flash_song_title;
+							self.write_flash_menu_option(option as usize);
+
+							self.save_settings();
+						} else if menu_option == MenuIndex::MirrorFlashSettingsFlashTitleMirror {
+							self.flash_song_title_mirror = !self.flash_song_title_mirror;
+							self.write_flash_menu_option(option as usize);
+
+							self.save_settings();
+						}
 					} else if self.menu_open == AMirrorMenu::MenuSettings {
 						if ai_msg.data[2] <= 0 {
 							return;
@@ -1797,6 +2343,9 @@ impl <'a> AMirror<'a> {
 
 						if menu_option == MenuIndex::MirrorMainSettingsAutoStart {
 							self.auto_mirror_start = !self.auto_mirror_start;
+							self.write_main_settings_menu_option(option as usize);
+						} else if menu_option == MenuIndex::MirrorMainSettingsAutoMusicStart {
+							self.auto_music_start = !self.auto_music_start;
 							self.write_main_settings_menu_option(option as usize);
 						}
 					}
@@ -1941,7 +2490,17 @@ impl <'a> AMirror<'a> {
 								mpv.stop();
 							}
 							Err(_) => {
-								println!("Power Off: MPV locked.");
+								let mut mpv;
+								loop {
+									mpv = match self.mpv_video.try_lock() {
+										Ok(mpv) => mpv,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								mpv.stop();
 							}
 						}
 					} else if self.power_state != 0x0 {
@@ -1957,7 +2516,17 @@ impl <'a> AMirror<'a> {
 								mpv.stop();
 							}
 							Err(_) => {
-								println!("Power Off: MPV locked.");
+								let mut mpv;
+								loop {
+									mpv = match self.mpv_video.try_lock() {
+										Ok(mpv) => mpv,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								mpv.stop();
 							}
 						}
 					}
@@ -1966,11 +2535,72 @@ impl <'a> AMirror<'a> {
 					context.night = (ai_msg.data[3]&0x80) != 0;
 
 					if context.night != night {
-						self.aa_handler.set_night_mode(context.night);
+						match self.aa_handler.try_lock() {
+							Ok(mut aa_handler) => {
+								aa_handler.set_night_mode(context.night);
+							}
+							Err(_) => {
+								let mut aa_handler;
+								loop {
+									aa_handler = match self.aa_handler.try_lock() {
+										Ok(aa_handler) => aa_handler,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								aa_handler.set_night_mode(context.night);
+							}
+						};
+
 						if context.night {
 							self.dongle_handler.send_carplay_command(PHONE_COMMAND_NIGHT);
 						} else {
 							self.dongle_handler.send_carplay_command(PHONE_COMMAND_DAY);
+						}
+					}
+				} else if ai_msg.l() >= 4 && ai_msg.data[1] == 0x11 { //Headlights.
+					let low_beam = ai_msg.data[2]&(1<<1) != 0;
+					let high_beam = ai_msg.data[2]&(1<<2) != 0;
+
+					if high_beam {
+						context.headlight_state = HeadlightState::HeadlightStateHigh;
+					} else if low_beam {
+						context.headlight_state = HeadlightState::HeadlightStateLow;
+					} else {
+						context.headlight_state = HeadlightState::HeadlightStateOff;
+					}
+				} else if ai_msg.l() >= 3 && ai_msg.data[1] == 0x1F { //Common info parameter.
+					if ai_msg.l() >= 5 && ai_msg.data[2] == 0x4 { //Speed.
+						let speed_info = ai_msg.data[3];
+						let mph = speed_info&(1<<7) != 0;
+						let decimal_count = (speed_info>>4)&0x7;
+
+						let mut speed: u64 = 0;
+						for d in &ai_msg.data[4..] {
+							speed <<= 8;
+							speed += *d as u64;
+						}
+
+						if mph {
+							speed = speed*16/10;
+						}
+
+						if decimal_count > 3 {
+							for _i in 3..decimal_count {
+								speed /= 10;
+							}
+						} else if decimal_count < 3 {
+							for _i in decimal_count..3 {
+								speed *= 10;
+							}
+						}
+
+						context.speed_e3 = if speed < i32::MAX as u64 {
+							speed as i32
+						} else {
+							i32::MAX
 						}
 					}
 				}
@@ -2019,25 +2649,72 @@ impl <'a> AMirror<'a> {
 					
 					if overlay_text.len() > 0 {
 						self.write_nav_overlay(overlay_text.replace("#", "##  "));
+						let mut mpv_video = match self.mpv_video.try_lock() {
+							Ok(mpv_video) => mpv_video,
+							Err(_) => {
+								let mpv;
+								loop {
+									mpv = match self.mpv_video.try_lock() {
+										Ok(mpv) => mpv,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								mpv
+							}
+						};
+
+						mpv_video.set_header_overlay(overlay_text);
+						self.header_overlay = true;
+						self.overlay_timer = Instant::now();
 					}
 				} else if button == 0x26 { //Audio button.
 					if state == 0x2 {
 						if !self.audio_held {
 							if !context.audio_selected {
-								match self.mpv_video.try_lock() {
-									Ok(mut mpv) => {
-										self.overlay_on = true;
-										self.vol_overlay = false;
-										self.overlay_timer = Instant::now();
-										mpv.show_overlay();
-									}
+								let mut mpv = match self.mpv_video.try_lock() {
+									Ok(mpv) => mpv,
 									Err(_) => {
-										println!("Audio button: MPV handler locked.");
+										let mpv;
+										loop {
+											mpv = match self.mpv_video.try_lock() {
+												Ok(mpv) => mpv,
+												Err(_) => {
+													continue;
+												}
+											};
+											break;
+										}
+										mpv
 									}
-								}
+								};
+
+								self.overlay_on = true;
+								self.vol_overlay = false;
+								self.overlay_timer = Instant::now();
+								mpv.show_overlay();
 							} else {
 								if context.phone_type == 5 {
-									self.aa_handler.show_audio_window();
+									let mut aa_handler = match self.aa_handler.try_lock() {
+										Ok(aa_handler) => aa_handler,
+										Err(_) => {
+											let aa_handler;
+											loop {
+												aa_handler = match self.aa_handler.try_lock() {
+													Ok(aa_handler) => aa_handler,
+													Err(_) => {
+														continue;
+													}
+												};
+												break;
+											}
+											aa_handler
+										}
+									};
+
+									aa_handler.show_audio_window();
 								}
 							}
 						} else {
@@ -2054,7 +2731,24 @@ impl <'a> AMirror<'a> {
 				} else if ((button == 0x46 && context.aibt_pause) || (button == 0x16 && !context.aibt_pause)) && state == 0x0 {
 					if context.audio_selected {
 						if context.phone_type == 5 {
-							self.aa_handler.play_pause_audio();
+							let mut aa_handler = match self.aa_handler.try_lock() {
+								Ok(aa_handler) => aa_handler,
+								Err(_) => {
+									let aa_handler;
+									loop {
+										aa_handler = match self.aa_handler.try_lock() {
+											Ok(aa_handler) => aa_handler,
+											Err(_) => {
+												continue;
+											}
+										};
+										break;
+									}
+									aa_handler
+								}
+							};
+
+							aa_handler.play_pause_audio();
 						} else if context.phone_type == 3 {
 							self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAYPAUSE);
 						}
@@ -2167,7 +2861,23 @@ impl <'a> AMirror<'a> {
 		if phone_type == 3 {
 			self.dongle_handler.handle_aibus_message(ai_msg.clone());
 		} else if phone_type == 5 {
-			self.aa_handler.handle_aibus_message(ai_msg);
+			let mut aa_handler = match self.aa_handler.try_lock() {
+				Ok(aa_handler) => aa_handler,
+				Err(_) => {
+					let aa_handler;
+					loop {
+						aa_handler = match self.aa_handler.try_lock() {
+							Ok(aa_handler) => aa_handler,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					aa_handler
+				}
+			};
+			aa_handler.handle_aibus_message(ai_msg);
 		}
 	}
 
@@ -2183,6 +2893,7 @@ impl <'a> AMirror<'a> {
 		settings.with_section(Some(SETTING_SECTION)).set(SETTING_AUTOMIRROR, bool::to_string(&self.auto_mirror_start));
 		settings.with_section(Some(SETTING_SECTION)).set(SETTING_AUTOMUSIC, bool::to_string(&self.auto_music_start));
 		settings.with_section(Some(SETTING_SECTION)).set(SETTING_FLASHSONG, bool::to_string(&self.flash_song_title));
+		settings.with_section(Some(SETTING_SECTION)).set(SETTING_FLASHSONG_MIRROR, bool::to_string(&self.flash_song_title_mirror));
 		settings.with_section(Some(SETTING_SECTION)).set(SETTING_SPLIT, bool::to_string(&self.imid_split));
 		settings.with_section(Some(SETTING_SECTION)).set(SETTING_SCROLL_PARAM, i8::to_string(&self.imid_scroll));
 
@@ -2372,8 +3083,17 @@ impl <'a> AMirror<'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Write Radio Name: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -2409,8 +3129,17 @@ impl <'a> AMirror<'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Write Radio Short Name: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -2499,8 +3228,17 @@ impl <'a> AMirror<'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Write All Metadata: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 		
@@ -2515,8 +3253,17 @@ impl <'a> AMirror<'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Write All Text: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 		
@@ -2553,8 +3300,17 @@ impl <'a> AMirror<'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Write All IMID Text: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -2776,6 +3532,15 @@ impl <'a> AMirror<'a> {
 		while Instant::now() - stream_timer < Duration::from_millis(50) {
 		}
 
+		match self.client_aibus_handler.lock() {
+			Ok(mut client_handler) => {
+				client_handler.process();
+			}
+			Err(_) => {
+				
+			}
+		}
+
 		let mut aibus_handler = match self.aibus_handler.try_lock() {
 			Ok(aibus_handler) => aibus_handler,
 			Err(_) => {
@@ -2828,6 +3593,15 @@ impl <'a> AMirror<'a> {
 		let stream_timer = Instant::now();
 
 		while Instant::now() - stream_timer < Duration::from_millis(100) {
+		}
+
+		match self.client_aibus_handler.lock() {
+			Ok(mut client_handler) => {
+				client_handler.process();
+			}
+			Err(_) => {
+				
+			}
 		}
 
 		let mut aibus_handler = match self.aibus_handler.try_lock() {
@@ -2886,18 +3660,27 @@ impl <'a> AMirror<'a> {
 		}
 
 		let mut sel = 0x3;
-		match self.context.try_lock() {
-			Ok(context) => {
-				if !context.imid_row_count > 0 && context.imid_text_len > 0 && !context.imid_native_mirror {
-					sel = 0x1;
-				} else if !context.imid_row_count > 0 && context.imid_text_len > 0 && context.imid_native_mirror {
-					sel = 0x2;
-				}
-			}
+		let context = match self.context.try_lock() {
+			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Settings Menu: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
+		};
+
+		if !context.imid_row_count > 0 && context.imid_text_len > 0 && !context.imid_native_mirror {
+			sel = 0x1;
+		} else if !context.imid_row_count > 0 && context.imid_text_len > 0 && context.imid_native_mirror {
+			sel = 0x2;
 		}
 
 		self.write_aibus_message(AIBusMessage {
@@ -2914,8 +3697,17 @@ impl <'a> AMirror<'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Menu Option: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -2957,13 +3749,13 @@ impl <'a> AMirror<'a> {
 			} else {
 				req_text = "#ROF ".to_string();
 			}
-		} else if menu_option == MenuIndex::MirrorAudioSettingsFlashTitle {
+		} /*else if menu_option == MenuIndex::MirrorAudioSettingsFlashTitle {
 			if self.flash_song_title {
 				req_text = "#RON ".to_string();
 			} else {
 				req_text = "#ROF ".to_string();
 			}
-		}
+		}*/
 
 		req_text += audio_menu.menu_str[option as usize];
 
@@ -3036,6 +3828,12 @@ impl <'a> AMirror<'a> {
 			} else {
 				req_text = "#ROF ".to_string();
 			}
+		} else if menu_option == MenuIndex::MirrorMainSettingsAutoMusicStart {
+			if self.auto_music_start {
+				req_text = "#RON ".to_string();
+			} else {
+				req_text = "#ROF ".to_string();
+			}
 		}
 
 		req_text += settings_menu.menu_str[option];
@@ -3056,24 +3854,28 @@ impl <'a> AMirror<'a> {
 
 	///Write the display menu.
 	fn write_display_menu(&mut self) {
-		println!("Display menu function called!");
-		if !self.clear_menu(true) {
-			println!("Clear menu failed...");
+		//self.print_debug("Display menu function called!");
+
+		if self.menu_open != AMirrorMenu::MenuNone {
+			self.next_menu = AMirrorMenu::MenuDisplay;
+			self.clear_menu(true);
 			return;
 		}
 
 		let cluster_menu = match MenuList::new(MenuIndex::MirrorClusterSettings, Locale::LocaleEnglishUS) {
 			Some(cluster_menu) => cluster_menu,
 			None => {
-				println!("Error loading menu option.");
+				self.print_debug("Error loading menu option.");
 				return;
 			}
 		};
 		
 		if !self.create_menu(cluster_menu.title.to_string(), cluster_menu.size() as u8, true) {
-			println!("Create menu failed...");
+			self.print_debug("Create menu failed...");
 			return;
 		}
+
+		self.next_menu = AMirrorMenu::MenuNone;
 
 		for i in 0..cluster_menu.size() {
 			self.write_display_menu_option(i);
@@ -3093,21 +3895,31 @@ impl <'a> AMirror<'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Display Menu Option: Context Locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
 		let cluster_menu = match MenuList::new(MenuIndex::MirrorClusterSettings, Locale::LocaleEnglishUS) {
 			Some(cluster_menu) => cluster_menu,
 			None => {
-				println!("Error loading menu option.");
+				self.print_debug("Error loading menu option.");
 				return;
 			}
 		};
 		let menu_option = match cluster_menu.get_global_index(option) {
 			Some(menu_option) => menu_option,
 			None => {
+				self.print_debug(&format!("Menu option {} not found.", option));
 				return;
 			}
 		};
@@ -3190,6 +4002,93 @@ impl <'a> AMirror<'a> {
 		}
 	}
 
+	///Write the title flash menu.
+	fn write_flash_menu(&mut self) {
+		if self.menu_open != AMirrorMenu::MenuNone {
+			self.next_menu = AMirrorMenu::MenuFlash;
+			self.clear_menu(true);
+			return;
+		}
+
+		let flash_menu = match MenuList::new(MenuIndex::MirrorFlashSettings, Locale::LocaleEnglishUS) {
+			Some(cluster_menu) => cluster_menu,
+			None => {
+				self.print_debug("Error loading menu option.");
+				return;
+			}
+		};
+		
+		if !self.create_menu(flash_menu.title.to_string(), flash_menu.size() as u8, true) {
+			self.print_debug("Create menu failed...");
+			return;
+		}
+
+		self.next_menu = AMirrorMenu::MenuNone;
+
+		for i in 0..flash_menu.size() {
+			self.write_flash_menu_option(i);
+		}
+
+		self.write_aibus_message(AIBusMessage {
+			sender: AIBUS_DEVICE_AMIRROR,
+			receiver: AIBUS_DEVICE_NAV_COMPUTER,
+			data: [0x2B, 0x52, 0x1].to_vec(),
+		});
+
+		self.menu_open = AMirrorMenu::MenuFlash;
+	}
+
+	//Write a flash menu option.
+	fn write_flash_menu_option(&mut self, option: usize) {
+		let mut menu_req_data = [0x2B, 0x51, option as u8].to_vec();
+
+		let settings_menu = match MenuList::new(MenuIndex::MirrorFlashSettings, Locale::LocaleEnglishUS) {
+			Some(settings_menu) => settings_menu,
+			None => {
+				println!("Error loading menu option.");
+				return;
+			}
+		};
+		
+		let menu_option = match settings_menu.get_global_index(option) {
+			Some(menu_option) => menu_option,
+			None => {
+				return;
+			}
+		};
+
+		let mut req_text: String = "".to_string();
+
+		if menu_option == MenuIndex::MirrorFlashSettingsFlashTitle {
+			if self.flash_song_title {
+				req_text = "#RON ".to_string();
+			} else {
+				req_text = "#ROF ".to_string();
+			}
+		} else if menu_option == MenuIndex::MirrorFlashSettingsFlashTitleMirror {
+			if self.flash_song_title_mirror {
+				req_text = "#RON ".to_string();
+			} else {
+				req_text = "#ROF ".to_string();
+			}
+		}
+
+		req_text += settings_menu.menu_str[option];
+
+		let req_text_b = req_text.as_bytes();
+		for i in 0..req_text_b.len() {
+			menu_req_data.push(req_text_b[i]);
+		}
+
+		if req_text_b.len() > 0 {
+			self.write_aibus_message(AIBusMessage {
+				sender: AIBUS_DEVICE_AMIRROR,
+				receiver: AIBUS_DEVICE_NAV_COMPUTER,
+				data: menu_req_data,
+			});
+		}
+	}
+
 	///Request the audio settings menu from the radio.
 	fn request_audio_settings_menu(&mut self) {
 		self.open_audio_menu = false;
@@ -3199,6 +4098,16 @@ impl <'a> AMirror<'a> {
 			receiver: AIBUS_DEVICE_RADIO,
 			data: [0x2B, 0x45].to_vec(),
 		});
+	}
+
+	///Print a debug AIBus message.
+	pub fn print_debug(&mut self, text: &str) {
+		let mut data = [0xA1, 0xFF].to_vec();
+		for b in text.as_bytes() {
+			data.push(*b);
+		}
+
+		self.write_aibus_message(AIBusMessage { sender: AIBUS_DEVICE_AMIRROR, receiver: 0xFF, data });
 	}
 }
 

@@ -12,6 +12,10 @@ void loop() {
 	canslator.loop();
 }
 
+CANslator::CANslator() {
+	param_requestor_vec.setStorage(param_requestor);
+}
+
 //Main object setup.
 void CANslator::setup() {
 	pinMode(BCAN_CS, OUTPUT);
@@ -51,8 +55,10 @@ void CANslator::setup() {
 	GPSSerial.swap(1);
 
 	ai_handler.addID(ID_CANSLATOR);
-	ai_handler.addID(ID_GPS_ANTENNA);
+	//ai_handler.addID(ID_GPS_ANTENNA);
 	ai_handler.addID(ID_CAMERA);
+
+	ai_handler.setAckCache(6, false);
 
 	bcan_handler.init();
 	bcan_handler.setWiperTimer(&wiper_timer);
@@ -105,6 +111,8 @@ void CANslator::loop() {
 
 	const bool last_reverse = parameters.reverse_on;
 
+	ai_handler.awaitCachcedAcknowledgment();
+
 	elapsedMillis ai_timer;
 	AIData ai_msg;
 
@@ -124,14 +132,38 @@ void CANslator::loop() {
 
 			if(ai_msg.sender == ID_NAV_COMPUTER && !parameters.computer_connected && !getInitMessage(&ai_msg) && !getPoweroffMessage(&ai_msg)) {
 				parameters.computer_connected = true;
-				bcan_handler.sendInfoParameters();
+				bcan_handler.sendInfoParameters(ID_NAV_COMPUTER);
+				bcan_handler.sendCommonParameters(ID_NAV_COMPUTER);
+				bcan_handler.sendBatteryVoltage(battery_voltage, ID_NAV_COMPUTER);
 				writeAIBusTimerMessage();
 			}
 
-			if(ai_msg.receiver == ID_CANSLATOR) {
+			if(ai_msg.receiver == 0xFF && ai_msg.l == 1 && ai_msg[0] == 0x1) { //Ping.
+				uint8_t ping_data[] = {0x1};
+
+				const int id_count = ai_handler.getIDCount();
+				uint8_t ids[id_count];
+				ai_handler.getIDs(ids, sizeof(ids));
+
+				for(const auto id: ids) {
+					AIData ping_msg(sizeof(ping_data), id, ai_msg.sender, ping_data);
+					ai_handler.writeAIData(&ping_msg);
+				}
+			} else if(ai_msg.receiver == ID_CANSLATOR) {
 				if(ai_msg.l >= 2 && ai_msg[0] == 0x4A && (ai_msg[1]&0x1E) == 0x1E) { //Request for common params.
 					param_timer = 0;
 					param_timer_enabled = true;
+
+					bool add = true;
+					for(uint8_t id: param_requestor_vec) {
+						if(id == ai_msg.sender) {
+							add = false;
+							break;
+						}
+					}
+
+					if(add)
+						param_requestor_vec.push_back(ai_msg.sender);
 				}
 
 				if(!bcan_handler.handleAIBus(&ai_msg))
@@ -148,6 +180,11 @@ void CANslator::loop() {
 	if(param_timer_enabled && param_timer > PARAM_TIMER) {
 		param_timer_enabled = false;
 		bcan_handler.sendCommonParameters();
+
+		for(uint8_t id: param_requestor_vec)
+			bcan_handler.sendCommonParameters(id);
+
+		param_requestor_vec.clear();
 	}
 
 	const uint8_t last_door = parameters.doors_open;

@@ -487,7 +487,10 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 				channel_msg.refreshIEData(channel_data);
 				ie_driver->sendMessage(&channel_msg, true, true);
+				
+				#ifndef HW_IEBUS
 				getIEAckMessage(device_ie_id);
+				#endif
 
 				*this->channel += 1;
 
@@ -507,7 +510,10 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 				channel_msg.refreshIEData(channel_data);
 				ie_driver->sendMessage(&channel_msg, true, true);
+				
+				#ifndef HW_IEBUS
 				getIEAckMessage(device_ie_id);
+				#endif
 
 				*this->channel -= 1;
 
@@ -527,7 +533,10 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 				channel_msg.refreshIEData(channel_data);
 				ie_driver->sendMessage(&channel_msg, true, true);
+				
+				#ifndef HW_IEBUS
 				getIEAckMessage(device_ie_id);
+				#endif
 
 				*this->channel -= 1;
 				
@@ -547,7 +556,10 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 				channel_msg.refreshIEData(channel_data);
 				ie_driver->sendMessage(&channel_msg, true, true);
+				
+				#ifndef HW_IEBUS
 				getIEAckMessage(device_ie_id);
+				#endif
 
 				*this->channel += 1;
 
@@ -593,7 +605,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 		channel_msg.refreshIEData(channel_data);
 		ie_driver->sendMessage(&channel_msg, true, true);
+		#ifndef HW_IEBUS
 		getIEAckMessage(device_ie_id);
+		#endif
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x38 && the_message->data[1] == 0xA && source_sel) { //Category increment/decrement.
 		uint8_t channel_data[] = {0x30, 0x0, 0x19, 0x2, 0x19, 0xF5, 0x0};
 		if(the_message->data[2] == 0)
@@ -604,7 +618,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 		channel_msg.refreshIEData(channel_data);
 		ie_driver->sendMessage(&channel_msg, true, true);
+		#ifndef HW_IEBUS
 		getIEAckMessage(device_ie_id);
+		#endif
 	} else if(the_message->l >= 4 && the_message->data[0] == 0x38 && the_message->data[1] == 0x5 && source_sel) { //Goto channel.
 		if(the_message->data[2] > 0)
 			return;
@@ -613,7 +629,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 		IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 		channel_msg.refreshIEData(channel_data);
 		ie_driver->sendMessage(&channel_msg, true, true);
+		#ifndef HW_IEBUS
 		getIEAckMessage(device_ie_id);
+		#endif
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x38 && the_message->data[1] == 0x6 && source_sel) { //Preset change.
 		changeToPreset(the_message->data[2]);
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x38 && the_message->data[1] == 0x7 && source_sel) { //Preset increment.
@@ -659,7 +677,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 			source_sel = true;
 			sendFunctionMessage(ie_driver, true, IE_ID_SIRIUS, function, sizeof(function));
 			sendFunctionMessage(ie_driver, false, IE_ID_SIRIUS, function, sizeof(function));
+			#ifndef HW_IEBUS
 			getIEAckMessage(device_ie_id);
+			#endif
 
 			bool full_xm_ack = false;
 
@@ -697,7 +717,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				function[2] = 0x41;
 				sendFunctionMessage(ie_driver, true, IE_ID_SIRIUS, function, sizeof(function));
 				sendFunctionMessage(ie_driver, false, IE_ID_SIRIUS, function, sizeof(function));
+				#ifndef HW_IEBUS
 				getIEAckMessage(device_ie_id);
+				#endif
 				full_xm = true;
 			}
 			
@@ -732,7 +754,9 @@ void HondaXMHandler::readAIBusMessage(AIData* the_message) {
 				source_sel = false;
 				uint8_t function[] = {0x0, 0x1};
 				sendFunctionMessage(ie_driver, true, IE_ID_SIRIUS, function, sizeof(function));
+				#ifndef HW_IEBUS
 				getIEAckMessage(device_ie_id);
+				#endif
 				requestControl(active_source);
 			}
 
@@ -1018,7 +1042,9 @@ void HondaXMHandler::sendTextRequest() {
 
 	IE_Message function_msg = getFunctionMessage(true, IE_ID_SIRIUS, function_data, sizeof(function_data));
 	ie_driver->sendMessage(&function_msg, true, true);
+	#ifndef HW_IEBUS
 	getIEAckMessage(&function_msg, device_ie_id);
+	#endif
 }
 
 //Set text on the IMID.
@@ -1143,7 +1169,9 @@ void HondaXMHandler::setChannel(uint16_t channel) {
 	IE_Message channel_msg(sizeof(channel_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 	channel_msg.refreshIEData(channel_data);
 	ie_driver->sendMessage(&channel_msg, true, true);	
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
+	#endif
 
 	*this->channel = channel;
 
@@ -1171,20 +1199,29 @@ void HondaXMHandler::changeToPreset(uint8_t preset) {
 	IE_Message preset_request(sizeof(preset_request_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 	preset_request.refreshIEData(preset_request_data);
 
+	#ifndef HW_IEBUS
 	bool ie_ack = false;
+	#endif
 	elapsedMillis ack_timer;
 
+	#ifndef HW_IEBUS
 	while(!ie_ack && ack_timer < 50) {
+	#endif
 		ie_driver->sendMessage(&preset_request, true, true);
+		#ifndef HW_IEBUS
 		ie_ack = this->getIEAckMessage(device_ie_id);
 	}
+	#endif
 
 	uint8_t preset_set_data[] = {0x30, 0x0, 0x19, 0x2, 0x19, 0xE7, 0x1};
 	preset_set_data[6] = preset;
 	IE_Message preset_set(sizeof(preset_set_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 	preset_set.refreshIEData(preset_set_data);
 	ie_driver->sendMessage(&preset_set, true, true);
+
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
+	#endif
 
 	if(new_channel != *this->channel) {
 		*this->channel = new_channel;
@@ -1212,13 +1249,19 @@ void HondaXMHandler::savePreset(uint8_t preset) {
 	IE_Message preset_request(sizeof(preset_request_data), IE_ID_RADIO, IE_ID_SIRIUS, 0xF, true);
 	preset_request.refreshIEData(preset_request_data);
 
+	#ifndef HW_IEBUS
 	bool ie_ack = false;
+	#endif
 	elapsedMillis ack_timer;
 
+	#ifndef HW_IEBUS
 	while(!ie_ack && ack_timer < 50) {
+	#endif
 		ie_driver->sendMessage(&preset_request, true, true);
+		#ifndef HW_IEBUS
 		ie_ack = this->getIEAckMessage(device_ie_id);
 	}
+	#endif
 
 	uint8_t preset_set_data[] = {0x30, 0x0, 0x19, 0x2, 0x19, 0xE8, 0x1};
 	preset_set_data[6] = preset;
@@ -1226,12 +1269,16 @@ void HondaXMHandler::savePreset(uint8_t preset) {
 	preset_set.refreshIEData(preset_set_data);
 	ie_driver->sendMessage(&preset_set, true, true);
 
+	#ifndef HW_IEBUS
 	ie_ack = false;
 	ack_timer = 0;
 	while(!ie_ack && ack_timer < 50) {
+	#endif
 		ie_driver->sendMessage(&preset_set, true, true);
+		#ifndef HW_IEBUS
 		ie_ack = this->getIEAckMessage(device_ie_id);
 	}
+	#endif
 
 	getPreset(preset);
 }
@@ -1363,7 +1410,9 @@ void HondaXMHandler::getPreset(const uint8_t preset) {
 	preset_request.refreshIEData(preset_request_data);
 
 	ie_driver->sendMessage(&preset_request, true, true);
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
+	#endif
 }
 
 //Request a channel name.
@@ -1382,7 +1431,9 @@ void HondaXMHandler::getChannel(const uint16_t channel) {
 	channel_request.refreshIEData(channel_request_data);
 
 	ie_driver->sendMessage(&channel_request, true, true);
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
+	#endif
 }
 
 //Send the message for the "info" button to the IMID. Always resend the message.
@@ -1930,6 +1981,7 @@ void HondaXMHandler::requestControl(const uint8_t id) {
 	ai_driver->writeAIData(&request_msg, parameter_list->screen_connected);
 }
 
+#ifndef HW_IEBUS
 //Handle an AIBus message internally.
 void HondaXMHandler::handleAIBus(AIData* msg) {
 	readAIBusMessage(msg);
@@ -1944,3 +1996,4 @@ void HondaXMHandler::handleIEBus(IE_Message* msg, const bool listen) {
 void HondaXMHandler::handleIMIDAIBus(AIData* msg) {
 	imid_handler->readAIBusMessage(msg);
 }
+#endif

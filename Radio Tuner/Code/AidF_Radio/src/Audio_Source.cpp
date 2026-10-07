@@ -482,6 +482,44 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					}
 				}
 				return true;
+			} else if(parameter_list->clock_freq_adjust) {
+				if(button != 0x2A && button != 0x2B && state == 2) {
+					if(menu_open == RADIO_CLOCK_MENU) {
+						const MenuList clock_menu = getMenu(MENU_INDEX_CLOCK_SET, parameter_list->locale);
+						parameter_list->clock_freq_adjust = false;
+						createRadioClockSettingsMenuItem(clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_FREQUENCY));
+					} else
+						parameter_list->clock_freq_adjust = false;
+
+					{
+						uint8_t data[] = {0x77, parameter_list->last_control, 0x10};
+
+						AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
+						ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
+					}
+				} else if(state == 2) {
+					const MenuList clock_menu = getMenu(MENU_INDEX_CLOCK_SET, parameter_list->locale);
+					const int16_t inc = parameter_list->fm_inc, lower_limit = parameter_list->fm_lower_limit, upper_limit = parameter_list->fm_upper_limit;
+
+					if(button == 0x2A) {
+						if(parameter_list->clock_freq < 0)
+							parameter_list->clock_freq = upper_limit;
+						else if(parameter_list->clock_freq - inc >= lower_limit)
+							parameter_list->clock_freq -= inc;
+						else
+							parameter_list->clock_freq = upper_limit;
+						createRadioClockSettingsMenuItem(clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_FREQUENCY));
+					} else if(button == 0x2B) {
+						if(parameter_list->clock_freq < 0)
+							parameter_list->clock_freq = lower_limit;
+						else if(parameter_list->clock_freq + inc <= upper_limit)
+							parameter_list->clock_freq += inc;
+						else
+							parameter_list->clock_freq = lower_limit;
+						createRadioClockSettingsMenuItem(clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_FREQUENCY));
+					}
+				}
+				return true;
 			}
 
 			if(button == 0x6 && state == 2) //Press volume knob.
@@ -728,7 +766,7 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 			const uint8_t steps = ai_d->data[2]&0xF;
 			const bool clockwise = (ai_d->data[2]&0x10) != 0;
 			if(ai_d->data[1] == 0x7) { //Function knob.
-				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected || !this->parameter_list->monitor_on) && source_list[current_source].source_id == ID_RADIO) {
+				if((this->parameter_list->manual_tune_mode || !this->parameter_list->computer_connected || !this->parameter_list->monitor_on) && parameter_list->audio_on && source_list[current_source].source_id == ID_RADIO) {
 					manualTuneIncrement(clockwise, steps);
 					//parameter_list->tune_changed = true;
 				} else if(parameter_list->bass_adjust || parameter_list->treble_adjust || parameter_list->balance_adjust || parameter_list->fader_adjust) {
@@ -772,6 +810,34 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						const MenuList settings_menu = getMenu(MENU_INDEX_AUDIO_SETTINGS, parameter_list->locale);
 						createAudioSettingsMenuItem(settings_menu.getLocalIndex(MENU_INDEX_AUDIO_SETTINGS_NAV_CUT));
 					}
+				} else if(parameter_list->clock_freq_adjust) {
+					const int16_t last_clock_freq = parameter_list->clock_freq;
+					const int16_t inc = parameter_list->fm_inc, lower_limit = parameter_list->fm_lower_limit, upper_limit = parameter_list->fm_upper_limit;
+					
+					if(clockwise) {
+						for(int i=0;i<steps;i+=1) {
+							if(parameter_list->clock_freq < 0)
+								parameter_list->clock_freq = lower_limit;
+							else if(parameter_list->clock_freq + inc <= upper_limit)
+								parameter_list->clock_freq += inc;
+							else
+							 	parameter_list->clock_freq = lower_limit;
+						}
+					} else {
+						for(int i=0;i<steps;i+=1) {
+							if(parameter_list->clock_freq < 0)
+								parameter_list->clock_freq = upper_limit;
+							else if(parameter_list->clock_freq - inc >= lower_limit)
+								parameter_list->clock_freq -= inc;
+							else
+							 	parameter_list->clock_freq = upper_limit;
+						}
+					}
+
+					if(parameter_list->clock_freq != last_clock_freq) {
+						const MenuList clock_menu = getMenu(MENU_INDEX_CLOCK_SET, parameter_list->locale);
+						createRadioClockSettingsMenuItem(clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_FREQUENCY));
+					}
 				}
 			}
 		}
@@ -784,9 +850,12 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 				menu_open = NO_MENU;
 				tuner_background->setSeekMode(true);
 
-				if(last_menu == RDS_FLASH_MENU || last_menu == FM_BAND_MENU || last_menu == FM_INC_MENU || last_menu == AM_BAND_MENU || last_menu == RDS_CALLSIGN_MENU || last_menu == STEERING_CONTROL_MENU)
-					createRadioSettingsMenu();
-				else if(last_menu == AUDIO_SETTINGS_MENU && settings_menu_requestor == ID_NAV_COMPUTER) {
+				if(last_menu == RDS_FLASH_MENU || last_menu == FM_BAND_MENU || last_menu == FM_INC_MENU || last_menu == AM_BAND_MENU || last_menu == RDS_CALLSIGN_MENU || last_menu == STEERING_CONTROL_MENU) {
+					if(settings_menu_requestor != ID_NAV_COMPUTER)
+						createRadioSettingsMenu();
+					else
+						createSecretMenu();
+				} else if(last_menu == AUDIO_SETTINGS_MENU && settings_menu_requestor == ID_NAV_COMPUTER) {
 					uint8_t close_data[] = {0x2B, 0x40};
 					AIData close_msg(sizeof(close_data), ID_RADIO, ID_NAV_COMPUTER, close_data);
 					ai_handler->writeAIData(&close_msg);
@@ -796,6 +865,16 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					createAudioSettingsMenu(settings_menu_requestor != ID_NAV_COMPUTER);
 				else if(last_menu == SVC_MENU)
 					createToneMenu();
+				else if(last_menu == RADIO_CLOCK_MENU) {
+					if(settings_menu_requestor != ID_NAV_COMPUTER)
+						createRadioSettingsMenu();
+					else
+						createSecretMenu();
+				} else if(last_menu == SECRET_DEV_MENU) {
+					uint8_t close_data[] = {0x2B, 0x40};
+					AIData close_msg(sizeof(close_data), ID_RADIO, ID_NAV_COMPUTER, close_data);
+					ai_handler->writeAIData(&close_msg);
+				}
 
 				return true;
 			} else if(ai_d->l >= 3 && ai_d->data[1] == 0x6A) { //Audio menu item selected.
@@ -1036,6 +1115,10 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					case MENU_INDEX_RADIO_SETTINGS_STEERING_WHEEL_MODE:
 						createSteeringControlMenu();
 						break;
+					case MENU_INDEX_RADIO_SETTINGS_CLOCK:
+						if(parameter_list->auto_clock)
+							createRadioClockSettingsMenu();
+						break;
 					case MENU_INDEX_RADIO_SETTINGS_AUDIO:
 						settings_menu_requestor = ID_RADIO;
 						createAudioSettingsMenu(true);
@@ -1106,8 +1189,11 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						setBandFrequencies();
 						setEEPROMPresets(parameter_list);
 						
-						clearMenu();
-						createRadioSettingsMenu();
+						if(settings_menu_requestor != ID_NAV_COMPUTER) {
+							clearMenu();
+							createRadioSettingsMenu();
+						} else
+							createSecretMenu();
 						break;
 					default:
 						break;
@@ -1127,8 +1213,11 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						setBandFrequencies();
 						setEEPROMPresets(parameter_list);
 						
-						clearMenu();
-						createRadioSettingsMenu();
+						if(settings_menu_requestor != ID_NAV_COMPUTER) {
+							clearMenu();
+							createRadioSettingsMenu();
+						} else
+							createSecretMenu();
 						break;
 					default:
 						break;
@@ -1147,8 +1236,11 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						setBandFrequencies();
 						setEEPROMPresets(parameter_list);
 						
-						clearMenu();
-						createRadioSettingsMenu();
+						if(settings_menu_requestor != ID_NAV_COMPUTER) {
+							clearMenu();
+							createRadioSettingsMenu();
+						} else
+							createSecretMenu();
 						break;
 					default:
 						break;
@@ -1168,8 +1260,11 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						setEEPROMPresets(parameter_list);
 						tuner_background->clearStationNames();
 						
-						clearMenu();
-						createRadioSettingsMenu();
+						if(settings_menu_requestor != ID_NAV_COMPUTER) {
+							clearMenu();
+							createRadioSettingsMenu();
+						} else
+							createSecretMenu();
 						break;
 					default:
 						break;
@@ -1190,6 +1285,69 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 						createToneMenu();
 						break;
 					default:
+						break;
+					}
+				} else if(menu_open == RADIO_CLOCK_MENU) {
+					const int selection = ai_d->data[2]-1;
+					if(selection < 0)
+						return true;
+
+					const MenuList clock_menu = getMenu(MENU_INDEX_CLOCK_SET, parameter_list->locale);
+					switch(clock_menu.getGlobalIndex(selection)) {
+					case MENU_INDEX_CLOCK_SET_WAIT:
+						if(parameter_list->clock_freq >= 0)
+							parameter_list->clock_wait = !parameter_list->clock_wait;
+						else
+							parameter_list->clock_wait = false;
+						parameter_list->use_clock_wait_timer = false;
+						createRadioClockSettingsMenuItem(clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_WAIT));
+						break;
+					case MENU_INDEX_CLOCK_SET_FREQUENCY:
+						parameter_list->clock_freq_adjust = !parameter_list->clock_freq_adjust;
+						parameter_list->clock_freq_type = CLOCK_FREQ_MANUAL;
+						createRadioClockSettingsMenuItem(clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_FREQUENCY));
+						{
+							uint8_t data[] = {0x77, ID_RADIO, 0x10};
+							if(parameter_list->clock_freq_adjust)
+								data[2] |= 0x20;
+							else
+								data[1] = parameter_list->last_control;
+
+							AIData screen_msg(sizeof(data), ID_RADIO, ID_NAV_SCREEN, data);
+							ai_handler->writeAIData(&screen_msg, parameter_list->screen_connected);
+						}
+
+						break;
+					case MENU_INDEX_CLOCK_SET_AUTOSET_FREQUENCY:
+						parameter_list->auto_clock_frequency = !parameter_list->auto_clock_frequency;
+						createRadioClockSettingsMenuItem(clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_AUTOSET_FREQUENCY));
+						break;
+					}
+				} else if(menu_open == SECRET_DEV_MENU) {
+					const int selection = ai_d->data[2]-1;
+					if(selection < 0)
+						return true;
+
+					const MenuList dev_menu = getMenu(MENU_INDEX_DEV_CONFIGURATION, parameter_list->locale);
+					switch(dev_menu.getGlobalIndex(selection)) {
+					case MENU_INDEX_DEV_CONFIGURATION_FM_BAND:
+						createFMBandMenu();
+						break;
+					case MENU_INDEX_DEV_CONFIGURATION_AM_BAND:
+						createAMBandMenu();
+						break;
+					case MENU_INDEX_DEV_CONFIGURATION_FM_INCREMENT:
+						createFMIncMenu();
+						break;
+					case MENU_INDEX_DEV_CONFIGURATION_RDS_CALLSIGN:
+						createRDSCallsignMenu();
+						break;
+					case MENU_INDEX_DEV_CONFIGURATION_RDS_CLOCK_SET:
+						createRadioClockSettingsMenu();
+						break;
+					case MENU_INDEX_DEV_CONFIGURATION_CLOCK_DEBUG:
+						parameter_list->clock_debug = !parameter_list->clock_debug;
+						createSecretMenuItem(dev_menu.getLocalIndex(MENU_INDEX_DEV_CONFIGURATION_CLOCK_DEBUG));
 						break;
 					}
 				}
@@ -1225,6 +1383,57 @@ bool SourceHandler::handleAIBus(AIData* ai_d) {
 					clearMenu(audio_menu_request);
 
 				createAudioSettingsMenu(audio_menu_request);
+				return true;
+			} else if(ai_d->data[1] == 0x55 || ai_d->data[1] == 0x56 || ai_d->data[1] == 0x57) { //Create menu by name.
+				String menu_requested = "";
+				for(int i=2;i<ai_d->l;i+=1)
+					menu_requested += char(ai_d->data[i]);
+
+				menu_requested.trim();
+
+				if(menu_requested.equalsIgnoreCase("SETTING")) { //Settings menu.
+					if(ai_d->data[1] == 0x55) {
+						settings_menu_requestor = ID_NAV_COMPUTER;
+						createAudioSettingsMenu(false);
+					} else {
+						const MenuList settings_menu = getMenu(MENU_INDEX_AUDIO_SETTINGS, parameter_list->locale);
+						const String menu_name = settings_menu.title;
+
+						uint8_t response_data[] = {0x2B, ai_d->data[1]};
+						AIData response_msg(sizeof(response_data) + (ai_d->data[1] == 0x57 ? menu_name.length() : 0), ID_RADIO, ai_d->sender);
+
+						for(int i=0;i<sizeof(response_data);i+=1)
+							response_msg[i] = response_data[i];
+
+						if(ai_d->data[1] == 0x57) {
+							for(int i=0;i<menu_name.length() && i+sizeof(response_data)<response_msg.l;i+=1)
+								response_msg[i+sizeof(response_data)] = uint8_t(menu_name[i]);
+						}
+
+						ai_handler->writeAIData(&response_msg);
+					}
+				} else if(menu_requested.equalsIgnoreCase("DEVSET")) {
+					if(ai_d->data[1] == 0x55)
+						createSecretMenu();
+					else {
+						const MenuList dev_menu = getMenu(MENU_INDEX_DEV_CONFIGURATION, parameter_list->locale);
+						const String menu_name = dev_menu.title;
+
+						uint8_t response_data[] = {0x2B, ai_d->data[1]};
+						AIData response_msg(sizeof(response_data) + (ai_d->data[1] == 0x57 ? menu_name.length() : 0), ID_RADIO, ai_d->sender);
+
+						for(int i=0;i<sizeof(response_data);i+=1)
+							response_msg[i] = response_data[i];
+
+						if(ai_d->data[1] == 0x57) {
+							for(int i=0;i<menu_name.length() && i+sizeof(response_data)<response_msg.l;i+=1)
+								response_msg[i+sizeof(response_data)] = uint8_t(menu_name[i]);
+						}
+
+						ai_handler->writeAIData(&response_msg);
+					}
+				}
+
 				return true;
 			}
 		}
@@ -1559,18 +1768,26 @@ bool SourceHandler::createMenu(const String title, const int items, const bool a
 
 	//Confirm that the nav computer does not respond with a "no menu" message.
 	elapsedMillis no_draw;
+	AIData cache_list[6];
+	Vector<AIData> cache_vec(cache_list);
+
 	while(no_draw < 50) {
 		AIData no_msg;
-		if(ai_handler->readAIData(&no_msg)) {
+		if(ai_handler->readAIData(&no_msg)) { //TODO: Check.
 			if(no_msg.receiver == ID_RADIO && no_msg.sender == ID_NAV_COMPUTER &&
 											no_msg.l >= 2 &&
 											no_msg.data[0] == 0x2B && no_msg.data[1] == 0x40) { //No menu message.
+				for(auto msg: cache_vec)
+					ai_handler->cacheMessage(&msg);
 				return false;
 			} else if(no_msg.receiver == ID_RADIO) {
-				ai_handler->cacheMessage(&no_msg);
+				cache_vec.push_back(no_msg);
 			}
 		}
 	}
+
+	for(auto msg: cache_vec)
+		ai_handler->cacheMessage(&msg);
 
 	return true;
 }
@@ -1699,7 +1916,7 @@ void SourceHandler::createStationListMenu() {
 
 //Create the main audio settings menu.
 void SourceHandler::createAudioSettingsMenu(const bool audio) {
-	if(menu_open != NO_MENU) {
+	if(menu_open != NO_MENU && audio) {
 		if(!clearMenu())
 			return;
 	}
@@ -1722,6 +1939,7 @@ void SourceHandler::createAudioSettingsMenu(const bool audio) {
 //Create an item in the audio settings menu.
 void SourceHandler::createAudioSettingsMenuItem(const int item) {
 	const MenuList settings_menu = getMenu(MENU_INDEX_AUDIO_SETTINGS, parameter_list->locale);
+	const menu_index_t menu_item = settings_menu.getGlobalIndex(item);
 
 	String option_text = settings_menu[item];
 
@@ -1734,8 +1952,6 @@ void SourceHandler::createAudioSettingsMenuItem(const int item) {
 
 	AIData option_msg(sizeof(option_data), ID_RADIO, ID_NAV_COMPUTER, option_data);
 	ai_handler->writeAIData(&option_msg, parameter_list->computer_connected);
-
-	const menu_index_t menu_item = settings_menu.getGlobalIndex(item);
 
 	if(menu_item == MENU_INDEX_AUDIO_SETTINGS_NAV_CUT) {
 		const uint8_t slider_max = 6;
@@ -1809,7 +2025,7 @@ void SourceHandler::createAudioSettingsMenuItem(const int item) {
 
 //Create the source button function menu.
 void SourceHandler::createSourceFunctionMenu() {
-	if(menu_open != NO_MENU) {
+	if(menu_open != NO_MENU && settings_menu_requestor != ID_NAV_COMPUTER) {
 		if(!clearMenu())
 			return;
 	}
@@ -1844,7 +2060,7 @@ void SourceHandler::createSourceFunctionMenu() {
 
 //Create the DAC latency menu.
 void SourceHandler::createDACLatencyMenu() {
-	if(menu_open != NO_MENU) {
+	if(menu_open != NO_MENU && settings_menu_requestor != ID_NAV_COMPUTER) {
 		if(!clearMenu())
 			return;
 	}
@@ -1879,7 +2095,7 @@ void SourceHandler::createDACLatencyMenu() {
 
 //Create the tone menu.
 void SourceHandler::createToneMenu() {
-	if(menu_open != NO_MENU) {
+	if(menu_open != NO_MENU && settings_menu_requestor != ID_NAV_COMPUTER) {
 		if(!clearMenu())
 			return;
 	}
@@ -2010,7 +2226,7 @@ void SourceHandler::createToneMenuItem(const int item) {
 
 //Create the SVC menu.
 void SourceHandler::createSVCMenu() {
-	if(menu_open != NO_MENU) {
+	if(menu_open != NO_MENU && settings_menu_requestor != ID_NAV_COMPUTER) {
 		if(!clearMenu())
 			return;
 	}
@@ -2065,6 +2281,8 @@ void SourceHandler::createRadioSettingsMenu() {
 	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = RADIO_SETTINGS_MENU;
+
+	settings_menu_requestor = ID_RADIO;
 }
 
 //Create an item in the radio settings menu.
@@ -2074,6 +2292,9 @@ void SourceHandler::createRadioSettingsMenuItem(const int item) {
 	if(item==settings_menu.getLocalIndex(MENU_INDEX_RADIO_SETTINGS_RDS_FLASH)) {
 		if(parameter_list->imid_char <= 0 || parameter_list->imid_lines != 1)
 			setting = (parameter_list->header_rds_setting == HEADER_RDS_OFF ? "#ROF" : "#RON") + (" " + setting);
+	} else if(item == settings_menu.getLocalIndex(MENU_INDEX_RADIO_SETTINGS_CLOCK)) {
+		if(!parameter_list->auto_clock)
+			return;
 	}
 
 	uint8_t setting_data[3+setting.length()];
@@ -2089,16 +2310,13 @@ void SourceHandler::createRadioSettingsMenuItem(const int item) {
 
 //Create the FM band menu.
 void SourceHandler::createFMBandMenu() {
-	if(menu_open != NO_MENU) {
+	if(menu_open != NO_MENU && settings_menu_requestor != ID_NAV_COMPUTER) {
 		if(!clearMenu())
 			return;
 	}
-	
-	if(!clearMenu())
-		return;
 
 	const MenuList fm_band_menu = getMenu(MENU_INDEX_FM_BAND, parameter_list->locale);
-	if(!createMenu(fm_band_menu.title, fm_band_menu.size()))
+	if(!createMenu(fm_band_menu.title, fm_band_menu.size(), settings_menu_requestor != ID_NAV_COMPUTER))
 		return;
 
 	for(int i=0;i<fm_band_menu.size();i+=1) {
@@ -2127,16 +2345,13 @@ void SourceHandler::createFMBandMenu() {
 
 //Create the FM increment menu.
 void SourceHandler::createFMIncMenu() {
-	if(menu_open != NO_MENU) {
+	if(menu_open != NO_MENU && settings_menu_requestor != ID_NAV_COMPUTER) {
 		if(!clearMenu())
 			return;
 	}
-	
-	if(!clearMenu())
-		return;
 
 	const MenuList fm_inc_menu = getMenu(MENU_INDEX_FM_INC, parameter_list->locale);
-	if(!createMenu(fm_inc_menu.title, fm_inc_menu.size()))
+	if(!createMenu(fm_inc_menu.title, fm_inc_menu.size(), settings_menu_requestor != ID_NAV_COMPUTER))
 		return;
 
 	for(int i=0;i<fm_inc_menu.size();i+=1) {
@@ -2165,16 +2380,13 @@ void SourceHandler::createFMIncMenu() {
 
 //Create the AM band menu.
 void SourceHandler::createAMBandMenu() {
-	if(menu_open != NO_MENU) {
+	if(menu_open != NO_MENU && settings_menu_requestor != ID_NAV_COMPUTER) {
 		if(!clearMenu())
 			return;
 	}
-	
-	if(!clearMenu())
-		return;
 
 	const MenuList am_band_menu = getMenu(MENU_INDEX_AM_BAND, parameter_list->locale);
-	if(!createMenu(am_band_menu.title, am_band_menu.size()))
+	if(!createMenu(am_band_menu.title, am_band_menu.size(), settings_menu_requestor != ID_NAV_COMPUTER))
 		return;
 
 	for(int i=0;i<am_band_menu.size();i+=1) {
@@ -2387,16 +2599,13 @@ void SourceHandler::createRDSFlashMenu() {
 
 //Create the RDS callsign menu.
 void SourceHandler::createRDSCallsignMenu() {
-	if(menu_open != NO_MENU) {
+	if(menu_open != NO_MENU && settings_menu_requestor != ID_NAV_COMPUTER) {
 		if(!clearMenu())
 			return;
 	}
-	
-	if(!clearMenu())
-		return;
 
 	const MenuList rds_callsign_menu = getMenu(MENU_INDEX_RDS_CALLSIGN, parameter_list->locale);
-	if(!createMenu(rds_callsign_menu.title, rds_callsign_menu.size()))
+	if(!createMenu(rds_callsign_menu.title, rds_callsign_menu.size(), settings_menu_requestor != ID_NAV_COMPUTER))
 		return;
 
 	for(int i=0;i<rds_callsign_menu.size();i+=1) {
@@ -2429,9 +2638,6 @@ void SourceHandler::createSteeringControlMenu() {
 		if(!clearMenu())
 			return;
 	}
-	
-	if(!clearMenu())
-		return;
 
 	const MenuList steering_control_menu = getMenu(MENU_INDEX_STEERING_CONTROL, parameter_list->locale);
 	if(!createMenu(steering_control_menu.title, steering_control_menu.size()))
@@ -2459,6 +2665,87 @@ void SourceHandler::createSteeringControlMenu() {
 	bool ack = ai_handler->writeAIData(&display_msg);
 	if(ack)
 		menu_open = STEERING_CONTROL_MENU;
+}
+
+//Create the radio clock settings menu.
+void SourceHandler::createRadioClockSettingsMenu() {
+	if(menu_open != NO_MENU && settings_menu_requestor != ID_NAV_COMPUTER) {
+		if(!clearMenu())
+			return;
+	}
+	
+	const MenuList clock_menu = getMenu(MENU_INDEX_CLOCK_SET, parameter_list->locale);
+	if(!createMenu(clock_menu.title, clock_menu.size(), settings_menu_requestor != ID_NAV_COMPUTER))
+		return;
+
+	for(int i=0;i<clock_menu.size();i+=1)
+		createRadioClockSettingsMenuItem(i);
+
+	uint8_t display_data[] = {0x2B, 0x52, 0x1};
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER, display_data);
+	bool ack = ai_handler->writeAIData(&display_msg);
+	if(ack)
+		menu_open = RADIO_CLOCK_MENU;
+}
+
+//Create a radio clock setting menu option.
+void SourceHandler::createRadioClockSettingsMenuItem(const int item) {
+	const MenuList clock_menu = getMenu(MENU_INDEX_CLOCK_SET, parameter_list->locale);
+	String setting = clock_menu[item];
+	if(item==clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_WAIT))
+		setting = (parameter_list->clock_wait ? "#RON " : "#ROF ") + setting;
+	else if(item == clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_FREQUENCY)) {
+		const String clock_freq = (parameter_list->clock_freq >= 0) ? String(parameter_list->clock_freq/100) + '.' + parameter_list->clock_freq%100 + " MHz" : "N/A";
+		setting = (parameter_list->clock_freq_adjust ? "" : setting + ": ") + (parameter_list->clock_freq_adjust ? " < " : "") + clock_freq + (parameter_list->clock_freq_adjust ? " > " : "");
+	} else if(item == clock_menu.getLocalIndex(MENU_INDEX_CLOCK_SET_AUTOSET_FREQUENCY))
+		setting = (parameter_list->auto_clock_frequency ? "#RON " : "#ROF ") + setting;
+
+	uint8_t setting_data[3+setting.length()];
+	setting_data[0] = 0x2B;
+	setting_data[1] = 0x51;
+	setting_data[2] = uint8_t(item);
+	for(int i=0;i<setting.length();i+=1)
+		setting_data[i+3] = uint8_t(setting[i]);
+
+	AIData setting_msg(sizeof(setting_data), ID_RADIO, ID_NAV_COMPUTER, setting_data);
+	ai_handler->writeAIData(&setting_msg, parameter_list->computer_connected);
+}
+
+//Create the "secret" developer menu.
+void SourceHandler::createSecretMenu() {
+	const MenuList dev_menu = getMenu(MENU_INDEX_DEV_CONFIGURATION, parameter_list->locale);
+	if(!createMenu(dev_menu.title, dev_menu.size(), false))
+		return;
+
+	for(int i=0;i<dev_menu.size();i+=1)
+		createSecretMenuItem(i);
+
+	uint8_t display_data[] = {0x2B, 0x52, 0x1};
+	AIData display_msg(sizeof(display_data), ID_RADIO, ID_NAV_COMPUTER, display_data);
+	bool ack = ai_handler->writeAIData(&display_msg);
+	if(ack)
+		menu_open = SECRET_DEV_MENU;
+
+	settings_menu_requestor = ID_NAV_COMPUTER;
+}
+
+//Create a "secret" developer menu option.
+void SourceHandler::createSecretMenuItem(const int item) {
+	const MenuList dev_menu = getMenu(MENU_INDEX_DEV_CONFIGURATION, parameter_list->locale);
+	String setting = dev_menu[item];
+
+	if(item == dev_menu.getLocalIndex(MENU_INDEX_DEV_CONFIGURATION_CLOCK_DEBUG))
+		setting = (parameter_list->clock_debug ? "#RON " : "#ROF ") + setting;
+
+	uint8_t setting_data[3+setting.length()];
+	setting_data[0] = 0x2B;
+	setting_data[1] = 0x51;
+	setting_data[2] = uint8_t(item);
+	for(int i=0;i<setting.length();i+=1)
+		setting_data[i+3] = uint8_t(setting[i]);
+
+	AIData setting_msg(sizeof(setting_data), ID_RADIO, ID_NAV_COMPUTER, setting_data);
+	ai_handler->writeAIData(&setting_msg, parameter_list->computer_connected);
 }
 
 //Set the current source to the desired ID and sub ID.

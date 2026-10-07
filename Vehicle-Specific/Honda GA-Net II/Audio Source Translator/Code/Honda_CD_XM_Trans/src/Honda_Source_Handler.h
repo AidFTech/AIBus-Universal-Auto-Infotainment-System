@@ -60,9 +60,11 @@ protected:
 
 	bool sendHandshakeAckMessage();
 	void sendIEAckMessage(const uint16_t recipient);
+	#ifndef HW_IEBUS
 	bool getIEAckMessage(const uint16_t sender);
 	bool getIEAckMessage(IE_Message* msg, const uint16_t sender);
 	bool getIEAckMessageStrict(const uint16_t sender);
+	#endif
 	
 	void requestRadioControl();
 	
@@ -79,11 +81,13 @@ protected:
 	void setNavHeader(String header);
 
 	virtual void requestControl(const uint8_t id);
+	#ifndef HW_IEBUS
 	virtual void listenForIEBus(const unsigned long wait = 500, const bool single_msg = true);
 
 	virtual void handleAIBus(AIData* msg);
 	virtual void handleIEBus(IE_Message* msg, const bool listen = true);
 	virtual void handleIMIDAIBus(AIData* msg);
+	#endif
 
 private:
 	void startMenu(const bool audio, const uint8_t count, const uint8_t rows, const bool loop, String title);

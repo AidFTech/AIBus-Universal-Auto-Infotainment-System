@@ -74,6 +74,7 @@ private:
 	uint8_t max_char = EXT_CHAR_LIMIT;
 
 	elapsedMillis imid_change_timer = IMID_CHANGE_TIMER;
+	unsigned long imid_change_limit = IMID_CHANGE_TIMER_LOCAL;
 
 	uint8_t button_held = 0;
 
@@ -83,6 +84,8 @@ private:
 	AIData ai_cache[16];
 	Vector<AIData> ai_cache_vec;
 	int16_t imid_next_source = 0, imid_next_subsource = 0;
+
+	bool cache_long = true;
 
 	elapsedMillis last_change;
 	

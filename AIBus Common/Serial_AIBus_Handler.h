@@ -59,12 +59,18 @@ public:
 	
 	bool writeAIData(AIData* ai_d);
 	bool writeAIData(AIData* ai_d, const bool acknowledge);
-	void writeToCache(AIData* ai_d, const bool acknowledge);
+	bool writeAIData(AIData* ai_d, const int ack_count);
+	void writeToCache(AIData* ai_d, const bool acknowledge = true);
 
 	void sendAcknowledgement(const uint8_t sender, const uint8_t receiver);
 
+	bool getCacheEnabled();
+
 	void requestResend(const uint8_t r);
 	void requestResend(const uint8_t s, const uint8_t r);
+
+	void setAckCache(const bool ack_cache, const bool auto_off = true);
+	void awaitCachedAcknowledgment(const unsigned long wait);
 
 	int getAvailableBytes();
 	int getAvailableBytes(const bool cache);
@@ -88,12 +94,12 @@ private:
 	int connectAIPort(string port);
 	#endif
 
-	bool awaitAcknowledgement(AIData* ai_d);
+	bool awaitAcknowledgement(AIData* ai_d, const int ack_count);
 
 	void writeToSocket(AIData* ai_d);
 	bool getID(const uint8_t id);
 
-	bool writeAIBusToSerial(AIData* ai_d, const bool acknowledge);
+	bool writeAIBusToSerial(AIData* ai_d, const int ack_count, const bool allow_ack_cache = true);
 
 	bool readAIData(AIData* ai_d, const bool cache, const bool multiple, const bool threaded);
 
@@ -118,6 +124,10 @@ private:
 
 	vector<AIData> multi_cache = vector<AIData>(0);
 	int multi_expected_size = -1;
+
+	bool use_ack_cache: 1, auto_ack_cache_off: 1;
+	vector<AIData> ack_cache; //Vector for messages that need staggered acknowledgment.
+	vector<int> ack_cache_count;
 
 	#ifdef SOCKET_SERVER
 	int** socket_list;

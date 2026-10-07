@@ -31,25 +31,33 @@ bool HondaSourceHandler::sendHandshakeAckMessage() {
 	//First message...
 	ie_driver->sendMessage(&handshake_message, true, true);
 	
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
+	#endif
 	//delay(20);
 	
 	//Second message...
 	ie_driver->sendMessage(&handshake_message2, true, true);
 	
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
+	#endif
 	//delay(20);
 
 	//Third message...
 	ie_driver->sendMessage(&handshake_message3, true, true);
 
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
+	#endif
 	//delay(20);
 	
 	//Last message?
 	ie_driver->sendMessage(&handshake_message4, true, true);
 	
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
+	#endif
 
 	uint8_t function[] = {0x0, 0x1};
 	
@@ -64,6 +72,7 @@ void HondaSourceHandler::sendIEAckMessage(const uint16_t recipient) {
 	ie_driver->sendAcknowledgement(IE_ID_RADIO, recipient);
 }
 
+#ifndef HW_IEBUS
 //Get whether the acknowledgment message was sent.
 bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 	bool ack = false;
@@ -72,16 +81,20 @@ bool HondaSourceHandler::getIEAckMessage(const uint16_t sender) {
 	int tries = 0;
 	while(!ack && delay_timer < 100 && tries < IE_TRIES) {
 		IE_Message ie_d;
+		#ifdef HW_IEBUS
+		const int message_result = ie_driver->readMessage(&ie_d, true, IE_ID_RADIO);
+		#else
 		const int message_result = ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO);
+		#endif
 		if(message_result == 0) {
 			if(ie_d.l >= 1 && ie_d.data[0] == 0x80) {
 				ack = true;
 				break;
 			}
 		} else if(message_result < -1 || message_result > 0) {
-			if(tries < 0) {
+			if(tries <= 0) {
 				delay_timer = 0;
-				//ie_driver->cacheAIBus();
+				ie_driver->cacheAIBus();
 			}
 			tries += 1;
 		}
@@ -116,7 +129,11 @@ bool HondaSourceHandler::getIEAckMessageStrict(const uint16_t sender) {
 	elapsedMillis delay_timer = 0;
 	while(!ack && delay_timer < 20) {
 		IE_Message ie_d;
+		#ifdef HW_IEBUS
+		const int message_result = ie_driver->readMessage(&ie_d, true, IE_ID_RADIO);
+		#else
 		const int message_result = ie_driver->readMessageStrict(&ie_d, true, IE_ID_RADIO);
+		#endif
 		if(message_result == 0) {
 			if(ie_d.l >= 1 && ie_d.data[0] == 0x80) {
 				ack = true;
@@ -130,6 +147,7 @@ bool HondaSourceHandler::getIEAckMessageStrict(const uint16_t sender) {
 
 	return ack;
 }
+#endif
 
 //Ask the radio to switch over.
 void HondaSourceHandler::requestRadioControl() {
@@ -153,9 +171,11 @@ void HondaSourceHandler::clearEstablished() {
 //Send an IEBus message through this source.
 bool HondaSourceHandler::sourceSendIEMessage(IE_Message* msg, const bool ack) {
 	ie_driver->sendMessage(msg, true, true);
+	#ifndef HW_IEBUS
 	if(ack)
 		return getIEAckMessage(msg, msg->receiver);
 	else
+	#endif
 		return true;
 }
 
@@ -291,6 +311,7 @@ void HondaSourceHandler::requestControl(const uint8_t id) {
 		parameter_list->screen_connected = false;
 }
 
+#ifndef HW_IEBUS
 //Listen for IEBus data.
 inline void HondaSourceHandler::listenForIEBus(const unsigned long wait, const bool single_msg) {
 	if(!source_sel)
@@ -334,7 +355,7 @@ inline void HondaSourceHandler::listenForIEBus(const unsigned long wait, const b
 					handleAIBus(&pending);
 					allow_recursive_aibus = true;
 					break;
-				} else if(pending.l > 0 && pending.receiver == ID_IMID_SCR) {
+				} else if(parameter_list->imid_connected && pending.l > 0 && pending.receiver == ID_IMID_SCR) {
 					allow_recursive_aibus = false;
 					handleIMIDAIBus(&pending);
 					allow_recursive_aibus = true;
@@ -379,6 +400,7 @@ void HondaSourceHandler::handleIEBus(IE_Message* msg, const bool listen) {
 void HondaSourceHandler::handleIMIDAIBus(AIData* msg) {
 
 }
+#endif
 
 //Send an overlay message to the phone mirror.
 void HondaSourceHandler::sendMirrorMessage(String text, const uint8_t index, const bool refresh) {

@@ -81,9 +81,11 @@ private:
 	void createTapeMenu();
 	void createTapeMenuOption(const uint8_t option);
 
+	#ifndef HW_IEBUS
 	void handleAIBus(AIData* msg);
 	void handleIEBus(IE_Message* msg, const bool listen = true);
 	void handleIMIDAIBus(AIData* msg);
+	#endif
 };
 
 #endif

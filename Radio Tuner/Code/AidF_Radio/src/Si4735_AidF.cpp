@@ -23,7 +23,7 @@ void Si4735Controller::init2() {
 	this->tuner.setFM(parameters->fm_lower_limit, parameters->fm_upper_limit, parameters->fm_start, parameters->fm_inc);
 
 	delay(500);
-	this->tuner.setRdsConfig(3, 3, 3, 3, 3);
+	this->tuner.setRdsConfig(1, 2, 2, 2, 2);
 	this->tuner.setFifoCount(1);
 	this->tuner.setVolume(63);
 	this->tuner.setFmBlendStereoThreshold(FM_STEREO_THRESH);
@@ -107,7 +107,7 @@ void Si4735Controller::setPower(const bool power, const uint8_t function) {
 		if(function != SUB_AM) {
 			this->tuner.setFrequencyStep(parameters->fm_inc);
 
-			this->tuner.setRdsConfig(3, 3, 3, 3, 3);
+			this->tuner.setRdsConfig(1, 2, 2, 2, 2);
 			this->tuner.setFifoCount(1);
 		} else {
 			this->tuner.setFrequencyStep(parameters->am_inc);
@@ -212,7 +212,8 @@ void Si4735Controller::getParameters(ParameterList* parameters, const uint8_t se
 	if(parameters->has_rds) {
 		getCallsign(&parameters->rds_station_name);
 		getRdsInfo(&parameters->rds_program_name, false);
-		getDateTime(parameters);
+		if(parameters->clock_freq < 0 || parameters->clock_freq == tuner.getFrequency())
+			parameters->clock_set_success |= getDateTime(parameters, false);
 	}
 }
 
@@ -264,8 +265,8 @@ bool Si4735Controller::getCallsign(String* rds) {
 }
 
 //Save the date and time to the parameter list.
-bool Si4735Controller::getDateTime() {
-	return getDateTime(this->parameters);
+bool Si4735Controller::getDateTime(const bool br) {
+	return getDateTime(this->parameters, br);
 }
 
 //Return whether a date/time signal is present in this frequency, but do not actually set the date/time.
@@ -276,20 +277,37 @@ bool Si4735Controller::getDateTimePresent() {
 	dummy_parameters.auto_clock = true;
 	dummy_parameters.fm_stereo = parameters->fm_stereo;
 	
-	return this->getDateTime(&dummy_parameters);
+	return this->getDateTime(&dummy_parameters, false);
 }
 
 //Save the date and time to a parameter list.
-bool Si4735Controller::getDateTime(ParameterList* parameters) {
+bool Si4735Controller::getDateTime(ParameterList* parameters, const bool br) {
+	if(!parameters->auto_clock)
+		return false;
+	
 	uint16_t year = parameters->year, month = parameters->month, day = parameters->day, hour = parameters->hour, minute = parameters->min;
 	const int16_t last_hour = parameters->hour, last_min = parameters->min;
+
+	tuner.getStatus();
+	tuner.getCurrentReceivedSignalQuality();
+
+	String rds_text = parameters->rds_program_name;
+	rds_text.trim();
+	
+	tuner.rdsBeginQuery();
+
+	if(getRSSI() < FM_STEREO_THRESH)
+		return last_clock_timer < 10500;
 	
 	const int minute_limit = 5;
 
-	if(parameters->auto_clock && tuner.getRdsDateTime(&year, &month, &day, &hour, &minute) && parameters->fm_stereo) {
-		const bool set_clock = getTimePlausible(hour, minute, last_hour, last_min, minute_limit);
+	if(parameters->auto_clock && tuner.getRdsDateTime(&year, &month, &day, &hour, &minute) && (parameters->fm_stereo || br)) {
+		const bool plausible = getTimePlausible(hour, minute, last_hour, last_min, minute_limit);
+
+		if((!plausible || month == 0 || day == 0) && hour == 0 && minute == 0)
+			return last_clock_timer < 10500;
 		
-		if(set_clock) {
+		if(plausible || (parameters->clock_wait && tuner.getFrequency() == parameters->clock_freq)) {
 			parameters->hour = hour;
 			parameters->min = minute;
 			parameters->minute_timer = 0;
@@ -298,14 +316,23 @@ bool Si4735Controller::getDateTime(ParameterList* parameters) {
 			parameters->month = month;
 			parameters->day = day;
 
-			parameters->clock_freq = tuner.getCurrentFrequency();
+			if((parameters->clock_freq_type == CLOCK_FREQ_BACKGROUND || parameters->clock_freq < 0)
+				&& !parameters->clock_wait && parameters->auto_clock_frequency && !br) {
+				parameters->clock_freq = tuner.getFrequency();
+				parameters->clock_freq_type = CLOCK_FREQ_ACTIVE_STATION;
+			}
 
 			parameters->received_time_change_message = false;
+			parameters->clock_wait = false;
+			
+			last_clock_timer = 0;
 
 			return true;
 		}
 	}
 
+	if(last_clock_timer < 10500)
+		return true;
 	return false;
 }
 

@@ -37,6 +37,7 @@
 
 #define BCAN_ID_IMIDMSG1 0x92F96350
 
+#define BCAN_ID_NAV_CURRENT_DISPLAY 0x92F95955
 #define BCAN_ID_NAV_DATA_LEN 0x92F95B55
 #define BCAN_ID_NAV_CURRENT_STREET 0x92F95E55
 #define BCAN_ID_NAV_NEXT_TURN 0x92F95C55
@@ -62,6 +63,112 @@ enum aidf_nav_special_t : uint8_t {
 	AIDF_NAV_SPECIAL_WAYPOINT
 };
 
+//Exterior light status:
+union aibus_ext_light_status {
+	struct data {
+		bool drl: 1;
+		bool low_beam: 1;
+		bool high_beam: 1;
+		bool parking: 1;
+		bool front_fog: 1;
+		bool left_turn: 1;
+		bool right_turn: 1;
+		bool auto_light: 1;
+
+		uint8_t spacer: 2;
+		bool bed_light: 1;
+		bool off_road: 1;
+		bool license_plate: 1;
+		bool taillight: 1;
+		bool rear_fog: 1;
+		bool reverse: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+
+	aibus_ext_light_status() {
+		raw[0] = 0;
+		raw[1] = 0;
+	}
+};
+
+//Signal status:
+union aibus_signal_status {
+	struct data {
+		bool left_signal: 1;
+		bool right_signal: 1;
+		bool hazard: 1;
+		bool brake_light: 1;
+		bool e_brake: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+//Outside or coolant temperature:
+union aibus_temperature_config {
+	struct data {
+		uint8_t byte_count: 3;
+		bool negative: 1;
+		uint8_t decimal_count: 3;
+		bool fahrenheit: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+//Speed or distance:
+union aibus_speed_distance_config {
+	struct data {
+		uint8_t byte_count: 4;
+		uint8_t decimal_count: 3;
+		bool miles: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+//Voltage:
+union aibus_voltage_config {
+	struct data {
+		uint8_t byte_count: 3;
+		bool negative: 1;
+		uint8_t decimal_count: 4;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+//Fuel economy:
+enum aibus_fuel_economy_units : uint8_t {
+	AIBUS_FUEL_ECONOMY_L_100KM,
+	AIBUS_FUEL_ECONOMY_KM_L,
+	AIBUS_FUEL_ECONOMY_MPG_US,
+	AIBUS_FUEL_ECONOMY_MPG_IMP,
+};
+
+union aibus_fuel_economy_config {
+	struct data {
+		uint8_t decimal_count: 5;
+		bool undefined: 1;
+		aibus_fuel_economy_units units: 2;
+	} data;
+	uint8_t raw[sizeof(data)];
+};
+
+union hybrid_mode_t {
+	struct data {
+		bool bat_to_motor: 1;
+		bool motor_to_bat: 1;
+		bool regen_to_bat: 1;
+		bool motor_to_wheels: 1;
+		bool wheels_to_motor: 1;
+		bool engine_to_wheels: 1;
+		bool engine_to_motor: 1;
+		bool plug_to_bat: 1;
+	} data;
+	uint8_t raw[sizeof(data)];
+
+	hybrid_mode_t() {
+		raw[0] = 0;
+	}
+};
+
 class BCAN_Handler {
 public:
 	BCAN_Handler(AIBusHandler* ai_handler, ParameterList* parameter_list, const uint8_t b_cs_pin, const uint8_t imid_cs_pin, const uint8_t rls_cs_pin, const uint8_t f_cs_pin);
@@ -83,9 +190,9 @@ public:
 	bool getWiperIntActive();
 	bool runWiper();
 	
-	void sendBatteryVoltage(const uint16_t voltage);
-	void sendCommonParameters();
-	void sendInfoParameters();
+	void sendBatteryVoltage(const uint16_t voltage, const uint8_t receiver = 0xFF);
+	void sendCommonParameters(const uint8_t receiver = 0xFF);
+	void sendInfoParameters(const uint8_t receiver = 0xFF);
 
 	void setNavNextTurn(const uint8_t entry_angle, const uint8_t exit_angle, const uint16_t roads_visible, const uint8_t step_num, const uint8_t special, String street_name);
 private:
@@ -116,7 +223,7 @@ private:
 	uint8_t honda_temp = 0x28; //Temp byte sent by the cluster.
 	bool honda_fahrenheit = false; //True if the temp byte above is in Fahrenheit.
 
-	uint8_t light_state_a = 0, light_state_b = 0;
+	aibus_ext_light_status light_state;
 	bool ext_drl_on = false; //True if an external DRL is in use.
 
 	elapsedMillis last_can_msg; //Duration since the last CAN message was sent.
@@ -126,7 +233,8 @@ private:
 	bool range_miles = false;
 
 	//Hybrid-specific:
-	uint8_t hybrid_status = 0x0, charge_assist = 0x7F, hybrid_battery = 0x0;
+	hybrid_mode_t hybrid_status;
+	uint8_t charge_assist = 0x7F, hybrid_battery = 0x0;
 	bool hybrid_init = false; //True if the hybrid handshake has been sent.
 
 	void broadcastBCAN(can_frame* can_msg);
@@ -147,17 +255,18 @@ private:
 	void writeAIBusKeyMessage(const uint8_t receiver);
 	void writeAIBusDoorMessage(const uint8_t receiver);
 	void writeAIBusBrightnessMessage(const uint8_t receiver);
-	void writeAIBusTempMessage(const uint8_t receiver);
-	void writeAIBusLightMessage(const uint8_t receiver);
-	void writeAIBusSignalMessage();
-	void writeAIBusSpeedMessage(const uint8_t receiver);
+	void writeAIBusTempMessage(const uint8_t receiver = 0xFF);
+	void writeAIBusLightMessage(const uint8_t receiver = 0xFF);
+	void writeAIBusSignalMessage(const uint8_t receiver = 0xFF);
+	void writeAIBusSpeedMessage(const uint8_t receiver = 0xFF);
+	void writeAIBusAutoStopMessage(const uint8_t receiver = 0xFF);
 	
-	void writeAIBusCoolantTempMessage(const uint8_t receiver);
-	void writeAIBusRangeMessage();
-	void writeAIBusAverageEconomyMessage();
+	void writeAIBusCoolantTempMessage(const uint8_t receiver = 0xFF);
+	void writeAIBusRangeMessage(const uint8_t receiver = 0xFF);
+	void writeAIBusAverageEconomyMessage(const uint8_t receiver = 0xFF);
 
-	void writeAIBusHybridHandshake();
-	void writeAIBusHybridStatusMessage();
+	void writeAIBusHybridHandshake(const uint8_t receiver = 0xFF);
+	void writeAIBusHybridStatusMessage(const uint8_t receiver = 0xFF);
 
 	//CAN message handling:
 	void forwardIMIDMessage();

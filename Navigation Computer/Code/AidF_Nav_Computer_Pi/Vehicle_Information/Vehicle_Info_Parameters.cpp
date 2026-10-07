@@ -10,6 +10,6 @@ void setLightState(AIData* light_msg, InfoParameters* info_parameters) {
 	if(light_msg->l + start_byte < 3)
 		return;
 
-	info_parameters->light_state_a = light_msg->data[start_byte+1];
-	info_parameters->light_state_b = light_msg->data[start_byte+2];
+	info_parameters->light_state.raw[0] = light_msg->data[start_byte+1];
+	info_parameters->light_state.raw[1] = light_msg->data[start_byte+2];
 }

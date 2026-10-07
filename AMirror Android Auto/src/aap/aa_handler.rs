@@ -14,6 +14,7 @@ use openssl_sys::*;
 use protobuf::MessageField;
 
 use crate::aap;
+use crate::context::HeadlightState;
 use crate::mirror::mpv::MpvVideo;
 use crate::aibus::*;
 use crate::mirror::mpv::RdAudio;
@@ -176,8 +177,17 @@ impl<'a> AapHandler <'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AA Handler process: Context locked.");
-				return;
+				let context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -253,7 +263,17 @@ impl<'a> AapHandler <'a> {
 				context.phone_type = 5;
 			}
 			Err(_) => {
-				println!("AA Handler start connection: Context locked.")
+				let mut context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context.phone_type = 5;
 			}
 		}
 
@@ -277,7 +297,17 @@ impl<'a> AapHandler <'a> {
 				context.phone_type = 0;
 			}
 			Err(_) => {
-				println!("AA Handler stop connection: Context locked.")
+				let mut context;
+				loop {
+					 context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context.phone_type = 0;
 			}
 		}
 	}
@@ -640,44 +670,56 @@ impl<'a> AapHandler <'a> {
 			println!("Message: {:X?}", msg_data);
 		}
 
-		if msg_type == ControlMessageType::MESSAGE_VERSION_RESPONSE as u16 { //Version response.
-			self.begin_ssl_handshake();
-		} else if msg_type == ControlMessageType::MESSAGE_ENCAPSULATED_SSL as u16 { //Handshake response.
-			self.handle_ssl_handshake(msg_data.to_vec());
-		} else if msg_type == ControlMessageType::MESSAGE_SERVICE_DISCOVERY_REQUEST as u16 { //Service request.
-			self.handle_service_discovery_request(chan);
-		} else if msg_type == ControlMessageType::MESSAGE_VOICE_SESSION_NOTIFICATION as u16 { //Voice session start/stop.
-			let mut notification = VoiceSessionNotification::new();
-			match notification.merge_from_bytes(msg_data) {
-				Ok(_) => {
-					let voice_on = notification.status() == VoiceSessionStatus::VOICE_SESSION_START;
-					match self.context.try_lock() {
-						Ok(mut context) => {
-							if !context.audio_selected {
-								context.phone_mute = voice_on;
+		if chan == ServiceChannels::ControlChannel as usize {
+			if msg_type == ControlMessageType::MESSAGE_VERSION_RESPONSE as u16 { //Version response.
+				self.begin_ssl_handshake();
+			} else if msg_type == ControlMessageType::MESSAGE_ENCAPSULATED_SSL as u16 { //Handshake response.
+				self.handle_ssl_handshake(msg_data.to_vec());
+			} else if msg_type == ControlMessageType::MESSAGE_SERVICE_DISCOVERY_REQUEST as u16 { //Service request.
+				self.handle_service_discovery_request(chan);
+			} else if msg_type == ControlMessageType::MESSAGE_VOICE_SESSION_NOTIFICATION as u16 { //Voice session start/stop.
+				let mut notification = VoiceSessionNotification::new();
+				match notification.merge_from_bytes(msg_data) {
+					Ok(_) => {
+						let voice_on = notification.status() == VoiceSessionStatus::VOICE_SESSION_START;
+						let mut context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								let context;
+								loop {
+									context = match self.context.try_lock() {
+										Ok(context) => context,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								context
 							}
-							if voice_on {
-								context.notification = false;
-							}
+						};
+
+						if !context.audio_selected {
+							context.phone_mute = voice_on;
 						}
-						Err(_) => {
-							println!("Voice session: Context Locked");
+						if voice_on {
+							context.notification = false;
 						}
 					}
+					Err(e) => {
+						println!("Error: {}", e);
+					}
 				}
-				Err(e) => {
-					println!("Error: {}", e);
-				}
-			}
-		} else if msg_type == ControlMessageType::MESSAGE_AUDIO_FOCUS_REQUEST as u16 { //Audio focus request.
-			let mut request = AudioFocusRequestNotification::new();
-			let request_data = msg_data;
-			match request.merge_from_bytes(request_data) {
-				Ok(_) => {
-					self.handle_audio_focus_request(chan as u8, request);
-				}
-				Err(e) => {
-					println!("Error: {}", e);
+			} else if msg_type == ControlMessageType::MESSAGE_AUDIO_FOCUS_REQUEST as u16 { //Audio focus request.
+				let mut request = AudioFocusRequestNotification::new();
+				let request_data = msg_data;
+				match request.merge_from_bytes(request_data) {
+					Ok(_) => {
+						self.handle_audio_focus_request(chan as u8, request);
+					}
+					Err(e) => {
+						println!("Error: {}", e);
+					}
 				}
 			}
 		} else if chan == ServiceChannels::VideoChannel as usize && msg_type == MediaMessageId::MEDIA_MESSAGE_VIDEO_FOCUS_REQUEST as u16 {
@@ -764,7 +806,18 @@ impl<'a> AapHandler <'a> {
 					context.phone_req_off = true;
 				}
 				Err(_) => {
-					println!("Shutdown message: Context locked.");
+					let mut context;
+					loop {
+						context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					context.phone_active = false;
+					context.phone_req_off = false;
 				}
 			}
 		} else if chan == ServiceChannels::MediaStatusChannel as usize &&
@@ -786,8 +839,17 @@ impl<'a> AapHandler <'a> {
 					let mut context = match self.context.try_lock() {
 						Ok(context) => context,
 						Err(_) => {
-							println!("AAP message processing: Context Locked.");
-							return;
+							let context;
+							loop {
+								context = match self.context.try_lock() {
+									Ok(context) => context,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							context
 						}
 					};
 
@@ -821,8 +883,17 @@ impl<'a> AapHandler <'a> {
 					let mut context = match self.context.try_lock() {
 						Ok(context) => context,
 						Err(_) => {
-							println!("AAP message processing: Context Locked.");
-							return;
+							let context;
+							loop {
+								context = match self.context.try_lock() {
+									Ok(context) => context,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							context
 						}
 					};
 
@@ -864,7 +935,19 @@ impl<'a> AapHandler <'a> {
 							}
 						}
 						Err(_) => {
-							println!("Audio request: Context locked.")
+							let mut context;
+							loop {
+								context = match self.context.try_lock() {
+									Ok(context) => context,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							if !context.phone_mute {
+								context.notification = true;
+							}
 						}
 					}
 				}
@@ -879,7 +962,18 @@ impl<'a> AapHandler <'a> {
 							context.phone_req_off = true;
 						}
 						Err(_) => {
-							println!("Shutdown message: Context locked.");
+							let mut context;
+							loop {
+								context = match self.context.try_lock() {
+									Ok(context) => context,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							context.phone_active = false;
+							context.phone_req_off = false;
 						}
 					}
 				}
@@ -890,7 +984,17 @@ impl<'a> AapHandler <'a> {
 							context.notification = false;
 						}
 						Err(_) => {
-							println!("Audio request: Context locked.")
+							let mut context;
+							loop {
+								context = match self.context.try_lock() {
+									Ok(context) => context,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							context.notification = false;
 						}
 					}
 				}
@@ -910,23 +1014,32 @@ impl<'a> AapHandler <'a> {
 		let horizontal_toggle;
 		let nav_knob;
 
-		match self.context.try_lock() {
-			Ok(context) => {
-				if context.phone_type != 5 {
-					return;
-				}
-
-				vertical_toggle = context.aibt_vertical_toggle;
-				horizontal_toggle = context.aibt_horizontal_toggle;
-				nav_knob = context.aibt_nav_knob;
-			}
+		let context = match self.context.try_lock() {
+			Ok(context) => context,
 			Err(_) => {
-				println!("Handle AIBus Message: Context Locked");
-				vertical_toggle = true;
-				horizontal_toggle = true;
-				nav_knob = true;
+				let context;
+				loop {
+					context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
+		};
+
+		if context.phone_type != 5 {
+			return;
 		}
+
+		vertical_toggle = context.aibt_vertical_toggle;
+		horizontal_toggle = context.aibt_horizontal_toggle;
+		nav_knob = context.aibt_nav_knob;
+
+		std::mem::drop(context);
 
 		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x30 { //Button press.
@@ -1025,7 +1138,17 @@ impl<'a> AapHandler <'a> {
 								context.home_held = true;
 							}
 							Err(_) => {
-								println!("Handler AIBus Message: Context Locked")
+								let mut context;
+								loop {
+									context = match self.context.try_lock() {
+										Ok(context) => context,
+										Err(_) => {
+											continue;
+										}
+									};
+									break;
+								}
+								context.home_held = true;
 							}
 						}
 					}
@@ -1036,7 +1159,17 @@ impl<'a> AapHandler <'a> {
 							context.phone_active = false;
 						}
 						Err(_) => {
-							println!("Handler AIBus Message: Context Locked")
+							let mut context;
+							loop {
+								context = match self.context.try_lock() {
+									Ok(context) => context,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
+							context.phone_active = false;
 						}
 					}
 					self.home_hold = true;
@@ -1085,6 +1218,42 @@ impl<'a> AapHandler <'a> {
 		sensor_msg.night_mode_data.push(night_sensor_msg);
 
 		self.write_message(true, ServiceChannels::SensorChannel as u8, sensor_msg, SensorMessageId::SENSOR_MESSAGE_BATCH as u16, Duration::from_millis(5000), true);
+	}
+
+	///Set the headlight state.
+	pub fn set_headlight_state(&mut self, state: HeadlightState) {
+		let mut light_data = LightData::new();
+		match state {
+			HeadlightState::HeadlightStateOff => {
+				light_data.set_head_light_state(HeadLightState::HEAD_LIGHT_STATE_OFF);
+			}
+			HeadlightState::HeadlightStateLow => {
+				light_data.set_head_light_state(HeadLightState::HEAD_LIGHT_STATE_ON);
+			}
+			HeadlightState::HeadlightStateHigh => {
+				light_data.set_head_light_state(HeadLightState::HEAD_LIGHT_STATE_HIGH);
+			}
+		}
+
+		let mut headlight_sensor_message = SensorBatch::new();
+		headlight_sensor_message.light_data.push(light_data);
+
+		self.write_message(true, ServiceChannels::SensorChannel as u8, headlight_sensor_message, SensorMessageId::SENSOR_MESSAGE_BATCH as u16, Duration::from_millis(5000), true);
+	}
+
+	///Set the vehicle speed.
+	pub fn set_speed(&mut self, speed: i32) {
+		let mut speed_data = SpeedData::new();
+		speed_data.set_speed_e3(speed);
+
+		let mut status_data = DrivingStatusData::new();
+		status_data.set_status(if speed == 0 {DrivingStatus::DRIVE_STATUS_UNRESTRICTED as i32} else {DrivingStatus::DRIVE_STATUS_NO_KEYBOARD_INPUT as i32});
+
+		let mut speed_sensor_message = SensorBatch::new();
+		speed_sensor_message.speed_data.push(speed_data);
+		speed_sensor_message.driving_status_data.push(status_data);
+
+		self.write_message(true, ServiceChannels::SensorChannel as u8, speed_sensor_message, SensorMessageId::SENSOR_MESSAGE_BATCH as u16, Duration::from_millis(5000), true);
 	}
 
 	///Start playing audio if start is true.
@@ -1339,8 +1508,17 @@ impl<'a> AapHandler <'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("AMirror Send Coordinates: Context Locked.");
-				return;
+				let context;
+				loop {
+					context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 
@@ -1378,7 +1556,17 @@ impl<'a> AapHandler <'a> {
 						context.phone_name = phone_name.to_string();
 					}
 					Err(_) => {
-						println!("Service discovery request: Context locked.");
+						let mut context;
+						loop {
+							context = match self.context.try_lock() {
+								Ok(context) => context,
+								Err(_) => {
+									continue;
+								}
+							};
+							break;
+						}
+						context.phone_name = phone_name.to_string();
 					}
 				}
 			}
@@ -1390,8 +1578,17 @@ impl<'a> AapHandler <'a> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
-				println!("Service discovery request: Context locked.");
-				return;
+				let context;
+				loop {
+					context = match self.context.try_lock() {
+						Ok(context) => context,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				context
 			}
 		};
 		
@@ -1474,9 +1671,17 @@ impl<'a> AapHandler <'a> {
 		let mut sensor_location = sensor_source_service::Sensor::new();
 		sensor_location.set_sensor_type(SensorType::SENSOR_LOCATION);
 
+		let mut sensor_speed = sensor_source_service::Sensor::new();
+		sensor_speed.set_sensor_type(SensorType::SENSOR_SPEED);
+
+		let mut sensor_lights = sensor_source_service::Sensor::new();
+		sensor_lights.set_sensor_type(SensorType::SENSOR_LIGHT_DATA);
+
 		sensor_service.sensors.push(sensor_driving_status);
 		sensor_service.sensors.push(sensor_night);
 		sensor_service.sensors.push(sensor_location);
+		sensor_service.sensors.push(sensor_speed);
+		sensor_service.sensors.push(sensor_lights);
 
 		let mut sensor_service_wrapper = Service::new();
 		sensor_service_wrapper.set_id(ServiceChannels::SensorChannel as i32);
@@ -1705,22 +1910,56 @@ impl<'a> AapHandler <'a> {
 
 		if channel == ServiceChannels::SensorChannel as u8 || channel_to_open == ServiceChannels::SensorChannel as u32 {
 			let mut night_sensor_msg = NightModeData::new();
+			let mut light_msg = LightData::new();
+			let mut speed_msg = SpeedData::new();
 
-			match self.context.try_lock() {
-				Ok(context) => {
-					night_sensor_msg.set_night_mode(context.night);
-				}
+			let mut allow_typing = true;
+
+			let context = match self.context.try_lock() {
+				Ok(context) => context,
 				Err(_) => {
-					println!("Channel Open Request: Context Locked.")
+					let context;
+					loop {
+						context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					context
+				}
+			};
+
+			night_sensor_msg.set_night_mode(context.night);
+			match context.headlight_state {
+				HeadlightState::HeadlightStateOff => {
+					light_msg.set_head_light_state(HeadLightState::HEAD_LIGHT_STATE_OFF);
+				}
+				HeadlightState::HeadlightStateLow => {
+					light_msg.set_head_light_state(HeadLightState::HEAD_LIGHT_STATE_ON);
+				}
+				HeadlightState::HeadlightStateHigh => {
+					light_msg.set_head_light_state(HeadLightState::HEAD_LIGHT_STATE_HIGH);
 				}
 			}
 
+			speed_msg.set_speed_e3(context.speed_e3);
+			if context.speed_e3 != 0 { 
+				allow_typing = false;
+			}
+
+			std::mem::drop(context);
+
 			let mut status_msg = DrivingStatusData::new();
-			status_msg.set_status(DrivingStatus::DRIVE_STATUS_UNRESTRICTED as i32);
+			status_msg.set_status(if allow_typing {DrivingStatus::DRIVE_STATUS_UNRESTRICTED as i32} else {DrivingStatus::DRIVE_STATUS_NO_KEYBOARD_INPUT as i32});
 
 			let mut sensor_msg = SensorBatch::new();
 			sensor_msg.night_mode_data.push(night_sensor_msg);
 			sensor_msg.driving_status_data.push(status_msg);
+			sensor_msg.light_data.push(light_msg);
+			sensor_msg.speed_data.push(speed_msg);
 			
 			self.write_message(true, ServiceChannels::SensorChannel as u8, sensor_msg, SensorMessageId::SENSOR_MESSAGE_BATCH as u16, Duration::from_millis(5000), true);
 		}
@@ -1790,7 +2029,18 @@ impl<'a> AapHandler <'a> {
 				mpv_video.push_video(&mpv_data);
 			}
 			Err(_) => {
-				println!("MPV handler locked.");
+				let mut mpv_video;
+				loop {
+					mpv_video = match self.mpv_video.try_lock() {
+						Ok(mpv_video) => mpv_video,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				self.last_video = Instant::now();
+				mpv_video.push_video(&mpv_data);
 			}
 		}
 
@@ -1809,7 +2059,19 @@ impl<'a> AapHandler <'a> {
 					}
 				}
 				Err(_) => {
-					println!("Handle audio message: Context locked.");
+					let context;
+					loop {
+						context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					if !context.audio_selected {
+						return;
+					}
 				}
 			}
 
@@ -1818,7 +2080,17 @@ impl<'a> AapHandler <'a> {
 					rd_audio.send_audio(&rd_data);
 				}
 				Err(_) => {
-					println!("Media audio handler locked.")
+					let mut rd_audio;
+					loop {
+						rd_audio = match self.rd_audio.try_lock() {
+							Ok(rd_audio) => rd_audio,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					rd_audio.send_audio(&rd_data);
 				}
 			}
 		} else if channel == ServiceChannels::Audio1Channel as u8 {
@@ -1827,7 +2099,17 @@ impl<'a> AapHandler <'a> {
 					nav_audio.send_audio(&rd_data);
 				}
 				Err(_) => {
-					println!("Nav audio handler locked.")
+					let mut nav_audio;
+					loop {
+						nav_audio = match self.nav_audio.try_lock() {
+							Ok(nav_audio) => nav_audio,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
+					nav_audio.send_audio(&rd_data);
 				}
 			}
 		}
@@ -1840,7 +2122,17 @@ impl<'a> AapHandler <'a> {
 				rd_audio.set_audio_profile(48000, 16, 2); //Standard Android audio profile.
 			}
 			Err(_) => {
-				println!("Refresh Audio Handler: Main audio locked.")
+				let mut rd_audio;
+				loop {
+					rd_audio = match self.rd_audio.try_lock() {
+						Ok(rd_audio) => rd_audio,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				rd_audio.set_audio_profile(48000, 16, 2);
 			}
 		}
 	}
@@ -1852,7 +2144,17 @@ impl<'a> AapHandler <'a> {
 				nav_audio.set_audio_profile(16000, 16, 1); //Android nav audio profile.
 			}
 			Err(_) => {
-				println!("Refresh Audio Handler: Nav audio locked.")
+				let mut rd_audio;
+				loop {
+					rd_audio = match self.rd_audio.try_lock() {
+						Ok(rd_audio) => rd_audio,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				rd_audio.set_audio_profile(16000, 16, 1);
 			}
 		}
 	}

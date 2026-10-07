@@ -18,6 +18,7 @@
 #include "Window/Settings_Clock_Window.h"
 #include "Window/Settings_Clock_Set_Window.h"
 #include "Window/Settings_Ext_Window.h"
+#include "Window/Settings_Secret_Window.h"
 #include "Window/Intro_Window.h"
 
 #include "Vehicle_Information/Vehicle_Info_Parameters.h"

@@ -6,6 +6,8 @@
 #include "Si4735_AidF.h"
 #include "Parameter_List.h"
 
+#include "AIBus.h"
+
 #ifndef background_tune_handler_h
 #define background_tune_handler_h
 
@@ -14,7 +16,6 @@
 #define SEEK_TIME 1000
 #define CLOCK_START_TIME 2000
 #define CLOCK_END_TIME 5000
-#define FIVE_SEC_LIMIT 55000
 
 class BackgroundTuneHandler {
 	public:
@@ -23,6 +24,8 @@ class BackgroundTuneHandler {
 
 		void loop();
 		void setSeekMode(const bool seek);
+
+		bool getTimeSetMode();
 
 		int getStationNames(String* names);
 		int getRawStationNames(String* names);
@@ -54,6 +57,9 @@ class BackgroundTuneHandler {
 
 		elapsedMillis seek_timer;
 		unsigned long seek_timer_limit = SEEK_TIME;
+
+		int clock_set_failures = 0;
+		int8_t last_min = -1;
 
 		elapsedMillis clock_timer;
 		

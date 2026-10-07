@@ -140,6 +140,9 @@ private:
 
 	CameraHandler* camera_handler;
 
+	vector<uint8_t> ping_device_list;
+	int ping_pointer = 0;
+
 	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread, amirror_video_thread, camera_video_thread;
 
 	SocketHandlerParameters amirror_socket_parameters, abta_socket_parameters;

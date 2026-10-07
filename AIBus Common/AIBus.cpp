@@ -129,5 +129,5 @@ void bytesToAIData(AIData* ai_b, uint8_t* b) {
 	ai_b->receiver = b[2];
 	
 	for(int i=0;i<ai_b->l;i+=1)
-		ai_b->data[i] = b[i+2];
+		ai_b->data[i] = b[i+3];
 }

@@ -45,6 +45,9 @@ SerialAIBusHandler::SerialAIBusHandler(string port, const uint8_t id,  unsigned 
 
 	this->timer = timer;
 	this->id = id;
+	
+	this->use_ack_cache = false;
+	this->auto_ack_cache_off = false;
 }
 
 SerialAIBusHandler::~SerialAIBusHandler() {
@@ -369,20 +372,26 @@ bool SerialAIBusHandler::writeAIData(AIData* ai_d) {
 
 //Write AIBus data. Wait for an acknowledgement message if acknowledge is true.
 bool SerialAIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
-	/*while(thread_locked);
-	main_locked = true;
-	cached_tx.push_back(*ai_d);
-	cached_ack.push_back(acknowledge);
-	main_locked = false;*/
-	return writeAIBusToSerial(ai_d, acknowledge);
+	return writeAIData(ai_d, acknowledge ? MAX_REPEAT : 0);
+}
+
+//Write AIBus data. Wait for an acknowledgement message if acknowledge is true.
+bool SerialAIBusHandler::writeAIData(AIData* ai_d, const int ack_count) {
+	return writeAIBusToSerial(ai_d, ack_count);
 }
 
 //Write AIBus data to the cache and send as a thread.
 void SerialAIBusHandler::writeToCache(AIData* ai_d, const bool acknowledge) {
 	while(thread_locked);
 	main_locked = true;
+	
 	cached_tx.push_back(*ai_d);
-	cached_ack.push_back(acknowledge);
+	
+	if(ai_d->receiver != 0xFF)
+		cached_ack.push_back(acknowledge);
+	else
+		cached_ack.push_back(false);
+
 	main_locked = false;
 
 	if(!cache_thread_enabled) {
@@ -392,11 +401,11 @@ void SerialAIBusHandler::writeToCache(AIData* ai_d, const bool acknowledge) {
 }
 
 //Write AIBus data to the serial port.
-bool SerialAIBusHandler::writeAIBusToSerial(AIData* ai_d, const bool acknowledge) {
+bool SerialAIBusHandler::writeAIBusToSerial(AIData* ai_d, const int ack_count, const bool allow_ack_cache) {
 	bool sent = true;
 
 	//Something that may need to be resent later?
-	if(ai_d->receiver != 0xFF && ai_d->l >= 1 && ai_d->data[0] != 0x80) {
+	if(ai_d->receiver != 0xFF && ai_d->l >= 1 && ai_d->data[0] != 0x80 && (ai_d->data[0] != 0x91 || ai_d->l > AIDATA_LIMIT + 3)) {
 		int index = -1;
 		for(int i=0;i<recent_tx.size();i+=1) {
 			AIData tx_msg = recent_tx[i];
@@ -447,15 +456,28 @@ bool SerialAIBusHandler::writeAIBusToSerial(AIData* ai_d, const bool acknowledge
 			while((*this->timer - start) < 1);
 		}
 
-		bool ack = false;
+		bool ack = true;
 		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
-			ack = writeAIBusToSerial(&ai_group[i], acknowledge);
-			if(!ack && acknowledge)
-				return false;
+			ack &= writeAIBusToSerial(&ai_group[i], use_ack_cache && allow_ack_cache ? 1 : ack_count, false);
+
+			if(!ack && ack_count > 0) {
+				if(!use_ack_cache || !allow_ack_cache)
+					return false;
+				else
+					break;
+			}
 
 			const unsigned long start = *timer;
 			while(*timer - start < 5);
 		}
+
+		if(!ack && use_ack_cache && allow_ack_cache) {
+			for(auto msg: ai_group) {
+				ack_cache.push_back(msg);
+				ack_cache_count.push_back(0);
+			}
+		}
+
 		return ack;
 	}
 
@@ -468,7 +490,7 @@ bool SerialAIBusHandler::writeAIBusToSerial(AIData* ai_d, const bool acknowledge
 		while(aiserialBytesAvailable(this->ai_port) >= 2 && *timer - cache_timer < 5) {
 			AIData msg;
 			if(readAIData(&msg, false)) {
-				if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
+				if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && ((msg.l >= 1 && msg.data[0] != 0x80) || use_ack_cache)) {
 					cached_rx.push_back(msg);
 				}
 			}
@@ -507,17 +529,13 @@ bool SerialAIBusHandler::writeAIBusToSerial(AIData* ai_d, const bool acknowledge
 			aiserialWrite(this->ai_port, (char*)data, sizeof(data));
 		}
 
-		/*while(aiserialBytesAvailable(this->ai_port) >= 2) {
-			AIData msg;
-			if(readAIData(&msg, false)) {
-				if(msg.sender != ai_d->sender && (msg.receiver == ai_d->sender || msg.receiver == 0xFF) && msg.l >= 1 && msg.data[0] != 0x80) {
-					cached_vec.push_back(msg);
-				}
+		if(ack_count > 0) {
+			sent = awaitAcknowledgement(ai_d, this->use_ack_cache && allow_ack_cache ? 1 : ack_count);
+			if(!sent && this->use_ack_cache && allow_ack_cache) {
+				ack_cache.push_back(*ai_d);
+				ack_cache_count.push_back(0);
 			}
-		}*/
-
-		if(acknowledge)
-			sent = awaitAcknowledgement(ai_d);
+		}
 	} else {
 		#ifndef RPI_UART
 		printBytes(ai_d);
@@ -536,7 +554,103 @@ void SerialAIBusHandler::sendAcknowledgement(const uint8_t sender, const uint8_t
 	AIData ack_msg(1, sender, receiver);
 	ack_msg.data[0] = 0x80;
 
-	writeAIBusToSerial(&ack_msg, false);
+	writeAIBusToSerial(&ack_msg, 0);
+}
+
+//Set whether to use a staggered acknowledgment.
+void SerialAIBusHandler::setAckCache(const bool ack_cache, const bool auto_off) {
+	use_ack_cache = ack_cache;
+	auto_ack_cache_off = auto_off;
+	if(!use_ack_cache) {
+		this->ack_cache.clear();
+		this->ack_cache_count.clear();
+	}
+}
+
+//Call during the main loop- send all cached messages awaiting acknowledgment and wait for acknowledgment in the specified wait period in ms.
+void SerialAIBusHandler::awaitCachedAcknowledgment(const unsigned long wait) {
+	if(!use_ack_cache)
+		return;
+
+	for(AIData new_msg: cached_rx) {
+		if(getID(new_msg.sender))
+			continue;
+
+		if(new_msg.l <= 0 || new_msg[0] != 0x80)
+			continue;
+
+		for(int i=0;i<ack_cache.size();i+=1) {
+			AIData* ai_d = &ack_cache[i];
+			if(new_msg.sender == ai_d->receiver && new_msg.receiver == ai_d->sender) {
+				ack_cache.erase(ack_cache.begin() + i);
+				ack_cache_count.erase(ack_cache_count.begin() + i);
+				break;
+			}
+		}
+	}
+
+	if(ack_cache.size() <= 0) {
+		if(auto_ack_cache_off)
+			use_ack_cache = false;
+		return;
+	}
+
+	const unsigned long start = *timer;
+	while(*timer - start < wait) {
+		for(int i=0;i<ack_cache.size();i+=1) {
+			AIData tx = ack_cache[i];
+
+			const bool ack = writeAIBusToSerial(&tx, 1, false);
+			if(ack) {
+				ack_cache.erase(ack_cache.begin() + i);
+				ack_cache_count.erase(ack_cache_count.begin() + i);
+				i -= 1;
+				continue;
+			} else {
+				ack_cache_count[i] += 1;
+			}
+
+			AIData new_msg;
+			bool found = false;
+			const unsigned long read_start = *timer;
+			while(*timer - read_start < wait) {
+				if(readAIData(&new_msg, false)) {
+					if(getID(new_msg.sender))
+						continue;
+
+					if(new_msg.sender == tx.receiver && new_msg.receiver == tx.sender && new_msg.l > 0 && new_msg.data[0] == 0x80) {
+						found = true;
+						break;
+					} else {
+						cached_rx.push_back(new_msg);
+					}
+				}
+			}
+
+			if(found || ack_cache_count[i] > MAX_REPEAT) {
+				ack_cache.erase(ack_cache.begin() + i);
+				ack_cache_count.erase(ack_cache_count.begin() + i);
+				i -= 1;
+			}
+
+			if(*timer - start >= wait)
+				break;
+		}
+
+		if(ack_cache.size() <= 0) {
+			if(auto_ack_cache_off)
+				use_ack_cache = false;
+			break;
+		}
+	}
+
+	for(int i=0;i<ack_cache.size() && i<ack_cache_count.size();i+=1) {
+		if(ack_cache_count[i] > MAX_REPEAT) {
+			ack_cache_count.erase(ack_cache_count.begin() + i);
+			ack_cache.erase(ack_cache.begin() + i);
+			i -= 1;
+		}
+	}
 }
 
 //Send a resend request.
@@ -555,12 +669,12 @@ void SerialAIBusHandler::requestResend(const uint8_t s, const uint8_t r) {
 }
 
 //Wait for the acknowledgement message.
-bool SerialAIBusHandler::awaitAcknowledgement(AIData* ai_d) {
+bool SerialAIBusHandler::awaitAcknowledgement(AIData* ai_d, const int ack_count) {
 	unsigned long repeat_time = *this->timer;
 	bool acknowledge = false;
-	uint8_t tries = 0;
+	int tries = 0;
 
-	while(!acknowledge && tries < MAX_REPEAT) {
+	while(!acknowledge && tries < ack_count) {
 		AIData new_msg;
 		if(readAIData(&new_msg, false, true, true)) {
 			if(new_msg.sender == ai_d->sender)
@@ -592,9 +706,9 @@ bool SerialAIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 			if(ai_d->l == 2 && ai_d->data[0] != 0xA1) {
 				AIData padded_msg(ai_d->l + 1, ai_d->sender, ai_d->receiver, ai_d->data);
 				padded_msg[padded_msg.l-1] = 0x0;
-				writeAIBusToSerial(&padded_msg, false);
+				writeAIBusToSerial(&padded_msg, 0);
 			} else
-				writeAIBusToSerial(ai_d, false);
+				writeAIBusToSerial(ai_d, 0);
 				
 			repeat_time = *this->timer;
 			tries += 1;
@@ -602,6 +716,11 @@ bool SerialAIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 	}
 	
 	return acknowledge;
+}
+
+//Get whether the cache thread is enabled.
+bool SerialAIBusHandler::getCacheEnabled() {
+	return this->cache_thread_enabled;
 }
 
 //Get the number of available bytes.
@@ -644,7 +763,7 @@ bool SerialAIBusHandler::cachePending(const bool threaded) {
 		AIData ai_msg;
 		if(readAIData(&ai_msg, false, true, threaded)) {
 			if(ai_msg.receiver == this->id || ai_msg.receiver == 0xFF) {
-				if(ai_msg.sender != this->id && ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
+				if(ai_msg.sender != this->id && ((ai_msg.l >= 1 && ai_msg.data[0] != 0x80) || use_ack_cache)) {
 					cached_rx.push_back(ai_msg);
 					return true;
 				}
@@ -658,7 +777,7 @@ bool SerialAIBusHandler::cachePending(const bool threaded) {
 //Cache a message.
 void SerialAIBusHandler::cacheMessage(AIData* ai_msg) {
 	if(ai_msg->receiver == this->id || ai_msg->receiver == 0xFF) {
-		if(ai_msg->sender != this->id && ai_msg->l >= 1 && ai_msg->data[0] != 0x80) {
+		if(ai_msg->sender != this->id && ((ai_msg->l >= 1 && ai_msg->data[0] != 0x80) || use_ack_cache)) {
 			cached_rx.push_back(*ai_msg);
 		}
 	}
@@ -685,7 +804,7 @@ bool SerialAIBusHandler::flushCached() {
 	thread_locked = true;
 
 	while(this->cached_tx.size() > 0 && this->cached_ack.size() > 0) {
-		ack &= writeAIBusToSerial(&this->cached_tx.at(0), cached_ack.at(0));
+		ack &= writeAIBusToSerial(&this->cached_tx.at(0), cached_ack.at(0) ? MAX_REPEAT : 0);
 
 		cached_tx.erase(cached_tx.begin());
 		cached_ack.erase(cached_ack.begin());

@@ -88,6 +88,11 @@ pub enum MenuIndex {
 	MirrorAudioSettingsFlashTitle,
 	MirrorAudioSettingsAudioSettings,
 
+	//Flash settings menu:
+	MirrorFlashSettings,
+	MirrorFlashSettingsFlashTitle,
+	MirrorFlashSettingsFlashTitleMirror,
+
 	//Cluster display menu:
 	MirrorClusterSettings,
 	MirrorClusterSettingsPhone,
@@ -101,12 +106,14 @@ pub enum MenuIndex {
 	//Main settings menu:
 	MirrorMainSettings,
 	MirrorMainSettingsAutoStart,
+	MirrorMainSettingsAutoMusicStart,
 
 	MenuIndexLength,
 }
 
 const MENU_START_INDEX: &[MenuIndex] = &[
 	MenuIndex::MirrorAudioSettings,
+	MenuIndex::MirrorFlashSettings,
 	MenuIndex::MirrorClusterSettings,
 	MenuIndex::MirrorMainSettings,
 	MenuIndex::MenuIndexLength,
@@ -121,6 +128,11 @@ const MENUS_ENG: &[&'static str] = &[
 	"Flash Song Title on Change",
 	"Audio Settings",
 
+	//Flash settings menu:
+	"Song Title Flash",
+	"In Main Menu/Outside Mirror",
+	"In Mirror View",
+
 	//Cluster display menu:
 	"Cluster Display Text",
 	"Display Phone Name",
@@ -134,4 +146,5 @@ const MENUS_ENG: &[&'static str] = &[
 	//Main settings menu:
 	"Phone Mirror Settings",
 	"Auto Mirror Start",
+	"Auto Music Start",
 ];

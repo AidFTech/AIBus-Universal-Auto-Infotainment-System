@@ -86,6 +86,8 @@
 
 class CANslator {
 public:
+	CANslator();
+
 	void setup();
 	void loop();
 private:
@@ -103,6 +105,8 @@ private:
 
 	bool param_timer_enabled = false;
 	elapsedMillis param_timer;
+	uint8_t param_requestor[12];
+	Vector<uint8_t> param_requestor_vec;
 
 	elapsedMillis wiper_timer; //The wiper timer.
 	elapsedMillis washer_fluid_timer; //Buffer for "Washer Fluid Low."

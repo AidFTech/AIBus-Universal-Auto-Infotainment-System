@@ -30,6 +30,17 @@ void EnAIBusHandler::addID(const uint8_t id) {
 	id_vec.push_back(id);
 }
 
+//Get the number of IDs in the AIBus list.
+int EnAIBusHandler::getIDCount() {
+	return id_vec.size();
+}
+
+//Get the IDs in the AIBus list.
+void EnAIBusHandler::getIDs(uint8_t* ids, const int l) {
+	for(int i=0;i<l && i<id_vec.size();i+=1)
+		ids[i] = id_vec[i];
+}
+
 //Set whether acknowledgment messages should be cached, e.g. if "pinging" another device.
 void EnAIBusHandler::setCacheAck(const bool cache_ack) {
 	this->cache_ack = cache_ack;

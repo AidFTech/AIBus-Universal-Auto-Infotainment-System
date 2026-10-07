@@ -1,10 +1,14 @@
 #include "AIBus_Handler.h"
 
-AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size) : 
-	AIBusHandler(serial, rx_pin, id, ai_cache_size, ai_cache_size) {
+AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size) 
+	#ifndef AIBUS_HANDLER_COMPACT
+	: AIBusHandler(serial, rx_pin, id, ai_cache_size, ai_cache_size) {
 }
 
 AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id, const unsigned int ai_cache_size, const unsigned int tx_cache_size) {
+	#else
+	{
+	#endif
 	this->ai_serial = serial;
 	this->rx_pin = rx_pin;
 
@@ -16,18 +20,29 @@ AIBusHandler::AIBusHandler(Stream* serial, const int8_t rx_pin, const uint8_t id
 	cached_byte = new AIData[ai_cache_size];
 	cached_vec.setStorage(cached_byte, ai_cache_size, 0);
 
+	#ifndef AIBUS_HANDLER_COMPACT
 	cached_tx = new AIData[tx_cache_size];
 	tx_vec.setStorage(cached_tx, tx_cache_size, 0);
+	#endif
 
 	this->ai_serial->setTimeout(1);
 }
 
 AIBusHandler::~AIBusHandler() {
 	delete[] cached_byte;
+	#ifndef AIBUS_HANDLER_COMPACT
 	delete[] cached_tx;
 
 	if(multi_cache != NULL)
 		delete[] multi_cache;
+
+	if(ack_cache != NULL)
+		delete[] ack_cache;
+
+	if(ack_cache_count != nullptr && ack_cache_count != NULL)
+		delete[] ack_cache_count;
+
+	#endif
 }
 
 //The amount of AIBus data available.
@@ -56,6 +71,7 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d) {
 
 //Read AIBus data from the main stream.
 aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, const bool multi) {
+	#ifndef AIBUS_HANDLER_COMPACT
 	if(multi_cache_len > 0 && multi_cache_pos > 0 && last_multi_message > 500) {
 		const uint8_t sender = multi_cache[0].sender, receiver = multi_cache[0].receiver;
 
@@ -69,6 +85,7 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 		if(getID(receiver))
 			requestResend(receiver, sender);
 	}
+	#endif
 	
 	if(cache && cached_vec.size() > 0) {
 		ai_d->refreshAIData(cached_vec[0]);
@@ -184,13 +201,16 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 		for(uint8_t i=0;i<ai_d->l && i<sizeof(d);i+=1)
 			ai_d->data[i] = d[i];
 
+		#ifndef AIBUS_HANDLER_COMPACT
 		if(ai_d->l >= 3 && ai_d->data[0] == 0x91 && multi_cache_len > 0 && multi_cache_pos > 0 && (multi_cache[0].sender != s || multi_cache[0].receiver != r))
 			return getID(r) ? AIBUS_READ_INVALID_MULTIPLE : AIBUS_READ_NODATA;
+		#endif
 
 		if(getID(r) && ai_d->l > 0 && ai_d->data[0] != 0x80)
 			sendAcknowledgement(r, s);
 
 		if(getID(r) && ai_d->l >= 1 && ai_d->data[0] == 0x92) { //Resend.
+			#ifndef AIBUS_HANDLER_COMPACT
 			for(int i=0;i<tx_vec.size();i+=1) {
 				AIData tx_msg = tx_vec[i];
 				if(tx_msg.receiver == s && tx_msg.sender == r) {
@@ -198,14 +218,18 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 					break;
 				}
 			}
+			#endif
 
 			return AIBUS_READ_NODATA;
 		}
 
+		#ifndef AIBUS_HANDLER_COMPACT
 		if(ai_d->l >= 3 && ai_d->data[0] == 0x91 && ai_d->data[1] > ai_d->data[2] && (getID(ai_d->receiver) || ai_d->receiver == 0xFF))
 			last_multi_message = 0;
+		#endif
 
 		if(multi && ai_d->l >= 3 && ai_d->data[0] == 0x91 && ai_d->data[1] > ai_d->data[2] && (getID(ai_d->receiver) || ai_d->receiver == 0xFF)) { //Multiple messages are on the way.
+			#ifndef AIBUS_HANDLER_COMPACT
 			if(multi_cache_len <= 0) {
 				const int cache_len = ai_d->data[1]&0xFF;
 				if(cache_len <= 0)
@@ -213,6 +237,7 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 
 				//Read through a while loop.
 				if(!allow_staggered_multi || (multi_cache_limit >= 0 && cache_len > multi_cache_limit) || !cache || ai_serial->available() > AIDATA_LIMIT*3/2) {
+					#endif
 					if((ai_d->data[2]&0xFF) != 0 || (ai_d->data[1]&0xFF) == 0)
 						return AIBUS_READ_INVALID_MULTIPLE;
 
@@ -258,6 +283,7 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 					ai_d->refreshAIData(full_length, ai_d->sender, ai_d->receiver);
 					ai_d->refreshAIData(full_data);
 					return AIBUS_READ_OK_MULTIPLE;
+				#ifndef AIBUS_HANDLER_COMPACT
 				}
 
 				multi_cache_len = cache_len;
@@ -322,6 +348,7 @@ aibus_read_result_t AIBusHandler::readAIDataErr(AIData* ai_d, const bool cache, 
 			}
 
 			return AIBUS_READ_NODATA;
+			#endif
 		}
 
 		return AIBUS_READ_OK_SERIAL;
@@ -359,8 +386,14 @@ bool AIBusHandler::writeAIData(AIData* ai_d) {
 
 //Write an AIBus message.
 bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
+	return writeAIBusToSerial(ai_d, acknowledge);
+}
+
+//Write an AIBus message to the serial port.
+bool AIBusHandler::writeAIBusToSerial(AIData* ai_d, const bool acknowledge, const bool allow_ack_cache) {
 	//Something we will need to resend?
-	if(ai_d->receiver != 0xFF && ai_d->l >= 1 && ai_d->data[0] != 0x80) {
+	#ifndef AIBUS_HANDLER_COMPACT
+	if(ai_d->receiver != 0xFF && ai_d->l >= 1 && ai_d->data[0] != 0x80 && (ai_d->data[0] != 0x91 || ai_d->l > AIDATA_LIMIT + 3)) {
 		int index = -1;
 		for(int i=0;i<tx_vec.size();i+=1) {
 			AIData tx_msg = tx_vec[i];
@@ -375,6 +408,7 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 
 		tx_vec.push_back(*ai_d);
 	}
+	#endif
 
 	if(ai_d->l > AIDATA_LIMIT + 3) {
 		const int count = ai_d->l/AIDATA_LIMIT, r = ai_d->l%AIDATA_LIMIT;
@@ -424,13 +458,26 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 			}
 		}
 
-		bool ack = false;
+		bool ack = true;
 		for(int i=0;i<sizeof(ai_group)/sizeof(AIData);i+=1) {
-			ack = writeAIData(&ai_group[i], acknowledge);
-			if(!ack && acknowledge)
+			ack &= writeAIBusToSerial(&ai_group[i], acknowledge, false);
+			if(!ack && acknowledge) {
+				if(ack_cache_len <= 0 || !allow_ack_cache)
+					return false;
+				else
+					break;
 				return false;
+			}
 			delay(5);
 		}
+
+		if(!ack && ack_cache_len > 0 && allow_ack_cache) {
+			for(auto msg: ai_group) {
+				ack_cache_vec.push_back(msg);
+				ack_cache_count_vec.push_back(0);
+			}
+		}
+
 		return ack;
 	}
 
@@ -506,8 +553,17 @@ bool AIBusHandler::writeAIData(AIData* ai_d, const bool acknowledge) {
 	} else if(ai_d->l == 1 && ai_d->data[0] == 0x80) //Acknowledgement we don't need to reacknowledge.
 		ack_sent = true;
 
-	if(!ack_sent && acknowledge)
+	if(!ack_sent && acknowledge) {
+		#ifndef AIBUS_HANDLER_COMPACT
+		ack_sent = awaitAcknowledgement(ai_d, ack_cache_len > 0 ? 1 : MAX_REPEAT);
+		if(!ack_sent && ack_cache_len > 0 && allow_ack_cache) {
+			ack_cache_vec.push_back(*ai_d);
+			ack_cache_count_vec.push_back(0);
+		}
+		#else
 		ack_sent = awaitAcknowledgement(ai_d);
+		#endif
+	}
 	
 	if(acknowledge)
 		return ack_sent;
@@ -544,12 +600,12 @@ void AIBusHandler::flush() {
 }
 
 //Wait for receiver acknowledgement.
-bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
+bool AIBusHandler::awaitAcknowledgement(AIData* ai_d, const int limit) {
 	elapsedMillis repeat_time = 0;
 	bool acknowledge = false;
 	int tries = 0;
 
-	while(!acknowledge && tries < MAX_REPEAT) {
+	while(!acknowledge && tries < limit) {
 		AIData new_msg;
 		
 		if(ai_serial->available() > 0) {
@@ -585,11 +641,139 @@ bool AIBusHandler::awaitAcknowledgement(AIData* ai_d) {
 	return acknowledge;
 }
 
+#ifndef AIBUS_HANDLER_COMPACT
+//Call during the main loop- send all cached messages awaiting acknowledgment and wait for acknowledgment in the specified wait period in ms.
+void AIBusHandler::awaitCachcedAcknowledgment(const unsigned long wait) {
+	if(ack_cache_len <= 0)
+		return;
+
+	for(AIData new_msg: cached_vec) {
+		if(getID(new_msg.sender))
+			continue;
+
+		if(new_msg.l <= 0 || new_msg[0] != 0x80)
+			continue;
+
+		for(int i=0;i<ack_cache_vec.size();i+=1) {
+			AIData* ai_d = &ack_cache[i];
+			if(new_msg.sender == ai_d->receiver && new_msg.receiver == ai_d->sender) {
+				ack_cache_vec.remove(i);
+				ack_cache_count_vec.remove(i);
+				break;
+			}
+		}
+	}
+
+	if(ack_cache_vec.size() <= 0) {
+		if(auto_ack_cache_off)
+			disableAckCache();
+		return;
+	}
+
+	elapsedMillis timer;
+	while(timer < wait) {
+		for(int i=0;i<ack_cache_vec.size();i+=1) {
+			AIData tx = ack_cache_vec[i];
+			
+			const bool ack = writeAIBusToSerial(&tx, true, false);
+			if(ack) {
+				ack_cache_vec.remove(i);
+				ack_cache_count_vec.remove(i);
+				i -= 1;
+				continue;
+			} else {
+				ack_cache_count_vec[i] += 1;
+			}
+
+			AIData new_msg;
+			bool found = false;
+			elapsedMillis read_timer;
+			while(read_timer < wait) {
+				if(readAIData(&new_msg, false)) {
+					if(getID(new_msg.sender))
+						continue;
+
+					if(new_msg.sender == tx.receiver && new_msg.receiver == tx.sender && new_msg.l > 0 && new_msg.data[0] == 0x80) {
+						found = true;
+						break;
+					} else {
+						cached_vec.push_back(new_msg);
+					}
+				}
+			}
+
+			if(found || ack_cache_count[i] > MAX_REPEAT) {
+				ack_cache_vec.remove(i);
+				ack_cache_count_vec.remove(i);
+				i -= 1;
+			}
+
+			if(timer >= wait)
+				break;
+		}
+
+		if(ack_cache_vec.size() <= 0) {
+			if(auto_ack_cache_off)
+				disableAckCache();
+			break;
+		}
+	}
+}
+
+//Enable the acknowledgment cache for staggered acknowledgment. 
+void AIBusHandler::setAckCache(const int limit, const bool auto_off) {
+	if(ack_cache != nullptr && ack_cache != NULL) {
+		ack_cache_vec = Vector<AIData>();
+		delete[] ack_cache;
+		ack_cache = nullptr;
+	}
+
+	if(ack_cache_count != nullptr && ack_cache_count != NULL) {
+		ack_cache_count_vec = Vector<int>();
+		delete[] ack_cache_count;
+		ack_cache_count = nullptr;
+	}
+
+	if(limit <= 0) {
+		ack_cache_len = -1;
+		return;
+	}
+
+	ack_cache = new AIData[limit];
+	ack_cache_count = new int[limit];
+	ack_cache_len = limit;
+	ack_cache_vec.setStorage(ack_cache, limit, 0);
+	ack_cache_count_vec.setStorage(ack_cache_count, limit, 0);
+
+	auto_ack_cache_off = auto_off;
+}
+
+//Disable the acknowledgment cache.
+void AIBusHandler::disableAckCache() {
+	if(ack_cache != nullptr && ack_cache != NULL) {
+		ack_cache_vec = Vector<AIData>();
+		delete[] ack_cache;
+		ack_cache = nullptr;
+	}
+	if(ack_cache_count != nullptr && ack_cache_count != NULL) {
+		ack_cache_count_vec = Vector<int>();
+		delete[] ack_cache_count;
+		ack_cache_count = nullptr;
+	}
+	ack_cache_len = -1;
+}
+#endif
+
 //Cache a message.
 void AIBusHandler::cacheMessage(AIData* ai_msg) {
-	//if(cached_vec.size() < cached_vec.max_size()) {	
+	if((ai_msg->l >= 1 && ai_msg->data[0] != 0x80)
+	#ifndef AIBUS_HANDLER_COMPACT
+	|| ack_cache_len > 0) {	
+	#else
+	) {
+	#endif
 		cached_vec.push_back(*ai_msg);
-	//}
+	}
 }
 
 //Cache any pending messages sent to the specified ID.
@@ -599,7 +783,12 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 		if(readAIData(&ai_msg, false)) {
 			if(!getID(ai_msg.sender) && ai_msg.sender != id) {
 				if(getID(ai_msg.receiver) || ai_msg.receiver == id || ai_msg.receiver == 0xFF) {
-					if(ai_msg.l >= 1 && ai_msg.data[0] != 0x80) {
+					if((ai_msg.l >= 1 && ai_msg.data[0] != 0x80)
+					#ifndef AIBUS_HANDLER_COMPACT
+					|| ack_cache_len > 0) {
+					#else
+					) {
+					#endif
 						cacheMessage(&ai_msg);
 						return true;
 					}
@@ -610,6 +799,7 @@ bool AIBusHandler::cachePending(const uint8_t id) {
 	return false;
 }
 
+#ifndef AIBUS_HANDLER_COMPACT
 //Set the hard limit for long message caching.
 void AIBusHandler::setMultiCacheLimit(const int limit) {
 	this->multi_cache_limit = limit;
@@ -619,6 +809,7 @@ void AIBusHandler::setMultiCacheLimit(const int limit) {
 void AIBusHandler::setAllowStaggeredMulti(const bool allow) {
 	this->allow_staggered_multi = allow;
 }
+#endif
 
 //Clear any pending data in the serial port.
 void AIBusHandler::clearSerial() {

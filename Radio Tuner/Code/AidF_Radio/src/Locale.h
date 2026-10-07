@@ -67,6 +67,7 @@ enum radio_menu_index : menu_index_t {
 	MENU_INDEX_RADIO_SETTINGS_FM_INCREMENT,
 	MENU_INDEX_RADIO_SETTINGS_AM_BAND,
 	MENU_INDEX_RADIO_SETTINGS_RDS_CALLSIGN,
+	MENU_INDEX_RADIO_SETTINGS_CLOCK,
 	MENU_INDEX_RADIO_SETTINGS_AUDIO,
 
 	//RDS flash menu:
@@ -105,6 +106,21 @@ enum radio_menu_index : menu_index_t {
 	MENU_INDEX_STEERING_CONTROL_SEEK,
 	MENU_INDEX_STEERING_CONTROL_PRESET,
 
+	//Radio clock set menu:
+	MENU_INDEX_CLOCK_SET,
+	MENU_INDEX_CLOCK_SET_FREQUENCY,
+	MENU_INDEX_CLOCK_SET_WAIT,
+	MENU_INDEX_CLOCK_SET_AUTOSET_FREQUENCY,
+
+	//Dev menu:
+	MENU_INDEX_DEV_CONFIGURATION,
+	MENU_INDEX_DEV_CONFIGURATION_FM_BAND,
+	MENU_INDEX_DEV_CONFIGURATION_FM_INCREMENT,
+	MENU_INDEX_DEV_CONFIGURATION_AM_BAND,
+	MENU_INDEX_DEV_CONFIGURATION_RDS_CALLSIGN,
+	MENU_INDEX_DEV_CONFIGURATION_RDS_CLOCK_SET,
+	MENU_INDEX_DEV_CONFIGURATION_CLOCK_DEBUG,
+
 	MENU_INDEX_LEN
 };
 
@@ -123,6 +139,8 @@ static const radio_menu_index MENU_START_INDEX[] = {
 	MENU_INDEX_AM_BAND,
 	MENU_INDEX_RDS_CALLSIGN,
 	MENU_INDEX_STEERING_CONTROL,
+	MENU_INDEX_CLOCK_SET,
+	MENU_INDEX_DEV_CONFIGURATION,
 
 	MENU_INDEX_LEN
 };
@@ -181,6 +199,7 @@ static const char* MENUS_ENG[] = {
 	"FM Increment",
 	"AM Band/Increment",
 	"RDS Callsign",
+	"Radio Clock Set",
 	"Audio Settings",
 
 	//RDS flash menu:
@@ -218,6 +237,21 @@ static const char* MENUS_ENG[] = {
 	"Steering Wheel Control",
 	"Seek",
 	"Change Preset",
+
+	//Radio clock set menu:
+	"Radio Clock Set",
+	"Clock Signal Frequency",
+	"Wait for Minute Increment",
+	"Auto Set Frequency",
+
+	//Secret dev menu:
+	"Audio/Radio Configuration",
+	"FM Band",
+	"FM Increment",
+	"AM Band/Increment",
+	"RDS Callsign",
+	"Radio Clock Set",
+	"Clock Set Debug Output",
 };
 
 const char* getString(const radio_text_index index, const uint8_t locale);

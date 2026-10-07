@@ -22,6 +22,7 @@
 
 #include "Radio_EEPROM.h"
 #include "Radio_RAM.h"
+#include "Radio_Time.h"
 
 #ifndef aidf_radio_h
 #define aidf_radio_h
@@ -165,7 +166,7 @@ private:
 	elapsedMillis door_timer;
 	bool door_timer_enabled = false;
 
-	elapsedMillis control_timer;
+	elapsedMillis control_timer, last_time_set;
 
 	SRAMHandler sram_handler = SRAMHandler(RAM_CS);
 

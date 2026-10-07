@@ -17,6 +17,7 @@
 #define CLOCK_MODE_BROADCAST_AUTO 0x1
 #define CLOCK_MODE_BROADCAST_MANUAL 0x2
 #define CLOCK_MODE_RTC_INIT 0x4
+#define CLOCK_MODE_AUTO_FREQ 0x40
 #define CLOCK_MODE_12H 0x80
 
 enum ADDR {
@@ -56,8 +57,7 @@ enum SOURCE_ADDR {
 //Radio startup parameters.
 struct StartParams {
 	uint8_t selected_source = 0, selected_subsource = 0;
-	uint16_t fm1_freq = 0, fm2_freq = 0, am_freq = 0;
-	int16_t clock_freq = -1;
+	uint16_t fm1_freq = 0, fm2_freq = 0, am_freq = 0, clock_freq = 0;
 
 	uint8_t clock_mode;
 

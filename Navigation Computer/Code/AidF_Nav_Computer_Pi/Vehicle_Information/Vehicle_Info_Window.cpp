@@ -194,7 +194,7 @@ void VehicleInfoWindow::drawWindow() {
 		const int16_t silhouette_start_x = attribute_list->w/2 - 600/2;
 
 		int16_t silhouette_start_y = attribute_list->h/2 - 240/2;
-		if(info_parameters->charge_assist_meter && info_parameters->draw_charge_assist)
+		if(info_parameters->hybrid_params.data.charge_assist && info_parameters->draw_charge_assist)
 			silhouette_start_y -= 30;
 		
 		this->title_box.drawText();
@@ -217,7 +217,7 @@ void VehicleInfoWindow::drawWindow() {
 		}
 
 		//Draw the DRLs.
-		if((this->info_parameters->light_state_a & INFO_LIGHTS_A_DRL) != 0 && (this->info_parameters->light_state_a & INFO_LIGHTS_A_FRONT_FOG) == 0) {
+		if(this->info_parameters->light_state.data.drl && !this->info_parameters->light_state.data.front_fog) {
 			if(this->drl_texture != NULL) {
 				SDL_Rect drl_rect = {silhouette_start_x - 15,silhouette_start_y + 160,53,24};
 				SDL_RenderCopy(this->renderer, this->drl_texture, NULL, &drl_rect);
@@ -225,7 +225,7 @@ void VehicleInfoWindow::drawWindow() {
 		}
 
 		//Draw the side markers.
-		if((this->info_parameters->light_state_a & INFO_LIGHTS_A_PARKING) != 0) {
+		if(this->info_parameters->light_state.data.parking) {
 			if(this->side_texture != NULL) {
 				SDL_Rect side_rect = {silhouette_start_x + 50,silhouette_start_y + 75,57,22};
 				SDL_RenderCopy(this->renderer, this->side_texture, NULL, &side_rect);
@@ -233,7 +233,7 @@ void VehicleInfoWindow::drawWindow() {
 		}
 
 		//Draw the low beams.
-		if((this->info_parameters->light_state_a & INFO_LIGHTS_A_LOW_BEAM) != 0) {
+		if(this->info_parameters->light_state.data.low_beam) {
 			if(this->lowbeam_texture != NULL) {
 				SDL_Rect lowbeam_rect = {silhouette_start_x - 15, silhouette_start_y + 130, 55, 30};
 				SDL_RenderCopy(this->renderer, this->lowbeam_texture, NULL, &lowbeam_rect);
@@ -241,7 +241,7 @@ void VehicleInfoWindow::drawWindow() {
 		}
 
 		//Draw the high beams.
-		if((this->info_parameters->light_state_a & INFO_LIGHTS_A_HIGH_BEAM) != 0) {
+		if(this->info_parameters->light_state.data.high_beam) {
 			if(this->highbeam_texture != NULL) {
 				SDL_Rect highbeam_rect = {silhouette_start_x - 15, silhouette_start_y + 100, 55, 24};
 				SDL_RenderCopy(this->renderer, this->highbeam_texture, NULL, &highbeam_rect);
@@ -249,7 +249,7 @@ void VehicleInfoWindow::drawWindow() {
 		}
 
 		//Draw the front foglights.
-		if((this->info_parameters->light_state_a & INFO_LIGHTS_A_FRONT_FOG) != 0) {
+		if(this->info_parameters->light_state.data.front_fog) {
 			if(this->frontfog_texture != NULL) {
 				SDL_Rect frontfog_rect = {silhouette_start_x - 5, silhouette_start_y + 160, 42, 27};
 				SDL_RenderCopy(this->renderer, this->frontfog_texture, NULL, &frontfog_rect);
@@ -257,7 +257,7 @@ void VehicleInfoWindow::drawWindow() {
 		}
 
 		//Draw the rear foglights.
-		if((this->info_parameters->light_state_b & INFO_LIGHTS_B_REAR_FOG) != 0) {
+		if(this->info_parameters->light_state.data.rear_fog) {
 			if(this->rearfog_texture != NULL) {
 				SDL_Rect rearfog_rect = {silhouette_start_x + 580, silhouette_start_y + 150, 40, 24};
 				SDL_RenderCopy(this->renderer, this->rearfog_texture, NULL, &rearfog_rect);
@@ -267,7 +267,7 @@ void VehicleInfoWindow::drawWindow() {
 		//Draw auto stop.
 		if(this->info_parameters->auto_stop == AUTO_STOP_ON) {
 			if(this->auto_stop_texture != NULL) {
-				SDL_Rect autostop_rect = {silhouette_start_x + 92, silhouette_start_y + 44, 50, 48};
+				SDL_Rect autostop_rect = {silhouette_start_x + 112, silhouette_start_y + 34, 50, 48};
 				SDL_RenderCopy(this->renderer, this->auto_stop_texture, NULL, &autostop_rect);
 			}
 		}
@@ -330,42 +330,42 @@ void VehicleInfoWindow::drawWindow() {
 			const uint32_t dimmed_button = ((button_red*7/10)<<24) | ((button_green*7/10)<<16) | ((button_blue*7/10)<<8) | button_alpha;
 			const uint32_t outline_color = color_profile->outline;
 
-			const uint8_t hybrid_status = info_parameters->hybrid_status_main;
+			const hybrid_mode_t hybrid_status = info_parameters->hybrid_status_main;
 
 			//Arrows:
-			PowerFlowArrow arrow_eb1(renderer, silhouette_start_x + 360, silhouette_start_y + 100, 23 + (((hybrid_status&0x6) == 0) ? 7 : 0), 15);
+			PowerFlowArrow arrow_eb1(renderer, silhouette_start_x + 360, silhouette_start_y + 100, 23 + ((!hybrid_status.data.motor_to_bat && !hybrid_status.data.regen_to_bat) ? 7 : 0), 15);
 			PowerFlowArrow arrow_eb2(renderer, silhouette_start_x + 345, silhouette_start_y + 115, 15, 45);
-			PowerFlowArrow arrow_eb3(renderer, silhouette_start_x + 305 + (((hybrid_status&0x1) == 0) ? 0 : 10), silhouette_start_y + 160, 30 + (((hybrid_status&0x1) == 0) ? 10 : 0), 15);
+			PowerFlowArrow arrow_eb3(renderer, silhouette_start_x + 305 + (!hybrid_status.data.bat_to_motor ? 0 : 10), silhouette_start_y + 160, 30 + (!hybrid_status.data.bat_to_motor ? 10 : 0), 15);
 
 			PowerFlowCorner corner_eb12(renderer, silhouette_start_x + 345, silhouette_start_y + 100, 15);
 			PowerFlowCorner corner_eb23(renderer, silhouette_start_x + 344, silhouette_start_y + 159, 15);
 
-			PowerFlowArrow arrow_ge(renderer, silhouette_start_x + 267, silhouette_start_y + 104, 15, 28 + (((hybrid_status&0x40) == 0) ? 10 : 0));
+			PowerFlowArrow arrow_ge(renderer, silhouette_start_x + 267, silhouette_start_y + 104, 15, 28 + (!hybrid_status.data.engine_to_motor ? 10 : 0));
 
-			PowerFlowArrow arrow_ew(renderer, silhouette_start_x + 205 + ((((hybrid_status&0x8) == 0) ? 0 : 10)), silhouette_start_y + 165, 30 + ((((hybrid_status&0x10) == 0 && (hybrid_status&0x8) == 0) ? 10 : 0)), 15);
+			PowerFlowArrow arrow_ew(renderer, silhouette_start_x + 205 + ((!hybrid_status.data.motor_to_wheels ? 0 : 10)), silhouette_start_y + 165, 30 + (((!hybrid_status.data.wheels_to_motor && !hybrid_status.data.motor_to_wheels) ? 10 : 0)), 15);
 
-			if((hybrid_status&0x7) == 0) {
+			if(!(hybrid_status.data.regen_to_bat || hybrid_status.data.bat_to_motor || hybrid_status.data.motor_to_bat)) {
 				arrow_eb1.drawOutline(dimmed_button, outline_color);
 				arrow_eb2.drawOutline(dimmed_button, outline_color);
 				arrow_eb3.drawOutline(dimmed_button, outline_color);
 				corner_eb12.drawOutline(dimmed_button, outline_color, CORNER_ANGLE_DR);
 				corner_eb23.drawOutline(dimmed_button, outline_color, CORNER_ANGLE_UL);
 			} else {
-				if((hybrid_status&0x1) != 0) { //Battery to motor.
+				if(hybrid_status.data.bat_to_motor) { //Battery to motor.
 					arrow_eb1.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_LEFT, false);
 					arrow_eb2.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_DOWN, false);
 					arrow_eb3.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_LEFT, true);
 					
 					corner_eb12.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, CORNER_ANGLE_DR, false);
 					corner_eb23.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, CORNER_ANGLE_UL, true);
-				} else if((hybrid_status&0x2) != 0) { //Motor to battery.
+				} else if(hybrid_status.data.motor_to_bat) { //Motor to battery.
 					arrow_eb1.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_RIGHT, true);
 					arrow_eb2.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_UP, false);
 					arrow_eb3.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_RIGHT, false);
 
 					corner_eb12.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, CORNER_ANGLE_DR, true);
 					corner_eb23.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, CORNER_ANGLE_UL, false);
-				} else if((hybrid_status&0x4) != 0) { //Motor to battery, regen.
+				} else if(hybrid_status.data.regen_to_bat) { //Motor to battery, regen.
 					arrow_eb1.drawFilled(COLOR_REG1, COLOR_REG2, outline_color, frame, ARROW_DIR_RIGHT, true);
 					arrow_eb2.drawFilled(COLOR_REG1, COLOR_REG2, outline_color, frame, ARROW_DIR_UP, false);
 					arrow_eb3.drawFilled(COLOR_REG1, COLOR_REG2, outline_color, frame, ARROW_DIR_RIGHT, false);
@@ -375,27 +375,27 @@ void VehicleInfoWindow::drawWindow() {
 				}
 			}
 
-			if((hybrid_status&0x40) == 0)
+			if(!hybrid_status.data.engine_to_motor)
 				arrow_ge.drawOutline(dimmed_button, outline_color);
 			else
 				arrow_ge.drawFilled(COLOR_ENG1, COLOR_ENG2, outline_color, frame, ARROW_DIR_DOWN, true);
 
-			if((hybrid_status&0x18) == 0)
+			if(!hybrid_status.data.wheels_to_motor && !hybrid_status.data.motor_to_wheels)
 				arrow_ew.drawOutline(dimmed_button, outline_color);
 			else {
-				if((hybrid_status&0x8) != 0) //Motor to wheels.
+				if(hybrid_status.data.motor_to_wheels) //Motor to wheels.
 					arrow_ew.drawFilled(COLOR_EV1, COLOR_EV2, outline_color, frame, ARROW_DIR_LEFT, true);
-				else if((hybrid_status&0x10) != 0) //Wheels to motor.
+				else if(hybrid_status.data.wheels_to_motor) //Wheels to motor.
 					arrow_ew.drawFilled(COLOR_REG1, COLOR_REG2, outline_color, frame, ARROW_DIR_RIGHT, true);
 			}
 
-			if(info_parameters->hybrid_system_type != 1) { //Not present in a series hybrid.
+			if(info_parameters->hybrid_params.data.system_type != INFO_HYBRID_TYPE_SERIES) { //Not present in a series hybrid.
 				PowerFlowArrow arrow_gw1(renderer, silhouette_start_x + 230, silhouette_start_y + 100, 15, 38);
 				PowerFlowArrow arrow_gw2(renderer, silhouette_start_x + 200, silhouette_start_y + 139, 30, 15);
 
 				PowerFlowCorner corner_gw12(renderer, silhouette_start_x + 229, silhouette_start_y + 137, 15);
 
-				if((hybrid_status&0x20) == 0) {
+				if(!hybrid_status.data.engine_to_wheels) {
 					arrow_gw1.drawOutline(dimmed_button, outline_color);
 					arrow_gw2.drawOutline(dimmed_button, outline_color);
 					corner_gw12.drawOutline(dimmed_button, outline_color, CORNER_ANGLE_UL);
@@ -406,14 +406,14 @@ void VehicleInfoWindow::drawWindow() {
 				}
 			}
 
-			if(info_parameters->charge_assist_meter && info_parameters->draw_charge_assist) {
+			if(info_parameters->hybrid_params.data.charge_assist && info_parameters->draw_charge_assist) {
 				PowerFlowArrow arrow_charge(renderer, w/2 - CHARGE_ASSIST_W/2, silhouette_start_y + 250, CHARGE_ASSIST_W/2, CHARGE_ASSIST_H);
 				PowerFlowArrow arrow_assist(renderer, w/2, silhouette_start_y + 250, CHARGE_ASSIST_W/2, CHARGE_ASSIST_H);
 				if(info_parameters->charge_assist_pos > 0x7F) { //Assist.
 					arrow_charge.drawOutline(dimmed_button, outline_color);
 					arrow_assist.drawPartialFilled(COLOR_EV1, COLOR_EV2, outline_color, dimmed_button, frame, ARROW_DIR_RIGHT, uint8_t((int(info_parameters->charge_assist_pos)-0x7F)*2), false);
 				} else if(info_parameters->charge_assist_pos < 0x7F) { //Charge.
-					arrow_charge.drawPartialFilled(((hybrid_status&0x4) != 0) ? COLOR_REG1 : COLOR_EV1, ((hybrid_status&0x4) != 0) ? COLOR_REG2 : COLOR_EV2, outline_color, dimmed_button, frame, ARROW_DIR_LEFT, uint8_t((0x7F-int(info_parameters->charge_assist_pos))*2), false);
+					arrow_charge.drawPartialFilled(hybrid_status.data.regen_to_bat ? COLOR_REG1 : COLOR_EV1, hybrid_status.data.regen_to_bat ? COLOR_REG2 : COLOR_EV2, outline_color, dimmed_button, frame, ARROW_DIR_LEFT, uint8_t((0x7F-int(info_parameters->charge_assist_pos))*2), false);
 					arrow_assist.drawOutline(dimmed_button, outline_color);
 				} else {
 					arrow_charge.drawOutline(dimmed_button, outline_color);
@@ -486,7 +486,7 @@ void VehicleInfoWindow::handleEnterButton() {
 			createParamSettingsMenu(uint8_t(selected));
 			break;
 		case MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST:
-			if(info_parameters->charge_assist_meter) {
+			if(info_parameters->hybrid_params.data.charge_assist) {
 				info_parameters->draw_charge_assist = !info_parameters->draw_charge_assist;
 				if(info_parameters->draw_charge_assist)
 					this->settings_menu->setItem(std::string("#RON ") + settings_menu_list.getLocalEntry(MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST), settings_menu_list.getLocalIndex(MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST));
@@ -730,7 +730,7 @@ void VehicleInfoWindow::createDefaultSettingsMenu() {
 			const std::string cruise_option = info_parameters->display_cruise ? "#RON " : "#ROF ";
 			this->settings_menu->setItem(cruise_option + settings_menu_list[i], i);
 		} else if(i == settings_menu_list.getLocalIndex(MENU_INDEX_INFORMATION_MAIN_CHARGE_ASSIST)) {
-			if(info_parameters->charge_assist_meter) {
+			if(info_parameters->hybrid_params.data.charge_assist) {
 				const std::string charge_assist_option = info_parameters->draw_charge_assist ? "#RON " : "#ROF ";
 				this->settings_menu->setItem(charge_assist_option + settings_menu_list[i], i);
 			}

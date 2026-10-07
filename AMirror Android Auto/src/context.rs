@@ -2,6 +2,12 @@ use std::time::Instant;
 
 pub const MAC_ADDR_LEN: usize = 6;
 
+#[derive(Clone,Copy,PartialEq,Eq)]
+pub enum HeadlightState {
+	HeadlightStateOff,
+	HeadlightStateLow,
+	HeadlightStateHigh
+}
 pub struct Context {
 	pub audio_selected: bool, //True if the mirror is selected as the active audio device.
 	pub audio_text: bool, //True if audio text handling is allowed.
@@ -22,6 +28,7 @@ pub struct Context {
 	pub track_time: i32, //The current song runtime.
 
 	pub night: bool, //True if the system is in night mode.
+	pub headlight_state: HeadlightState, //Headlight state.
 
 	pub notification: bool, //True if a notification is active.
 	pub phone_mute: bool, //True if audio should be muted for a phone call or other voice event.
@@ -30,6 +37,9 @@ pub struct Context {
 	pub home_held: bool, //True if "home" was held by the user.
 
 	pub last_connection_change: Instant,
+
+	//Vehicle:
+	pub speed_e3: i32, //The vehicle speed times 1000.
 
 	//IMID Parameters:
 	pub imid_row_count: u8,
@@ -86,6 +96,7 @@ impl Context {
 			last_connection_change: Instant::now(),
 
 			night: false,
+			headlight_state: HeadlightState::HeadlightStateOff,
 
 			notification: false,
 			phone_mute: false,
@@ -96,6 +107,7 @@ impl Context {
 			latitude: 0.0,
 			longitude: 0.0,
 			altitude: 0,
+			speed_e3: 0,
 			
 			imid_row_count: 0,
 			imid_text_len: 0,

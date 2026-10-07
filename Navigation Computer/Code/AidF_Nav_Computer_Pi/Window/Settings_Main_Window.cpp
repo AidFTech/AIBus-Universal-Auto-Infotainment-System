@@ -16,6 +16,8 @@ Settings_Main_Window::Settings_Main_Window(AttributeList *attribute_list) : Sett
 
 	vector<uint8_t>* ping_device_list = &attribute_list->ping_device_list;
 
+	attribute_list->aibus_handler->setAckCache(true);
+
 	for(int i=0;i<ping_device_list->size();i+=1) {
 		switch(ping_device_list->at(i)) {
 		case 0:
@@ -31,14 +33,12 @@ Settings_Main_Window::Settings_Main_Window(AttributeList *attribute_list) : Sett
 
 		uint8_t req_data[] = {0x2B, 0x57, 'S', 'E', 'T', 'T', 'I', 'N', 'G'};
 		AIData req_msg(sizeof(req_data), ID_NAV_COMPUTER, ping_device_list->at(i), req_data);
-		attribute_list->aibus_handler->writeToCache(&req_msg, true);
+		attribute_list->aibus_handler->writeAIData(&req_msg);
 	}
-
-	ping_device_list->clear(); //TODO: DO we really want to do this?
 }
 
 bool Settings_Main_Window::handleAIBus(AIData* ai_msg) {
-	if(Settings_Window::handleAIBus(ai_msg))
+	if(!home_held && !enter_held && !menu_held && Settings_Window::handleAIBus(ai_msg))
 		return true;
 
 	if(ai_msg->l >= 2 && ai_msg->data[0] == 0x2B) { //Menu message...
@@ -49,6 +49,28 @@ bool Settings_Main_Window::handleAIBus(AIData* ai_msg) {
 
 			addNestedRequestOption(menu_name, ai_msg->sender);
 			return true;
+		}
+	} else if(ai_msg->sender == ID_NAV_SCREEN && ai_msg->l >= 3) { 
+		if(ai_msg->data[0] == 0x30 && (ai_msg->data[2] == 0x40 || ai_msg->data[2] == 0x80)) { //Button held or released.
+			const uint8_t button = ai_msg->data[1];
+			const bool held = ai_msg->data[2] == 0x40;
+
+			const bool activate_secret_menu = !held && home_held && menu_held && enter_held; //Open the secret menu if all three buttons are held.
+
+			if(button == 0x20)
+				home_held = held;
+			else if(button == 0x51)
+				menu_held = held;
+			else if(button == 0x7)
+				enter_held = held;
+
+			if(activate_secret_menu) {
+				attribute_list->next_window = NEXT_WINDOW_SETTINGS_SECRET;
+				return true;
+			} else if(button == 0x51) {
+				handleBackButton();
+				return true;
+			}
 		}
 	}
 

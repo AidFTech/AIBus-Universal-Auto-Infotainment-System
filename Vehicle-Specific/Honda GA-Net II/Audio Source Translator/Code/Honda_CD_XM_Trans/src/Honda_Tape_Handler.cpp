@@ -46,8 +46,10 @@ void HondaTapeHandler::loop() {
 				parameter_list->radio_connected = false;
 		}
 
+		#ifndef HW_IEBUS
 		if(ie_driver->getInputOn())
 			this->listenForIEBus(500, false);
+		#endif
 
 		if(last_imid_str.length() > 0) {
 			if(imid_handler->writeIMIDTextMessage(last_imid_str))
@@ -55,7 +57,9 @@ void HondaTapeHandler::loop() {
 		}
 
 		while(ie_cache_vec.size() > 0) {
+			#ifndef HW_IEBUS
 			handleIEBus(&ie_cache_vec[0], false);
+			#endif
 			ie_cache_vec.remove(0);
 			ie_driver->cacheAIBus();
 		}
@@ -94,8 +98,10 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message, const bool 
 				delay(2);
 
 				ie_driver->sendMessage(&handshake_msg, false, false);
+				#ifndef HW_IEBUS
 				if(listen)
 					listenForIEBus();
+				#endif
 			}
 		} else if(the_message->data[0] == 0x5 && the_message->data[2] == 0x2) {
 			ack = false;
@@ -171,8 +177,10 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message, const bool 
 			}
 		}
 
+		#ifndef HW_IEBUS
 		if(listen && (tape_state == TAPE_MODE_LOAD || tape_state == TAPE_MODE_EJECT))
 			listenForIEBus(2000, false);
+		#endif
 	} else if(the_message->l >= 6 && the_message->data[0] ==0x10 && the_message->data[3] == 0x10 && the_message->data[4] == 0x10 && !source_sel) { //Tape loading but not selected.
 		uint8_t tape_load_data[] = {0x31, TAPE_MODE_LOAD, 0x2, 0x0};
 		AIData tape_load_message(sizeof(tape_load_data), ID_TAPE, ID_RADIO);
@@ -186,7 +194,9 @@ void HondaTapeHandler::interpretTapeMessage(IE_Message* the_message, const bool 
 		if(autostart && !source_sel)
 			requestRadioControl();
 
+		#ifndef HW_IEBUS
 		listenForIEBus(1000, false);
+		#endif
 	}
 	
 	if(ack)
@@ -275,14 +285,18 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			if(parameter_list->audio_pin >= 0)
 				digitalWrite(parameter_list->audio_pin, HIGH);
 
+			#ifndef HW_IEBUS
 			listenForIEBus(500, false);
+			#endif
 
 		} else {
 			if(source_sel) {
 				source_sel = false;
 				uint8_t function[] = {0x0, 0x1};
 				sendFunctionMessage(ie_driver, true, IE_ID_TAPE, function, sizeof(function));
+				#ifndef HW_IEBUS
 				getIEAckMessage(device_ie_id);
+				#endif
 				requestControl(active_source);
 			}
 
@@ -305,7 +319,9 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 			sendFunctionTextMessage();
 
 			if(!last_text_control) {
+				#ifndef HW_IEBUS
 				listenForIEBus(1200, false);
+				#endif
 			}
 		}
 	} else if(the_message->l >= 3 && the_message->data[0] == 0x70 && the_message->data[1] == 0x10 && sender == ID_RADIO) { //Function heartbeat.
@@ -385,8 +401,10 @@ void HondaTapeHandler::readAIBusMessage(AIData* the_message) {
 
 //Refresh the source.
 void HondaTapeHandler::refreshSource() {
+	#ifndef HW_IEBUS
 	if(ie_driver->getInputOn())
 		this->listenForIEBus();
+	#endif
 }
 
 //Send the AIBus handshake message to the radio.
@@ -440,9 +458,11 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button) {
 	button_message.refreshIEData(button_data);
 	
 	ie_driver->sendMessage(&button_message, true, true);
+	
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
-
 	listenForIEBus();
+	#endif
 }
 
 //Send a button IEBus message with a track count.
@@ -453,11 +473,14 @@ void HondaTapeHandler::sendButtonMessage(const uint8_t button, const uint8_t tra
 	button_message.refreshIEData(button_data);
 	
 	ie_driver->sendMessage(&button_message, true, true);
+	
+	#ifndef HW_IEBUS
 	getIEAckMessage(device_ie_id);
-
 	listenForIEBus();
+	#endif
 }
 
+#ifndef HW_IEBUS
 //Handle an AIBus message internally.
 void HondaTapeHandler::handleAIBus(AIData* msg) {
 	readAIBusMessage(msg);
@@ -472,6 +495,7 @@ void HondaTapeHandler::handleIEBus(IE_Message* msg, const bool listen) {
 void HondaTapeHandler::handleIMIDAIBus(AIData* msg) {
 	imid_handler->readAIBusMessage(msg);
 }
+#endif
 
 //Determine whether the up/down symbol should be shown.
 bool HondaTapeHandler::getDisplaySymbol() {

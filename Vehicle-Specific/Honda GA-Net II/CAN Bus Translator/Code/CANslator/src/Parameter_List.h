@@ -6,13 +6,19 @@
 #define WIPER_TIMER_L 15000
 #define WIPER_TIMER_H 6000
 
-enum trim_t : uint8_t {
-	TRIM_COMMON_AUTO_5AT,
-	TRIM_COMMON_AUTO_CVT,
-	TRIM_COMMON_MANUAL,
+enum transmission_t : uint8_t {
+	TRANS_5AT,
+	TRANS_COMMON_CVT,
+	TRANS_HYBRID_CVT,
+	TRANS_5MT,
+	TRANS_6MT,
+};
+
+enum special_trim_t : uint8_t {
+	TRIM_NORMAL,
 	TRIM_HYBRID,
 	TRIM_SI,
-	TRIM_CNG
+	TRIM_CNG,
 };
 
 enum drl_setting_t : uint8_t  {
@@ -56,6 +62,8 @@ struct ParameterList {
 
 	bool reverse_on = false; //True if the car is in reverse.
 
+	bool ambient_slide_active = false;
+
 	//Settings:
 	bool display_celsius = true; //Display Celsius.
 	bool wiper_door_off = true; //Turn the wipers off if the doors are open.
@@ -67,9 +75,26 @@ struct ParameterList {
 	bool ambient_light_enable_door = true, ambient_light_enable_int = true;
 
 	//Hidden settings:
-	trim_t trim = TRIM_HYBRID;
-	drl_setting_t drl_setting = DRL_SETTING_OFF;
-	bool parking_light_drl = false; //True if DRLs should be on as parking lights.
+	special_trim_t special_trim: 3;
+	transmission_t transmission: 2;
+	drl_setting_t drl_setting: 2;
+	bool parking_light_drl : 1; //True if DRLs should be on as parking lights.
+	bool pushbutton: 1; //True if the car has pushbutton start.
+
+	bool has_rearview_camera: 1, has_lanewatch: 1;
+	bool has_ambient_lighting: 1;
+
+	ParameterList() {
+		special_trim = TRIM_NORMAL;
+		transmission = TRANS_5AT;
+		drl_setting = DRL_SETTING_OFF;
+		parking_light_drl = false;
+		pushbutton = false;
+
+		has_rearview_camera = true;
+		has_lanewatch = false;
+		has_ambient_lighting = false;
+	}
 };
 
 #endif

@@ -1,0 +1,206 @@
+[
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/CDC.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/CDC.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/CDC.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/CDC.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/Tone.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/Tone.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/Tone.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/Tone.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/UART.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/UART.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/UART0.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART0.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART0.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/UART0.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/UART1.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART1.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART1.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/UART1.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/UART2.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART2.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART2.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/UART2.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/UART3.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART3.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UART3.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/UART3.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/UNO_compat.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UNO_compat.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/UNO_compat.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/UNO_compat.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/USBCore.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/USBCore.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/USBCore.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/USBCore.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega3208/FrameworkArduino/WInterrupts.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/WInterrupts.c",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/WInterrupts.c",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/WInterrupts.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/WMath.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/WMath.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/WMath.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/WMath.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/abi.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/abi.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/abi.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/abi.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/api/Common.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Common.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Common.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/api/Common.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/api/IPAddress.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/IPAddress.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/IPAddress.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/api/IPAddress.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/api/PluggableUSB.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/PluggableUSB.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/PluggableUSB.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/api/PluggableUSB.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/api/Print.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Print.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Print.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/api/Print.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/api/RingBuffer.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/RingBuffer.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/RingBuffer.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/api/RingBuffer.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/api/Stream.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Stream.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/Stream.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/api/Stream.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/api/String.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/String.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/String.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/api/String.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega3208/FrameworkArduino/hooks.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/hooks.c",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/hooks.c",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/hooks.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/main.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/main.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/main.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/main.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/FrameworkArduino/new.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/new.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/new.cpp",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/new.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega3208/FrameworkArduino/wiring.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring.c",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring.c",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/wiring.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega3208/FrameworkArduino/wiring_analog.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_analog.c",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_analog.c",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/wiring_analog.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega3208/FrameworkArduino/wiring_digital.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_digital.c",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_digital.c",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/wiring_digital.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -mmcu=atmega3208 -x assembler-with-cpp -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard -c -o .pio/build/ATmega3208/FrameworkArduino/wiring_pulse.S.o /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_pulse.S",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_pulse.S",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/wiring_pulse.S.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega3208/FrameworkArduino/wiring_pulse.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_pulse.c",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_pulse.c",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/wiring_pulse.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-gcc -o .pio/build/ATmega3208/FrameworkArduino/wiring_shift.c.o -c -std=gnu11 -fno-fat-lto-objects -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_shift.c",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/wiring_shift.c",
+        "output": ".pio/build/ATmega3208/FrameworkArduino/wiring_shift.c.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/lib949/src@src-1c3d8aef6aa12a3dd9da6cd2ce68169f/Vector/Vector.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I.pio/libdeps/ATmega3208/src@src-1c3d8aef6aa12a3dd9da6cd2ce68169f -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard .pio/libdeps/ATmega3208/src@src-1c3d8aef6aa12a3dd9da6cd2ce68169f/Vector/Vector.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": ".pio/libdeps/ATmega3208/src@src-1c3d8aef6aa12a3dd9da6cd2ce68169f/Vector/Vector.cpp",
+        "output": ".pio/build/ATmega3208/lib949/src@src-1c3d8aef6aa12a3dd9da6cd2ce68169f/Vector/Vector.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/libdf5/SPI/SPI.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/libraries/SPI/src -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard /home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/libraries/SPI/src/SPI.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": "/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/libraries/SPI/src/SPI.cpp",
+        "output": ".pio/build/ATmega3208/libdf5/SPI/SPI.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/libdcb/arduino-mcp2515-master/mcp2515.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I.pio/libdeps/ATmega3208/arduino-mcp2515-master -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/libraries/SPI/src -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard .pio/libdeps/ATmega3208/arduino-mcp2515-master/mcp2515.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": ".pio/libdeps/ATmega3208/arduino-mcp2515-master/mcp2515.cpp",
+        "output": ".pio/build/ATmega3208/libdcb/arduino-mcp2515-master/mcp2515.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/libd52/MCP23S08-master/MCP23S08.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I.pio/libdeps/ATmega3208/MCP23S08-master -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/libraries/SPI/src -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard .pio/libdeps/ATmega3208/MCP23S08-master/MCP23S08.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": ".pio/libdeps/ATmega3208/MCP23S08-master/MCP23S08.cpp",
+        "output": ".pio/build/ATmega3208/libd52/MCP23S08-master/MCP23S08.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/libb77/src@src-fed5bfd4d708b4ed9147ecfea70a5def/mcp3201.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I.pio/libdeps/ATmega3208/src@src-fed5bfd4d708b4ed9147ecfea70a5def -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/libraries/SPI/src -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard .pio/libdeps/ATmega3208/src@src-fed5bfd4d708b4ed9147ecfea70a5def/mcp3201.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": ".pio/libdeps/ATmega3208/src@src-fed5bfd4d708b4ed9147ecfea70a5def/mcp3201.cpp",
+        "output": ".pio/build/ATmega3208/libb77/src@src-fed5bfd4d708b4ed9147ecfea70a5def/mcp3201.cpp.o"
+    },
+    {
+        "command": "/home/aidan/.platformio/packages/toolchain-atmelavr@1.70300.191015/bin/avr-g++ -o .pio/build/ATmega3208/lib31c/src/MCP4251.cpp.o -c -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -fpermissive -Wno-error=narrowing -mmcu=atmega3208 -Os -w -ffunction-sections -fdata-sections -flto -DPLATFORMIO=60200 -DARDUINO_AVR_ATmega3208 -DF_CPU=20000000L -DARDUINO_ARCH_MEGAAVR -DARDUINO=10808 -I.pio/libdeps/ATmega3208/src -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/libraries/SPI/src -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX/api/deprecated -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/cores/MegaCoreX -I/home/aidan/.platformio/packages/framework-arduino-megaavr-megacorex/variants/32pin-standard .pio/libdeps/ATmega3208/src/MCP4251.cpp",
+        "directory": "/home/aidan/Documents/Remote Stuff/AIBus-Universal-Auto-Infotainment-System/Vehicle-Specific/Honda GA-Net II/Audio Source Translator/Code/IEBus_Transceiver",
+        "file": ".pio/libdeps/ATmega3208/src/MCP4251.cpp",
+        "output": ".pio/build/ATmega3208/lib31c/src/MCP4251.cpp.o"
+    }
+]

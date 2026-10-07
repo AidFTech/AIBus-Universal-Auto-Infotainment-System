@@ -36,10 +36,14 @@ void HondaCDXMTrans::setup() {
 	//pinMode(IEBUS_RX, INPUT);
 	pinMode(ILL_CS, OUTPUT);
 	pinMode(MAIN_POWER, OUTPUT);
-	pinMode(REC_SET, INPUT);
-	pinMode(REC_CLEAR, OUTPUT);
 	pinMode(AUDIO_ON, OUTPUT);
 	pinMode(TRUNK_OPEN, OUTPUT);
+
+	#ifdef HW_IEBUS
+	pinMode(IEBUS_ACTIVE, INPUT);
+	#else
+	pinMode(REC_SET, INPUT);
+	pinMode(REC_CLEAR, OUTPUT);
 
 	pinMode(GAH_COUNT_0, INPUT);
 	pinMode(GAH_COUNT_1, INPUT);
@@ -48,20 +52,24 @@ void HondaCDXMTrans::setup() {
 
 	pinMode(GAH_COUNT_ENABLE, OUTPUT);
 	pinMode(GAH_COUNT_CLEAR, OUTPUT);
+
+	digitalWrite(REC_CLEAR, HIGH);
+
+	digitalWrite(GAH_COUNT_CLEAR, HIGH);
+	digitalWrite(GAH_COUNT_CLEAR, LOW);
+
+	digitalWrite(GAH_COUNT_ENABLE, HIGH);
+	#endif
+
 	pinMode(SPDIF_RESET, OUTPUT);
 
 	digitalWrite(ILL_ANODE, LOW);
 	//digitalWrite(IEBUS_TX, LOW);
 	digitalWrite(ILL_CS, HIGH);
 	digitalWrite(MAIN_POWER, LOW);
-	digitalWrite(REC_CLEAR, HIGH);
+	
 	digitalWrite(AUDIO_ON, LOW);
 	digitalWrite(TRUNK_OPEN, LOW);
-
-	digitalWrite(GAH_COUNT_CLEAR, HIGH);
-	digitalWrite(GAH_COUNT_CLEAR, LOW);
-
-	digitalWrite(GAH_COUNT_ENABLE, HIGH);
 	
 	digitalWrite(SPDIF_RESET, HIGH);
 	delay(100);
@@ -69,6 +77,7 @@ void HondaCDXMTrans::setup() {
 	delay(100);
 	digitalWrite(SPDIF_RESET, HIGH);
 
+	#ifndef HW_IEBUS
 	EnIEBusParams ie_params;
 	ie_params.count_enable = GAH_COUNT_ENABLE;
 	ie_params.count_reset = GAH_COUNT_CLEAR;
@@ -86,6 +95,7 @@ void HondaCDXMTrans::setup() {
 	ie_params.count[3] = GAH_COUNT_3;
 
 	ie_handler.init(&ie_params);
+	#endif
 
 	//sendWideHandshake(&ie_handler);
 	//sendPingHandshake(&ie_handler, IE_ID_IMID);
@@ -121,8 +131,10 @@ void HondaCDXMTrans::loop() {
 		memory_timer = 0;
 		int mem = freeMemory();
 
+		#ifndef HW_IEBUS
 		if(mem > (8192 - 4848))
 			mem = 0;
+		#endif
 
 		const int cache_limit = mem/4/(sizeof(AIData) + AIDATA_LIMIT);
 
@@ -190,8 +202,10 @@ void HondaCDXMTrans::loop() {
 				} else if(message_value > 0 || message_value < -1)
 					message_timer = 0;
 
+				#ifndef HW_IEBUS
 				digitalWrite(REC_CLEAR, LOW);
 				digitalWrite(REC_CLEAR, HIGH);
+				#endif
 
 				ai_handler.clearSerial();
 			}
@@ -201,6 +215,7 @@ void HondaCDXMTrans::loop() {
 
 			ie_handler.clearRX();
 
+			#ifndef HW_IEBUS
 			if(digitalRead(REC_SET) == HIGH) { //Possible miss.
 				digitalWrite(REC_CLEAR, LOW);
 				digitalWrite(REC_CLEAR, HIGH);
@@ -212,6 +227,7 @@ void HondaCDXMTrans::loop() {
 				else if(xm_handler.getSelected())
 					xm_handler.refreshSource();
 			}
+			#endif
 		}
 	
 		AIData ai_msg;
@@ -363,12 +379,14 @@ void HondaCDXMTrans::loop() {
 						parameters.hour = ai_msg.data[3]&0x1F;
 						parameters.minute = ai_msg.data[4];
 						parameters.display_24h = (ai_msg.data[3]&0x80) == 0;
-						imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year, parameters.display_24h);
+						if(parameters.imid_connected)
+							imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year, parameters.display_24h);
 					} else if (ai_msg.data[2] == 0x2 && ai_msg.l >= 7) { // Date.
 						parameters.year = (ai_msg.data[3] << 8) | ai_msg.data[4];
 						parameters.month = ai_msg.data[5];
 						parameters.date = ai_msg.data[6];
-						imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year, parameters.display_24h);
+						if(parameters.imid_connected)
+							imid_handler.writeTimeAndDayMessage(parameters.hour, parameters.minute, parameters.month, parameters.date, parameters.year, parameters.display_24h);
 					}
 				}
 				else if (ai_msg.sender == ID_CANSLATOR && ai_msg.l >= 3 && ai_msg.data[1] == 0x2) { // Key position.
@@ -381,6 +399,7 @@ void HondaCDXMTrans::loop() {
 							digitalWrite(MAIN_POWER, HIGH);
 							parameters.power_on = true;
 							door_timer_enabled = false;
+							keyed_on = true;
 
 							sendWideHandshake(&ie_handler);
 							sendPingHandshake(&ie_handler, IE_ID_IMID);
@@ -440,7 +459,7 @@ void HondaCDXMTrans::loop() {
 				cd_handler.readAIBusMessage(&ai_msg);
 			else if (ai_msg.receiver == ID_TAPE && tape_handler.getEstablished())
 				tape_handler.readAIBusMessage(&ai_msg);
-			else if (ai_msg.receiver == ID_IMID_SCR && imid_handler.getEstablished())
+			else if (ai_msg.receiver == ID_IMID_SCR && imid_handler.getEstablished() && parameters.imid_connected)
 				imid_handler.readAIBusMessage(&ai_msg);
 			else if (ai_msg.receiver == ID_XM && xm_handler.getEstablished())
 				xm_handler.readAIBusMessage(&ai_msg);
@@ -526,28 +545,6 @@ void HondaCDXMTrans::loop() {
 			}
 		}
 
-		if(power_ping_timer > POWER_PING_TIMER) {
-			power_ping_timer = 0;
-
-			uint8_t ping_src = ID_CDC;
-
-			if(!cd_handler.getEstablished()) {
-				if(tape_handler.getEstablished())
-					ping_src = ID_TAPE;
-				else if(xm_handler.getEstablished())
-					ping_src = ID_XM;
-				else if(imid_handler.getEstablished())
-					ping_src = ID_IMID_SCR;
-				else ping_src = 0;
-			}
-
-			if(ping_src > 0) {
-				uint8_t power_ping_data[] = {0x4A, 0x1E};
-				AIData power_ping_msg(sizeof(power_ping_data), ping_src, ID_CANSLATOR, power_ping_data);
-				ai_handler.writeAIData(&power_ping_msg, false);
-			}
-		}
-
 		if(!parameters.has_dimensions && dimension_request_timer > DIMENSION_REQUEST_TIMER) {
 			dimension_request_timer = 0;
 			uint8_t ping_src = ID_CDC;
@@ -567,6 +564,28 @@ void HondaCDXMTrans::loop() {
 				AIData dim_ping_msg(sizeof(dim_ping_data), ping_src, ID_NAV_COMPUTER, dim_ping_data);
 				ai_handler.writeAIData(&dim_ping_msg, parameters.computer_connected);
 			}
+		}
+	}
+
+	if(power_ping_timer > (parameters.power_on || keyed_on) ? POWER_PING_TIMER : 2000) {
+		power_ping_timer = 0;
+
+		uint8_t ping_src = ID_CDC;
+
+		if(!cd_handler.getEstablished()) {
+			if(tape_handler.getEstablished())
+				ping_src = ID_TAPE;
+			else if(xm_handler.getEstablished())
+				ping_src = ID_XM;
+			else if(imid_handler.getEstablished())
+				ping_src = ID_IMID_SCR;
+			else ping_src = 0;
+		}
+
+		if(ping_src > 0) {
+			uint8_t power_ping_data[] = {0x4A, 0x1E};
+			AIData power_ping_msg(sizeof(power_ping_data), ping_src, ID_CANSLATOR, power_ping_data);
+			ai_handler.writeAIData(&power_ping_msg, false);
 		}
 	}
 	
@@ -701,7 +720,11 @@ void HondaCDXMTrans::powerOff() {
 
 //Get the available memory.
 int freeMemory() {
+	#ifdef HW_IEBUS
+	int size = 16384;
+	#else
 	int size = 8192;
+	#endif
 	byte *buf;
 	while ((buf = (byte *)malloc(--size)) == NULL);
 	free(buf);

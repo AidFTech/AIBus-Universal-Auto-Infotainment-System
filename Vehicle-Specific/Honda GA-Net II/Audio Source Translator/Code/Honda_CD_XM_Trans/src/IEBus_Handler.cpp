@@ -1,5 +1,10 @@
 #include "IEBus_Handler.h"
 
+#ifdef HW_IEBUS
+IEBusHandler::IEBusHandler(Stream* ie_serial, const int8_t active_pin) {
+	this->ie_serial = ie_serial;
+	this->active_pin = active_pin;
+#else
 IEBusHandler::IEBusHandler(const int8_t rx_pin, const int8_t tx_pin) {
 	this->rx_pin = rx_pin;
 	this->tx_pin = tx_pin;
@@ -22,10 +27,12 @@ IEBusHandler::IEBusHandler(const int8_t rx_pin, const int8_t tx_pin) {
 	rx_bitmask = digitalPinToBitMask(this->rx_pin);
 	const uint8_t rx_port = digitalPinToPort(this->rx_pin);
 	this->rx_portregister = portInputRegister(rx_port);
+	#endif
 
 	rx_cache.setStorage(rx_cache_array, 0);
 }
 
+#ifndef HW_IEBUS
 void IEBusHandler::sendBit(const bool data) {
 	TIMER = 0;
 
@@ -174,12 +181,38 @@ int IEBusHandler::readBits(const uint8_t length, const bool with_parity, const b
 
 	return value;
 }
+#endif
 
 void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum) {
 	sendMessage(ie_d, ack_response, checksum, true);
 }
 
 void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const bool checksum, const bool wait) {
+	#ifdef HW_IEBUS
+	while(active_pin >= 0 && digitalRead(active_pin) == HIGH);
+
+	uint8_t serial_proxy[ie_d->l + 5];
+	serial_proxy[0] = (ie_d->sender&0xF)>>8;
+	serial_proxy[1] = ie_d->sender&0xFF;
+	serial_proxy[2] = (ie_d->receiver&0xF)>>8;
+	serial_proxy[3] = ie_d->receiver&0xFF;
+	serial_proxy[4] = ie_d->control;
+
+	if(ie_d->direct)
+		serial_proxy[0] |= 0x80;
+
+	if(!checksum)
+		serial_proxy[0] |= 0x40;
+
+	for(int i=0;i<ie_d->l;i+=1)
+		serial_proxy[i+5] = ie_d->data[5];
+
+	AIData serial_proxy_msg(sizeof(serial_proxy), 0x10, 0x11, serial_proxy);
+	uint8_t bytes[serial_proxy_msg.l + 4];
+	serial_proxy_msg.getBytes(bytes);
+
+	ie_serial->write(bytes, sizeof(bytes));
+	#else
 	const uint8_t cx = ie_d->getChecksum();
 	const unsigned int bit_count = 1+13+14+6+10+10*(checksum ? ie_d->l + 1 : ie_d->l);
 
@@ -215,26 +248,6 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 		TIMER_SCALER = 2;
 	}
 	
-	/*uint8_t direct = 0;
-	if(ie_d->direct)
-		direct = 1;*/
-
-	/*this->sendStartBit();
-	this->sendBit(ie_d->direct);
-	this->sendBits(ie_d->sender, 12, true, false);
-	this->sendBits(ie_d->receiver, 12);
-	this->sendBits(ie_d->control, 4);
-
-	if(checksum)
-		this->sendBits(ie_d->l+1, 8);
-	else
-		this->sendBits(ie_d->l, 8);
-	
-	for(uint8_t i=0;i<ie_d->l;i+=1)
-		this->sendBits(ie_d->data[i], 8);
-
-	if(checksum)
-		this->sendBits(cx, 8);*/
 
 	this->sendStartBit();
 
@@ -259,6 +272,7 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 	}
 
 	interrupts();
+	#endif
 }
 
 //Cache a GA-NET message.
@@ -288,6 +302,57 @@ void IEBusHandler::clearRX() {
 }
 
 int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_t id) {
+	#ifdef HW_IEBUS
+	while(active_pin >= 0 && digitalRead(active_pin) == HIGH);
+	if(ie_serial->available() >= 4) {
+		uint8_t sl[3];
+		ie_serial->readBytes(sl, sizeof(sl));
+
+		const uint8_t s = sl[0], r = sl[2];
+		const int len = sl[1];
+
+		uint8_t main_data[len - 1];
+		ie_serial->readBytes(main_data, sizeof(main_data));
+
+		uint8_t full_data[sizeof(sl) + sizeof(main_data)];
+		for(int i=0;i<sizeof(sl);i+=1)
+			full_data[i] = sl[i];
+
+		for(int i=0;i<sizeof(main_data);i+=1)
+			full_data[i+sizeof(sl)] = main_data[i];
+
+		if(!checkValidity(full_data, sizeof(full_data)))
+			return 1;
+
+		if(s != 0x11 && r != 0x10)
+			return -1;
+
+		AIData rx;
+		bytesToAIData(&rx, full_data);
+
+		if(rx.l < 5)
+			return -1;
+
+		const uint16_t sender = ((rx[0]&0xF)<<8) | rx[1], receiver = ((rx[2]&0xF)<<8) | rx[3];
+		const uint8_t ctl = rx[4];
+
+		const bool direct = (rx[0]&0x80) != 0;
+
+		ie_d->refreshIEData(rx.l - 5);
+
+		ie_d->sender = sender;
+		ie_d->receiver = receiver;
+		ie_d->control = ctl;
+		ie_d->direct = direct;
+
+		for(int i=0;i<ie_d->l;i+=1)
+			ie_d->data[i] = rx[i+5];
+
+		return 0;
+	}
+
+	return -1;
+	#else
 	noInterrupts();
 
 	if((*rx_portregister&rx_bitmask) == 0) {
@@ -432,6 +497,7 @@ int IEBusHandler::readMessage(IE_Message* ie_d, bool ack_response, const uint16_
 	ie_d->refreshIEData(new_data);
 
 	return 0;
+	#endif
 }
 
 void IEBusHandler::sendAcknowledgement(const uint16_t sender, const uint16_t receiver) {

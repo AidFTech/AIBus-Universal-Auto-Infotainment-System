@@ -14,6 +14,7 @@ enum canslator_menu_index : menu_index_t {
 	MENU_INDEX_SETTINGS_MAIN_LIGHTING,
 	MENU_INDEX_SETTINGS_MAIN_DOORS,
 	MENU_INDEX_SETTINGS_MAIN_COMFORT_CONVENIENCE,
+	MENU_INDEX_SETTINGS_MAIN_AMBIENT_LIGHTING,
 
 	//Comfort/Convenience menu.
 	MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE,
@@ -29,13 +30,30 @@ enum canslator_menu_index : menu_index_t {
 	MENU_INDEX_SETTINGS_HEADLIGHT_10C,
 	MENU_INDEX_SETTINGS_HEADLIGHT_15C,
 
+	//Ambient Light menu.
+	MENU_INDEX_SETTINGS_AMBIENT_LIGHTING,
+	MENU_INDEX_SETTINGS_AMBIENT_LIGHTING_BRIGHTNESS,
+	MENU_INDEX_SETTINGS_AMBIENT_LIGHTING_DOOR,
+	MENU_INDEX_SETTINGS_AMBIENT_LIGHTING_INTERIOR,
+
+	//Secret dev menu.
+	MENU_INDEX_SECRET_MAIN,
+	MENU_INDEX_SECRET_MAIN_TRIM_OPTIONS,
+	MENU_INDEX_SECRET_MAIN_TRANSMISSION,
+	MENU_INDEX_SECRET_MAIN_OUTSIDE_TEMP_DISPLAY,
+	MENU_INDEX_SECRET_MAIN_ADDITIONAL_OPTIONS,
+
 	MENU_INDEX_LEN
 };
 
 static const canslator_menu_index MENU_START_INDEX[] = {
 	MENU_INDEX_SETTINGS_MAIN,
 	MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE,
-	MENU_INDEX_SETTINGS_HEADLIGHT
+	MENU_INDEX_SETTINGS_HEADLIGHT,
+	MENU_INDEX_SETTINGS_AMBIENT_LIGHTING,
+	MENU_INDEX_SECRET_MAIN,
+
+	MENU_INDEX_LEN
 };
 
 static const char* MENUS_ENG[] = {
@@ -47,6 +65,7 @@ static const char* MENUS_ENG[] = {
 	"Lighting",
 	"Doors",
 	"Comfort/Convenience",
+	"Ambient Lighting",
 
 	//Comfort/Convenience menu.
 	"Comfort/Convenience",
@@ -55,11 +74,26 @@ static const char* MENUS_ENG[] = {
 	"Disable Wipers with Door Open",
 	"Rain-Sensing Wipers",
 
+	//Headlight/Temperature Integration menu.
 	"Headlight/Temperature Integration",
 	"Off",
 	"Headlights On Below 5°C/40°F",
 	"Headlights On Below 10°C/50°F",
-	"Headlights On Below 15°C/60°F"
+	"Headlights On Below 15°C/60°F",
+
+	//Ambient Lighting menu.
+	"Ambient Lighting",
+	"Brightness",
+	"Ambient Lighting with Door",
+	"Ambient Lighting with Interior Lights",
+
+	//Secret menu.
+	"BCM Configuration",
+	"Trim",
+	"Transmission",
+	"Outside Temp Display",
+	"Additional Options",
+
 };
 
 MenuList getMenu(const canslator_menu_index index, const uint8_t locale);
