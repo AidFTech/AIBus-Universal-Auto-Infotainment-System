@@ -54,7 +54,7 @@ pub struct AMirror<'a> {
 	mpv_video: &'a Arc<Mutex<MpvVideo>>,
 
 	dongle_handler: MirrorHandler<'a>,
-	aa_handler: Arc<Mutex<AapHandler<'a>>>,
+	aa_handler: AapHandler<'a>,
 
 	client_aibus_handler: Arc<Mutex<ClientAIBusHandler>>,
 	aibus_handler: Arc<Mutex<AIBusHandler>>,
@@ -118,7 +118,7 @@ pub struct AMirror<'a> {
 impl <'a> AMirror<'a> {
 	pub fn new(context: &'a Arc<Mutex<Context>>, aibus_handler: Arc<Mutex<AIBusHandler>>, client_aibus_handler: Arc<Mutex<ClientAIBusHandler>>, mpv_video: &'a Arc<Mutex<MpvVideo>>, rd_audio: &'a Arc<Mutex<RdAudio>>, nav_audio: &'a Arc<Mutex<RdAudio>>, w: u16, h: u16) -> Self {
 		let mutex_mirror_handler = MirrorHandler::new(context, mpv_video, rd_audio, nav_audio, w, h);
-		let mutex_aa_handler = Arc::new(Mutex::new(AapHandler::new(context, mpv_video, rd_audio, nav_audio, w, h)));
+		let mutex_aa_handler = AapHandler::new(context, mpv_video, rd_audio, nav_audio, w, h);
 
 		let mut display_title = false;
 		let mut display_artist = false;
@@ -362,14 +362,7 @@ impl <'a> AMirror<'a> {
 
 		if self.screen_acknowledged {
 			self.dongle_handler.process();
-			match self.aa_handler.try_lock() {
-				Ok(mut aa_handler) => {
-					aa_handler.process();
-				}
-				Err(_) => {
-
-				}
-			}
+			self.aa_handler.process();
 		}
 
 		context = match self.context.try_lock() {
@@ -641,24 +634,7 @@ impl <'a> AMirror<'a> {
 				if context.phone_type == 3 {
 					self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAY);
 				} else if context.phone_type == 5 {
-					let mut aa_handler = match self.aa_handler.try_lock() {
-						Ok(aa_handler) => aa_handler,
-						Err(_) => {
-							let aa_handler;
-							loop {
-								aa_handler = match self.aa_handler.try_lock() {
-									Ok(aa_handler) => aa_handler,
-									Err(_) => {
-										continue;
-									}
-								};
-								break;
-							}
-							aa_handler
-						}
-					};
-
-					aa_handler.start_stop_audio(true);
+					self.aa_handler.start_stop_audio(true);
 				}
 			}
 
@@ -1349,31 +1325,14 @@ impl <'a> AMirror<'a> {
 		}
 
 		if phone_type == 0x5 {
-			let mut aa_handler = match self.aa_handler.try_lock() {
-				Ok(aa_handler) => aa_handler,
-				Err(_) => {
-					let aa_handler;
-					loop {
-						aa_handler = match self.aa_handler.try_lock() {
-							Ok(aa_handler) => aa_handler,
-							Err(_) => {
-								continue;
-							}
-						};
-						break;
-					}
-					aa_handler
-				}
-			};
-
 			//Headlight state.
 			if context.headlight_state != headlight_state {
-				aa_handler.set_headlight_state(context.headlight_state);
+				self.aa_handler.set_headlight_state(context.headlight_state);
 			}
 
 			//Speed.
 			if context.speed_e3 != speed {
-				aa_handler.set_speed(context.speed_e3);
+				self.aa_handler.set_speed(context.speed_e3);
 			}
 		}
 
@@ -1381,24 +1340,7 @@ impl <'a> AMirror<'a> {
 
 		if phone_type == 0x5 {
 			if new_latitude != latitude || new_longitude != longitude || new_altitude != altitude {
-				let mut aa_handler = match self.aa_handler.try_lock() {
-					Ok(aa_handler) => aa_handler,
-					Err(_) => {
-						let aa_handler;
-						loop {
-							aa_handler = match self.aa_handler.try_lock() {
-								Ok(aa_handler) => aa_handler,
-								Err(_) => {
-									continue;
-								}
-							};
-							break;
-						}
-						aa_handler
-					}
-				};
-
-				aa_handler.send_coordinates();
+				self.aa_handler.send_coordinates();
 			}
 		}
 
@@ -1776,25 +1718,7 @@ impl <'a> AMirror<'a> {
 					
 					if context.phone_type != 0 {
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAY);
-
-						match self.aa_handler.try_lock() {
-							Ok(mut aa_handler) => {
-								aa_handler.start_stop_audio(true);
-							}
-							Err(_) => {
-								let mut aa_handler;
-								loop {
-									aa_handler = match self.aa_handler.try_lock() {
-										Ok(aa_handler) => aa_handler,
-										Err(_) => {
-											continue;
-										}
-									};
-									break;
-								}
-								aa_handler.start_stop_audio(true);
-							}
-						}
+						self.aa_handler.start_stop_audio(true);
 					}
 					
 					std::mem::drop(context);
@@ -1834,25 +1758,7 @@ impl <'a> AMirror<'a> {
 
 					if context.phone_type != 0 {
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_PAUSE);
-
-						match self.aa_handler.try_lock() {
-							Ok(mut aa_handler) => {
-								aa_handler.start_stop_audio(false);
-							}
-							Err(_) => {
-								let mut aa_handler;
-								loop {
-									aa_handler = match self.aa_handler.try_lock() {
-										Ok(aa_handler) => aa_handler,
-										Err(_) => {
-											continue;
-										}
-									};
-									break;
-								}
-								aa_handler.start_stop_audio(false);
-							}
-						}
+						self.aa_handler.start_stop_audio(false);
 					}
 					
 					context.audio_selected = false;
@@ -1994,25 +1900,7 @@ impl <'a> AMirror<'a> {
 					if context.phone_req_off {
 						context.phone_req_off = false;
 						self.dongle_handler.send_carplay_command(PHONE_COMMAND_HOME);
-
-						match self.aa_handler.try_lock() {
-							Ok(mut aa_handler) => {
-								aa_handler.send_start_request();
-							}
-							Err(_) => {
-								let mut aa_handler;
-								loop {
-									aa_handler = match self.aa_handler.try_lock() {
-										Ok(aa_handler) => aa_handler,
-										Err(_) => {
-											continue;
-										}
-									};
-									break;
-								}
-								aa_handler.send_start_request();
-							}
-						};
+						self.aa_handler.send_start_request();
 					}
 				} else {
 					self.write_aibus_message(AIBusMessage {
@@ -2535,24 +2423,7 @@ impl <'a> AMirror<'a> {
 					context.night = (ai_msg.data[3]&0x80) != 0;
 
 					if context.night != night {
-						match self.aa_handler.try_lock() {
-							Ok(mut aa_handler) => {
-								aa_handler.set_night_mode(context.night);
-							}
-							Err(_) => {
-								let mut aa_handler;
-								loop {
-									aa_handler = match self.aa_handler.try_lock() {
-										Ok(aa_handler) => aa_handler,
-										Err(_) => {
-											continue;
-										}
-									};
-									break;
-								}
-								aa_handler.set_night_mode(context.night);
-							}
-						};
+						self.aa_handler.set_night_mode(context.night);
 
 						if context.night {
 							self.dongle_handler.send_carplay_command(PHONE_COMMAND_NIGHT);
@@ -2697,24 +2568,7 @@ impl <'a> AMirror<'a> {
 								mpv.show_overlay();
 							} else {
 								if context.phone_type == 5 {
-									let mut aa_handler = match self.aa_handler.try_lock() {
-										Ok(aa_handler) => aa_handler,
-										Err(_) => {
-											let aa_handler;
-											loop {
-												aa_handler = match self.aa_handler.try_lock() {
-													Ok(aa_handler) => aa_handler,
-													Err(_) => {
-														continue;
-													}
-												};
-												break;
-											}
-											aa_handler
-										}
-									};
-
-									aa_handler.show_audio_window();
+									self.aa_handler.show_audio_window();
 								}
 							}
 						} else {
@@ -2731,24 +2585,7 @@ impl <'a> AMirror<'a> {
 				} else if ((button == 0x46 && context.aibt_pause) || (button == 0x16 && !context.aibt_pause)) && state == 0x0 {
 					if context.audio_selected {
 						if context.phone_type == 5 {
-							let mut aa_handler = match self.aa_handler.try_lock() {
-								Ok(aa_handler) => aa_handler,
-								Err(_) => {
-									let aa_handler;
-									loop {
-										aa_handler = match self.aa_handler.try_lock() {
-											Ok(aa_handler) => aa_handler,
-											Err(_) => {
-												continue;
-											}
-										};
-										break;
-									}
-									aa_handler
-								}
-							};
-
-							aa_handler.play_pause_audio();
+							self.aa_handler.play_pause_audio();
 						} else if context.phone_type == 3 {
 							self.dongle_handler.send_carplay_command(PHONE_COMMAND_PLAYPAUSE);
 						}
@@ -2861,23 +2698,7 @@ impl <'a> AMirror<'a> {
 		if phone_type == 3 {
 			self.dongle_handler.handle_aibus_message(ai_msg.clone());
 		} else if phone_type == 5 {
-			let mut aa_handler = match self.aa_handler.try_lock() {
-				Ok(aa_handler) => aa_handler,
-				Err(_) => {
-					let aa_handler;
-					loop {
-						aa_handler = match self.aa_handler.try_lock() {
-							Ok(aa_handler) => aa_handler,
-							Err(_) => {
-								continue;
-							}
-						};
-						break;
-					}
-					aa_handler
-				}
-			};
-			aa_handler.handle_aibus_message(ai_msg);
+			self.aa_handler.handle_aibus_message(ai_msg);
 		}
 	}
 

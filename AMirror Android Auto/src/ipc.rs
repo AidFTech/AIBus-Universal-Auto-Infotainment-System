@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use crate::AIBusMessage;
 use crate::aibus::*;
 use crate::aibus_handler::AIBusHandler;
+use crate::context::Context;
 
 const SOCKET_PATH: &str = "/tmp/amirror";
 const SOCKET_START: &str = "AidFSock";
@@ -35,11 +36,13 @@ pub struct ClientAIBusHandler {
 	ack_cache: Vec<(AIBusMessage, u32)>,
 
 	process_active: bool,
+
+	context: Arc<Mutex<Context>>,
 }
 
 impl ClientAIBusHandler {
 	///Get an AIBus handler with the socket path.
-	pub fn get(path: &str, ai_handler: Arc<Mutex<AIBusHandler>>) -> Self {
+	pub fn get(path: &str, ai_handler: Arc<Mutex<AIBusHandler>>, context: Arc<Mutex<Context>>) -> Self {
 		let client_handler = if path.len() <= 0 {
 			ClientAIBusHandler { socket: init_default_socket(),
 								aibus_handler: ai_handler,
@@ -52,7 +55,8 @@ impl ClientAIBusHandler {
 								auto_ack_cache_off: false,
 								ack_cache: Vec::new(),
 
-								process_active: false }
+								process_active: false,
+								context }
 		} else {
 			ClientAIBusHandler { socket: init_socket(path.to_string()),
 								aibus_handler: ai_handler,
@@ -65,19 +69,21 @@ impl ClientAIBusHandler {
 								auto_ack_cache_off: false,
 								ack_cache: Vec::new(),
 
-								process_active: false }
+								process_active: false,
+								context }
 		};
 
 		return client_handler;
 	}
 
-	///Get the socket path.
-	pub fn get_socket(&self) -> &Option<UnixStream> {
-		return &self.socket;
-	}
-
 	///Run the threaded loop.
 	pub fn process(&mut self) {
+		self.read_stream();
+		self.write_stream();
+	}
+
+	///Read the AIBus socket.
+	fn read_stream(&mut self) {
 		let mut stream = match &self.socket {
 			Some(stream) => stream,
 			None => {
@@ -95,7 +101,17 @@ impl ClientAIBusHandler {
 		let mut aibus_handler = match self.aibus_handler.try_lock() {
 			Ok(aibus_handler) => aibus_handler,
 			Err(_) => {
-				return;
+				let aibus_handler;
+				loop {
+					aibus_handler = match self.aibus_handler.try_lock() {
+						Ok(aibus_handler) => aibus_handler,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				aibus_handler
 			}
 		};
 
@@ -108,7 +124,6 @@ impl ClientAIBusHandler {
 				if e.raw_os_error() != Some(11) {
 					println!("{}", e);
 				}
-				std::mem::drop(aibus_handler);
 				return;
 			}
 		}
@@ -208,6 +223,174 @@ impl ClientAIBusHandler {
 		std::mem::drop(aibus_handler);
 	}
 
+	///Write cached data to the AIBus socket.
+	fn write_stream(&mut self) {
+		let mut stream = match &self.socket {
+			Some(stream) => stream,
+			None => {
+				return;
+			}
+		};
+
+		let mut aibus_handler = match self.aibus_handler.try_lock() {
+			Ok(aibus_handler) => aibus_handler,
+			Err(_) => {
+				let aibus_handler;
+				loop {
+					aibus_handler = match self.aibus_handler.try_lock() {
+						Ok(aibus_handler) => aibus_handler,
+						Err(_) => {
+							continue;
+						}
+					};
+					break;
+				}
+				aibus_handler
+			}
+		};
+
+		let tx_list = aibus_handler.get_ai_tx();
+		let mut ai_tx_list = Vec::new();
+
+		for ai_data in &mut *tx_list {
+			if ai_data.l() > AIDATA_LIMIT + 3 {
+				let count = ai_data.l() / AIDATA_LIMIT;
+				let r = ai_data.l() % AIDATA_LIMIT;
+
+				let total_count = if r > 0 {
+					count + 1
+				} else {
+					count
+				};
+
+				for m in 0..count {
+					let mut data = [0x91, (total_count&0xFF) as u8, (m&0xFF) as u8].to_vec();
+					for i in 0..AIDATA_LIMIT {
+						data.push(ai_data.data[i+m*AIDATA_LIMIT]);
+					}
+
+					let new_msg = AIBusMessage {
+						sender: ai_data.sender,
+						receiver: ai_data.receiver,
+						data: data,
+					};
+					ai_tx_list.push(new_msg);
+				}
+
+				if r > 0 {
+					let mut data = [0x91, (total_count&0xFF) as u8, ((total_count-1)&0xFF) as u8].to_vec();
+					for i in 0..r {
+						data.push(ai_data.data[i+(total_count-1)*AIDATA_LIMIT]);
+					}
+
+					let new_msg = AIBusMessage {
+						sender: ai_data.sender,
+						receiver: ai_data.receiver,
+						data: data,
+					};
+					ai_tx_list.push(new_msg);
+				}
+			} else {
+				ai_tx_list.push(ai_data.clone());
+			}
+		}
+
+		let use_ack_cache = self.use_ack_cache;
+		let mut ack_cache = Vec::new();
+		let mut long_indices = Vec::new();
+
+		let mut first_long = 0;
+		let mut long_set = false;
+
+		let mut sent_list = Vec::new();
+		let mut rx_list = Vec::new();
+
+		for m in 0..ai_tx_list.len() {
+			let ai_msg = &ai_tx_list[m];
+			let socket_data = get_full_bytes(ai_msg);
+			let _ = stream.write(&socket_data);
+			println!("Wrote {:X?}", socket_data);
+
+			if !long_set && ai_msg.l() > 0 && ai_msg.data[0] == 0x91 {
+				first_long = m;
+				long_set = true;
+			} else if ai_msg.l() <= 0 || ai_msg.data[0] != 0x91 {
+				long_set = false;
+			}
+
+			sent_list.push(ai_msg.clone());
+
+			let (radio_connected, screen_connected, bluetooth_connected, imid_connected) = match self.context.try_lock() {
+				Ok(context) => {
+					(context.radio_connected, context.screen_connected, context.bluetooth_connected, context.imid_connected)
+				}
+				Err(_) => {
+					(true, true, true, true)
+				}
+			};
+			
+			let mut ack = true;
+			if ai_msg.receiver == 0xFF {
+				ack = false;
+			} else if ai_msg.receiver == AIBUS_DEVICE_RADIO {
+				ack = radio_connected;
+			} else if ai_msg.receiver == AIBUS_DEVICE_NAV_SCREEN {
+				ack = screen_connected;
+			} else if ai_msg.receiver == AIBUS_DEVICE_PHONE {
+				ack = bluetooth_connected;
+			} else if ai_msg.receiver == AIBUS_DEVICE_IMID {
+				ack = imid_connected;
+			}
+
+			if ack {
+				let (rec_ack, rec_msg) = self.await_acknowledgment(ai_msg.clone());
+
+				if !rec_ack && use_ack_cache {
+					if ai_msg.l() > 0 && ai_msg.data[0] == 0x91 && long_indices.len() <= 0 {
+						for i in first_long..ai_tx_list.len() {
+							if ai_tx_list[i].l() > 0 && ai_tx_list[i].data[0] == 0x91 {
+								long_indices.push(i);
+							}
+						}
+					} else {
+						if long_indices.len() > 0 {
+							long_indices.clear();
+						}
+						ack_cache.push(ai_msg.clone());
+					}
+				} else if !rec_ack {
+					//TODO: If the intended recipient was radio, Bluetooth, or screen, turn connection mode off.
+				}
+
+				for r in rec_msg {
+					rx_list.push(r.clone());
+				}
+			}
+		}
+
+		tx_list.clear();
+
+		for l in long_indices {
+			ack_cache.push(ai_tx_list[l].clone());
+		}
+
+		for r in rx_list {
+			aibus_handler.get_ai_rx().push(r);
+		}
+
+		std::mem::drop(aibus_handler);
+
+		for ai_msg in sent_list {
+			self.cache_tx(ai_msg);
+		}
+
+		if use_ack_cache {
+			for msg in ack_cache {
+				self.add_ack_cache(msg);
+			}
+		}
+	}
+
 	///Set the acknowledgment cache.
 	pub fn set_ack_cache(&mut self, use_ack_cache: bool, auto_off: bool) {
 		self.use_ack_cache = use_ack_cache;
@@ -216,11 +399,6 @@ impl ClientAIBusHandler {
 		if !self.use_ack_cache {
 			self.ack_cache.clear();
 		}
-	}
-
-	///Get whether the acknowledgment cache is in use.
-	pub fn get_ack_cache(&self) -> bool {
-		return self.use_ack_cache;
 	}
 
 	///Add a message to the acknowledgment cache.

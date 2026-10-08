@@ -8,7 +8,6 @@ mod aap;
 mod text_split;
 mod locale;
 
-use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -22,12 +21,12 @@ use mirror::mpv::{MpvVideo, RdAudio};
 
 fn main() {
 	let mutex_context = Arc::new(Mutex::new(Context::new()));
+	let thread_context = Arc::clone(&mutex_context);
 
 	let aibus_handler = Arc::new(Mutex::new(AIBusHandler::new()));
-	let aibus_main = Arc::clone(&aibus_handler);
 	let aibus_thread = Arc::clone(&aibus_handler);
 
-	let client_handler = Arc::new(Mutex::new(ClientAIBusHandler::get("", aibus_thread)));
+	let client_handler = Arc::new(Mutex::new(ClientAIBusHandler::get("", aibus_thread, thread_context)));
 	let client_thread = Arc::clone(&client_handler);
 	let client_amirror = Arc::clone(&client_handler);
 
@@ -99,8 +98,6 @@ fn main() {
 				continue;
 			}
 		}
-
-		send_aibus_data(aibus_handler.clone(), mutex_context.clone(), client_handler.clone());
 	}
 
 	let mut resolution_start_time = Instant::now();
@@ -121,7 +118,6 @@ fn main() {
 					continue;
 				}
 			}
-			send_aibus_data(aibus_handler.clone(), mutex_context.clone(), client_handler.clone());
 
 			resolution_start_time = Instant::now();
 		}
@@ -212,196 +208,10 @@ fn main() {
 				}
 			}
 		}
-
-		let mut send_aibus = false;
-
-		match aibus_main.try_lock() {
-			Ok(mut aibus_handler) => {
-				if aibus_handler.get_ai_tx().len() > 0 {
-					send_aibus = true;
-				}
-			}
-			Err(_) => {
-				send_aibus = false;
-			}
-		}
-
-		if send_aibus {
-			send_aibus_data(aibus_main.clone(), mutex_context.clone(), client_handler.clone());
-		}
 	}
 
 	amirror.save_settings();
 	aibus_handle.join().unwrap();
-}
-
-///Write AIBus data to the socket.
-fn send_aibus_data(aibus_handler_ptr: Arc<Mutex<AIBusHandler>>, context: Arc<Mutex<Context>>, handler_ptr: Arc<Mutex<ClientAIBusHandler>>) {
-	let mut aibus_handler = match aibus_handler_ptr.try_lock() {
-		Ok(aibus_handler) => aibus_handler,
-		Err(_) => {
-			return;
-		}
-	};
-	let tx_list = aibus_handler.get_ai_tx();
-	let mut rx_list = Vec::new();
-
-	let mut sent_list = Vec::new();
-
-	let mut client_handler = match handler_ptr.try_lock() {
-		Ok(handler) => handler,
-		Err(_) => {
-			std::mem::drop(aibus_handler);
-			return;
-		}
-	};
-
-	let socket = client_handler.get_socket();
-	let mut stream = match socket {
-		Some(stream) => stream,
-		None => {
-			std::mem::drop(aibus_handler);
-			return;
-		}
-	};
-
-	let _ = stream.set_write_timeout(Some(Duration::from_millis(5)));
-	let mut ai_tx_list = Vec::new();
-
-	for ai_data in &mut *tx_list {
-		if ai_data.l() > AIDATA_LIMIT + 3 {
-			let count = ai_data.l() / AIDATA_LIMIT;
-			let r = ai_data.l() % AIDATA_LIMIT;
-
-			let total_count = if r > 0 {
-				count + 1
-			} else {
-				count
-			};
-
-			for m in 0..count {
-				let mut data = [0x91, (total_count&0xFF) as u8, (m&0xFF) as u8].to_vec();
-				for i in 0..AIDATA_LIMIT {
-					data.push(ai_data.data[i+m*AIDATA_LIMIT]);
-				}
-
-				let new_msg = AIBusMessage {
-					sender: ai_data.sender,
-					receiver: ai_data.receiver,
-					data: data,
-				};
-				ai_tx_list.push(new_msg);
-			}
-
-			if r > 0 {
-				let mut data = [0x91, (total_count&0xFF) as u8, ((total_count-1)&0xFF) as u8].to_vec();
-				for i in 0..r {
-					data.push(ai_data.data[i+(total_count-1)*AIDATA_LIMIT]);
-				}
-
-				let new_msg = AIBusMessage {
-					sender: ai_data.sender,
-					receiver: ai_data.receiver,
-					data: data,
-				};
-				ai_tx_list.push(new_msg);
-			}
-		} else {
-			ai_tx_list.push(ai_data.clone());
-		}
-	}
-
-	let use_ack_cache = client_handler.get_ack_cache();
-	let mut ack_cache = Vec::new();
-	let mut long_indices = Vec::new();
-
-	let mut first_long = 0;
-	let mut long_set = false;
-
-	for m in 0..ai_tx_list.len() {
-		let ai_msg = &ai_tx_list[m];
-		let socket_data = get_full_bytes(ai_msg);
-		let _ = stream.write(&socket_data);
-		println!("Wrote {:X?}", socket_data);
-
-		if !long_set && ai_msg.l() > 0 && ai_msg.data[0] == 0x91 {
-			first_long = m;
-			long_set = true;
-		} else if ai_msg.l() <= 0 || ai_msg.data[0] != 0x91 {
-			long_set = false;
-		}
-
-		sent_list.push(ai_msg.clone());
-
-		let (radio_connected, screen_connected, bluetooth_connected, imid_connected) = match context.try_lock() {
-			Ok(context) => {
-				(context.radio_connected, context.screen_connected, context.bluetooth_connected, context.imid_connected)
-			}
-			Err(_) => {
-				(true, true, true, true)
-			}
-		};
-		
-		let mut ack = true;
-		if ai_msg.receiver == 0xFF {
-			ack = false;
-		} else if ai_msg.receiver == AIBUS_DEVICE_RADIO {
-			ack = radio_connected;
-		} else if ai_msg.receiver == AIBUS_DEVICE_NAV_SCREEN {
-			ack = screen_connected;
-		} else if ai_msg.receiver == AIBUS_DEVICE_PHONE {
-			ack = bluetooth_connected;
-		} else if ai_msg.receiver == AIBUS_DEVICE_IMID {
-			ack = imid_connected;
-		}
-
-		if ack {
-			let (rec_ack, rec_msg) = client_handler.await_acknowledgment(ai_msg.clone());
-
-			if !rec_ack && use_ack_cache {
-				if ai_msg.l() > 0 && ai_msg.data[0] == 0x91 && long_indices.len() <= 0 {
-					for i in first_long..ai_tx_list.len() {
-						if ai_tx_list[i].l() > 0 && ai_tx_list[i].data[0] == 0x91 {
-							long_indices.push(i);
-						}
-					}
-				} else {
-					if long_indices.len() > 0 {
-						long_indices.clear();
-					}
-					ack_cache.push(ai_msg.clone());
-				}
-			} else if !rec_ack {
-				//TODO: If the intended recipient was radio, Bluetooth, or screen, turn connection mode off.
-			}
-
-			for r in rec_msg {
-				rx_list.push(r.clone());
-			}
-		}
-	}
-
-	tx_list.clear();
-
-	for l in long_indices {
-		ack_cache.push(ai_tx_list[l].clone());
-	}
-
-	for r in rx_list {
-		aibus_handler.get_ai_rx().push(r);
-	}
-
-	for ai_msg in sent_list {
-		client_handler.cache_tx(ai_msg);
-	}
-
-	std::mem::drop(aibus_handler);
-
-	if use_ack_cache {
-		for msg in ack_cache {
-			client_handler.add_ack_cache(msg);
-		}
-	}
 }
 
 #[cfg(not(target_arch = "aarch64"))]
