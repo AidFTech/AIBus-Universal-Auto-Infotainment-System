@@ -1,5 +1,7 @@
 use protobuf::{rt::*, Message};
 
+const ACCESS_UNIT_DELIMITER: &[u8] = &[0x0, 0x0, 0x0, 0x1, 0x9, 0xF0];
+
 pub struct VideoMsg {
 	data: Vec<u8>,
 	msg_type: u16,
@@ -27,6 +29,12 @@ impl VideoMsg {
 		}
 
 		self.data = data[start..].to_vec();
+
+		if self.msg_type == 0 { //Mark the end of the frame so mpv shows it without waiting for the next one.
+			for b in ACCESS_UNIT_DELIMITER {
+				self.data.push(*b);
+			}
+		}
 	}
 
 	pub fn new() -> Self {
