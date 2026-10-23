@@ -160,6 +160,57 @@ void CANMenuHandler::createMainSettingsMenu() {
 	this->displayMenu(1);
 }
 
+//Create the factory lighting menu.
+void CANMenuHandler::createLightingMenu(const bool light_sensor_connected) {
+	const MenuList light_settings = getMenu(MENU_INDEX_SETTINGS_LIGHTING, parameter_list->locale);
+	const active_menu_t last_menu = this->getActiveMenu();
+	const uint8_t setting_count = uint8_t(light_settings.size());
+
+	if(last_menu != ACTIVE_MENU_SETTINGS_LIGHTING &&
+		!this->startMenu(setting_count, setting_count, false, light_settings.title))
+		return;
+
+	this->setActiveMenu(ACTIVE_MENU_SETTINGS_LIGHTING);
+
+	for(int i=0;i<light_settings.size();i+=1) {
+		String setting = light_settings[i];
+
+		if(light_settings.getGlobalIndex(i) == MENU_INDEX_SETTINGS_LIGHTING_AUTO_SENSITIVITY) {
+			if(!light_sensor_connected)
+				continue;
+		} else if(light_settings.getGlobalIndex(i) == MENU_INDEX_SETTINGS_LIGHTING_PARKING_LIGHTS)
+			setting = (parameter_list->parking_lights ? "#RON " : "#ROF ") + setting;
+
+		this->appendMenu(i, setting);
+	}
+
+	if(last_menu != ACTIVE_MENU_SETTINGS_LIGHTING)
+		this->displayMenu(1);
+}
+
+//Create the auto light sensitivity menu.
+void CANMenuHandler::createAutoLightSensitivityMenu(const int value) {
+	const MenuList light_settings = getMenu(MENU_INDEX_SETTINGS_AUTO_SENSITIVITY, parameter_list->locale);
+	const active_menu_t last_menu = this->getActiveMenu();
+	const uint8_t setting_count = uint8_t(light_settings.size());
+
+	if(last_menu != ACTIVE_MENU_SETTINGS_AUTO_SENSITIVITY &&
+		!this->startMenu(setting_count, setting_count, false, light_settings.title))
+		return;
+
+	this->setActiveMenu(ACTIVE_MENU_SETTINGS_AUTO_SENSITIVITY);
+
+	for(int i=0;i<light_settings.size();i+=1) {
+		String setting = light_settings[i];
+
+		setting = ((i == value) ? "#CON " : "#COF ") + setting;
+		this->appendMenu(i, setting);
+	}
+
+	if(last_menu != ACTIVE_MENU_SETTINGS_AUTO_SENSITIVITY)
+		this->displayMenu(value >= 0 && value < light_settings.size() ? value + 1 : light_settings.getLocalIndex(MENU_INDEX_SETTINGS_AUTO_SENSITIVITY_MED));
+}
+
 //Create the comfort/convenience settings menu.
 void CANMenuHandler::createComfortConvenienceMenu(const bool light_sensor_connected, const bool rain_sensor_connected) {
 	bool selection_settings[] = {true, parameter_list->parking_lights, parameter_list->wiper_door_off, parameter_list->auto_wiper};

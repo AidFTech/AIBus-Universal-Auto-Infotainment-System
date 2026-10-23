@@ -316,7 +316,11 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 				}
 			}
 		} else if(the_message->l >= 5 && the_message->data[0] == 0x3B) {
-			timer = (the_message->data[3]<<8)|the_message->data[4];
+			timer = 0;
+			for(int i=1;i<the_message->l;i+=1) {
+				timer <<= 8;
+				timer |= the_message->data[i];
+			}
 
 			if(!writeIMIDCDCTrackMessage(disc, track, track_count, timer, getIECDStatus(ai_cd_mode), getIECDRepeat(ai_cd_mode))) {
 				imid_change_timer = 0;
@@ -482,7 +486,12 @@ void HondaIMIDHandler::readAIBusMessage(AIData* the_message) {
 			return;
 		}
 		
-		const long time = the_message->data[4] | (the_message->data[3]<<8);
+		long time = 0;
+		for(int i=1;i<the_message->l;i+=1) {
+			time <<= 8;
+			time |= the_message->data[i];
+		}
+
 		if(!setBTTimer(time)) {
 			ai_cache_vec.push_back(*the_message);
 			imid_change_timer = 0;

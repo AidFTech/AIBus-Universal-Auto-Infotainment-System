@@ -69,6 +69,9 @@ pub struct Context {
 	pub screen_connected: bool,
 	pub bluetooth_connected: bool,
 	pub imid_connected: bool,
+
+	//Debug:
+	pub debug: String,
 }
 
 impl Context {
@@ -129,6 +132,8 @@ impl Context {
 			screen_connected: false,
 			bluetooth_connected: false,
 			imid_connected: false,
+
+			debug: "".to_string(),
 		};
 	}
 }

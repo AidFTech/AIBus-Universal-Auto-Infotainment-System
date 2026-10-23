@@ -19,6 +19,7 @@ public:
 	~EnAIBusHandler();
 
 	void addID(const uint8_t id);
+	void removeID(const uint8_t id, const bool notify = true);
 
 	int getIDCount();
 	void getIDs(uint8_t* ids, const int l);

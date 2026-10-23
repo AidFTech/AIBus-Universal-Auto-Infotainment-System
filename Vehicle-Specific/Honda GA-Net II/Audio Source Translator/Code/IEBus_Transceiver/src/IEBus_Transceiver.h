@@ -34,9 +34,11 @@ private:
 	bool readBit();
 	int16_t readBits(int count, bool use_parity, const bool use_ack, bool ack);
 
+	inline bool readMessage(IE_Message* rec);
+
 	void writeBit(const bool bit);
 	void writeBits(const int count, const uint16_t data, const bool use_parity, const bool use_ack);
-	void writeMessage(IE_Message* ie_data);
+	void writeMessage(IE_Message* ie_data, const bool ack = true);
 	void writeMessageChecksum(IE_Message* ie_data);
 
 	IE_Message ie_cache[IE_CACHE_SIZE], ie_ack_cache[IE_CACHE_SIZE];

@@ -108,6 +108,8 @@ pub struct AapHandler <'a> {
 	ssl_method: *const SSL_METHOD,
 	ssl_context: *mut SSL_CTX,
 
+	compressed_audio: bool,
+
 	had_sdr: bool,
 	first_video: bool,
 
@@ -117,14 +119,10 @@ pub struct AapHandler <'a> {
 	connection_start: Instant,
 	ping_timer: Instant,
 
-	rotary_count: i32,
-	rotary_timer: Instant,
-
-	last_video: Instant,
-
 	ping_duration: u64,
-
 	android_start: i64,
+
+	last_media: Instant,
 }
 
 const EMPTY_DATA_ARRAY: Vec<u8> = Vec::new();
@@ -154,6 +152,8 @@ impl<'a> AapHandler <'a> {
 			ssl_method: std::ptr::null_mut(),
 			ssl_context: std::ptr::null_mut(),
 
+			compressed_audio: false,
+
 			had_sdr: false,
 			first_video: false,
 
@@ -163,68 +163,68 @@ impl<'a> AapHandler <'a> {
 			connection_start: Instant::now(),
 			ping_duration: 2000,
 
-			rotary_count: 0,
-			rotary_timer: Instant::now(),
-
-			last_video: Instant::now(),
-
 			android_start: 0,
 			ping_timer: Instant::now(),
+
+			last_media: Instant::now(),
 		}
 	}
 
 	pub fn process(&mut self) {
-		let context = match self.context.try_lock() {
-			Ok(context) => context,
-			Err(_) => {
-				let context;
-				loop {
-					 context = match self.context.try_lock() {
-						Ok(context) => context,
-						Err(_) => {
-							continue;
-						}
-					};
-					break;
+		let context;
+		loop {
+				context = match self.context.try_lock() {
+				Ok(context) => context,
+				Err(_) => {
+					continue;
 				}
-				context
-			}
-		};
+			};
+			break;
+		}
 
 		let phone_type = context.phone_type;
+		let audio_active = context.audio_selected;
 		std::mem::drop(context);
 
 		if phone_type == 3 { //Carplay active.
 			return;
 		}
 
-		//Android Auto stuff.
-		let data;
-		if !self.usb_handler.get_connected() {
-			let connected = self.usb_handler.connect();
+		let usb_start = Instant::now();
 
-			if connected {
-				self.write_block(true, 0, [0x0, 0x1, 0x0, 0x1].to_vec(), ControlMessageType::MESSAGE_VERSION_REQUEST as u16, Duration::from_millis(2000), false);
+		loop {
+			let data;
+			if !self.usb_handler.get_connected() {
+				let connected = self.usb_handler.connect();
 
-				if phone_type != 5 {
-					self.start_connection();
+				if connected {
+					self.write_block(true, 0, [0x0, 0x1, 0x0, 0x1].to_vec(), ControlMessageType::MESSAGE_VERSION_REQUEST as u16, Duration::from_millis(2000), false);
+
+					if phone_type != 5 {
+						self.start_connection();
+					}
+				} else {
+					self.stop_connection();
+					thread::sleep(Duration::from_millis(1));
 				}
+
+				data = [].to_vec();
 			} else {
-				self.stop_connection();
-				thread::sleep(Duration::from_millis(1));
+				data = self.usb_handler.read_bytes();
 			}
 
-			data = [].to_vec();
-		} else {
-			data = self.usb_handler.read_bytes();
-		}
+			if data.len() > 0 {
+				self.process_bytes(data);
+			}
 
-		if data.len() > 0 {
-			let bytes_read = self.process_bytes(data);
-			if bytes_read {
-				for i in 0..CHANNEL_COUNT {
+			for i in 0..CHANNEL_COUNT {
+				if self.data_complete[i] {
 					self.process_message(i);
 				}
+			}
+
+			if !self.usb_handler.get_connected() || !audio_active || Instant::now() - usb_start >= Duration::from_millis(5) || Instant::now() - self.last_media >= Duration::from_millis(30) {
+				break;
 			}
 		}
 
@@ -235,23 +235,6 @@ impl<'a> AapHandler <'a> {
 			let mut ping_msg = PingRequest::new();
 			ping_msg.set_timestamp(self.get_timestamp() as i64);
 			self.write_message(true, ServiceChannels::ControlChannel as u8, ping_msg, ControlMessageType::MESSAGE_PING_REQUEST as u16, Duration::from_millis(5000), true);
-		}
-
-		if phone_type == 5 && self.rotary_count != 0 && Instant::now() - self.rotary_timer > Duration::from_millis(5) {
-			self.send_rotary_knob_message(self.rotary_count);
-			self.rotary_count = 0;
-		}
-
-		if Instant::now() - self.last_video > Duration::from_millis(100) {
-			self.last_video = Instant::now();
-			match self.mpv_video.try_lock() {
-				Ok(mut mpv) => {
-					mpv.refresh_video();
-				}
-				Err(_) => {
-					return;
-				}
-			}
 		}
 	}
 
@@ -412,15 +395,13 @@ impl<'a> AapHandler <'a> {
 				}
 			}
 	
-			let buffer_data = &data[0..current_length];
+			let start = frame*MAX_FRAME_PAYLOAD_SIZE;
+			let buffer_data = &data[start..start+current_length];
 			for b in buffer_data {
 				buffer.push(*b);
 			}
 	
-			if !self.usb_handler.write_bytes(&buffer, retry, timeout) {
-				println!("Error. Couldn't write unencoded bytes.");
-				return false;
-			}
+			self.usb_handler.write_bytes(&buffer, retry, timeout);
 		}
 	
 		return true;
@@ -455,22 +436,39 @@ impl<'a> AapHandler <'a> {
 				current_length = full_len - frame*MAX_FRAME_PAYLOAD_SIZE;
 			}
 	
-			let buffer_data = &data[0..current_length];
+			let start = frame*MAX_FRAME_PAYLOAD_SIZE;
+			let buffer_data = &data[start..start+current_length];
 			let ssl = self.ssl;
 			if ssl == std::ptr::null_mut() {
 				println!("Error: SSL not defined.");
 				return false;
 			}
 
-			let const_data = buffer_data.as_ptr() as *const c_void;
-			unsafe { 
-				SSL_write(ssl, const_data, buffer_data.len() as i32);
-			}
-
 			let bio_read = self.bio_read;
 			if bio_read == std::ptr::null_mut() {
 				println!("Error: Read BIO not defined.");
 				return false;
+			}
+
+			//Clear any stale data...
+			let stale_bytes;
+			unsafe {
+				stale_bytes = BIO_ctrl(bio_read, 10, 0, std::ptr::null_mut());
+			};
+			if stale_bytes > 0 {
+				match self.context.try_lock() {
+					Ok(mut context) => {
+						context.debug = format!("Write cycle: {} stale bytes read.", stale_bytes);
+					}
+					Err(_) => {
+
+					}
+				}
+			}
+
+			let const_data = buffer_data.as_ptr() as *const c_void;
+			unsafe { 
+				SSL_write(ssl, const_data, buffer_data.len() as i32);
 			}
 
 			let mut encrypted_data = vec![0;0x10000];
@@ -506,11 +504,8 @@ impl<'a> AapHandler <'a> {
 			for i in 0..push_len as usize {
 				buffer.push(encrypted_data[i]);
 			}
-				
-			if !self.usb_handler.write_bytes(&buffer, retry, timeout) {
-				println!("Error.");
-				return false;
-			}
+
+			self.usb_handler.write_bytes(&buffer, retry, timeout);
 		}
 	
 		return true;
@@ -581,6 +576,21 @@ impl<'a> AapHandler <'a> {
 
 			let bytes_written: i32;
 
+			let stale_bytes;
+			unsafe {
+				stale_bytes = SSL_read(ssl, std::ptr::null_mut(), 10000);
+			}
+			if stale_bytes > 0 {
+				match self.context.try_lock() {
+					Ok(mut context) => {
+						context.debug = format!("Read cycle: {} stale bytes read.", stale_bytes);
+					}
+					Err(_) => {
+
+					}
+				}
+			}
+
 			unsafe { 
 				let const_data = data[start..].as_mut_ptr() as *const c_void;
 				bytes_written = BIO_write(bio_write, const_data, (data.len() - start) as i32);
@@ -589,6 +599,7 @@ impl<'a> AapHandler <'a> {
 			if bytes_written <= 0 {
 				println!("Error: Invalid bytes written. {}", bytes_written);
 				self.usb_handler.soft_reset();
+
 				self.clear_data(current_channel);
 				return false;
 			}
@@ -632,6 +643,7 @@ impl<'a> AapHandler <'a> {
 			if bytes_read <= 0 || bytes_read > (decoded_len) as i32 {
 				println!("Error: Invalid bytes read. {}", bytes_read);
 				self.usb_handler.soft_reset();
+
 				self.clear_data(current_channel);
 				return false;
 			}
@@ -1041,6 +1053,8 @@ impl<'a> AapHandler <'a> {
 
 		std::mem::drop(context);
 
+		let mut answered = false;
+
 		if ai_msg.sender == AIBUS_DEVICE_NAV_SCREEN {
 			if ai_msg.l() >= 3 && ai_msg.data[0] == 0x30 { //Button press.
 				let button = ai_msg.data[1];
@@ -1049,9 +1063,9 @@ impl<'a> AapHandler <'a> {
 				if button == 0x2A || button == 0x2B || button == 0x28 || button == 0x29 || button == 0x7 { //Directional pad, handle differently depending on configuration.
 					if !nav_knob && vertical_toggle && horizontal_toggle { //No nav knob but 4-way toggle.
 						if button == 0x2A && state == 0x0 { //Toggle left.
-							self.increment_rotary_count(false);
+							self.increment_rotary_count(false, 1);
 						} else if button == 0x2B && state == 0x0 { //Toggle right.
-							self.increment_rotary_count(true);
+							self.increment_rotary_count(true, 1);
 						} else if button == 0x28 { //Toggle up.
 							self.send_button_message(KeyCode::KEYCODE_DPAD_UP as u32, state);
 						} else if button == 0x29 { //Toggle down.
@@ -1071,9 +1085,9 @@ impl<'a> AapHandler <'a> {
 						}
 					} else if !nav_knob && (vertical_toggle || horizontal_toggle) { //No nav knob, simple directional controls.
 						if (button == 0x28 || button == 0x2A) && state == 0x0 { //Toggle left or up.
-							self.increment_rotary_count(false);
+							self.increment_rotary_count(false, 1);
 						} else if (button == 0x29 || button == 0x2B) && state == 0x0 { //Toggle right or down.
-							self.increment_rotary_count(true);
+							self.increment_rotary_count(true, 1);
 						} else if button == 0x7 && state == 0x2 { //Enter.
 							if !self.enter_hold {
 								self.send_button_message(KeyCode::KEYCODE_DPAD_CENTER as u32, 0x0);
@@ -1182,16 +1196,31 @@ impl<'a> AapHandler <'a> {
 				} else if button == 0x55 { //Map.
 					self.send_button_message(KeyCode::KEYCODE_NAVIGATION as u32, state);
 				}
+
+				answered = true;
 			} else if ai_msg.l() >= 3 && ai_msg.data[0] == 0x32 && ai_msg.data[1] == 0x7 {
 				let clockwise = (ai_msg.data[2]&0x10) != 0;
 				let steps = ai_msg.data[2]&0xF;
 
-				for _i in 0..steps {
-					self.increment_rotary_count(clockwise);
-				}
+				self.increment_rotary_count(clockwise, steps);
+
+				answered = true;
 			}
 		} else if ai_msg.sender == AIBUS_DEVICE_ANTENNA {
 			
+		}
+	
+		if answered && self.usb_handler.get_connected() {
+			let data = self.usb_handler.read_bytes();
+			if data.len() > 0 {
+				self.process_bytes(data);
+			}
+
+			for i in 0..CHANNEL_COUNT {
+				if self.data_complete[i] {
+					self.process_message(i);
+				}
+			}
 		}
 	}
 
@@ -1376,7 +1405,8 @@ impl<'a> AapHandler <'a> {
 			ERR_clear_error();
 
 			let ret = SSL_do_handshake(self.ssl);
-			if SSL_get_error(self.ssl, ret) == SSL_ERROR_WANT_READ {
+			let ssl_error = SSL_get_error(self.ssl, ret);
+			if BIO_ctrl(self.bio_read, 10, 0, std::ptr::null_mut()) > 0 {
 				let mut handshake_data = vec![0; MAX_FRAME_PAYLOAD_SIZE];
 				
 				let c_handshake_data = handshake_data.as_mut_ptr() as *mut c_void;
@@ -1388,8 +1418,9 @@ impl<'a> AapHandler <'a> {
 				}
 
 				self.write_block(false, ServiceChannels::ControlChannel as u8, set_handshake_data, ControlMessageType::MESSAGE_ENCAPSULATED_SSL as u16, Duration::from_millis(5000), false);
-			} else {
-				println!("Error code {}", SSL_get_error(self.ssl, ret));
+			}
+
+			if ssl_error == SSL_ERROR_WANT_READ || ssl_error != 0 {
 				return;
 			}
 		}
@@ -1406,7 +1437,8 @@ impl<'a> AapHandler <'a> {
 
 			let ret = SSL_do_handshake(self.ssl);
 
-			if SSL_get_error(self.ssl, ret) == SSL_ERROR_WANT_READ {
+			let ssl_error = SSL_get_error(self.ssl, ret);
+			if BIO_ctrl(self.bio_read, 10, 0, std::ptr::null_mut()) > 0 {
 				let mut handshake_data = vec![0; MAX_FRAME_PAYLOAD_SIZE];
 				
 				let c_handshake_data = handshake_data.as_mut_ptr() as *mut c_void;
@@ -1418,8 +1450,19 @@ impl<'a> AapHandler <'a> {
 				}
 
 				self.write_block(false, ServiceChannels::ControlChannel as u8, set_handshake_data, ControlMessageType::MESSAGE_ENCAPSULATED_SSL as u16, Duration::from_millis(5000), false);
-			} else if SSL_get_error(self.ssl, ret) != 0 {
+			}
+
+			if ssl_error == SSL_ERROR_WANT_READ || ssl_error != 0 {
 				return;
+			}
+
+			match self.context.try_lock() {
+				Ok(mut context) => {
+					context.debug = format!("TLS version: {:?}", std::ffi::CStr::from_ptr(SSL_get_version(self.ssl)));
+				}
+				Err(_) => {
+
+				}
 			}
 
 			let mut auth_message = AuthResponse::new();
@@ -1452,16 +1495,14 @@ impl<'a> AapHandler <'a> {
 	}
 
 	///Increment the scroll wheel count.
-	fn increment_rotary_count(&mut self, cw: bool) {
-		if cw {
-			self.rotary_count += 1;
+	fn increment_rotary_count(&mut self, cw: bool, pulses: u8) {
+		let true_pulses = if cw {
+			pulses as i32
 		} else {
-			self.rotary_count -= 1;
-		}
+			(pulses as i32)*-1
+		};
 
-		self.rotary_timer = Instant::now();
-
-		//self.ping_duration = 16;
+		self.send_rotary_knob_message(true_pulses);
 	}
 
 	///Send a full rotary knob message.
@@ -1735,7 +1776,7 @@ impl<'a> AapHandler <'a> {
 			}
 		}
 		
-		video_config.set_frame_rate(VideoFrameRateType::VIDEO_FPS_60);
+		video_config.set_frame_rate(VideoFrameRateType::VIDEO_FPS_30);
 		video_config.set_width_margin(margin_w);
 		video_config.set_height_margin(margin_h);
 		video_config.set_density(160);
@@ -1743,13 +1784,19 @@ impl<'a> AapHandler <'a> {
 
 		video_sink.video_configs.push(video_config);
 
-		video_sink.set_available_type(MediaCodecType::MEDIA_CODEC_VIDEO_AV1);
+		video_sink.set_available_type(MediaCodecType::MEDIA_CODEC_VIDEO_H264_BP);
 		video_sink.set_available_while_in_call(true);
 	
 		let mut video_sink_wrapper = Service::new();
 		video_sink_wrapper.set_id(ServiceChannels::VideoChannel as i32);
 		video_sink_wrapper.media_sink_service = MessageField::some(video_sink);
 		response.services.push(video_sink_wrapper);
+
+		let audio_format = if self.compressed_audio {
+			MediaCodecType::MEDIA_CODEC_AUDIO_AAC_LC_ADTS
+		} else {
+			MediaCodecType::MEDIA_CODEC_AUDIO_PCM
+		};
 
 		//Main audio:
 		let mut audio_sink = MediaSinkService::new();
@@ -1759,7 +1806,7 @@ impl<'a> AapHandler <'a> {
 		audio_config.set_number_of_bits(16);
 		audio_config.set_number_of_channels(2);
 		
-		audio_sink.set_available_type(MediaCodecType::MEDIA_CODEC_AUDIO_PCM);
+		audio_sink.set_available_type(audio_format);
 		audio_sink.set_available_while_in_call(false);
 		audio_sink.set_audio_type(AudioStreamType::AUDIO_STREAM_MEDIA);
 		audio_sink.audio_configs.push(audio_config);
@@ -1777,7 +1824,7 @@ impl<'a> AapHandler <'a> {
 		voice_config.set_number_of_bits(16);
 		voice_config.set_number_of_channels(1);
 		
-		voice_sink.set_available_type(MediaCodecType::MEDIA_CODEC_AUDIO_PCM);
+		voice_sink.set_available_type(audio_format);
 		voice_sink.set_audio_type(AudioStreamType::AUDIO_STREAM_GUIDANCE);
 		voice_sink.set_available_while_in_call(true);
 		voice_sink.audio_configs.push(voice_config);
@@ -2021,11 +2068,11 @@ impl<'a> AapHandler <'a> {
 
 	///Handle a piece of video.
 	fn handle_video_message(&mut self, video_msg: VideoMsg) {
+		self.last_media = Instant::now();
 		let mpv_data = video_msg.get_data();
 
 		match self.mpv_video.try_lock() {
 			Ok(mut mpv_video) => {
-				self.last_video = Instant::now();
 				mpv_video.push_video(&mpv_data);
 			}
 			Err(_) => {
@@ -2039,7 +2086,6 @@ impl<'a> AapHandler <'a> {
 					};
 					break;
 				}
-				self.last_video = Instant::now();
 				mpv_video.push_video(&mpv_data);
 			}
 		}
@@ -2077,7 +2123,11 @@ impl<'a> AapHandler <'a> {
 
 			match self.rd_audio.try_lock() {
 				Ok(mut rd_audio) => {
-					rd_audio.send_audio(&rd_data);
+					if self.compressed_audio {
+						rd_audio.send_compressed_audio(&rd_data);
+					} else {
+						rd_audio.send_audio(&rd_data);
+					}
 				}
 				Err(_) => {
 					let mut rd_audio;
@@ -2090,13 +2140,21 @@ impl<'a> AapHandler <'a> {
 						};
 						break;
 					}
-					rd_audio.send_audio(&rd_data);
+					if self.compressed_audio {
+						rd_audio.send_compressed_audio(&rd_data);
+					} else {
+						rd_audio.send_audio(&rd_data);
+					}
 				}
 			}
 		} else if channel == ServiceChannels::Audio1Channel as u8 {
 			match self.nav_audio.try_lock() {
 				Ok(mut nav_audio) => {
-					nav_audio.send_audio(&rd_data);
+					if self.compressed_audio {
+						nav_audio.send_compressed_audio(&rd_data);
+					} else {
+						nav_audio.send_audio(&rd_data);
+					}
 				}
 				Err(_) => {
 					let mut nav_audio;
@@ -2109,7 +2167,11 @@ impl<'a> AapHandler <'a> {
 						};
 						break;
 					}
-					nav_audio.send_audio(&rd_data);
+					if self.compressed_audio {
+						nav_audio.send_compressed_audio(&rd_data);
+					} else {
+						nav_audio.send_audio(&rd_data);
+					}
 				}
 			}
 		}

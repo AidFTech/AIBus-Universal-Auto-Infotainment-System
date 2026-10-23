@@ -13,6 +13,8 @@
 enum active_menu_t : uint8_t {
 	ACTIVE_MENU_NONE,
 	ACTIVE_MENU_SETTINGS_MAIN,
+	ACTIVE_MENU_SETTINGS_LIGHTING,
+	ACTIVE_MENU_SETTINGS_AUTO_SENSITIVITY,
 	ACTIVE_MENU_SETTINGS_COMFORT_CONVENIENCE,
 	ACTIVE_MENU_SETTINGS_HEADLIGHT_INTEGRATION,
 	ACTIVE_MENU_SETTINGS_AMBIENT_LIGHTING,
@@ -28,6 +30,8 @@ public:
 	void setActiveMenu(const active_menu_t active_menu);
 
 	void createMainSettingsMenu();
+	void createLightingMenu(const bool light_sensor_connected);
+	void createAutoLightSensitivityMenu(const int value);
 	void createComfortConvenienceMenu(const bool light_sensor_connected, const bool rain_sensor_connected);
 	void createHeadlightTempereatureMenu();
 	void createAmbientLightingMenu(const bool slider_only = false);

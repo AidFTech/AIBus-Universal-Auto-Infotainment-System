@@ -9,6 +9,41 @@ CameraHandler::CameraHandler(SDL_Renderer* renderer, AttributeList* attribute_li
 	const char* camera_message = getString(LOCALE_STRING_REAR_CAMERA_MESSAGE, attribute_list->locale);
 	message_box.setText(camera_message);
 	message_box.renderText();
+
+	setCameraPath(socket_handler->socket_path.c_str());
+}
+
+CameraHandler::~CameraHandler() {
+	if(socket_handler->thread_run)
+		pthread_cancel(camera_thread);
+}
+
+//Set whether the camera is on or off.
+void CameraHandler::setCameraActive(const bool camera_active) {
+	const bool last_active = this->camera_active;
+	this->camera_active = camera_active;
+
+	if(this->camera_active && !last_active) { //Camera turned on.
+		if(filesystem::exists(filesystem::path(socket_handler->socket_path))) {
+			socket_handler->socket_handler = new ClientVideoSocketHandler(renderer, CAMERA_VIDEO_IPC_PATH, socket_handler->socket_path, attribute_list->w, attribute_list->h);
+			pthread_create(&camera_thread, NULL, videoPlayThread, (void*)socket_handler);
+		}
+	} else if(!this->camera_active && last_active) { //Camera turned off.
+		bool run = false;
+		bool* last_run = socket_handler->running;
+
+		socket_handler->running = &run;
+
+		if(socket_handler->thread_run)
+			pthread_join(camera_thread, NULL);
+
+		socket_handler->running = last_run;
+
+		if(socket_handler->socket_handler != nullptr) {
+			delete socket_handler->socket_handler;
+			socket_handler->socket_handler = nullptr;
+		}
+	}
 }
 
 //Overlay the camera message and other info.
@@ -22,15 +57,30 @@ void CameraHandler::overlayCameraInfo(SDL_Texture* video_texture) {
 
 //Set the camera path.
 void CameraHandler::setCameraPath(const char* path) {
-	if(socket_handler->socket_handler != nullptr) {
-		delete socket_handler->socket_handler;
-		socket_handler->socket_handler = nullptr;
-	}
+	if(camera_active) {
+		if(socket_handler->socket_handler != nullptr) {
+			bool run = false;
+			bool* last_run = socket_handler->running;
 
-	if(filesystem::exists(filesystem::path(path))) {
-		socket_handler->socket_handler = new ClientVideoSocketHandler(renderer, CAMERA_VIDEO_IPC_PATH, path, attribute_list->w, attribute_list->h);
+			socket_handler->running = &run;
+
+			if(socket_handler->thread_run)
+				pthread_join(camera_thread, NULL);
+
+			socket_handler->running = last_run;
+
+			delete socket_handler->socket_handler;
+			socket_handler->socket_handler = nullptr;
+		}
+
+		if(filesystem::exists(filesystem::path(path))) {
+			socket_handler->socket_handler = new ClientVideoSocketHandler(renderer, CAMERA_VIDEO_IPC_PATH, path, attribute_list->w, attribute_list->h);
+			socket_handler->socket_path = path;
+
+			pthread_create(&camera_thread, NULL, videoPlayThread, (void*)socket_handler);
+		}
+	} else
 		socket_handler->socket_path = path;
-	}
 }
 
 //Set the message displayed at the bottom of the camera screen.

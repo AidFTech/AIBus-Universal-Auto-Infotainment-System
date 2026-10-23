@@ -35,6 +35,9 @@ void setCallbacks(mpv_handle* mpv_handler, mpv_render_context* mpv_gl) {
 
 //Render the video.
 int mpvPixelRender(mpv_render_context* renderer, const int w, const int h, size_t* pitch, void* pixels) {
+	if(renderer == NULL || pitch == NULL || pixels == NULL)
+		return -1;
+	
 	mpv_render_param params[] = {
 		{MPV_RENDER_PARAM_SW_SIZE, (int[2]){w, h}},
 		{MPV_RENDER_PARAM_SW_FORMAT, "0bgr"},

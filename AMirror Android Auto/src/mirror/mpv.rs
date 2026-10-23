@@ -46,6 +46,9 @@ pub struct MpvVideo {
 	header_color: Rgba<u8>,
 
 	fullscreen: bool,
+
+	last_delimit: Instant,
+	awaiting_delimit: bool,
 }
 
 impl MpvVideo {
@@ -66,9 +69,8 @@ impl MpvVideo {
 
 		//Check these for crashes.
 		mpv_cmd.arg("--video-sync=display-resample");
-		//mpv_cmd.arg("--override-display-fps=60");
+		mpv_cmd.arg("--override-display-fps=60");
 		mpv_cmd.arg("--interpolation");
-		//mpv_cmd.arg("--tscale=oversample");
 
 		if fullscreen {
 			
@@ -78,11 +80,10 @@ impl MpvVideo {
 
 		//mpv_cmd.arg("--container-fps-override=60");
 		mpv_cmd.arg("--profile=low-latency");
-		//mpv_cmd.arg("--no-correct-pts");
 		mpv_cmd.arg("--video-unscaled=yes");
 
 		mpv_cmd.arg("--framedrop=decoder+vo");
-		mpv_cmd.arg("--speed=1.01");
+		mpv_cmd.arg("--speed=10");
 
 		mpv_cmd.arg("-");
 
@@ -126,19 +127,57 @@ impl MpvVideo {
 			header_color: Rgba([0xFF, 0xFF, 0x3A, 255]),
 
 			fullscreen,
+
+			last_delimit: Instant::now(),
+			awaiting_delimit: false,
 		 });
 	}
 
 	///Loop function.
 	pub fn process(&mut self) {
-		
+		if Instant::now() - self.last_delimit > Duration::from_millis(10) && self.awaiting_delimit {
+			self.last_delimit = Instant::now();
+			self.awaiting_delimit = false;
+			let mpv_delimiter = [0x0, 0x0, 0x0, 0x1, 0x9, 0xF0];
+
+			let mut child_stdin = self.process.stdin.as_ref().unwrap();
+			let _ = child_stdin.write(&mpv_delimiter);
+		}
 	}
 
 	///Send video bytes.
 	pub fn push_video(&mut self, data: &[u8]) {
 		if data.len() > 0 {
+			let mut full_data = data.to_vec();
+			
+			if Instant::now() - self.last_delimit >= Duration::from_millis(10) {
+				self.last_delimit = Instant::now();
+				let mut delimited = true;
+				let mpv_delimiter = [0x0, 0x0, 0x0, 0x1, 0x9, 0xF0];
+
+				if full_data.len() >= 6 {
+					let data_end = &full_data[full_data.len()-6..];
+					for i in 0..data_end.len() {
+						if data_end[i] != mpv_delimiter[i] {
+							delimited = false;
+							break;
+						}
+					}
+				}
+
+				if !delimited {
+					for b in mpv_delimiter {
+						full_data.push(b);
+					}
+				}
+			} else {
+				self.awaiting_delimit = true;
+			}
+
+			self.last_delimit = Instant::now();
+
 			let mut child_stdin = self.process.stdin.as_ref().unwrap();
-			let _ = child_stdin.write(&data);
+			let _ = child_stdin.write(&full_data);
 		}
 		
 		if self.output_locked {
@@ -150,8 +189,6 @@ impl MpvVideo {
 			};
 
 			let _ = mpv_ipc.write("set vid auto\n".as_bytes());
-
-			self.refresh_video();
 		}
 	}
 
@@ -271,24 +308,6 @@ impl MpvVideo {
 
 		let overlay_str = "overlay-remove 0\n";
 		match mpv_ipc.write(overlay_str.as_bytes()) {
-			Ok(_) => {
-				
-			}
-			Err(e) => {
-				println!("Error: {}", e);
-			}
-		}
-	}
-
-	///Refresh the video.
-	pub fn refresh_video(&mut self) {
-		let mut mpv_ipc = match &self.mpv_ipc {
-			Some(mpv_ipc) => mpv_ipc,
-			None => return,
-		};
-
-		let refresh_str = "seek -0.001 absolute\n";
-		match mpv_ipc.write(refresh_str.as_bytes()) {
 			Ok(_) => {
 				
 			}
@@ -645,6 +664,7 @@ pub struct RdAudio {
 	bits: u16,
 	channels: u16,
 	send_header: bool,
+	send_compressed: bool,
 	send_zero: bool,
 }
 
@@ -691,7 +711,7 @@ impl RdAudio {
 			}
 		}
 
-		let mut this = RdAudio { process: process.unwrap(), sample: 48000, bits: 32, channels: 2, send_header: true, send_zero: false };
+		let mut this = RdAudio { process: process.unwrap(), sample: 48000, bits: 32, channels: 2, send_header: true, send_compressed: false, send_zero: false };
 		this.send_audio(&[]);
 
 		return Ok(this);
@@ -699,6 +719,11 @@ impl RdAudio {
 
 	///Send audio bytes.
 	pub fn send_audio(&mut self, data: &[u8]) {
+		if self.send_compressed {
+			self.send_compressed = false;
+			self.send_header = true;
+		}
+
 		let mut new_data = if self.send_header {
 			self.send_header = false;
 			get_wav_header(data.len(), self.sample, self.channels, self.bits)
@@ -736,6 +761,29 @@ impl RdAudio {
 		};*/
 		
 		//self.sink.append(source);
+		match self.process.stdin.as_ref() {
+			Some(mut child_stdin) => {
+				let _ = child_stdin.write(&new_data);
+			}
+			None => {
+
+			}
+		}
+	}
+
+	///Send compressed audio bytes.
+	pub fn send_compressed_audio(&mut self, data: &[u8]) {
+		if !self.send_compressed {
+			self.send_compressed = true;
+			self.send_header = true;
+		}
+
+		let mut new_data = Vec::new();
+
+		for d in data {
+			new_data.push(*d);
+		} 
+
 		match self.process.stdin.as_ref() {
 			Some(mut child_stdin) => {
 				let _ = child_stdin.write(&new_data);

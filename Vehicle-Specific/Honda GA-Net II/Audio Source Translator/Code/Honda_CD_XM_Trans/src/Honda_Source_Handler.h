@@ -97,4 +97,6 @@ private:
 
 AIData getTextMessage(const uint8_t sender, String text, const uint8_t group, const uint8_t area, const bool refresh);
 
+int getTimeBytes(const uint64_t time);
+
 #endif

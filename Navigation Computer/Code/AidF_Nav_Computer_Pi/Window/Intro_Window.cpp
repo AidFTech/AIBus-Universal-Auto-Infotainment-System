@@ -23,9 +23,15 @@ void IntroWindow::drawWindow() {
 
 bool IntroWindow::handleAIBus(AIData* ai_d) {
 	if(ai_d->sender == ID_CANSLATOR && ai_d->receiver == 0xFF) {
-		if(ai_d->l >= 3 && ai_d->data[0] == 0xA1 && ai_d->data[1] == 0x2 && (ai_d->data[2]&0xF) != 0) //Key on.
+		if(ai_d->l >= 3 && ai_d->data[0] == 0xA1 && ai_d->data[1] == 0x2 && (ai_d->data[2]&0xF) != 0) { //Key on.
 			attribute_list->next_window = NEXT_WINDOW_MAIN;
-	}
+			
+			uint8_t ping_data[] = {0x1};
+			AIData ping_msg(sizeof(ping_data), ID_NAV_COMPUTER, 0xFF, ping_data);
+			attribute_list->aibus_handler->writeAIData(&ping_msg, false);
+		}
+	} else if(ai_d->sender == ID_NAV_SCREEN && ai_d->l >= 3 && ai_d->data[0] == 0x30 && ai_d->data[1] == 0x26) //Audio button. Don't process normally.
+		return true;
 
 	return false;
 }

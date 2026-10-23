@@ -59,6 +59,8 @@ pub struct AMirror<'a> {
 	client_aibus_handler: Arc<Mutex<ClientAIBusHandler>>,
 	aibus_handler: Arc<Mutex<AIBusHandler>>,
 
+	aibus_cache: Vec<AIBusMessage>,
+
 	display_title: bool,
 	display_artist: bool,
 	display_album: bool,
@@ -214,6 +216,7 @@ impl <'a> AMirror<'a> {
 
 			aibus_handler,
 			client_aibus_handler,
+			aibus_cache: Vec::new(),
 
 			display_title,
 			display_artist,
@@ -301,6 +304,13 @@ impl <'a> AMirror<'a> {
 				}
 
 				ai_rx.clear();
+
+				let ai_tx = aibus_handler.get_ai_tx();
+				for ai_data in &self.aibus_cache {
+					ai_tx.push(ai_data.clone());
+				}
+
+				self.aibus_cache.clear();
 			}
 
 			for ai_data in ai_rx_list {
@@ -933,9 +943,9 @@ impl <'a> AMirror<'a> {
 						}
 
 						self.write_nav_text(time_text, 0, 1, true);
-						self.write_time(AIBUS_DEVICE_RADIO, context.track_time as u16);
+						self.write_time(AIBUS_DEVICE_RADIO, context.track_time as u64);
 						if context.phone_type != 0 {
-							self.write_time(AIBUS_DEVICE_IMID, context.track_time as u16);
+							self.write_time(AIBUS_DEVICE_IMID, context.track_time as u64);
 						}
 					} else {
 						let clear_data = [0x20, 0x71, 0x0].to_vec();
@@ -1245,37 +1255,36 @@ impl <'a> AMirror<'a> {
 		let latitude = context.latitude;
 		let longitude = context.longitude;
 		let altitude = context.altitude;
+		let phone_active = context.phone_active;
 
 		std::mem::drop(context);
 		let mut ai_rx_list = Vec::new();
 
-		let mut aibus_handler = match self.aibus_handler.try_lock() {
-			Ok(aibus_handler) => aibus_handler,
-			Err(_) => {
-				let aibus_handler;
-				loop {
-					 aibus_handler = match self.aibus_handler.try_lock() {
-						Ok(aibus_handler) => aibus_handler,
-						Err(_) => {
-							continue;
-						}
-					};
-					break;
+		match self.aibus_handler.try_lock() {
+			Ok(mut aibus_handler) => {
+				let ai_rx = aibus_handler.get_ai_rx();
+				for ai_data in &mut *ai_rx {
+					ai_rx_list.push(ai_data.clone());
 				}
-				aibus_handler
+
+				ai_rx.clear();
+
+				let ai_tx = aibus_handler.get_ai_tx();
+				for ai_data in &self.aibus_cache {
+					ai_tx.push(ai_data.clone());
+				}
+
+				self.aibus_cache.clear();
 			}
-		};
-
-		let ai_rx = aibus_handler.get_ai_rx();
-		for ai_data in &mut *ai_rx {
-			ai_rx_list.push(ai_data.clone());
+			Err(_) => {}
 		}
-
-		ai_rx.clear();
-		std::mem::drop(aibus_handler);
 
 		for ai_data in ai_rx_list {
 			self.handle_aibus_message(ai_data);
+			if phone_active && self.screen_acknowledged {
+				self.aa_handler.process();
+				self.dongle_handler.process();
+			}
 		}
 
 		context = match self.context.try_lock() {
@@ -1336,6 +1345,9 @@ impl <'a> AMirror<'a> {
 			}
 		}
 
+		let debug = context.debug.clone();
+		context.debug = "".to_string();
+
 		std::mem::drop(context);
 
 		if phone_type == 0x5 {
@@ -1351,6 +1363,10 @@ impl <'a> AMirror<'a> {
 			Err(_) => {
 				println!("AMirror: MPV Locked.");
 			}
+		}
+
+		if debug.len() > 0 {
+			self.print_debug(&debug);
 		}
 	}
 
@@ -1614,7 +1630,7 @@ impl <'a> AMirror<'a> {
 				let index = (ai_msg.data[1]&0xF) as usize;
 
 				let mut mpv = match self.mpv_video.try_lock() {
-					Ok(mut mpv) => mpv,
+					Ok(mpv) => mpv,
 					Err(_) => {
 						let mpv;
 						loop {
@@ -1996,7 +2012,14 @@ impl <'a> AMirror<'a> {
 
 						if menu_option == MenuIndex::MirrorAudioSettingsScrollInfoText && rows > 0 && char_count > 0 && native_mirror { //Toggle split.
 							self.imid_split = !self.imid_split;
-							self.write_audio_settings_menu_option(option as usize);
+
+							match self.get_audio_settings_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}
+
 							self.imid_refresh = true;
 							self.imid_scroll_wrap = false;
 							self.imid_scroll_pos = 0;
@@ -2007,12 +2030,22 @@ impl <'a> AMirror<'a> {
 							self.write_display_menu();
 						} else if menu_option == MenuIndex::MirrorAudioSettingsAutoMusicStart {
 							self.auto_music_start = !self.auto_music_start;
-							self.write_audio_settings_menu_option(option as usize);
+							match self.get_audio_settings_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}
 
 							self.save_settings();
 						} else if menu_option == MenuIndex::MirrorAudioSettingsFlashTitle {
 							/*self.flash_song_title = !self.flash_song_title;
-							self.write_audio_settings_menu_option(option as usize);
+							match self.get_audio_settings_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}
 
 							self.save_settings();*/
 
@@ -2063,22 +2096,52 @@ impl <'a> AMirror<'a> {
 
 						if menu_option == MenuIndex::MirrorClusterSettingsPhone { //Display phone name.
 							self.display_phone = !self.display_phone;
-							self.write_display_menu_option(option as usize);	
+							match self.get_display_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}	
 						} else if menu_option == MenuIndex::MirrorClusterSettingsSong { //Display song title.
 							self.display_title = !self.display_title;
-							self.write_display_menu_option(option as usize);
+							match self.get_display_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}	
 						} else if menu_option == MenuIndex::MirrorClusterSettingsArtist { //Display artist name.
 							self.display_artist = !self.display_artist;
-							self.write_display_menu_option(option as usize);
+							match self.get_display_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}	
 						} else if menu_option == MenuIndex::MirrorClusterSettingsAlbum { //Display album name.
 							self.display_album = !self.display_album;
-							self.write_display_menu_option(option as usize);
+							match self.get_display_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}	
 						} else if menu_option == MenuIndex::MirrorClusterSettingsApp { //Display app name.
 							self.display_app = !self.display_app;
-							self.write_display_menu_option(option as usize);
+							match self.get_display_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}	
 						} else if menu_option == MenuIndex::MirrorClusterSettingsScrollCluster || menu_option == MenuIndex::MirrorClusterSettingsScrollInfo { //Scroll.
 							self.imid_split = !self.imid_split;
-							self.write_display_menu_option(option as usize);
+							match self.get_display_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}	
 							self.imid_refresh = true;
 							self.imid_scroll_wrap = false;
 							self.imid_scroll_pos = 0;
@@ -2133,27 +2196,52 @@ impl <'a> AMirror<'a> {
 							if display_selected > row_count {
 								if option != 0 && display_selected > row_count && self.display_phone {
 									self.display_phone = false;
-									self.write_display_menu_option(0);
+									match self.get_display_menu_option(0) {
+										Some(ai_msg) => {
+											self.write_aibus_message(ai_msg);
+										}
+										None => {}
+									}
 									display_selected -= 1;
 								}
 								if option != 1 && display_selected > row_count && self.display_title {
 									self.display_title = false;
-									self.write_display_menu_option(1);
+									match self.get_display_menu_option(1) {
+										Some(ai_msg) => {
+											self.write_aibus_message(ai_msg);
+										}
+										None => {}
+									}
 									display_selected -= 1;
 								}
 								if option != 2 && display_selected > row_count && self.display_artist {
 									self.display_artist = false;
-									self.write_display_menu_option(2);
+									match self.get_display_menu_option(2) {
+										Some(ai_msg) => {
+											self.write_aibus_message(ai_msg);
+										}
+										None => {}
+									}
 									display_selected -= 1;
 								}
 								if option != 3 && display_selected > row_count && self.display_album {
 									self.display_album = false;
-									self.write_display_menu_option(3);
+									match self.get_display_menu_option(3) {
+										Some(ai_msg) => {
+											self.write_aibus_message(ai_msg);
+										}
+										None => {}
+									}
 									display_selected -= 1;
 								}
 								if option != 4 && display_selected > row_count && self.display_app {
 									self.display_app = false;
-									self.write_display_menu_option(4);
+									match self.get_display_menu_option(4) {
+										Some(ai_msg) => {
+											self.write_aibus_message(ai_msg);
+										}
+										None => {}
+									}
 								}
 							}
 
@@ -2199,12 +2287,22 @@ impl <'a> AMirror<'a> {
 
 						if menu_option == MenuIndex::MirrorFlashSettingsFlashTitle {
 							self.flash_song_title = !self.flash_song_title;
-							self.write_flash_menu_option(option as usize);
+							match self.get_flash_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}
 
 							self.save_settings();
 						} else if menu_option == MenuIndex::MirrorFlashSettingsFlashTitleMirror {
 							self.flash_song_title_mirror = !self.flash_song_title_mirror;
-							self.write_flash_menu_option(option as usize);
+							match self.get_flash_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}
 
 							self.save_settings();
 						}
@@ -2231,14 +2329,36 @@ impl <'a> AMirror<'a> {
 
 						if menu_option == MenuIndex::MirrorMainSettingsAutoStart {
 							self.auto_mirror_start = !self.auto_mirror_start;
-							self.write_main_settings_menu_option(option as usize);
+							match self.get_main_settings_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}
 						} else if menu_option == MenuIndex::MirrorMainSettingsAutoMusicStart {
 							self.auto_music_start = !self.auto_music_start;
-							self.write_main_settings_menu_option(option as usize);
+							match self.get_main_settings_menu_option(option as usize) {
+								Some(ai_msg) => {
+									self.write_aibus_message(ai_msg);
+								}
+								None => {}
+							}
 						}
 					}
 				} else if ai_msg.l() >= 2 && ai_msg.data[1] == 0x45 {
+					std::mem::drop(context);
+
 					self.write_main_settings_menu();
+
+					loop {
+						context = match self.context.try_lock() {
+							Ok(context) => context,
+							Err(_) => {
+								continue;
+							}
+						};
+						break;
+					}
 				} else if ai_msg.l() >= 2 && (ai_msg.data[1] == 0x55 || ai_msg.data[1] == 0x56 || ai_msg.data[1] == 0x57) { //Menu request.
 					let requested_menu;
 					let command = ai_msg.data[1];
@@ -2258,7 +2378,19 @@ impl <'a> AMirror<'a> {
 
 					if requested_menu.eq_ignore_ascii_case("SETTING") {
 						if command == 0x55 { //Display the menu.
+							std::mem::drop(context);
+
 							self.write_main_settings_menu();
+
+							loop {
+								context = match self.context.try_lock() {
+									Ok(context) => context,
+									Err(_) => {
+										continue;
+									}
+								};
+								break;
+							}
 						} else {
 							let mut command_response = [0x2B, command].to_vec();
 							if command == 0x57 {
@@ -2726,17 +2858,8 @@ impl <'a> AMirror<'a> {
 		let mut aibus_handler = match self.aibus_handler.try_lock() {
 			Ok(aibus_handler) => aibus_handler,
 			Err(_) => {
-				let ai_handler;
-				loop {
-					 ai_handler = match self.aibus_handler.try_lock() {
-						Ok(aibus_handler) => aibus_handler,
-						Err(_) => {
-							continue;
-						}
-					};
-					break;
-				}
-				ai_handler
+				self.aibus_cache.push(ai_msg);
+				return;
 			}
 		};
 
@@ -2818,6 +2941,25 @@ impl <'a> AMirror<'a> {
 		}*/
 	}
 
+	///Write multiple AIBus messages.
+	fn write_aibus_messages(&mut self, msg_list: &[AIBusMessage]) {
+		let mut aibus_handler = match self.aibus_handler.try_lock() {
+			Ok(aibus_handler) => aibus_handler,
+			Err(_) => {
+				for ai_msg in msg_list {
+					self.aibus_cache.push(ai_msg.clone());
+				}
+				return;
+			}
+		};
+
+		let ai_tx = aibus_handler.get_ai_tx();
+		
+		for ai_msg in msg_list {
+			ai_tx.push(ai_msg.clone());
+		}
+	}
+
 	///Write the initial pings.
 	pub fn write_init_ping(&mut self) {
 		self.write_aibus_message(AIBusMessage {
@@ -2846,8 +2988,21 @@ impl <'a> AMirror<'a> {
 	}
 
 	///Write track time.
-	fn write_time(&mut self, recipient: u8, time: u16) {
-		let time_data = [0x3B, 0x0, 0x0, (time>>8) as u8, (time&0xFF) as u8].to_vec();
+	fn write_time(&mut self, recipient: u8, time: u64) {
+		let mut bytes = 1;
+		let mut data_measure: u64 = 0x100;
+
+		while time as u64 >= data_measure {
+			bytes += 1;
+			data_measure <<= 8;
+		}
+
+		let mut time_data = [0x3B].to_vec();
+
+		for i in 0..bytes {
+			time_data.push(((time>>(8*(bytes-i-1)))&0xFF) as u8);
+		}
+
 		let time_msg = AIBusMessage {
 			sender: AIBUS_DEVICE_AMIRROR,
 			receiver: recipient,
@@ -3351,6 +3506,10 @@ impl <'a> AMirror<'a> {
 		let stream_timer = Instant::now();
 
 		while Instant::now() - stream_timer < Duration::from_millis(50) {
+			if self.screen_acknowledged {
+				self.aa_handler.process();
+				self.dongle_handler.process();
+			}
 		}
 
 		match self.client_aibus_handler.lock() {
@@ -3414,6 +3573,10 @@ impl <'a> AMirror<'a> {
 		let stream_timer = Instant::now();
 
 		while Instant::now() - stream_timer < Duration::from_millis(100) {
+			if self.screen_acknowledged {
+				self.aa_handler.process();
+				self.dongle_handler.process();
+			}
 		}
 
 		match self.client_aibus_handler.lock() {
@@ -3476,8 +3639,15 @@ impl <'a> AMirror<'a> {
 			return;
 		}
 
+		let mut msg_list = Vec::new();
+
 		for i in 0..audio_menu.size() {
-			self.write_audio_settings_menu_option(i);
+			match self.get_audio_settings_menu_option(i) {
+				Some(ai_msg) => {
+					msg_list.push(ai_msg);
+				}
+				None => {}
+			}
 		}
 
 		let mut sel = 0x3;
@@ -3504,17 +3674,19 @@ impl <'a> AMirror<'a> {
 			sel = 0x2;
 		}
 
-		self.write_aibus_message(AIBusMessage {
+		msg_list.push(AIBusMessage {
 			sender: AIBUS_DEVICE_AMIRROR,
 			receiver: AIBUS_DEVICE_NAV_COMPUTER,
 			data: [0x2B, 0x52, sel].to_vec(),
 		});
 
+		self.write_aibus_messages(&msg_list);
+
 		self.menu_open = AMirrorMenu::MenuAudioSettings;
 	}
 
 	///Write an audio settings menu option.
-	fn write_audio_settings_menu_option(&mut self, option: usize) {
+	fn get_audio_settings_menu_option(&mut self, option: usize) -> Option<AIBusMessage> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
@@ -3536,13 +3708,13 @@ impl <'a> AMirror<'a> {
 			Some(audio_menu) => audio_menu,
 			None => {
 				println!("Error loading menu option.");
-				return;
+				return None;
 			}
 		};
 		let menu_option = match audio_menu.get_global_index(option) {
 			Some(menu_option) => menu_option,
 			None => {
-				return;
+				return None;
 			}
 		};
 
@@ -3552,11 +3724,11 @@ impl <'a> AMirror<'a> {
 
 		if menu_option == MenuIndex::MirrorAudioSettingsClusterDisplayText {
 			if !(context.imid_row_count > 0 && context.imid_text_len > 0 && !context.imid_native_mirror) {
-				return;
+				return None;
 			}
 		} else if menu_option == MenuIndex::MirrorAudioSettingsScrollInfoText {		
 			if !(context.imid_row_count > 0 && context.imid_text_len > 0 && context.imid_native_mirror) {
-				return;
+				return None;
 			}
 
 			if self.imid_split {
@@ -3586,11 +3758,13 @@ impl <'a> AMirror<'a> {
 		}
 
 		if req_text_b.len() > 0 {
-			self.write_aibus_message(AIBusMessage {
+			return Some(AIBusMessage {
 				sender: AIBUS_DEVICE_AMIRROR,
 				receiver: AIBUS_DEVICE_NAV_COMPUTER,
 				data: menu_req_data,
 			});
+		} else {
+			return None;
 		}
 	}
 
@@ -3608,36 +3782,46 @@ impl <'a> AMirror<'a> {
 			return;
 		}
 
+		let mut msg_list = Vec::new();
+
 		for i in 0..settings_menu.size() {
-			self.write_main_settings_menu_option(i);
+			match self.get_main_settings_menu_option(i) {
+				Some(ai_msg) => {
+					println!("Writing {}", ai_msg.l());
+					msg_list.push(ai_msg);
+				}
+				None => {}
+			}
 		}
 
 		let sel = 1;
-		self.write_aibus_message(AIBusMessage {
+		msg_list.push(AIBusMessage {
 			sender: AIBUS_DEVICE_AMIRROR,
 			receiver: AIBUS_DEVICE_NAV_COMPUTER,
 			data: [0x2B, 0x52, sel].to_vec(),
 		});
 
+		self.write_aibus_messages(&msg_list);
+
 		self.menu_open = AMirrorMenu::MenuSettings;
 	}
 
 	///Write a main setting menu option.
-	fn write_main_settings_menu_option(&mut self, option: usize) {
+	fn get_main_settings_menu_option(&mut self, option: usize) -> Option<AIBusMessage> {
 		let mut menu_req_data = [0x2B, 0x51, option as u8].to_vec();
 
 		let settings_menu = match MenuList::new(MenuIndex::MirrorMainSettings, Locale::LocaleEnglishUS) {
 			Some(settings_menu) => settings_menu,
 			None => {
 				println!("Error loading menu option.");
-				return;
+				return None;
 			}
 		};
 		
 		let menu_option = match settings_menu.get_global_index(option) {
 			Some(menu_option) => menu_option,
 			None => {
-				return;
+				return None;
 			}
 		};
 
@@ -3665,11 +3849,13 @@ impl <'a> AMirror<'a> {
 		}
 
 		if req_text_b.len() > 0 {
-			self.write_aibus_message(AIBusMessage {
+			return Some(AIBusMessage {
 				sender: AIBUS_DEVICE_AMIRROR,
 				receiver: AIBUS_DEVICE_NAV_COMPUTER,
 				data: menu_req_data,
 			});
+		} else {
+			return None;
 		}
 	}
 
@@ -3679,7 +3865,7 @@ impl <'a> AMirror<'a> {
 
 		if self.menu_open != AMirrorMenu::MenuNone {
 			self.next_menu = AMirrorMenu::MenuDisplay;
-			self.clear_menu(true);
+			self.clear_menu(false);
 			return;
 		}
 
@@ -3698,21 +3884,30 @@ impl <'a> AMirror<'a> {
 
 		self.next_menu = AMirrorMenu::MenuNone;
 
+		let mut msg_list = Vec::new();
+
 		for i in 0..cluster_menu.size() {
-			self.write_display_menu_option(i);
+			match self.get_display_menu_option(i) {
+				Some(ai_msg) => {
+					msg_list.push(ai_msg);
+				}
+				None => {}
+			}
 		}
 
-		self.write_aibus_message(AIBusMessage {
+		msg_list.push(AIBusMessage {
 			sender: AIBUS_DEVICE_AMIRROR,
 			receiver: AIBUS_DEVICE_NAV_COMPUTER,
 			data: [0x2B, 0x52, 0x1].to_vec(),
 		});
 
+		self.write_aibus_messages(&msg_list);
+
 		self.menu_open = AMirrorMenu::MenuDisplay;
 	}
 
 	///Write a display menu option.
-	fn write_display_menu_option(&mut self, option: usize) {
+	fn get_display_menu_option(&mut self, option: usize) -> Option<AIBusMessage> {
 		let context = match self.context.try_lock() {
 			Ok(context) => context,
 			Err(_) => {
@@ -3734,14 +3929,14 @@ impl <'a> AMirror<'a> {
 			Some(cluster_menu) => cluster_menu,
 			None => {
 				self.print_debug("Error loading menu option.");
-				return;
+				return None;
 			}
 		};
 		let menu_option = match cluster_menu.get_global_index(option) {
 			Some(menu_option) => menu_option,
 			None => {
 				self.print_debug(&format!("Menu option {} not found.", option));
-				return;
+				return None;
 			}
 		};
 
@@ -3788,7 +3983,7 @@ impl <'a> AMirror<'a> {
 			}
 		} else if menu_option == MenuIndex::MirrorClusterSettingsScrollCluster {
 			if context.imid_row_count != 1 {
-				return;
+				return None;
 			}
 
 			if self.imid_split {
@@ -3798,7 +3993,7 @@ impl <'a> AMirror<'a> {
 			}
 		} else if menu_option == MenuIndex::MirrorClusterSettingsScrollInfo {
 			if context.imid_row_count == 1 {
-				return;
+				return None;
 			}
 
 			if self.imid_split {
@@ -3815,11 +4010,13 @@ impl <'a> AMirror<'a> {
 		}
 
 		if req_text_b.len() > 0 {
-			self.write_aibus_message(AIBusMessage {
+			return Some(AIBusMessage {
 				sender: AIBUS_DEVICE_AMIRROR,
 				receiver: AIBUS_DEVICE_NAV_COMPUTER,
 				data: menu_req_data,
 			});
+		} else {
+			return None;
 		}
 	}
 
@@ -3827,7 +4024,7 @@ impl <'a> AMirror<'a> {
 	fn write_flash_menu(&mut self) {
 		if self.menu_open != AMirrorMenu::MenuNone {
 			self.next_menu = AMirrorMenu::MenuFlash;
-			self.clear_menu(true);
+			self.clear_menu(false);
 			return;
 		}
 
@@ -3846,35 +4043,44 @@ impl <'a> AMirror<'a> {
 
 		self.next_menu = AMirrorMenu::MenuNone;
 
+		let mut msg_list = Vec::new();
+
 		for i in 0..flash_menu.size() {
-			self.write_flash_menu_option(i);
+			match self.get_flash_menu_option(i) {
+				Some(ai_msg) => {
+					msg_list.push(ai_msg);
+				}
+				None => {}
+			}
 		}
 
-		self.write_aibus_message(AIBusMessage {
+		msg_list.push(AIBusMessage {
 			sender: AIBUS_DEVICE_AMIRROR,
 			receiver: AIBUS_DEVICE_NAV_COMPUTER,
 			data: [0x2B, 0x52, 0x1].to_vec(),
 		});
 
+		self.write_aibus_messages(&msg_list);
+
 		self.menu_open = AMirrorMenu::MenuFlash;
 	}
 
 	//Write a flash menu option.
-	fn write_flash_menu_option(&mut self, option: usize) {
+	fn get_flash_menu_option(&mut self, option: usize) -> Option<AIBusMessage> {
 		let mut menu_req_data = [0x2B, 0x51, option as u8].to_vec();
 
 		let settings_menu = match MenuList::new(MenuIndex::MirrorFlashSettings, Locale::LocaleEnglishUS) {
 			Some(settings_menu) => settings_menu,
 			None => {
 				println!("Error loading menu option.");
-				return;
+				return None;
 			}
 		};
 		
 		let menu_option = match settings_menu.get_global_index(option) {
 			Some(menu_option) => menu_option,
 			None => {
-				return;
+				return None;
 			}
 		};
 
@@ -3902,11 +4108,13 @@ impl <'a> AMirror<'a> {
 		}
 
 		if req_text_b.len() > 0 {
-			self.write_aibus_message(AIBusMessage {
+			return Some(AIBusMessage {
 				sender: AIBUS_DEVICE_AMIRROR,
 				receiver: AIBUS_DEVICE_NAV_COMPUTER,
 				data: menu_req_data,
 			});
+		} else {
+			return None;
 		}
 	}
 

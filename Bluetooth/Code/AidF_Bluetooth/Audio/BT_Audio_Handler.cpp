@@ -895,8 +895,19 @@ void BTAudioHandler::writePosition() {
 
 	const uint32_t position = this->position/1000;
 
-	uint8_t meta_pos_data[] = {0x3B, 0x0, 0x0, uint8_t((position>>8)&0xFF), uint8_t(position&0xFF)};
-	AIData meta_pos_msg(sizeof(meta_pos_data), ID_PHONE, ID_RADIO, meta_pos_data);
+	int bytes = 1;
+	uint64_t data_measure = 0x100;
+
+	while(position >= data_measure) {
+		data_measure <<= 8;
+		bytes += 1;
+	}
+	AIData meta_pos_msg(bytes+1, ID_PHONE, ID_RADIO);
+
+	meta_pos_msg[0] = 0x3B;
+	for(int i=0;i<bytes;i+=1)
+		meta_pos_msg[i+1] = (position>>(8*(bytes-i-1)))&0xFF;
+
 	aibus_handler->writeAIData(&meta_pos_msg, parameter_list->radio_connected);
 
 	if(!parameter_list->text_allowed)

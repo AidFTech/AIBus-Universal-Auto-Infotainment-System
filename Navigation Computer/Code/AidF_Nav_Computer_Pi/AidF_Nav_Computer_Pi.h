@@ -110,6 +110,9 @@ private:
 	void getBackground();
 	void setMonitorOn(const bool on);
 
+	bool displayExtVideo();
+	void refreshExtVideo(const bool display = true);
+
 	uint8_t key_position = 0, door_position = 0;
 	bool key_switched_on = false; //True once the key has been cycled on.
 
@@ -143,7 +146,7 @@ private:
 	vector<uint8_t> ping_device_list;
 	int ping_pointer = 0;
 
-	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread, amirror_video_thread, camera_video_thread;
+	pthread_t amirror_socket_thread, abta_socket_thread, frame_thread, timer_thread, amirror_video_thread;
 
 	SocketHandlerParameters amirror_socket_parameters, abta_socket_parameters;
 	VideoSocketParameters amirror_video_socket_parameters, camera_video_socket_parameters;

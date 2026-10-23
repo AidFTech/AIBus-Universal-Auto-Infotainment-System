@@ -456,3 +456,16 @@ AIData getTextMessage(const uint8_t sender, String text, const uint8_t group, co
 	
 	return text_message;
 }
+
+//Get the number of bytes required to write out a time.
+int getTimeBytes(const uint64_t time) {
+	int bytes = 1;
+	uint64_t data_measure = 0x100;
+
+	while(time >= data_measure) {
+		data_measure <<= 8;
+		bytes += 1;
+	}
+
+	return bytes;
+}

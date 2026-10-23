@@ -16,6 +16,21 @@ enum canslator_menu_index : menu_index_t {
 	MENU_INDEX_SETTINGS_MAIN_COMFORT_CONVENIENCE,
 	MENU_INDEX_SETTINGS_MAIN_AMBIENT_LIGHTING,
 
+	//Lighting menu.
+	MENU_INDEX_SETTINGS_LIGHTING,
+	MENU_INDEX_SETTINGS_LIGHTING_INTERIOR_TIME,
+	MENU_INDEX_SETTINGS_LIGHTING_AUTO_OFF_TIMER,
+	MENU_INDEX_SETTINGS_LIGHTING_PARKING_LIGHTS,
+	MENU_INDEX_SETTINGS_LIGHTING_AUTO_SENSITIVITY,
+
+	//Auto light sensitivity menu.
+	MENU_INDEX_SETTINGS_AUTO_SENSITIVITY,
+	MENU_INDEX_SETTINGS_AUTO_SENSITIVITY_MIN,
+	MENU_INDEX_SETTINGS_AUTO_SENSITIVITY_LOW,
+	MENU_INDEX_SETTINGS_AUTO_SENSITIVITY_MED,
+	MENU_INDEX_SETTINGS_AUTO_SENSITIVITY_HIGH,
+	MENU_INDEX_SETTINGS_AUTO_SENSITIVITY_MAX,
+
 	//Comfort/Convenience menu.
 	MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE,
 	MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE_HEADLIGHT_TEMP,
@@ -48,6 +63,8 @@ enum canslator_menu_index : menu_index_t {
 
 static const canslator_menu_index MENU_START_INDEX[] = {
 	MENU_INDEX_SETTINGS_MAIN,
+	MENU_INDEX_SETTINGS_LIGHTING,
+	MENU_INDEX_SETTINGS_AUTO_SENSITIVITY,
 	MENU_INDEX_SETTINGS_COMFORT_CONVENIENCE,
 	MENU_INDEX_SETTINGS_HEADLIGHT,
 	MENU_INDEX_SETTINGS_AMBIENT_LIGHTING,
@@ -66,6 +83,21 @@ static const char* MENUS_ENG[] = {
 	"Doors",
 	"Comfort/Convenience",
 	"Ambient Lighting",
+
+	//Lighting menu.
+	"Lighting",
+	"Interior Light Dimming Time",
+	"Headlight Auto Off Timer",
+	"Parking Lights",
+	"Auto Light Sensitivity",
+
+	//Auto light sensitivity menu.
+	"Auto Light Sensitivity",
+	"Minimum",
+	"Low",
+	"Medium",
+	"High",
+	"Maximum",
 
 	//Comfort/Convenience menu.
 	"Comfort/Convenience",

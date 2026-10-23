@@ -192,9 +192,9 @@ void IEBusHandler::sendMessage(IE_Message* ie_d, const bool ack_response, const 
 	while(active_pin >= 0 && digitalRead(active_pin) == HIGH);
 
 	uint8_t serial_proxy[ie_d->l + 5];
-	serial_proxy[0] = (ie_d->sender&0xF)>>8;
+	serial_proxy[0] = (ie_d->sender&0xF00)>>8;
 	serial_proxy[1] = ie_d->sender&0xFF;
-	serial_proxy[2] = (ie_d->receiver&0xF)>>8;
+	serial_proxy[2] = (ie_d->receiver&0xF00)>>8;
 	serial_proxy[3] = ie_d->receiver&0xFF;
 	serial_proxy[4] = ie_d->control;
 

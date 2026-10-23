@@ -13,6 +13,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <filesystem>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -73,9 +74,11 @@ private:
 };
 
 struct VideoSocketParameters {
-	ClientVideoSocketHandler* socket_handler;
-	bool* running;
-	string socket_path;
+	ClientVideoSocketHandler* socket_handler = nullptr;
+	bool* running = nullptr;
+	string socket_path = "";
+
+	bool thread_run = false;
 };
 
 void *videoPlayThread(void* parameters_v);

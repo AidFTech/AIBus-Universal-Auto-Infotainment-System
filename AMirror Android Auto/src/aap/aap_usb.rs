@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::{time::{Duration, Instant}};
 
 use rusb::{Context as USBContext, Device, DeviceDescriptor, DeviceHandle, Direction, TransferType, UsbContext};
 
@@ -28,7 +28,7 @@ impl AndroidUSBConnection {
 			device_handle: None,
 
 			last_check: Instant::now(),
-		}
+		};
 	}
 
 	///Return whether a full AA connection has been established.
@@ -140,7 +140,7 @@ impl AndroidUSBConnection {
 		self.aa_activated = false;
 	}
 
-	///Read bytes from USB.
+	///Read bytes from the USB cache.
 	pub fn read_bytes(&mut self) -> Vec<u8> {
 		if !self.aa_activated {
 			return [].to_vec();
@@ -151,20 +151,24 @@ impl AndroidUSBConnection {
 		let mut data = vec![0;131800];
 		match handle.read_bulk(0x81, &mut data, Duration::from_millis(2)) {
 			Ok(len) => {
-				return data[0..len].to_vec();
+				let mut rx = Vec::new();
+				for d in &data[0..len] {
+					rx.push(*d);
+				}
+
+				return rx;
 			}
 			Err(e) => {
 				match e {
 					rusb::Error::Timeout => {
 						//Do nothing.
-						return [].to_vec();
 					}
 					_=> {
 						println!("Error: {}", e);
 						self.aa_activated = false;
-						return [].to_vec();
 					}
 				}
+				return [].to_vec();
 			}
 		}
 	}

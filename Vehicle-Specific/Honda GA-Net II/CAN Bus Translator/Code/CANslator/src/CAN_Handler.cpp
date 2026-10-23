@@ -712,9 +712,7 @@ void BCAN_Handler::sendBatteryVoltage(const uint16_t voltage, const uint8_t rece
 void BCAN_Handler::sendCommonParameters(const uint8_t receiver) {
 	writeAIBusKeyMessage(receiver);
 	writeAIBusDoorMessage(receiver);
-	writeAIBusBrightnessMessage(receiver);	
-	writeAIBusLightMessage(receiver);
-	writeAIBusTempMessage(receiver);
+	writeAIBusBrightnessMessage(receiver);
 	writeAIBusSpeedMessage(receiver);
 }
 
@@ -726,6 +724,7 @@ void BCAN_Handler::sendInfoParameters(const uint8_t receiver) {
 	}
 
 	writeAIBusTempMessage(receiver);
+	writeAIBusSpeedMessage(receiver);
 	writeAIBusCoolantTempMessage(receiver);
 	writeAIBusRangeMessage(receiver);
 	writeAIBusLightMessage(receiver);
@@ -1090,9 +1089,27 @@ void BCAN_Handler::handleSelection(const uint8_t selection) {
 		case MENU_INDEX_SETTINGS_MAIN_COMFORT_CONVENIENCE:
 			menu_handler.createComfortConvenienceMenu(light_sensor_connected, rain_sensor_connected);
 			break;
+		case MENU_INDEX_SETTINGS_MAIN_LIGHTING:
+			menu_handler.createLightingMenu(light_sensor_connected);
+			break;
 		case MENU_INDEX_SETTINGS_MAIN_AMBIENT_LIGHTING:
 			if(parameter_list->has_ambient_lighting)
 				menu_handler.createAmbientLightingMenu();
+		default:
+			break;
+		}
+	} else if(menu_handler.getActiveMenu() == ACTIVE_MENU_SETTINGS_LIGHTING) {
+		const MenuList menu = getMenu(MENU_INDEX_SETTINGS_LIGHTING, parameter_list->locale);
+		switch(menu.getGlobalIndex(selected)) {
+		case MENU_INDEX_SETTINGS_LIGHTING_AUTO_SENSITIVITY:
+			if(light_sensor_connected)
+				menu_handler.createAutoLightSensitivityMenu(0); //TODO: The actual value.
+			break;
+		case MENU_INDEX_SETTINGS_LIGHTING_PARKING_LIGHTS:
+			parameter_list->parking_lights = !parameter_list->parking_lights;
+			menu_handler.createLightingMenu(light_sensor_connected);
+			setCanslatorSettings(parameter_list);
+			break;
 		default:
 			break;
 		}

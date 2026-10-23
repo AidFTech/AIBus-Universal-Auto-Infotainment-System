@@ -1,4 +1,5 @@
 #include "IEBus_Transceiver.h"
+#include "elapsedMillis.h"
 
 IEBusTransceiver transceiver;
 
@@ -43,86 +44,9 @@ void IEBusTransceiver::loop() {
 		goto read_send;
 
 	if(ie_active) { //A message is on its way.
-		digitalWrite(IEBUS_ACTIVE, HIGH);
-		digitalWrite(RX_ENABLE, HIGH);
-		noInterrupts();
-
-		//Wait for the start bit to finish.
-		while(digitalReadFast(IEBUS_RX) == HIGH);
 		IE_Message rec;
-		bool ack = false;
-		
-		{
-			const int16_t direct = readBits(1, false, false, false);
-			if(direct < 0)
-				goto read_exit;
-			rec.direct = direct == 1;
-		}
-
-		{
-			const int16_t sender = readBits(12, true, false, false);
-			if(sender < 0)
-				goto read_exit;
-			rec.sender = sender;
-		}
-
-		{
-			const int16_t receiver = readBits(12, true, false, false);
-			if(receiver < 0)
-				goto read_exit;
-			rec.receiver = receiver;
-
-			if(receiver == MY_ID) {
-				while(digitalReadFast(IEBUS_CLK) == LOW);
-
-				digitalWriteFast(IEBUS_TX_BIT, LOW);
-				digitalWriteFast(TX_ENABLE, HIGH);
-				while(digitalReadFast(IEBUS_TX) == HIGH || digitalReadFast(IEBUS_CLK) == HIGH);
-				digitalWriteFast(TX_ENABLE, LOW);
-
-				ack = true;
-			}
-		}
-
-		{
-			const int16_t ctl = readBits(4, true, true, ack);
-			if(ctl < 0)
-				goto read_exit;
-			rec.control = ctl;
-		}
-
-		{
-			const int16_t len = readBits(8, true, true, ack);
-			if(len < 0)
-				goto read_exit;
-			rec.refreshIEData(len);
-		}
-
-		for(int i=0;i<rec.l;i+=1) {
-			const int16_t data = readBits(8, true, true, ack);
-			if(data < 0)
-				goto read_exit;
-
-			rec.data[i] = data&0xFF;
-		}
-
-		//Send Honda acknowledgment.
-		if(rec.receiver == MY_ID && rec.checkVaildity()) {
-			uint8_t ack_data[] = {0x80};
-			IE_Message msg_ack(sizeof(ack_data), rec.receiver, rec.sender, 0xF, true);
-			msg_ack.refreshIEData(ack_data);
-			writeMessageChecksum(&msg_ack);
-
+		if(readMessage(&rec))
 			ie_cache_vec.push_back(rec);
-		}
-
-		if(ie_cache_vec.size() < ie_cache_vec.max_size())
-			last_ie = 0;
-
-		read_exit:
-		interrupts();
-		digitalWrite(RX_ENABLE, LOW);
-		digitalWrite(IEBUS_ACTIVE, LOW);
 	}
 
 	if(ie_cache_vec.size() > 0 && last_ie > 5) {
@@ -185,12 +109,14 @@ void IEBusTransceiver::loop() {
 		bytesToAIData(&rx, data);
 
 		if(rx.sender == 0x10 && rx.receiver == 0x11) { //IEBus message to send.
+			#ifdef LOOPBACK
 			{ 
 				AIData copy(rx.l, 0x11, 0x10, rx.data);
 				uint8_t copy_bytes[copy.l + 4];
 				copy.getBytes(copy_bytes);
 				Serial.write(copy_bytes, sizeof(copy_bytes));
 			}
+			#endif
 
 			if(rx.l > 5) {
 				const uint16_t ie_sender = (uint16_t(rx[0]&0xF)<<8) | rx[1], ie_receiver = (uint16_t(rx[2]&0xF)<<8) | rx[3];
@@ -233,6 +159,99 @@ void IEBusTransceiver::loop() {
 		Serial.readBytes(avail_bytes, sizeof(avail_bytes));
 		avail = 0;
 	}
+}
+
+//Read an IEBus message. Return whether successful.
+bool IEBusTransceiver::readMessage(IE_Message *rec) {
+	digitalWrite(IEBUS_ACTIVE, HIGH);
+	digitalWrite(RX_ENABLE, HIGH);
+	noInterrupts();
+
+	//Wait for the start bit to finish.
+	while(digitalReadFast(IEBUS_RX) == HIGH);
+	bool ack = false, send_ack = false;
+	bool success = false;
+	
+	{
+		const int16_t direct = readBits(1, false, false, false);
+		if(direct < 0)
+			goto read_exit;
+		rec->direct = direct == 1;
+	}
+
+	{
+		const int16_t sender = readBits(12, true, false, false);
+		if(sender < 0)
+			goto read_exit;
+		rec->sender = sender;
+	}
+
+	{
+		const int16_t receiver = readBits(12, true, false, false);
+		if(receiver < 0)
+			goto read_exit;
+		rec->receiver = receiver;
+
+		if(receiver == MY_ID) {
+			while(digitalReadFast(IEBUS_CLK) == LOW);
+
+			digitalWriteFast(IEBUS_TX_BIT, LOW);
+			digitalWriteFast(TX_ENABLE, HIGH);
+			while(digitalReadFast(IEBUS_TX) == HIGH || digitalReadFast(IEBUS_CLK) == HIGH);
+			digitalWriteFast(TX_ENABLE, LOW);
+
+			ack = true;
+		}
+	}
+
+	{
+		const int16_t ctl = readBits(4, true, true, ack);
+		if(ctl < 0)
+			goto read_exit;
+		rec->control = ctl;
+	}
+
+	{
+		const int16_t len = readBits(8, true, true, ack);
+		if(len < 0)
+			goto read_exit;
+		rec->refreshIEData(len);
+	}
+
+	for(int i=0;i<rec->l;i+=1) {
+		const int16_t data = readBits(8, true, true, ack);
+		if(data < 0)
+			goto read_exit;
+
+		rec->data[i] = data&0xFF;
+	}
+
+	if(rec->checkVaildity())
+		success = true;
+
+	//Send Honda acknowledgment.
+	if(rec->receiver == MY_ID && rec->checkVaildity())
+		send_ack = true;
+
+	if(ie_cache_vec.size() + 1 < ie_cache_vec.max_size())
+		last_ie = 0;
+
+	read_exit:
+	interrupts();
+	digitalWrite(RX_ENABLE, LOW);
+	digitalWrite(IEBUS_ACTIVE, LOW);
+
+	if(send_ack) {
+		elapsedMicros wait;
+		while(wait < 40);
+
+		uint8_t ack_data[] = {0x80};
+		IE_Message msg_ack(sizeof(ack_data), rec->receiver, rec->sender, 0xF, true);
+		msg_ack.refreshIEData(ack_data);
+		writeMessageChecksum(&msg_ack);
+	}
+
+	return success;
 }
 
 //Read a bit from IEBus.
@@ -324,6 +343,12 @@ int16_t IEBusTransceiver::readBits(int count, const bool use_parity, const bool 
 void IEBusTransceiver::writeBit(const bool bit) {
 	digitalWriteFast(IEBUS_TX_BIT, bit ? HIGH : LOW);
 	while(digitalReadFast(IEBUS_CLK) == LOW);
+	
+	if(!bit) {
+		digitalWriteFast(TX_ENABLE, LOW);
+		while(digitalReadFast(IEBUS_TX) == HIGH);
+		digitalWriteFast(TX_ENABLE, HIGH);
+	}
 }
 
 //Write a set of bits to IEBus.
@@ -350,7 +375,7 @@ void IEBusTransceiver::writeBits(const int count, const uint16_t data, const boo
 }
 
 //Write a full message to IEBus.
-void IEBusTransceiver::writeMessage(IE_Message* ie_data) {
+void IEBusTransceiver::writeMessage(IE_Message* ie_data, const bool ack) {
 	const boolean was_active = digitalRead(IEBUS_ACTIVE) == HIGH;
 	digitalWriteFast(IEBUS_ACTIVE, HIGH);
 	digitalWriteFast(TX_ENABLE, HIGH);
@@ -358,8 +383,9 @@ void IEBusTransceiver::writeMessage(IE_Message* ie_data) {
 
 	elapsedMicros start_timer;
 	digitalWriteFast(IEBUS_START, HIGH);
+	digitalWriteFast(IEBUS_TX_BIT, HIGH);
 	start_timer = 0;
-	while(start_timer < 200 || digitalReadFast(IEBUS_CLK) == HIGH);
+	while(start_timer < 160 || digitalReadFast(IEBUS_CLK) == HIGH);
 	digitalWriteFast(IEBUS_START, LOW);
 
 	writeBits(1, ie_data->direct ? 1 : 0, false, false);
@@ -376,6 +402,32 @@ void IEBusTransceiver::writeMessage(IE_Message* ie_data) {
 		digitalWriteFast(IEBUS_ACTIVE, LOW);
 	}
 	digitalWriteFast(TX_ENABLE, LOW);
+
+	if(ack && ie_data->direct && ie_data->sender == MY_ID) {
+		int tries = 0;
+		elapsedMillis send_timer;
+		bool ack_rec = false;
+
+		while(tries < 25) {
+			const bool ie_active = digitalRead(IEBUS_RX) == HIGH;
+			if(ie_active) {
+				IE_Message rec;
+				if(readMessage(&rec)) {
+					if(rec.sender == ie_data->receiver && rec.receiver == ie_data->sender && rec.l > 0 && rec.data[0] == 0x80) {
+						ack_rec = true;
+						break;
+					} else if(rec.receiver == ie_data->sender || rec.receiver == MY_ID)
+						ie_cache_vec.push_back(rec);
+				}
+			}
+
+			if(!ack_rec && send_timer > 200) {
+				send_timer = 0;
+				tries += 1;
+				writeMessage(ie_data, false);
+			}
+		}
+	}
 }
 
 //Write a message to IEBus with a Honda checksum.

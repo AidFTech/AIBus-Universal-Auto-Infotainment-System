@@ -30,6 +30,28 @@ void EnAIBusHandler::addID(const uint8_t id) {
 	id_vec.push_back(id);
 }
 
+//Remove an ID from the AIBus list.
+void EnAIBusHandler::removeID(const uint8_t id, const bool notify) {
+	int index = -1;
+	for(int i=0;i<id_vec.size();i+=1) {
+		if(id_vec[i] == id) {
+			index = i;
+			break;
+		}
+	}
+
+	if(index < 0)
+		return;
+
+	if(notify) {
+		uint8_t off_data[] = {0xA0};
+		AIData off_msg(sizeof(off_data), id, 0xFF, off_data);
+		writeAIData(&off_msg, false);
+	}
+
+	id_vec.remove(index);
+}
+
 //Get the number of IDs in the AIBus list.
 int EnAIBusHandler::getIDCount() {
 	return id_vec.size();

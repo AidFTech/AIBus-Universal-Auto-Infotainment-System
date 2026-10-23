@@ -265,10 +265,13 @@ void HondaCDHandler::loop() {
 		}
 
 		if((track_cmd&COMMAND_WRITE_TIME_MESSAGES) != 0) {
-			uint8_t timer_data[] = {0x3B, 0x0, 0x0, uint8_t((timer&0xFF00) >> 8), uint8_t(timer&0xFF)};
+			const int bytes = getTimeBytes(timer);
 
-			AIData timer_msg(sizeof(timer_data), ID_CDC, ID_RADIO);
-			timer_msg.refreshAIData(timer_data);
+			AIData timer_msg(bytes + 1, ID_CDC, ID_RADIO);
+			timer_msg[0] = 0x3B;
+
+			for(int i=0;i<bytes;i+=1)
+				timer_msg[i+1] = (timer>>(8*(bytes-i-1)))&0xFF;
 			
 			ai_driver->writeAIData(&timer_msg, parameter_list->radio_connected);
 			if(text_control) {
@@ -1661,10 +1664,13 @@ void HondaCDHandler::sendCDIMIDTrackandTimeMessage() {
 			}
 		} else if(parameter_list->external_imid_cd) {
 			sendAICDStatusMessage(ID_IMID_SCR);
-			uint8_t timer_data[] = {0x3B, 0x0, 0x0, uint8_t((timer&0xFF00) >> 8), uint8_t(timer&0xFF)};
+			const int bytes = getTimeBytes(timer);
 
-			AIData timer_msg(sizeof(timer_data), ID_CDC, ID_IMID_SCR);
-			timer_msg.refreshAIData(timer_data);
+			AIData timer_msg(bytes + 1, ID_CDC, ID_IMID_SCR);
+			timer_msg[0] = 0x3B;
+
+			for(int i=0;i<bytes;i+=1)
+				timer_msg[i+1] = (timer>>(8*(bytes-i-1)))&0xFF;
 			
 			ai_driver->writeAIData(&timer_msg);
 		} else if(parameter_list->external_imid_char > 0 && parameter_list->external_imid_lines > 0) {

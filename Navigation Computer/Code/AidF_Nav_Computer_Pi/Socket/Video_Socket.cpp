@@ -23,13 +23,14 @@ ClientVideoSocketHandler::ClientVideoSocketHandler(SDL_Renderer* renderer, strin
 	mpv_set_option_string(mpv_handler, "cmd", "no");
 	#endif
 
-	mpv_set_option_string(mpv_handler, "override-display-fps", "60");
+	//mpv_set_option_string(mpv_handler, "override-display-fps", "60");
 
 	mpv_set_option_string(mpv_handler, "profile", "low-latency");
 	mpv_set_option_string(mpv_handler, "keep-open", "yes");
 	mpv_set_option_string(mpv_handler, "idle", "yes");
 
-	mpv_set_option_string(mpv_handler, "framedrop", "decoder+vo");
+	mpv_set_option_string(mpv_handler, "correct-pts", "no");
+	mpv_set_option_string(mpv_handler, "speed", "5");
 
 	mpv_set_option_string(mpv_handler, "input-ipc-server", ipc_path.c_str());
 
@@ -57,7 +58,7 @@ ClientVideoSocketHandler::~ClientVideoSocketHandler() {
 //Object loop function.
 void ClientVideoSocketHandler::loop() {
 	if(!video_socket_path_set) {
-		if(access(video_socket_path.c_str(), F_OK) == 0) {
+		if(filesystem::exists(filesystem::path(video_socket_path))) {
 			const char* load_command[] = {"loadfile", video_socket_path.c_str(), NULL};
 			mpv_command_async(mpv_handler, 0, load_command);
 			video_socket_path_set = true;
@@ -65,7 +66,7 @@ void ClientVideoSocketHandler::loop() {
 			return;
 		}
 	} else {
-		if(access(video_socket_path.c_str(), F_OK) != 0) {
+		if(!filesystem::exists(filesystem::path(video_socket_path))) {
 			video_socket_path_set = false;
 			return;
 		}
@@ -78,6 +79,9 @@ void ClientVideoSocketHandler::loop() {
 
 //Handle an SDL event. Return whether to rerender.
 bool ClientVideoSocketHandler::handleEvent(SDL_Event* event) {
+	if(!video_socket_path_set)
+		return false;
+
 	if(event->type == wakeup_on_mpv_render_update) {
 		const uint64_t flags = mpv_render_context_update(mpv_gl);
 		if((flags&MPV_RENDER_UPDATE_FRAME) == MPV_RENDER_UPDATE_FRAME) {
@@ -87,6 +91,9 @@ bool ClientVideoSocketHandler::handleEvent(SDL_Event* event) {
 		}
 	} else if(event->type == wakeup_on_mpv_events) {
 		while(true) {
+			if(!video_socket_path_set)
+				return false;
+
 			mpv_event* mp_event = mpv_wait_event(mpv_handler, 0);
 			if(mp_event->event_id == MPV_EVENT_NONE)
 				break;
@@ -98,6 +105,9 @@ bool ClientVideoSocketHandler::handleEvent(SDL_Event* event) {
 
 //Render a frame.
 void ClientVideoSocketHandler::render() {
+	if(!video_socket_path_set)
+		return;
+
 	size_t* pitch_s = (size_t*)&video_cache.pitch;
 	refresh = false;
 	mpvPixelRender(mpv_gl, w, h, pitch_s, video_cache.pixels);
@@ -126,10 +136,16 @@ void ClientVideoSocketHandler::clearVideoInit() {
 //Video thread function.
 void *videoPlayThread(void* parameters_v) {
 	VideoSocketParameters* parameters = (VideoSocketParameters*)parameters_v;
-	ClientVideoSocketHandler* socket_ptr = parameters->socket_handler;
+	//ClientVideoSocketHandler* socket_ptr = parameters->socket_handler;
 
-	while(*parameters->running)
-		socket_ptr->loop();
+	parameters->thread_run = true;
+
+	while(*parameters->running) {
+		if(parameters->socket_handler != nullptr)
+			parameters->socket_handler->loop();
+	}
+
+	parameters->thread_run = false;
 
 	void* result;
 	return result;
